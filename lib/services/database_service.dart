@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/sender.dart';
 import '../models/transaction.dart';
+import '../models/app_notification.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -19,7 +20,8 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(path,
+        version: 3, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -48,9 +50,37 @@ CREATE TABLE transactions (
   category $textType,
   rawMessage $textType,
   isAutoDetected $boolType,
-  totalBalance $doubleType
+  totalBalance $doubleType,
+  reason TEXT
 )
 ''');
+
+    await db.execute('''
+CREATE TABLE notifications (
+  id TEXT PRIMARY KEY,
+  sender TEXT NOT NULL,
+  body TEXT NOT NULL,
+  date TEXT NOT NULL,
+  isRead INTEGER NOT NULL DEFAULT 0
+)
+''');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  sender TEXT NOT NULL,
+  body TEXT NOT NULL,
+  date TEXT NOT NULL,
+  isRead INTEGER NOT NULL DEFAULT 0
+)
+''');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN reason TEXT;');
+    }
   }
 
   // --- Sender Methods ---
@@ -83,9 +113,6 @@ CREATE TABLE transactions (
   // --- Transaction Methods ---
   Future<int> insertTransaction(AppTransaction transaction) async {
     final db = await instance.database;
-    // Generate an ID if it's not provided
-    // We already use String? id in AppTransaction, we'll ensure FinanceProvider or TelebirrParser sets it.
-    // Wait, if it's not set, let's create a temporary UUID or fallback ID.
     final idToUse =
         transaction.id ?? DateTime.now().millisecondsSinceEpoch.toString();
     final map = transaction.toMap();
@@ -94,13 +121,23 @@ CREATE TABLE transactions (
     return await db.insert(
       'transactions',
       map,
-      conflictAlgorithm: ConflictAlgorithm.ignore, // Ignore duplicates
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  Future<int> updateTransaction(AppTransaction transaction) async {
+    final db = await instance.database;
+    return await db.update(
+      'transactions',
+      transaction.toMap(),
+      where: 'id = ?',
+      whereArgs: [transaction.id],
     );
   }
 
   Future<List<AppTransaction>> getTransactions() async {
     final db = await instance.database;
-    final orderBy = 'date DESC';
+    const orderBy = 'date DESC';
     final maps = await db.query('transactions', orderBy: orderBy);
     return maps.map((map) => AppTransaction.fromMap(map)).toList();
   }
@@ -121,5 +158,38 @@ CREATE TABLE transactions (
       }
     }
     return null;
+  }
+
+  // --- Notification Methods ---
+  Future<void> insertNotification(AppNotification notification) async {
+    final db = await instance.database;
+    await db.insert(
+      'notifications',
+      notification.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  Future<List<AppNotification>> getNotifications() async {
+    final db = await instance.database;
+    final maps = await db.query('notifications', orderBy: 'date DESC');
+    return maps.map((map) => AppNotification.fromMap(map)).toList();
+  }
+
+  Future<int> getUnreadNotificationCount() async {
+    final db = await instance.database;
+    final result = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM notifications WHERE isRead = 0');
+    return (result.first['count'] as int?) ?? 0;
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    final db = await instance.database;
+    await db.update('notifications', {'isRead': 1});
+  }
+
+  Future<void> deleteNotification(String id) async {
+    final db = await instance.database;
+    await db.delete('notifications', where: 'id = ?', whereArgs: [id]);
   }
 }

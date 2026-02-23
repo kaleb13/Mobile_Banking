@@ -1,7 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     
+
     <application
         android:label="mobile_banking_app"
         android:name="${applicationName}"
@@ -33,6 +37,17 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="dataSync" />
+
+        <receiver android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
+            android:permission="android.permission.BROADCAST_SMS" android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -9,6 +9,7 @@ class AppTransaction {
   final String rawMessage;
   final bool isAutoDetected;
   final double totalBalance;
+  final String? reason;
 
   AppTransaction({
     this.id,
@@ -21,6 +22,7 @@ class AppTransaction {
     required this.rawMessage,
     required this.isAutoDetected,
     this.totalBalance = 0.0,
+    this.reason,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +37,7 @@ class AppTransaction {
       'rawMessage': rawMessage,
       'isAutoDetected': isAutoDetected ? 1 : 0,
       'totalBalance': totalBalance,
+      'reason': reason,
     };
   }
 
@@ -50,6 +53,7 @@ class AppTransaction {
       rawMessage: map['rawMessage'],
       isAutoDetected: map['isAutoDetected'] == 1,
       totalBalance: (map['totalBalance'] as num?)?.toDouble() ?? 0.0,
+      reason: map['reason'],
     );
   }
 }

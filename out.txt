@@ -1,0 +1,22 @@
+Analyzing Mobile_Banking...
+
+warning - bin\test_cbe_birr.dart:18:12 - The value of the local variable 'type' isn't used. Try removing the variable or using it. - unused_local_variable
+warning - lib\services\background_service.dart:3:8 - Unused import: 'package:flutter/material.dart'. Try removing the import directive. - unused_import
+warning - lib\services\background_service.dart:110:23 - The operand can't be 'null', so the condition is always 'true'. Remove the condition. - unnecessary_null_comparison
+   info - bin\test_cbe_birr.dart:14:7 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - bin\test_cbe_birr.dart:35:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - bin\test_cbe_birr.dart:48:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - bin\test_cbe_birr.dart:61:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - bin\test_cbe_birr.dart:81:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - bin\test_cbe_birr.dart:108:7 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - bin\test_cbe_birr.dart:110:5 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - bin\test_cbe_regex.dart:8:3 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - bin\test_regex.dart:10:3 - Don't invoke 'print' in production code. Try using a logging framework. - avoid_print
+   info - lib\providers\finance_provider.dart:9:62 - The prefix 'smsInbox' isn't a lower_case_with_underscores identifier. Try changing the prefix to follow the lower_case_with_underscores style. - library_prefixes
+   info - lib\services\background_service.dart:5:8 - The import of 'package:flutter_background_service_android/flutter_background_service_android.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter_background_service/flutter_background_service.dart'. Try removing the import directive. - unnecessary_import
+   info - lib\services\cbe_birr_parser.dart:32:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\services\cbe_birr_parser.dart:45:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\services\cbe_birr_parser.dart:58:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+   info - lib\services\cbe_birr_parser.dart:78:9 - Statements in an if should be enclosed in a block. Try wrapping the statement in a block. - curly_braces_in_flow_control_structures
+
+18 issues found.

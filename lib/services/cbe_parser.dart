@@ -31,8 +31,9 @@ class CbeParser {
       // Let's stick to 'expense' for debited/transferred and 'income' for credited, but we can set the type exactly as requested if the system supports it.
       // Our UI expects `tx.type == 'income'` or `tx.type == 'expense'` for colors and math. Let's map: Deposit -> income, Transfer/Withdrawal -> expense. We'll use category for the specific detail or adjust the model type.
       type = 'expense';
-      category = 'Transfer';
-      amount = extractAmount(RegExp(r'transfered\s+ETB\s+([0-9,.]+)'));
+      category = 'Transferred';
+      amount = extractAmount(
+          RegExp(r'transferr?ed\s+ETB\s+([0-9,.]+)', caseSensitive: false));
 
       // Extract recipient: "to Miss Bethelihem on"
       final toMatch =
@@ -42,12 +43,27 @@ class CbeParser {
       }
     } else if (lowerMsg.contains('debited')) {
       type = 'expense';
-      category = 'Withdrawal';
-      amount = extractAmount(RegExp(r'debited\s+with\s+ETB\s+([0-9,.]+)'));
+      category = 'Transferred';
+      final startStr = 'has been debited with ETB ';
+      final startIdx = message.indexOf(startStr);
+      if (startIdx != -1) {
+        final valStart = startIdx + startStr.length;
+        final valEnd = message.indexOf('.', valStart);
+        if (valEnd != -1) {
+          final amtStr =
+              message.substring(valStart, valEnd).replaceAll(',', '').trim();
+          amount = double.tryParse(amtStr) ?? 0.0;
+        }
+      }
+      if (amount <= 0) {
+        amount = extractAmount(
+            RegExp(r'debited\s+with\s+ETB\s+([0-9,.]+)', caseSensitive: false));
+      }
     } else if (lowerMsg.contains('credited')) {
       type = 'income';
       category = 'Deposit';
-      amount = extractAmount(RegExp(r'Credited\s+with\s+ETB\s+([0-9,.]+)'));
+      amount = extractAmount(
+          RegExp(r'credited\s+with\s+ETB\s+([0-9,.]+)', caseSensitive: false));
 
       // Extract sender: "from Kaleab Afesha," or "from Kaleab Afesha "
       final fromMatch =
@@ -63,23 +79,25 @@ class CbeParser {
 
     // Extract Ref No / Transaction ID
     String? id;
-    final refRegex1 =
-        RegExp(r'Ref\s*No\.?\s*([A-Za-z0-9]+)', caseSensitive: false);
-    final refMatch1 = refRegex1.firstMatch(message);
-    if (refMatch1 != null) {
-      id = refMatch1.group(1);
+    final idStartStr = 'id=';
+    final idIdx = message.indexOf(idStartStr);
+    if (idIdx != -1) {
+      final valStart = idIdx + idStartStr.length;
+      int valEnd = message.indexOf(' ', valStart);
+      if (valEnd == -1) valEnd = message.length;
+      id = message.substring(valStart, valEnd).trim();
     } else {
-      // Fallback to standalone reference like FT...
-      final ftRegex = RegExp(r'(FT[0-9A-Z]+)', caseSensitive: true);
-      final ftMatch = ftRegex.firstMatch(message);
-      if (ftMatch != null) {
-        id = ftMatch.group(1);
+      final refRegex1 =
+          RegExp(r'Ref\s*No\.?\s*([A-Za-z0-9]+)', caseSensitive: false);
+      final refMatch1 = refRegex1.firstMatch(message);
+      if (refMatch1 != null) {
+        id = refMatch1.group(1);
       } else {
-        // Fallback to URL ID
-        final urlRegex = RegExp(r'id=([A-Za-z0-9]+)');
-        final urlMatch = urlRegex.firstMatch(message);
-        if (urlMatch != null) {
-          id = urlMatch.group(1);
+        // Fallback to standalone reference like FT...
+        final ftRegex = RegExp(r'(FT[0-9A-Z]+)', caseSensitive: true);
+        final ftMatch = ftRegex.firstMatch(message);
+        if (ftMatch != null) {
+          id = ftMatch.group(1);
         }
       }
     }
@@ -89,17 +107,34 @@ class CbeParser {
     // Extract Balance
     double totalBalance = 0.0;
     String singleLineMsg = message.replaceAll('\n', ' ').replaceAll('\r', ' ');
-    final balanceMatch =
-        RegExp(r'Current Balance is\s+ETB\s+([0-9.,]+)', caseSensitive: false)
-            .firstMatch(singleLineMsg);
-    if (balanceMatch != null) {
-      String strippedBalance =
-          balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
-      if (strippedBalance.endsWith('.')) {
-        strippedBalance =
-            strippedBalance.substring(0, strippedBalance.length - 1);
+    final balStartStr = 'Your Current Balance is ETB ';
+    final balIdx = singleLineMsg.indexOf(balStartStr);
+    if (balIdx != -1) {
+      final valStart = balIdx + balStartStr.length;
+      final valEnd = singleLineMsg.indexOf(' Thank', valStart);
+      if (valEnd != -1) {
+        final balStr = singleLineMsg
+            .substring(valStart, valEnd)
+            .replaceAll(',', '')
+            .trim();
+        totalBalance = double.tryParse(balStr) ?? 0.0;
       }
-      totalBalance = double.tryParse(strippedBalance) ?? 0.0;
+    }
+
+    // RegEx fallback for balance
+    if (totalBalance <= 0) {
+      final balanceMatch =
+          RegExp(r'Current Balance is\s+ETB\s+([0-9.,]+)', caseSensitive: false)
+              .firstMatch(singleLineMsg);
+      if (balanceMatch != null) {
+        String strippedBalance =
+            balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
+        if (strippedBalance.endsWith('.')) {
+          strippedBalance =
+              strippedBalance.substring(0, strippedBalance.length - 1);
+        }
+        totalBalance = double.tryParse(strippedBalance) ?? 0.0;
+      }
     }
 
     // Extract Date

@@ -4,14 +4,38 @@ import 'package:intl/intl.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 
-class TransactionDetailScreen extends StatelessWidget {
+import 'package:provider/provider.dart';
+import '../../providers/finance_provider.dart';
+
+class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
 
   const TransactionDetailScreen({super.key, required this.transaction});
 
   @override
+  State<TransactionDetailScreen> createState() =>
+      _TransactionDetailScreenState();
+}
+
+class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
+  late TextEditingController _reasonController;
+
+  @override
+  void initState() {
+    super.initState();
+    _reasonController =
+        TextEditingController(text: widget.transaction.reason ?? '');
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final bool isIncome = transaction.type == 'income';
+    final bool isIncome = widget.transaction.type == 'income';
     final sign = isIncome ? '+' : '-';
     final amountColor = isIncome ? AppColors.primaryTeal : AppColors.alertRed;
 
@@ -78,7 +102,7 @@ class TransactionDetailScreen extends StatelessWidget {
                             )
                           ]),
                       child: Icon(
-                        isIncome ? Icons.call_received : Icons.call_made,
+                        isIncome ? Icons.south_west : Icons.north_east,
                         size: 36,
                         color: isIncome
                             ? AppColors.primaryTeal
@@ -87,7 +111,7 @@ class TransactionDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      '$sign${NumberFormat('#,##0.00').format(transaction.amount)}',
+                      '$sign${NumberFormat('#,##0.0#').format(widget.transaction.amount)}',
                       style: TextStyle(
                         color: amountColor,
                         fontSize: 48,
@@ -106,7 +130,7 @@ class TransactionDetailScreen extends StatelessWidget {
                       child: Text(
                         isIncome
                             ? 'Deposit Successful'
-                            : 'Withdrawal Successful',
+                            : 'Transferred Successful',
                         style: const TextStyle(
                           color: AppColors.textWhite,
                           fontSize: 12,
@@ -122,6 +146,83 @@ class TransactionDetailScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Text(
+                      'Attach Reason',
+                      style: TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _reasonController,
+                            style: const TextStyle(color: AppColors.textWhite),
+                            decoration: InputDecoration(
+                              hintText: 'e.g., Dinner, Rent, Salary...',
+                              hintStyle: TextStyle(
+                                  color: AppColors.textGray
+                                      .withValues(alpha: 0.6)),
+                              filled: true,
+                              fillColor: AppColors.surfaceDark,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                    color: AppColors.surfaceLight
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                    color: AppColors.surfaceLight
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                    color: AppColors.primaryTeal),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () {
+                            Provider.of<FinanceProvider>(context, listen: false)
+                                .updateTransactionReason(widget.transaction.id!,
+                                    _reasonController.text.trim());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Reason updated'),
+                                backgroundColor: AppColors.primaryTeal,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            height: 50,
+                            width: 50,
+                            decoration: BoxDecoration(
+                              color:
+                                  AppColors.primaryTeal.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: AppColors.primaryTeal
+                                      .withValues(alpha: 0.3)),
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: AppColors.primaryTeal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.surfaceDark,
@@ -133,21 +234,22 @@ class TransactionDetailScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          _buildDetailRow(
-                              'Transaction ID', transaction.id ?? 'Unknown'),
-                          _buildDivider(),
-                          _buildDetailRow('Category', transaction.category),
+                          _buildDetailRow('Transaction ID',
+                              widget.transaction.id ?? 'Unknown'),
                           _buildDivider(),
                           _buildDetailRow(
-                              'Sender / Recipient', transaction.sender),
+                              'Category', widget.transaction.category),
+                          _buildDivider(),
+                          _buildDetailRow(
+                              'Sender / Recipient', widget.transaction.sender),
                           _buildDivider(),
                           _buildDetailRow(
                               'Date',
                               DateFormat('dd MMM yyyy, HH:mm')
-                                  .format(transaction.date)),
+                                  .format(widget.transaction.date)),
                           _buildDivider(),
                           _buildDetailRow('Total Balance',
-                              '${NumberFormat('#,##0.00').format(transaction.totalBalance)} ETB'),
+                              '${NumberFormat('#,##0.00').format(widget.transaction.totalBalance)} ETB'),
                         ],
                       ),
                     ),
@@ -171,7 +273,7 @@ class TransactionDetailScreen extends StatelessWidget {
                                 AppColors.surfaceLight.withValues(alpha: 0.3)),
                       ),
                       child: Text(
-                        transaction.rawMessage,
+                        widget.transaction.rawMessage,
                         style: TextStyle(
                             color: AppColors.textGray.withValues(alpha: 0.7),
                             height: 1.6,

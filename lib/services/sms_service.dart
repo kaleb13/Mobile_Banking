@@ -25,9 +25,12 @@ class SmsService {
 
     // Filter out messages that arrived before 'since' if provided
     if (since != null) {
+      // Subtract 2 seconds from cutoff so we never miss a message
+      // right on the boundary of the last known transaction date.
+      final cutoff = since.subtract(const Duration(seconds: 2));
       return messages.where((msg) {
         if (msg.date == null) return false;
-        return msg.date!.isAfter(since);
+        return msg.date!.isAfter(cutoff);
       }).toList();
     }
 

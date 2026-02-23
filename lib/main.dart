@@ -5,9 +5,11 @@ import 'providers/finance_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/intro/intro_screen.dart';
+import 'services/background_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeBackgroundService();
 
   // Make the app immersive (Edge to Edge)
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

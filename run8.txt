@@ -1,0 +1,7 @@
+﻿No supported devices found with name or id matching 'RF8T904ZDKR'.
+
+The following devices were found:
+SM A135F (mobile) â€¢ 192.168.0.154:34283 â€¢ android-arm    â€¢ Android 14 (API 34)
+Windows (desktop) â€¢ windows             â€¢ windows-x64    â€¢ Microsoft Windows [Version 10.0.26200.7840]
+Chrome (web)      â€¢ chrome              â€¢ web-javascript â€¢ Google Chrome 145.0.7632.76
+Edge (web)        â€¢ edge                â€¢ web-javascript â€¢ Microsoft Edge 145.0.3800.70
