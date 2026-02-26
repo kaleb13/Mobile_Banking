@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 void main() {
   String msg1 =
       "you have withdrawn 300.00Br. from CBE ATM on 19/02/26 18:08,Txn ID DBJ416E1LLU… Your CBE Birr account balance is 51.64Br.";
@@ -31,9 +32,10 @@ void main() {
       final amountMatch =
           RegExp(r'withdrawn\s+([0-9.,]+)br\.?', caseSensitive: false)
               .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0;
+      }
 
       final dateMatch = RegExp(r'on\s+(.*?),txn id', caseSensitive: false)
           .firstMatch(message);
@@ -44,9 +46,10 @@ void main() {
       final amountMatch =
           RegExp(r'credited with\s+([0-9.,]+)br\.?', caseSensitive: false)
               .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0;
+      }
 
       final dateMatch = RegExp(r'on\s+(.*?),txn id', caseSensitive: false)
           .firstMatch(message);
@@ -57,9 +60,10 @@ void main() {
       final amountMatch =
           RegExp(r'received\s+([0-9.,]+)br\.?', caseSensitive: false)
               .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0;
+      }
 
       final senderMatch = RegExp(r'from\s+(.*?)\s+on', caseSensitive: false)
           .firstMatch(message);
@@ -77,9 +81,10 @@ void main() {
       final amountMatch = RegExp(r'(?:sent|paid|transferred)\s+([0-9.,]+)br\.?',
               caseSensitive: false)
           .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0;
+      }
 
       final recipMatch =
           RegExp(r'to\s+(.*?)\s+on', caseSensitive: false).firstMatch(message);
@@ -104,11 +109,12 @@ void main() {
     final balMatch =
         RegExp(r'(?:account\s+)?balance is\s+([0-9.,]+)', caseSensitive: false)
             .firstMatch(message);
-    if (balMatch != null)
+    if (balMatch != null) {
       balance = double.tryParse(balMatch.group(1)!.replaceAll(',', '')) ?? 0;
+    }
 
     print(
-        "Cat: $category, Amt: $amount, Date: $dateStr, Txn: $txnId, Bal: $balance, Part: $participant");
+        "Type: $type, Cat: $category, Amt: $amount, Date: $dateStr, Txn: $txnId, Bal: $balance, Part: $participant");
   }
 
   parseMessage(msg1);

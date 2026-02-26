@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/finance_provider.dart';
 import 'theme/app_theme.dart';
-import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/shell/main_shell.dart';
 import 'screens/intro/intro_screen.dart';
 import 'services/background_service.dart';
 
@@ -36,7 +36,7 @@ class MobileBankingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Banking Tracker',
+      title: 'Shibre',
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
       home: Consumer<FinanceProvider>(
@@ -49,7 +49,7 @@ class MobileBankingApp extends StatelessWidget {
           if (!provider.hasPermission) {
             return const IntroScreen();
           }
-          return const DashboardScreen();
+          return const MainShell();
         },
       ),
     );

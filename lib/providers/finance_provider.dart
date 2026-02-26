@@ -4,19 +4,26 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/sender.dart';
 import '../models/transaction.dart';
 import '../models/app_notification.dart';
+import '../models/reason.dart';
+import '../models/loan_record.dart';
 import '../services/database_service.dart';
 import '../services/sms_service.dart';
-import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as smsInbox;
+import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as sms_inbox;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:telephony/telephony.dart';
 import '../services/telebirr_parser.dart';
 import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
+import '../services/background_service.dart';
 
-class FinanceProvider with ChangeNotifier {
+class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppSender> _senders = [];
   List<AppTransaction> _transactions = [];
   List<AppNotification> _notifications = [];
+  List<AppReason> _reasons = [];
+  List<AppReasonLink> _reasonLinks = [];
+  List<LoanRecord> _loanRecords = [];
+  Map<int, List<LoanPayment>> _loanPayments = {}; // keyed by loanId
   int _unreadNotificationCount = 0;
   bool _isLoading = true;
   double _totalBalance = 0;
@@ -67,6 +74,20 @@ class FinanceProvider with ChangeNotifier {
   int get todayTransactionCount => _todayTransactionCount;
   List<AppNotification> get notifications => _notifications;
   int get unreadNotificationCount => _unreadNotificationCount;
+  List<AppReason> get reasons => _reasons;
+  List<AppReasonLink> get reasonLinks => _reasonLinks;
+  List<LoanRecord> get loanRecords => _loanRecords;
+  List<LoanPayment> paymentsForLoan(int loanId) => _loanPayments[loanId] ?? [];
+
+  // ── Loan convenience getters ──────────────────
+  List<LoanRecord> get activeLoans =>
+      _loanRecords.where((l) => l.status == 'active').toList();
+  List<LoanRecord> get overdueLoans =>
+      _loanRecords.where((l) => l.isOverdue).toList();
+  List<LoanRecord> get paidLoans =>
+      _loanRecords.where((l) => l.isPaid).toList();
+  int get activeLoanCount => activeLoans.length;
+  int get overdueLoanCount => overdueLoans.length;
 
   Future<void> requestPermission() async {
     _hasPermission = await SmsService().requestPermission();
@@ -97,6 +118,8 @@ class FinanceProvider with ChangeNotifier {
   }
 
   Future<void> init() async {
+    WidgetsBinding.instance.addObserver(this);
+
     _isLoading = true;
     notifyListeners();
 
@@ -125,6 +148,10 @@ class FinanceProvider with ChangeNotifier {
     ];
 
     _transactions = await DatabaseService.instance.getTransactions();
+    _reasons = await DatabaseService.instance.getReasons();
+    _reasonLinks = await DatabaseService.instance.getReasonLinks();
+    await _loadLoans();
+    await _refreshOverdueStatuses();
 
     // 2. Discover last fetch time & Install state
     final prefs = await SharedPreferences.getInstance();
@@ -151,7 +178,7 @@ class FinanceProvider with ChangeNotifier {
       // First boot: fetch messages within the 2-day window before install.
       // Consistent with the install_anchor_date = now - 2 days.
       final installAnchor = DateTime.now().subtract(const Duration(days: 2));
-      List<smsInbox.SmsMessage> allMessages =
+      List<sms_inbox.SmsMessage> allMessages =
           await SmsService().getAllMessages(since: installAnchor);
 
       // Sort newest first so we pick the most recent message per bank
@@ -223,11 +250,69 @@ class FinanceProvider with ChangeNotifier {
           notifyListeners();
         }
       },
-      listenInBackground: false,
+      onBackgroundMessage: backgroundMessageHandler,
+      listenInBackground: true,
     );
 
     _calculateStats();
     _isLoading = false;
+    notifyListeners();
+  }
+
+  // ── Load loans helper ─────────────────────────────────────────────────────
+  Future<void> _loadLoans() async {
+    _loanRecords = await DatabaseService.instance.getLoanRecords();
+    _loanPayments = {};
+    for (final loan in _loanRecords) {
+      _loanPayments[loan.id!] =
+          await DatabaseService.instance.getPaymentsForLoan(loan.id!);
+    }
+  }
+
+  /// Refresh statuses for active loans whose due date has passed.
+  Future<void> _refreshOverdueStatuses() async {
+    bool changed = false;
+    for (int i = 0; i < _loanRecords.length; i++) {
+      final loan = _loanRecords[i];
+      if (loan.status == 'active' &&
+          DateTime.now().isAfter(loan.dueDate) &&
+          !loan.isPaid) {
+        final updated = loan.copyWith(status: 'overdue');
+        await DatabaseService.instance.updateLoanRecord(updated);
+        _loanRecords[i] = updated;
+        changed = true;
+        // Notify the user
+        await addUnrecognizedNotification(
+          sender: 'Loan Alert',
+          body: loan.loanType == 'lent'
+              ? '🔔 ${loan.personName} owes you ${loan.remainingAmount.toStringAsFixed(2)} ETB — repayment was due!'
+              : '🔔 Your loan from ${loan.personName} is overdue — ${loan.remainingAmount.toStringAsFixed(2)} ETB remaining.',
+          date: DateTime.now(),
+        );
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // The app just came to the foreground. Background service might have
+      // inserted new transactions. Load them from DB.
+      _reloadFromDatabase();
+    }
+  }
+
+  Future<void> _reloadFromDatabase() async {
+    _transactions = await DatabaseService.instance.getTransactions();
+    await _loadNotifications();
+    _calculateStats();
     notifyListeners();
   }
 
@@ -248,7 +333,7 @@ class FinanceProvider with ChangeNotifier {
     // Fetch every SMS from known senders since the install anchor
     // (subtract 1 min buffer to be safe at boundaries)
     final cutoff = anchorDate.subtract(const Duration(minutes: 1));
-    List<smsInbox.SmsMessage> messages =
+    List<sms_inbox.SmsMessage> messages =
         await SmsService().getAllMessages(since: cutoff);
 
     // Sort oldest-first so transactions are inserted chronologically
@@ -424,34 +509,316 @@ class FinanceProvider with ChangeNotifier {
   }
 
   Future<void> addTransaction(AppTransaction transaction) async {
-    await DatabaseService.instance.insertTransaction(transaction);
-    _transactions.insert(0, transaction);
+    // Auto-categorize: check if sender matches a linked reason rule
+    AppTransaction txToInsert = transaction;
+    if (transaction.reasonId == null && transaction.customReasonText == null) {
+      final autoReason = await DatabaseService.instance
+          .findAutoReason(transaction.sender, transaction.type);
+      if (autoReason != null) {
+        txToInsert = transaction.copyWith(
+            reasonId: autoReason.id, reason: autoReason.name);
+      }
+    }
+    await DatabaseService.instance.insertTransaction(txToInsert);
+    _transactions.insert(0, txToInsert);
+
+    // ─ Auto-detect loan repayment if this is an income SMS ─
+    if (txToInsert.type == 'income') {
+      await _checkAndApplyLoanRepayment(txToInsert);
+    }
+
     _calculateStats();
     notifyListeners();
   }
 
+  /// Update a transaction with a reusable reason [reasonId] OR a one-time [customReasonText].
+  /// Pass reasonId=null and customReasonText with a value for one-time.
+  /// Pass reasonId with a value for a saved reason.
   Future<void> updateTransactionReason(
-      String transactionId, String reason) async {
+    String transactionId, {
+    int? reasonId,
+    String? customReasonText,
+  }) async {
     final index = _transactions.indexWhere((t) => t.id == transactionId);
-    if (index != -1) {
-      final oldTx = _transactions[index];
-      final newTx = AppTransaction(
-        id: oldTx.id,
-        name: oldTx.name,
-        amount: oldTx.amount,
-        type: oldTx.type,
-        date: oldTx.date,
-        sender: oldTx.sender,
-        category: oldTx.category,
-        rawMessage: oldTx.rawMessage,
-        isAutoDetected: oldTx.isAutoDetected,
-        totalBalance: oldTx.totalBalance,
-        reason: reason.isEmpty ? null : reason,
-      );
-      await DatabaseService.instance.updateTransaction(newTx);
-      _transactions[index] = newTx;
-      notifyListeners();
+    if (index == -1) return;
+    final oldTx = _transactions[index];
+
+    String? resolvedName;
+    if (reasonId != null) {
+      final r = _reasons.firstWhere((r) => r.id == reasonId,
+          orElse: () => AppReason(name: ''));
+      resolvedName = r.name.isNotEmpty ? r.name : null;
     }
+
+    final newTx = AppTransaction(
+      id: oldTx.id,
+      name: oldTx.name,
+      amount: oldTx.amount,
+      type: oldTx.type,
+      date: oldTx.date,
+      sender: oldTx.sender,
+      category: oldTx.category,
+      rawMessage: oldTx.rawMessage,
+      isAutoDetected: oldTx.isAutoDetected,
+      totalBalance: oldTx.totalBalance,
+      reasonId: reasonId,
+      customReasonText:
+          (customReasonText != null && customReasonText.isNotEmpty)
+              ? customReasonText
+              : null,
+      reason: resolvedName,
+    );
+    await DatabaseService.instance.updateTransaction(newTx);
+    _transactions[index] = newTx;
+    notifyListeners();
+  }
+
+  // ── Reason CRUD ──────────────────────────────────
+  Future<void> loadReasons() async {
+    _reasons = await DatabaseService.instance.getReasons();
+    _reasonLinks = await DatabaseService.instance.getReasonLinks();
+    notifyListeners();
+  }
+
+  Future<void> addReason(String name) async {
+    final id = await DatabaseService.instance
+        .insertReason(AppReason(name: name, isSystem: false));
+    _reasons.add(AppReason(id: id, name: name, isSystem: false));
+    notifyListeners();
+  }
+
+  Future<void> editReason(AppReason reason, String newName) async {
+    final updated = reason.copyWith(name: newName);
+    await DatabaseService.instance.updateReason(updated);
+    final idx = _reasons.indexWhere((r) => r.id == reason.id);
+    if (idx != -1) _reasons[idx] = updated;
+    notifyListeners();
+  }
+
+  Future<void> deleteReason(int id) async {
+    await DatabaseService.instance.deleteReason(id);
+    _reasons.removeWhere((r) => r.id == id);
+    _reasonLinks.removeWhere((l) => l.reasonId == id);
+    notifyListeners();
+  }
+
+  Future<void> addReasonLink(
+      {required int reasonId,
+      required String linkedName,
+      required String linkType}) async {
+    final lowerName = linkedName.toLowerCase();
+
+    // 1. Remove any existing link for exactly this name and type (so we override)
+    final existingLinksToRemove = _reasonLinks
+        .where((l) =>
+            l.linkedName.toLowerCase() == lowerName && l.linkType == linkType)
+        .toList();
+    for (var l in existingLinksToRemove) {
+      await deleteReasonLink(l.id!);
+    }
+
+    // 2. Add the new link
+    final id = await DatabaseService.instance.insertReasonLink(AppReasonLink(
+        reasonId: reasonId, linkedName: linkedName, linkType: linkType));
+    _reasonLinks.add(AppReasonLink(
+        id: id,
+        reasonId: reasonId,
+        linkedName: linkedName,
+        linkType: linkType));
+
+    // 3. Retroactively apply this new reason to all matching existing transactions
+    final r = _reasons.firstWhere((r) => r.id == reasonId,
+        orElse: () => AppReason(name: ''));
+    if (r.name.isNotEmpty) {
+      bool updated = false;
+      for (int i = 0; i < _transactions.length; i++) {
+        final tx = _transactions[i];
+        final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
+
+        if (tx.sender.toLowerCase() == lowerName &&
+            expectedLinkType == linkType) {
+          final newTx = tx.copyWith(
+            reasonId: reasonId,
+            reason: r.name,
+            clearCustomReason: true, // override one-time reasons too
+          );
+          await DatabaseService.instance.updateTransaction(newTx);
+          _transactions[i] = newTx;
+          updated = true;
+        }
+      }
+      if (updated) {
+        _calculateStats();
+      }
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> deleteReasonLink(int id) async {
+    await DatabaseService.instance.deleteReasonLink(id);
+    _reasonLinks.removeWhere((l) => l.id == id);
+    notifyListeners();
+  }
+
+  List<AppReasonLink> linksForReason(int reasonId) =>
+      _reasonLinks.where((l) => l.reasonId == reasonId).toList();
+
+  // ── Loan Management ───────────────────────────────────────────────────────
+
+  Future<LoanRecord> createLoan({
+    required String loanType,
+    required String personName,
+    String? trackedSenderName,
+    required double principalAmount,
+    required DateTime dueDate,
+    String? linkedTransactionId,
+    String? note,
+  }) async {
+    final loan = LoanRecord(
+      loanType: loanType,
+      personName: personName,
+      trackedSenderName: trackedSenderName,
+      principalAmount: principalAmount,
+      loanDate: DateTime.now(),
+      dueDate: dueDate,
+      linkedTransactionId: linkedTransactionId,
+      note: note,
+    );
+    final id = await DatabaseService.instance.insertLoanRecord(loan);
+    final withId = LoanRecord(
+      id: id,
+      loanType: loan.loanType,
+      personName: loan.personName,
+      trackedSenderName: loan.trackedSenderName,
+      principalAmount: loan.principalAmount,
+      paidAmount: 0,
+      loanDate: loan.loanDate,
+      dueDate: loan.dueDate,
+      linkedTransactionId: loan.linkedTransactionId,
+      status: 'active',
+      note: loan.note,
+    );
+    _loanRecords.insert(0, withId);
+    _loanPayments[id] = [];
+    notifyListeners();
+    return withId;
+  }
+
+  Future<void> loadLoans() async {
+    await _loadLoans();
+    notifyListeners();
+  }
+
+  Future<void> deleteLoan(int id) async {
+    await DatabaseService.instance.deleteLoanRecord(id);
+    _loanRecords.removeWhere((l) => l.id == id);
+    _loanPayments.remove(id);
+    notifyListeners();
+  }
+
+  Future<void> updateLoan(LoanRecord loan) async {
+    await DatabaseService.instance.updateLoanRecord(loan);
+    final idx = _loanRecords.indexWhere((l) => l.id == loan.id);
+    if (idx != -1) _loanRecords[idx] = loan;
+    notifyListeners();
+  }
+
+  /// Add a manual repayment against a loan.
+  Future<void> recordLoanPayment({
+    required int loanId,
+    required double amount,
+    String? note,
+    String? linkedTransactionId,
+  }) async {
+    final payment = LoanPayment(
+      loanId: loanId,
+      amount: amount,
+      paymentDate: DateTime.now(),
+      linkedTransactionId: linkedTransactionId,
+      note: note,
+    );
+    await DatabaseService.instance.insertLoanPayment(payment);
+    final updated = await DatabaseService.instance.recalcLoanPaid(loanId);
+    if (updated != null) {
+      final idx = _loanRecords.indexWhere((l) => l.id == loanId);
+      if (idx != -1) _loanRecords[idx] = updated;
+      _loanPayments[loanId] =
+          await DatabaseService.instance.getPaymentsForLoan(loanId);
+
+      // If just reached full payment, add a congratulatory notification
+      if (updated.isPaid) {
+        await addUnrecognizedNotification(
+          sender: 'Loan Complete ✅',
+          body: updated.loanType == 'lent'
+              ? '${updated.personName} has fully repaid ${updated.principalAmount.toStringAsFixed(2)} ETB!'
+              : 'You have fully repaid your loan of ${updated.principalAmount.toStringAsFixed(2)} ETB to ${updated.personName}!',
+          date: DateTime.now(),
+        );
+      } else {
+        // Progress update notification
+        final pct = (updated.progressPercent * 100).toStringAsFixed(0);
+        await addUnrecognizedNotification(
+          sender: 'Loan Update',
+          body: updated.loanType == 'lent'
+              ? '${updated.personName} paid ${amount.toStringAsFixed(2)} ETB (↑$pct% of loan complete). ${updated.remainingAmount.toStringAsFixed(2)} ETB remaining.'
+              : 'Payment of ${amount.toStringAsFixed(2)} ETB recorded. $pct% of your loan repaid. ${updated.remainingAmount.toStringAsFixed(2)} ETB left.',
+          date: DateTime.now(),
+        );
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> deleteLoanPaymentRecord(int paymentId, int loanId) async {
+    await DatabaseService.instance.deleteLoanPayment(paymentId);
+    final updated = await DatabaseService.instance.recalcLoanPaid(loanId);
+    if (updated != null) {
+      final idx = _loanRecords.indexWhere((l) => l.id == loanId);
+      if (idx != -1) _loanRecords[idx] = updated;
+      _loanPayments[loanId] =
+          await DatabaseService.instance.getPaymentsForLoan(loanId);
+    }
+    notifyListeners();
+  }
+
+  /// Called when a new income SMS arrives — checks if the sender is tracked
+  /// by any active loan and auto-records a payment.
+  Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
+    // Look for active loans whose trackedSenderName matches sender or name
+    final matchingLoans =
+        await DatabaseService.instance.findActiveLoansForSender(tx.sender);
+    if (matchingLoans.isEmpty) {
+      // Also try matching by bank name
+      final byName =
+          await DatabaseService.instance.findActiveLoansForSender(tx.name);
+      if (byName.isEmpty) return;
+      for (final loan in byName) {
+        await _applyRepayment(loan, tx);
+      }
+      return;
+    }
+    for (final loan in matchingLoans) {
+      await _applyRepayment(loan, tx);
+    }
+  }
+
+  Future<void> _applyRepayment(LoanRecord loan, AppTransaction tx) async {
+    // Only attribute up to the remaining amount
+    final applicable = tx.amount.clamp(0.0, loan.remainingAmount);
+    if (applicable <= 0) return;
+    await recordLoanPayment(
+      loanId: loan.id!,
+      amount: applicable,
+      linkedTransactionId: tx.id,
+      note: 'Auto-detected from SMS (${tx.name})',
+    );
+  }
+
+  Future<List<LoanPayment>> getPaymentsForLoan(int loanId) async {
+    final payments = await DatabaseService.instance.getPaymentsForLoan(loanId);
+    _loanPayments[loanId] = payments;
+    return payments;
   }
 
   Future<void> processNewSms(
@@ -515,6 +882,7 @@ class FinanceProvider with ChangeNotifier {
     if (hasDeposit && !hasExpense) {
       await addTransaction(
         AppTransaction(
+          id: '${sender}_${date.millisecondsSinceEpoch}',
           name: matchedSender.senderName,
           amount: amount,
           type: 'income',
@@ -528,6 +896,7 @@ class FinanceProvider with ChangeNotifier {
     } else if (hasExpense && !hasDeposit) {
       await addTransaction(
         AppTransaction(
+          id: '${sender}_${date.millisecondsSinceEpoch}',
           name: matchedSender.senderName,
           amount: amount,
           type: 'expense',

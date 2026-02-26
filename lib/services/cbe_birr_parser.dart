@@ -28,9 +28,10 @@ class CbeBirrParser {
       final amountMatch =
           RegExp(r'withdrawn\s+([0-9.,]+)br\.?', caseSensitive: false)
               .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0.0;
+      }
 
       final dateMatch = RegExp(r'on\s+(.*?),txn id', caseSensitive: false)
           .firstMatch(message);
@@ -41,9 +42,10 @@ class CbeBirrParser {
       final amountMatch =
           RegExp(r'credited with\s+([0-9.,]+)br\.?', caseSensitive: false)
               .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0.0;
+      }
 
       final dateMatch = RegExp(r'on\s+(.*?),txn id', caseSensitive: false)
           .firstMatch(message);
@@ -54,9 +56,10 @@ class CbeBirrParser {
       final amountMatch =
           RegExp(r'received\s+([0-9.,]+)br\.?', caseSensitive: false)
               .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0.0;
+      }
 
       final senderMatch = RegExp(r'from\s+(.*?)\s+on', caseSensitive: false)
           .firstMatch(message);
@@ -74,9 +77,10 @@ class CbeBirrParser {
       final amountMatch = RegExp(r'(?:sent|paid|transferred)\s+([0-9.,]+)br\.?',
               caseSensitive: false)
           .firstMatch(message);
-      if (amountMatch != null)
+      if (amountMatch != null) {
         amount =
             double.tryParse(amountMatch.group(1)!.replaceAll(',', '')) ?? 0.0;
+      }
 
       final recipMatch =
           RegExp(r'to\s+(.*?)\s+on', caseSensitive: false).firstMatch(message);

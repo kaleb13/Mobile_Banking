@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'package:mobile_banking_app/services/telebirr_parser.dart';
 
 void main() {

@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:telephony/telephony.dart';
 import '../models/transaction.dart';
 import '../models/sender.dart';
+import '../models/app_notification.dart';
 import 'database_service.dart';
 import 'telebirr_parser.dart';
 import 'cbe_parser.dart';
@@ -34,8 +35,8 @@ Future<void> initializeBackgroundService() async {
       autoStart: true,
       isForegroundMode: true,
       notificationChannelId: 'my_foreground',
-      initialNotificationTitle: 'Mobile Banking Monitor',
-      initialNotificationContent: 'Monitoring incoming transactions...',
+      initialNotificationTitle: 'Shibre is Active',
+      initialNotificationContent: 'Looking for transaction SMS',
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(),
@@ -57,6 +58,35 @@ void onStart(ServiceInstance service) async {
     });
     service.on('stopService').listen((event) {
       service.stopSelf();
+    });
+
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+
+    // Periodically update the notification to keep it permanently pinned and "active"
+    Timer.periodic(const Duration(seconds: 15), (timer) async {
+      if (await service.isForegroundService()) {
+        flutterLocalNotificationsPlugin.show(
+          id: 888,
+          title: 'Shibre is Active',
+          body: 'Looking for transaction SMS',
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'my_foreground',
+              'Mobile Banking Service',
+              icon: 'launch_background',
+              ongoing: true, // This is explicitly sticky (cannot be swiped)
+              autoCancel: false,
+              priority: Priority
+                  .min, // Low/min priority usually puts it strictly in status bar without heads-up
+              importance: Importance.low, // doesn't make sound
+              playSound: false,
+              enableVibration: false,
+              showWhen: false, // Don't keep updating the timestamp constantly
+            ),
+          ),
+        );
+      }
     });
   }
 
@@ -105,55 +135,61 @@ Future<void> processBackgroundSms(SmsMessage message) async {
       return;
     }
 
-    if (matchedSender != null) {
-      final lowerMsg = body.toLowerCase();
-      bool hasDeposit = matchedSender.depositKeywords
-          .any((kw) => lowerMsg.contains(kw.toLowerCase()));
-      bool hasExpense = matchedSender.expenseKeywords
-          .any((kw) => lowerMsg.contains(kw.toLowerCase()));
+    final lowerMsg = body.toLowerCase();
+    bool hasDeposit = matchedSender.depositKeywords
+        .any((kw) => lowerMsg.contains(kw.toLowerCase()));
+    bool hasExpense = matchedSender.expenseKeywords
+        .any((kw) => lowerMsg.contains(kw.toLowerCase()));
 
-      // Basic amount extract
-      final amountMatch = RegExp(r'[0-9.,]+').firstMatch(body);
-      double amount = 0;
-      if (amountMatch != null) {
-        amount =
-            double.tryParse(amountMatch.group(0)!.replaceAll(',', '')) ?? 0;
-      }
+    // Basic amount extract
+    final amountMatch = RegExp(r'[0-9.,]+').firstMatch(body);
+    double amount = 0;
+    if (amountMatch != null) {
+      amount = double.tryParse(amountMatch.group(0)!.replaceAll(',', '')) ?? 0;
+    }
 
-      if (hasDeposit && !hasExpense) {
-        tx = AppTransaction(
-          name: matchedSender.senderName,
-          amount: amount,
-          type: 'income',
-          date: date,
-          sender: senderAddress,
-          category: 'Auto',
-          rawMessage: body,
-          isAutoDetected: true,
-        );
-      } else if (hasExpense && !hasDeposit) {
-        tx = AppTransaction(
-          name: matchedSender.senderName,
-          amount: amount,
-          type: 'expense',
-          date: date,
-          sender: senderAddress,
-          category: 'Auto',
-          rawMessage: body,
-          isAutoDetected: true,
-        );
-      } else {
-        tx = AppTransaction(
-          name: matchedSender.senderName,
-          amount: amount,
-          type: 'pending',
-          date: date,
-          sender: senderAddress,
-          category: 'Unclassified',
-          rawMessage: body,
-          isAutoDetected: false,
-        );
-      }
+    if (hasDeposit && !hasExpense) {
+      tx = AppTransaction(
+        id: '${senderAddress}_${date.millisecondsSinceEpoch}',
+        name: matchedSender.senderName,
+        amount: amount,
+        type: 'income',
+        date: date,
+        sender: senderAddress,
+        category: 'Auto',
+        rawMessage: body,
+        isAutoDetected: true,
+      );
+    } else if (hasExpense && !hasDeposit) {
+      tx = AppTransaction(
+        id: '${senderAddress}_${date.millisecondsSinceEpoch}',
+        name: matchedSender.senderName,
+        amount: amount,
+        type: 'expense',
+        date: date,
+        sender: senderAddress,
+        category: 'Auto',
+        rawMessage: body,
+        isAutoDetected: true,
+      );
+    } else {
+      // Unrecognized: save to in-app notifications instead of pending
+      final notificationId = '${senderAddress}_${date.millisecondsSinceEpoch}';
+
+      // We do not have easy access to SharedPreferences ignored_notification_ids
+      // here to filter out ignored ones, but usually background unknown messages
+      // are fine to log. For complete parity, we could check prefs, but inserting
+      // directly is safer for background to ensure no missed data.
+      final notification = AppNotification(
+        id: notificationId,
+        sender: senderAddress,
+        body: body,
+        date: date,
+      );
+      await DatabaseService.instance.insertNotification(notification);
+
+      // Return early so we don't insert a null tx
+      return;
     }
   }
 

@@ -11,7 +11,7 @@ class IntroScreen extends StatelessWidget {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundTop,
+      backgroundColor: const Color(0xFF0A0B0D),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -19,7 +19,7 @@ class IntroScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.message_outlined,
-                  size: 80, color: AppColors.primaryTeal),
+                  size: 80, color: AppColors.primaryBlue),
               const SizedBox(height: 32),
               const Text(
                 'Welcome to Smart Banking',
@@ -58,7 +58,7 @@ class IntroScreen extends StatelessWidget {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryTeal,
+                    backgroundColor: AppColors.primaryBlue,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

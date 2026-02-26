@@ -19,9 +19,9 @@ class NotificationsScreen extends StatelessWidget {
     });
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundTop,
+      backgroundColor: const Color(0xFF0A0B0D),
       appBar: AppBar(
-        backgroundColor: AppColors.backgroundTop,
+        backgroundColor: const Color(0xFF0A0B0D),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new,
@@ -42,7 +42,8 @@ class NotificationsScreen extends StatelessWidget {
               onPressed: () => _showClearAll(context, provider),
               child: const Text(
                 'Clear all',
-                style: TextStyle(color: AppColors.primaryTeal, fontSize: 13),
+                style:
+                    TextStyle(color: AppColors.primaryBlue, fontSize: 13),
               ),
             ),
         ],
@@ -183,7 +184,7 @@ class NotificationsScreen extends StatelessWidget {
             ),
             child: const Icon(
               Icons.notifications_none_rounded,
-              color: AppColors.primaryTeal,
+              color: AppColors.primaryBlue,
               size: 40,
             ),
           ),
@@ -329,7 +330,7 @@ class NotificationsScreen extends StatelessWidget {
                 child: const Text(
                   'Cancel',
                   style: TextStyle(
-                    color: AppColors.primaryTeal,
+                    color: AppColors.primaryBlue,
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),

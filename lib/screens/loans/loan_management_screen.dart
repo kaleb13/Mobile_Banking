@@ -1,0 +1,1579 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import '../../models/loan_record.dart';
+import '../../providers/finance_provider.dart';
+import '../../theme/app_theme.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loan Management Screen
+// ─────────────────────────────────────────────────────────────────────────────
+class LoanManagementScreen extends StatefulWidget {
+  const LoanManagementScreen({super.key});
+
+  @override
+  State<LoanManagementScreen> createState() => _LoanManagementScreenState();
+}
+
+class _LoanManagementScreenState extends State<LoanManagementScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+  // 0 = Lent (I gave money), 1 = Borrowed (I owe), 2 = Paid
+  static const _tabs = ['Lent Out', 'Borrowed', 'Settled'];
+
+  static const _lentColor = Color(0xFF3EB489); // green
+  static const _borrowColor = Color(0xFFE67E22); // amber
+  static const _paidColor = Color(0xFF6B8FA6); // muted blue
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<FinanceProvider>().loadLoans();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<FinanceProvider>(context);
+    final lentLoans = provider.loanRecords
+        .where((l) => l.loanType == 'lent' && !l.isPaid)
+        .toList();
+    final borrowedLoans = provider.loanRecords
+        .where((l) => l.loanType == 'borrowed' && !l.isPaid)
+        .toList();
+    final paidLoans = provider.paidLoans;
+
+    // Summary figures
+    final totalLent =
+        lentLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
+    final totalBorrowed =
+        borrowedLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0A0B0D),
+        body: Column(
+          children: [
+            // ── Header ────────────────────────────────────────────────────
+            _LoanHeader(totalLent: totalLent, totalBorrowed: totalBorrowed),
+
+            // ── Tab bar ───────────────────────────────────────────────────
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF111315),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: TabBar(
+                controller: _tabCtrl,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.5)),
+                ),
+                dividerColor: Colors.transparent,
+                labelColor: AppColors.accentBlue,
+                unselectedLabelColor: AppColors.textGray,
+                labelStyle:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                unselectedLabelStyle:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+                tabs: _tabs.map((t) => Tab(text: t)).toList(),
+              ),
+            ),
+
+            // ── Tab views ─────────────────────────────────────────────────
+            Expanded(
+              child: TabBarView(
+                controller: _tabCtrl,
+                children: [
+                  _LoanList(
+                    loans: lentLoans,
+                    accentColor: _lentColor,
+                    emptyTitle: 'No active loans given',
+                    emptySubtitle: 'Track money you\'ve lent to others',
+                  ),
+                  _LoanList(
+                    loans: borrowedLoans,
+                    accentColor: _borrowColor,
+                    emptyTitle: 'No active debts',
+                    emptySubtitle: 'Track money you\'ve borrowed from others',
+                  ),
+                  _LoanList(
+                    loans: paidLoans,
+                    accentColor: _paidColor,
+                    emptyTitle: 'No settled loans yet',
+                    emptySubtitle: 'Paid loans will appear here automatically',
+                    showPaid: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        // ── FAB ───────────────────────────────────────────────────────────
+        floatingActionButton: _buildFAB(context, provider),
+      ),
+    );
+  }
+
+  Widget _buildFAB(BuildContext context, FinanceProvider provider) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 80),
+      child: FloatingActionButton.extended(
+        onPressed: () => _showAddLoanSheet(context, provider),
+        backgroundColor: AppColors.primaryBlue,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('New Loan',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  // ── Add loan bottom sheet ─────────────────────────────────────────────────
+  void _showAddLoanSheet(BuildContext context, FinanceProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddLoanSheet(provider: provider),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Summary Header
+// ─────────────────────────────────────────────────────────────────────────────
+class _LoanHeader extends StatelessWidget {
+  final double totalLent;
+  final double totalBorrowed;
+  const _LoanHeader({required this.totalLent, required this.totalBorrowed});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00');
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.0, -0.9),
+          radius: 1.1,
+          colors: [Color(0xFF0D3A2E), Color(0xFF091E18), Color(0xFF0A0B0D)],
+          stops: [0.0, 0.5, 1.0],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1)),
+                    ),
+                    child: const Icon(Icons.handshake_outlined,
+                        color: Color(0xFF3EB489), size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Loan Manager',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.4)),
+                      Text('Track every lent & borrowed amount',
+                          style: TextStyle(
+                              color: Color(0xFF6B8FA6), fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SummaryCard(
+                      label: 'You are owed',
+                      amount: fmt.format(totalLent),
+                      color: const Color(0xFF3EB489),
+                      icon: Icons.arrow_circle_up_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _SummaryCard(
+                      label: 'You owe',
+                      amount: fmt.format(totalBorrowed),
+                      color: const Color(0xFFE67E22),
+                      icon: Icons.arrow_circle_down_outlined,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String label;
+  final String amount;
+  final Color color;
+  final IconData icon;
+  const _SummaryCard(
+      {required this.label,
+      required this.amount,
+      required this.color,
+      required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 14),
+              const SizedBox(width: 5),
+              Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(amount,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          const Text('ETB',
+              style: TextStyle(color: Color(0xFF4A6572), fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loan List (per tab)
+// ─────────────────────────────────────────────────────────────────────────────
+class _LoanList extends StatelessWidget {
+  final List<LoanRecord> loans;
+  final Color accentColor;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final bool showPaid;
+
+  const _LoanList({
+    required this.loans,
+    required this.accentColor,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+    this.showPaid = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loans.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.handshake_outlined,
+                color: AppColors.textGray.withValues(alpha: 0.3), size: 52),
+            const SizedBox(height: 16),
+            Text(emptyTitle,
+                style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 6),
+            Text(emptySubtitle,
+                style: const TextStyle(color: Color(0xFF4A6572), fontSize: 12),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 140),
+      physics: const BouncingScrollPhysics(),
+      itemCount: loans.length,
+      itemBuilder: (ctx, i) => _LoanCard(
+        loan: loans[i],
+        accentColor: accentColor,
+        showPaid: showPaid,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Individual Loan Card
+// ─────────────────────────────────────────────────────────────────────────────
+class _LoanCard extends StatelessWidget {
+  final LoanRecord loan;
+  final Color accentColor;
+  final bool showPaid;
+  const _LoanCard(
+      {required this.loan, required this.accentColor, this.showPaid = false});
+
+  String _statusLabel() {
+    if (loan.isPaid) return 'Paid';
+    if (loan.isOverdue) return 'Overdue';
+    final d = loan.daysUntilDue;
+    if (d <= 0) return 'Due Today';
+    if (d == 1) return '1 day left';
+    if (d <= 7) return '$d days left';
+    return DateFormat('MMM d').format(loan.dueDate);
+  }
+
+  Color _statusColor() {
+    if (loan.isPaid) return const Color(0xFF6B8FA6);
+    if (loan.isOverdue) return AppColors.alertRed;
+    final d = loan.daysUntilDue;
+    if (d <= 3) return const Color(0xFFE67E22);
+    return const Color(0xFF3EB489);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<FinanceProvider>();
+    final fmt = NumberFormat('#,##0.00');
+    final shortFmt = NumberFormat('#,##0');
+    final pct = loan.progressPercent;
+    final statusColor = _statusColor();
+
+    return GestureDetector(
+      onTap: () => _openDetail(context, provider),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F1214),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: loan.isOverdue
+                ? AppColors.alertRed.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.06),
+          ),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Row 1: avatar + name + status ─────────────────────
+                  Row(
+                    children: [
+                      // Avatar
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: accentColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: accentColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Center(
+                          child: Text(
+                            loan.personName.isNotEmpty
+                                ? loan.personName[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                                color: accentColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              loan.personName,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Icon(
+                                  loan.loanType == 'lent'
+                                      ? Icons.arrow_upward_rounded
+                                      : Icons.arrow_downward_rounded,
+                                  color: accentColor,
+                                  size: 11,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  loan.loanType == 'lent'
+                                      ? 'Lent out'
+                                      : 'Borrowed',
+                                  style: TextStyle(
+                                      color: accentColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                                if (loan.note != null &&
+                                    loan.note!.isNotEmpty) ...[
+                                  const Text(' · ',
+                                      style: TextStyle(
+                                          color: Color(0xFF4A6572),
+                                          fontSize: 11)),
+                                  Expanded(
+                                    child: Text(
+                                      loan.note!,
+                                      style: const TextStyle(
+                                          color: Color(0xFF4A6572),
+                                          fontSize: 11),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Status badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: statusColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          _statusLabel(),
+                          style: TextStyle(
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Amounts row ────────────────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Principal',
+                              style: TextStyle(
+                                  color: Color(0xFF4A6572), fontSize: 10)),
+                          Text(
+                            fmt.format(loan.principalAmount),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w300,
+                                letterSpacing: -0.3),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('Remaining',
+                              style: TextStyle(
+                                  color: Color(0xFF4A6572), fontSize: 10)),
+                          Text(
+                            shortFmt.format(loan.remainingAmount),
+                            style: TextStyle(
+                                color: loan.isPaid
+                                    ? const Color(0xFF3EB489)
+                                    : Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.3),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Progress bar ───────────────────────────────────────
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: pct,
+                      minHeight: 6,
+                      backgroundColor: Colors.white.withValues(alpha: 0.07),
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${(pct * 100).toStringAsFixed(0)}% repaid',
+                        style: const TextStyle(
+                            color: Color(0xFF4A6572), fontSize: 10),
+                      ),
+                      Text(
+                        'Due ${DateFormat('MMM d, y').format(loan.dueDate)}',
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+
+                  // ── Tracked sender chip ────────────────────────────────
+                  if (loan.trackedSenderName != null &&
+                      loan.trackedSenderName!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.track_changes_rounded,
+                            color: AppColors.primaryBlue, size: 12),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Watching: ${loan.trackedSenderName}',
+                          style: const TextStyle(
+                              color: AppColors.primaryBlue, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // ── Action bar ────────────────────────────────────────────────
+            if (!loan.isPaid)
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top:
+                        BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Record payment
+                    Expanded(
+                      child: _ActionTile(
+                        icon: Icons.payment_rounded,
+                        label: 'Record Payment',
+                        color: accentColor,
+                        onTap: () => _showPaymentSheet(context, provider, loan),
+                      ),
+                    ),
+                    Container(
+                        width: 1,
+                        height: 36,
+                        color: Colors.white.withValues(alpha: 0.05)),
+                    // Delete
+                    _ActionTile(
+                      icon: Icons.delete_outline_rounded,
+                      label: 'Delete',
+                      color: AppColors.alertRed,
+                      onTap: () => _confirmDelete(context, provider),
+                      compact: true,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openDetail(BuildContext context, FinanceProvider provider) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LoanDetailScreen(loan: loan),
+      ),
+    );
+  }
+
+  void _showPaymentSheet(
+      BuildContext context, FinanceProvider provider, LoanRecord loan) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => RecordPaymentSheet(loan: loan, provider: provider),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, FinanceProvider provider) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title:
+            const Text('Delete Loan?', style: TextStyle(color: Colors.white)),
+        content: Text(
+            'Are you sure you want to delete the loan for ${loan.personName}? All payment history will be lost.',
+            style: const TextStyle(color: AppColors.textGray)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textGray)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete',
+                style: TextStyle(color: AppColors.alertRed)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await provider.deleteLoan(loan.id!);
+    }
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  final bool compact;
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding:
+            EdgeInsets.symmetric(horizontal: compact ? 16 : 20, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+          children: [
+            Icon(icon, color: color, size: 16),
+            if (!compact) ...[
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loan Detail Screen
+// ─────────────────────────────────────────────────────────────────────────────
+class LoanDetailScreen extends StatelessWidget {
+  final LoanRecord loan;
+  const LoanDetailScreen({super.key, required this.loan});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<FinanceProvider>();
+    // Get current version from provider
+    final current = provider.loanRecords
+        .firstWhere((l) => l.id == loan.id, orElse: () => loan);
+    final payments = provider.paymentsForLoan(current.id!);
+    final fmt = NumberFormat('#,##0.00');
+    final isLent = current.loanType == 'lent';
+    final accentColor =
+        isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0B0D),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          current.personName,
+          style: const TextStyle(
+              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          if (!current.isPaid)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: GestureDetector(
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) =>
+                        RecordPaymentSheet(loan: current, provider: provider),
+                  );
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: accentColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, color: accentColor, size: 14),
+                      const SizedBox(width: 4),
+                      Text('Payment',
+                          style: TextStyle(
+                              color: accentColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+        physics: const BouncingScrollPhysics(),
+        children: [
+          // ── Progress hero ──────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              children: [
+                // Circular progress
+                SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 120,
+                        height: 120,
+                        child: CircularProgressIndicator(
+                          value: current.progressPercent,
+                          strokeWidth: 8,
+                          backgroundColor: Colors.white.withValues(alpha: 0.07),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(accentColor),
+                        ),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${(current.progressPercent * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(
+                                color: accentColor,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700),
+                          ),
+                          const Text('repaid',
+                              style: TextStyle(
+                                  color: Color(0xFF6B8FA6), fontSize: 10)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _DetailStat('Principal',
+                        fmt.format(current.principalAmount), Colors.white),
+                    _DetailStat('Paid', fmt.format(current.paidAmount),
+                        const Color(0xFF3EB489)),
+                    _DetailStat('Remaining',
+                        fmt.format(current.remainingAmount), accentColor),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Divider(color: Colors.white.withValues(alpha: 0.07)),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isLent ? '↑ Lent on' : '↓ Borrowed on',
+                      style: const TextStyle(
+                          color: Color(0xFF4A6572), fontSize: 11),
+                    ),
+                    Text(DateFormat('MMM d, y').format(current.loanDate),
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 11)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      current.isOverdue
+                          ? '⚠ Overdue by ${current.daysOverdue}d'
+                          : '📅 Due on',
+                      style: TextStyle(
+                          color: current.isOverdue
+                              ? AppColors.alertRed
+                              : const Color(0xFF4A6572),
+                          fontSize: 11),
+                    ),
+                    Text(DateFormat('MMM d, y').format(current.dueDate),
+                        style: TextStyle(
+                            color: current.isOverdue
+                                ? AppColors.alertRed
+                                : Colors.white,
+                            fontSize: 11,
+                            fontWeight: current.isOverdue
+                                ? FontWeight.w700
+                                : FontWeight.normal)),
+                  ],
+                ),
+                if (current.trackedSenderName != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('🔍 Tracking sender',
+                          style: TextStyle(
+                              color: AppColors.primaryBlue, fontSize: 11)),
+                      Text(current.trackedSenderName!,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 11)),
+                    ],
+                  ),
+                ],
+                if (current.note != null && current.note!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('📝 Note',
+                          style: TextStyle(
+                              color: Color(0xFF4A6572), fontSize: 11)),
+                      Flexible(
+                        child: Text(current.note!,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Payment history ────────────────────────────────────────────
+          if (payments.isNotEmpty) ...[
+            const Text('Payment History',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
+            ...payments.map((p) => _PaymentTile(
+                  payment: p,
+                  loanId: current.id!,
+                  accentColor: accentColor,
+                )),
+          ] else ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  children: [
+                    Icon(Icons.receipt_long_outlined,
+                        color: AppColors.textGray.withValues(alpha: 0.3),
+                        size: 40),
+                    const SizedBox(height: 10),
+                    const Text('No payments recorded yet',
+                        style:
+                            TextStyle(color: AppColors.textGray, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+  const _DetailStat(this.label, this.value, this.valueColor);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value,
+            style: TextStyle(
+                color: valueColor, fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(label,
+            style: const TextStyle(color: Color(0xFF4A6572), fontSize: 10)),
+      ],
+    );
+  }
+}
+
+class _PaymentTile extends StatelessWidget {
+  final LoanPayment payment;
+  final int loanId;
+  final Color accentColor;
+  const _PaymentTile(
+      {required this.payment, required this.loanId, required this.accentColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<FinanceProvider>();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1214),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.payments_outlined, color: accentColor, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  NumberFormat('#,##0.00').format(payment.amount) + ' ETB',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  DateFormat('MMM d, y · hh:mm a').format(payment.paymentDate),
+                  style:
+                      const TextStyle(color: Color(0xFF4A6572), fontSize: 10),
+                ),
+                if (payment.note != null && payment.note!.isNotEmpty)
+                  Text(payment.note!,
+                      style: const TextStyle(
+                          color: Color(0xFF4A6572), fontSize: 10)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: AppColors.surfaceDark,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  title: const Text('Remove payment?',
+                      style: TextStyle(color: Colors.white)),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel',
+                            style: TextStyle(color: AppColors.textGray))),
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Remove',
+                            style: TextStyle(color: AppColors.alertRed))),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await provider.deleteLoanPaymentRecord(payment.id!, loanId);
+              }
+            },
+            child: const Icon(Icons.close_rounded,
+                color: AppColors.alertRed, size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Add Loan Bottom Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class AddLoanSheet extends StatefulWidget {
+  final FinanceProvider provider;
+  final String? linkedTransactionId;
+  final double? prefilledAmount;
+  final String? prefilledName;
+  final String? prefilledTrackedSender;
+  final String? prefilledType;
+
+  const AddLoanSheet({
+    super.key,
+    required this.provider,
+    this.linkedTransactionId,
+    this.prefilledAmount,
+    this.prefilledName,
+    this.prefilledTrackedSender,
+    this.prefilledType,
+  });
+
+  @override
+  State<AddLoanSheet> createState() => _AddLoanSheetState();
+}
+
+class _AddLoanSheetState extends State<AddLoanSheet> {
+  String _loanType = 'lent';
+  final _nameCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _trackedCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefilledAmount != null) {
+      _amountCtrl.text = widget.prefilledAmount!.toStringAsFixed(2);
+    }
+    if (widget.prefilledName != null) {
+      _nameCtrl.text = widget.prefilledName!;
+    }
+    if (widget.prefilledTrackedSender != null) {
+      _trackedCtrl.text = widget.prefilledTrackedSender!;
+    }
+    if (widget.prefilledType != null) {
+      _loanType = widget.prefilledType!;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _amountCtrl.dispose();
+    _trackedCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      builder: (ctx, child) {
+        return Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.primaryBlue,
+              surface: Color(0xFF1C1F24),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) setState(() => _dueDate = picked);
+  }
+
+  Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    final amountStr = _amountCtrl.text.trim().replaceAll(',', '');
+    if (name.isEmpty || amountStr.isEmpty) return;
+    final amount = double.tryParse(amountStr);
+    if (amount == null || amount <= 0) return;
+
+    setState(() => _saving = true);
+    await widget.provider.createLoan(
+      loanType: _loanType,
+      personName: name,
+      trackedSenderName:
+          _trackedCtrl.text.trim().isEmpty ? null : _trackedCtrl.text.trim(),
+      principalAmount: amount,
+      dueDate: _dueDate,
+      linkedTransactionId: widget.linkedTransactionId,
+      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+    );
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomPad),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141618),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                const Text('New Loan Record',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 20),
+
+                // ── Loan type toggle ────────────────────────────────────
+                if (widget.prefilledType == null) ...[
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C1F24),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        _TypeToggle(
+                          label: '↑ I Lent Money',
+                          active: _loanType == 'lent',
+                          activeColor: const Color(0xFF3EB489),
+                          onTap: () => setState(() => _loanType = 'lent'),
+                        ),
+                        _TypeToggle(
+                          label: '↓ I Borrowed',
+                          active: _loanType == 'borrowed',
+                          activeColor: const Color(0xFFE67E22),
+                          onTap: () => setState(() => _loanType = 'borrowed'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // ── Person name ─────────────────────────────────────────
+                if (widget.prefilledName == null) ...[
+                  _SheetField(
+                      controller: _nameCtrl,
+                      hint: _loanType == 'lent'
+                          ? 'Borrower\'s name…'
+                          : 'Lender\'s name…',
+                      icon: Icons.person_outline_rounded),
+                  const SizedBox(height: 12),
+                ],
+
+                // ── Amount ──────────────────────────────────────────────
+                if (widget.prefilledAmount == null) ...[
+                  _SheetField(
+                      controller: _amountCtrl,
+                      hint: 'Amount (ETB)…',
+                      icon: Icons.attach_money_rounded,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true)),
+                  const SizedBox(height: 12),
+                ],
+
+                // ── Due date ────────────────────────────────────────────
+                GestureDetector(
+                  onTap: _pickDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C1F24),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today_outlined,
+                            color: AppColors.textGray, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Return by: ${DateFormat('MMM d, y').format(_dueDate)}',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 14),
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: AppColors.textGray, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Tracked sender ──────────────────────────────────────
+                if (widget.prefilledTrackedSender == null) ...[
+                  _SheetField(
+                    controller: _trackedCtrl,
+                    hint: 'Track repayments from sender name (optional)…',
+                    icon: Icons.track_changes_rounded,
+                  ),
+                  const SizedBox(height: 6),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child: Text(
+                      'E.g. "Telebirr" or "CBE" — auto-detects when they send you money',
+                      style: TextStyle(color: Color(0xFF4A6572), fontSize: 10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // ── Note ────────────────────────────────────────────────
+                _SheetField(
+                    controller: _noteCtrl,
+                    hint: 'Note (optional)…',
+                    icon: Icons.notes_rounded),
+                const SizedBox(height: 24),
+
+                // ── Save button ─────────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Save Loan Record',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeToggle extends StatelessWidget {
+  final String label;
+  final bool active;
+  final Color activeColor;
+  final VoidCallback onTap;
+  const _TypeToggle(
+      {required this.label,
+      required this.active,
+      required this.activeColor,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: active ? activeColor.withValues(alpha: 0.15) : null,
+            borderRadius: BorderRadius.circular(14),
+            border: active
+                ? Border.all(color: activeColor.withValues(alpha: 0.4))
+                : null,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? activeColor : AppColors.textGray,
+                fontSize: 13,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  const _SheetField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.keyboardType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: AppColors.textGray, size: 18),
+        hintText: hint,
+        hintStyle: TextStyle(
+            color: AppColors.textGray.withValues(alpha: 0.6), fontSize: 13),
+        filled: true,
+        fillColor: const Color(0xFF1C1F24),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.primaryBlue),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Record Payment Bottom Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class RecordPaymentSheet extends StatefulWidget {
+  final LoanRecord loan;
+  final FinanceProvider provider;
+  const RecordPaymentSheet(
+      {super.key, required this.loan, required this.provider});
+
+  @override
+  State<RecordPaymentSheet> createState() => _RecordPaymentSheetState();
+}
+
+class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
+  final _amountCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill remaining amount for convenience
+    _amountCtrl.text = widget.loan.remainingAmount.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final amountStr = _amountCtrl.text.trim().replaceAll(',', '');
+    final amount = double.tryParse(amountStr);
+    if (amount == null || amount <= 0) return;
+
+    setState(() => _saving = true);
+    await widget.provider.recordLoanPayment(
+      loanId: widget.loan.id!,
+      amount: amount,
+      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+    );
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+    final isLent = widget.loan.loanType == 'lent';
+    final accentColor =
+        isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
+
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomPad),
+        decoration: const BoxDecoration(
+          color: Color(0xFF141618),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              isLent
+                  ? 'Record payment from ${widget.loan.personName}'
+                  : 'Record repayment to ${widget.loan.personName}',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${NumberFormat('#,##0.00').format(widget.loan.remainingAmount)} ETB remaining',
+              style: TextStyle(color: accentColor, fontSize: 12),
+            ),
+            const SizedBox(height: 20),
+            _SheetField(
+              controller: _amountCtrl,
+              hint: 'Amount paid (ETB)…',
+              icon: Icons.attach_money_rounded,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+            _SheetField(
+              controller: _noteCtrl,
+              hint: 'Note (optional)…',
+              icon: Icons.notes_rounded,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text('Confirm Payment',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

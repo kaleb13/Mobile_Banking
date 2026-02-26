@@ -9,7 +9,11 @@ class AppTransaction {
   final String rawMessage;
   final bool isAutoDetected;
   final double totalBalance;
-  final String? reason;
+
+  // Reason system
+  final int? reasonId; // points to reasons table (reusable)
+  final String? customReasonText; // one-time text, stored only on transaction
+  final String? reason; // legacy / convenience resolved name
 
   AppTransaction({
     this.id,
@@ -22,8 +26,14 @@ class AppTransaction {
     required this.rawMessage,
     required this.isAutoDetected,
     this.totalBalance = 0.0,
+    this.reasonId,
+    this.customReasonText,
     this.reason,
   });
+
+  /// Resolved display label: prefer reason name from `reason` field (pre-resolved),
+  /// fallback to customReasonText.
+  String? get resolvedReason => reason ?? customReasonText;
 
   Map<String, dynamic> toMap() {
     return {
@@ -37,7 +47,10 @@ class AppTransaction {
       'rawMessage': rawMessage,
       'isAutoDetected': isAutoDetected ? 1 : 0,
       'totalBalance': totalBalance,
-      'reason': reason,
+      'reasonId': reasonId,
+      'customReasonText': customReasonText,
+      // Keep legacy 'reason' column in sync for backward compat
+      'reason': reason ?? customReasonText,
     };
   }
 
@@ -53,7 +66,36 @@ class AppTransaction {
       rawMessage: map['rawMessage'],
       isAutoDetected: map['isAutoDetected'] == 1,
       totalBalance: (map['totalBalance'] as num?)?.toDouble() ?? 0.0,
-      reason: map['reason'],
+      reasonId: map['reasonId'] as int?,
+      customReasonText: map['customReasonText'] as String?,
+      reason: map['reason'] as String?,
+    );
+  }
+
+  AppTransaction copyWith({
+    int? reasonId,
+    bool clearReasonId = false,
+    String? customReasonText,
+    bool clearCustomReason = false,
+    String? reason,
+    bool clearReason = false,
+  }) {
+    return AppTransaction(
+      id: id,
+      name: name,
+      amount: amount,
+      type: type,
+      date: date,
+      sender: sender,
+      category: category,
+      rawMessage: rawMessage,
+      isAutoDetected: isAutoDetected,
+      totalBalance: totalBalance,
+      reasonId: clearReasonId ? null : (reasonId ?? this.reasonId),
+      customReasonText: clearCustomReason
+          ? null
+          : (customReasonText ?? this.customReasonText),
+      reason: clearReason ? null : (reason ?? this.reason),
     );
   }
 }

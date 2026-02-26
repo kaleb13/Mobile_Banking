@@ -5,13 +5,19 @@ class SmsService {
   final SmsQuery query = SmsQuery();
 
   Future<bool> requestPermission() async {
-    var permission = await Permission.sms.status;
-    if (permission.isGranted) {
-      return true;
-    } else {
-      var newPermission = await Permission.sms.request();
-      return newPermission.isGranted;
+    var smsPermission = await Permission.sms.status;
+    if (!smsPermission.isGranted) {
+      await Permission.sms.request();
     }
+
+    // Also explicitly request notification permission for Android 13+
+    // so the persistent status bar service stays visible and doesn't get suppressed
+    var notificationPermission = await Permission.notification.status;
+    if (!notificationPermission.isGranted) {
+      await Permission.notification.request();
+    }
+
+    return await Permission.sms.isGranted;
   }
 
   Future<List<SmsMessage>> getAllMessages({DateTime? since}) async {
