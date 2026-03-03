@@ -5,6 +5,8 @@ import '../models/transaction.dart';
 import '../models/app_notification.dart';
 import '../models/reason.dart';
 import '../models/loan_record.dart';
+import '../models/expense_definition.dart';
+import '../models/cash_transaction.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -23,7 +25,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 6, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 7, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -89,6 +91,36 @@ CREATE TABLE reason_links (
 
     // Loan tables
     await _createLoanTables(db);
+
+    // Cash Wallet and Recurring Expenses tables
+    await _createCashTables(db);
+  }
+
+  Future<void> _createCashTables(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS expense_definitions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  defaultAmount REAL NOT NULL,
+  isRecurring INTEGER NOT NULL DEFAULT 0,
+  recurringType TEXT,
+  intervalDays INTEGER,
+  specificDay INTEGER,
+  lastAppliedDate TEXT
+)
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS cash_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  description TEXT,
+  expenseDefinitionId INTEGER,
+  FOREIGN KEY(expenseDefinitionId) REFERENCES expense_definitions(id) ON DELETE SET NULL
+)
+''');
   }
 
   Future<void> _createLoanTables(Database db) async {
@@ -179,6 +211,9 @@ CREATE TABLE IF NOT EXISTS reason_links (
     }
     if (oldVersion < 6) {
       await _addNewSystemReasons(db);
+    }
+    if (oldVersion < 7) {
+      await _createCashTables(db);
     }
   }
 
@@ -488,5 +523,59 @@ CREATE TABLE IF NOT EXISTS reason_links (
     final updated = loan.copyWith(paidAmount: totalPaid, status: newStatus);
     await updateLoanRecord(updated);
     return updated;
+  }
+
+  // ──────────────────────────────────────────────
+  // Expense Definition Methods
+  // ──────────────────────────────────────────────
+  Future<int> insertExpenseDefinition(ExpenseDefinition definition) async {
+    final db = await instance.database;
+    return await db.insert('expense_definitions', definition.toMap());
+  }
+
+  Future<List<ExpenseDefinition>> getExpenseDefinitions() async {
+    final db = await instance.database;
+    final maps = await db.query('expense_definitions', orderBy: 'name ASC');
+    return maps.map((map) => ExpenseDefinition.fromMap(map)).toList();
+  }
+
+  Future<ExpenseDefinition?> getExpenseDefinitionById(int id) async {
+    final db = await instance.database;
+    final maps =
+        await db.query('expense_definitions', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return ExpenseDefinition.fromMap(maps.first);
+  }
+
+  Future<int> updateExpenseDefinition(ExpenseDefinition definition) async {
+    final db = await instance.database;
+    return await db.update('expense_definitions', definition.toMap(),
+        where: 'id = ?', whereArgs: [definition.id]);
+  }
+
+  Future<int> deleteExpenseDefinition(int id) async {
+    final db = await instance.database;
+    return await db
+        .delete('expense_definitions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ──────────────────────────────────────────────
+  // Cash Transaction Methods
+  // ──────────────────────────────────────────────
+  Future<int> insertCashTransaction(CashTransaction transaction) async {
+    final db = await instance.database;
+    return await db.insert('cash_transactions', transaction.toMap());
+  }
+
+  Future<List<CashTransaction>> getCashTransactions() async {
+    final db = await instance.database;
+    final maps = await db.query('cash_transactions', orderBy: 'date DESC');
+    return maps.map((map) => CashTransaction.fromMap(map)).toList();
+  }
+
+  Future<int> deleteCashTransaction(int id) async {
+    final db = await instance.database;
+    return await db
+        .delete('cash_transactions', where: 'id = ?', whereArgs: [id]);
   }
 }

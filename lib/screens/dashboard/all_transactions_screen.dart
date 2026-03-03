@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +21,48 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   String _selectedSender = 'All';
   DateTimeRange? _selectedDateRange;
   String _selectedType = 'All';
+  int _searchLabelIndex = 0;
+  Timer? _searchLabelTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startSearchLabelRotation();
+  }
+
+  void _startSearchLabelRotation() {
+    _searchLabelTimer?.cancel();
+    _searchLabelTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        setState(() {
+          _searchLabelIndex = (_searchLabelIndex + 1) % 3;
+        });
+      }
+    });
+  }
+
+  String _getSearchHint(FinanceProvider provider) {
+    if (_searchLabelIndex == 0) {
+      final hour = DateTime.now().hour;
+      if (hour < 12) return 'Good Morning ☀️';
+      if (hour < 17) return 'Good Afternoon 🌤️';
+      return 'Good Evening 🌙';
+    } else if (_searchLabelIndex == 1) {
+      return 'Search all Transactions';
+    } else {
+      final top = provider.topExpenseHighlight;
+      if (top != null) {
+        return 'HE: ${top['reason']} (${NumberFormat('#,###').format(top['amount'])} ETB)';
+      }
+      return 'Search all Transactions';
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchLabelTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,11 +107,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
+        backgroundColor: const Color(0xFF1F1F25),
         body: Column(
           children: [
             _buildHeader(context),
-            _buildSearchAndFilters(context, senderNames),
+            _buildSearchAndFilters(context, senderNames, provider),
             Expanded(
               child: _buildTransactionList(filteredTransactions, provider),
             ),
@@ -87,7 +130,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         right: 20,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF121417),
+        color: Color(0xFF111315),
       ),
       child: Row(
         children: [
@@ -117,12 +160,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildSearchAndFilters(
-      BuildContext context, List<String> senderNames) {
+  Widget _buildSearchAndFilters(BuildContext context, List<String> senderNames,
+      FinanceProvider provider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF121417),
+        color: Color(0xFF111315),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
@@ -132,23 +175,80 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         children: [
           // Search Bar
           Container(
+            height: 40,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(16),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              style: const TextStyle(color: Colors.white),
-              onChanged: (value) => setState(() => _searchQuery = value),
-              decoration: InputDecoration(
-                icon: const Icon(Icons.search,
-                    color: AppColors.textGray, size: 20),
-                hintText: 'Search sender, reason...',
-                hintStyle:
-                    const TextStyle(color: AppColors.textGray, fontSize: 14),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
+            child: Row(
+              children: [
+                const Icon(Icons.search, color: AppColors.textGray, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      if (_searchQuery.isEmpty)
+                        IgnorePointer(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 600),
+                            switchInCurve: Curves.easeInOutCubic,
+                            switchOutCurve: Curves.easeInOutCubic,
+                            layoutBuilder: (Widget? currentChild,
+                                List<Widget> previousChildren) {
+                              return Stack(
+                                alignment: Alignment.centerLeft,
+                                children: [
+                                  ...previousChildren,
+                                  if (currentChild != null) currentChild,
+                                ],
+                              );
+                            },
+                            transitionBuilder:
+                                (Widget child, Animation<double> animation) {
+                              final inAnimation = Tween<Offset>(
+                                begin: const Offset(0.0, 1.2),
+                                end: Offset.zero,
+                              ).animate(animation);
+                              final outAnimation = Tween<Offset>(
+                                begin: const Offset(0.0, -1.2),
+                                end: Offset.zero,
+                              ).animate(animation);
+
+                              return ClipRect(
+                                child: SlideTransition(
+                                  position:
+                                      child.key == ValueKey(_searchLabelIndex)
+                                          ? inAnimation
+                                          : outAnimation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: Text(
+                              _getSearchHint(provider),
+                              key: ValueKey(_searchLabelIndex),
+                              style: const TextStyle(
+                                  color: AppColors.textGray, fontSize: 12),
+                            ),
+                          ),
+                        ),
+                      TextField(
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 12),
+                        onChanged: (value) =>
+                            setState(() => _searchQuery = value),
+                        decoration: const InputDecoration(
+                          hintText: '',
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
@@ -247,7 +347,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textWhite,
+                color:
+                    isSelected ? const Color(0xFF1F1F25) : AppColors.textWhite,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
               ),
@@ -356,7 +457,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: Colors.white.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -493,7 +594,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.search_off_rounded,
-                size: 64, color: Colors.white.withValues(alpha: 0.1)),
+                size: 64, color: Colors.white.withOpacity(0.1)),
             const SizedBox(height: 16),
             const Text(
               'No transactions found',
@@ -523,7 +624,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFC7C7C7).withValues(alpha: 0.06),
+              color: const Color(0xFFC7C7C7).withOpacity(0.06),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(

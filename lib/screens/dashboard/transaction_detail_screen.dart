@@ -184,7 +184,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
+        backgroundColor: const Color(0xFF1F1F25),
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           centerTitle: true,
@@ -333,7 +333,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                         if (linkedLoan != null) ...[
                           const SizedBox(height: 24),
-                          _buildLoanTrackingCard(context, linkedLoan),
+                          _buildLoanTrackingCard(context, linkedLoan, provider),
                         ],
                       ],
                     ),
@@ -542,8 +542,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 elevation: 0,
                               ),
                               child: const Text('Save Changes',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
+                                  style: TextStyle(
+                                      color: Color(0xFF1F1F25),
+                                      fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ],
@@ -621,15 +622,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Positioned.fill(
       child: Container(
         decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -1.0),
-            radius: 1.2,
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
             colors: [
-              AppColors.accentBlue,
-              AppColors.primaryBlue,
-              Color(0xFF0A0B0D),
+              Color(0xFF1F1F25),
+              Color(0xFF1B1B21),
             ],
-            stops: [0.0, 0.3, 0.8],
           ),
         ),
       ),
@@ -692,7 +691,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  Widget _buildLoanTrackingCard(BuildContext context, LoanRecord loan) {
+  Widget _buildLoanTrackingCard(
+      BuildContext context, LoanRecord loan, FinanceProvider provider) {
     final isLent = loan.loanType == 'lent';
     final accentColor =
         isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
@@ -755,11 +755,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ),
               GestureDetector(
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const LoanManagementScreen()),
-                  );
+                  provider.setScreenIndex(3);
+                  Navigator.popUntil(context, (route) => route.isFirst);
                 },
                 child: Container(
                   padding:

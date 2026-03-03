@@ -74,7 +74,7 @@ void onStart(ServiceInstance service) async {
             android: AndroidNotificationDetails(
               'my_foreground',
               'Mobile Banking Service',
-              icon: 'launch_background',
+              icon: 'ic_notification',
               ongoing: true, // This is explicitly sticky (cannot be swiped)
               autoCancel: false,
               priority: Priority
@@ -206,7 +206,7 @@ Future<void> processBackgroundSms(SmsMessage message) async {
         android: AndroidNotificationDetails(
           'my_foreground',
           'Mobile Banking Service',
-          icon: 'launch_background',
+          icon: 'ic_notification',
           importance: Importance.high,
           priority: Priority.high,
         ),

@@ -6,6 +6,8 @@ import '../models/transaction.dart';
 import '../models/app_notification.dart';
 import '../models/reason.dart';
 import '../models/loan_record.dart';
+import '../models/expense_definition.dart';
+import '../models/cash_transaction.dart';
 import '../services/database_service.dart';
 import '../services/sms_service.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as sms_inbox;
@@ -15,6 +17,7 @@ import '../services/telebirr_parser.dart';
 import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
 import '../services/background_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppSender> _senders = [];
@@ -24,6 +27,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppReasonLink> _reasonLinks = [];
   List<LoanRecord> _loanRecords = [];
   Map<int, List<LoanPayment>> _loanPayments = {}; // keyed by loanId
+
+  // Cash Wallet & Expenses
+  List<ExpenseDefinition> _expenseDefinitions = [];
+  List<CashTransaction> _cashTransactions = [];
+  double _cashBalance = 0;
+
   int _unreadNotificationCount = 0;
   bool _isLoading = true;
   double _totalBalance = 0;
@@ -33,12 +42,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   double _expenseForSelectedDate = 0;
   double _netForSelectedDate = 0;
   double _incomePercentageChange = 0;
+  double _netOverall = 0;
+  double _percentageChangeOverall = 0;
   int _todayTransactionCount = 0;
   DateTime _selectedDate = DateTime.now();
+  DateTime? _customMonthAnchorDate;
 
   bool _hasPermission = false;
   bool _isBalanceVisible = true;
   bool _isShowingAll = false;
+  bool _isMenuOpen = false;
+  int _currentScreenIndex = 0;
 
   List<AppSender> get senders => _senders;
   List<AppTransaction> get transactions => _transactions;
@@ -52,11 +66,54 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         .toList();
   }
 
+  List<AppTransaction> get transactionsForSelectedMonth {
+    return _transactions
+        .where((tx) => isDateInMonthOf(tx.date, _selectedDate))
+        .toList();
+  }
+
+  bool isDateInMonthOf(DateTime date, DateTime relativeTo) {
+    if (_customMonthAnchorDate == null) {
+      return date.year == relativeTo.year && date.month == relativeTo.month;
+    }
+    final strippedAnchor = DateTime(_customMonthAnchorDate!.year,
+        _customMonthAnchorDate!.month, _customMonthAnchorDate!.day);
+    final strippedRelative =
+        DateTime(relativeTo.year, relativeTo.month, relativeTo.day);
+    final strippedDate = DateTime(date.year, date.month, date.day);
+
+    final int daysSince = strippedRelative.difference(strippedAnchor).inDays;
+    final int periodIndex = (daysSince / 30).floor();
+
+    final DateTime periodStart =
+        strippedAnchor.add(Duration(days: periodIndex * 30));
+    final DateTime periodEnd = periodStart.add(const Duration(days: 30));
+
+    return !strippedDate.isBefore(periodStart) &&
+        strippedDate.isBefore(periodEnd);
+  }
+
+  Future<void> setCustomMonthAnchorDate(DateTime? date) async {
+    _customMonthAnchorDate = date;
+    final prefs = await SharedPreferences.getInstance();
+    if (date == null) {
+      await prefs.remove('custom_month_anchor_date');
+    } else {
+      await prefs.setString('custom_month_anchor_date', date.toIso8601String());
+    }
+    _calculateStats();
+    notifyListeners();
+  }
+
   bool get isLoading => _isLoading;
   bool get hasPermission => _hasPermission;
   bool get isBalanceVisible => _isBalanceVisible;
   bool get isShowingAll => _isShowingAll;
+  bool get isMenuOpen => _isMenuOpen;
   DateTime get selectedDate => _selectedDate;
+  DateTime? get customMonthAnchorDate => _customMonthAnchorDate;
+  int get currentScreenIndex => _currentScreenIndex;
+
   bool get isSelectedDateToday {
     final now = DateTime.now();
     return _selectedDate.year == now.year &&
@@ -71,6 +128,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   double get expenseForSelectedDate => _expenseForSelectedDate;
   double get netForSelectedDate => _netForSelectedDate;
   double get incomePercentageChange => _incomePercentageChange;
+  double get netOverall => _netOverall;
+  double get percentageChangeOverall => _percentageChangeOverall;
   int get todayTransactionCount => _todayTransactionCount;
   List<AppNotification> get notifications => _notifications;
   int get unreadNotificationCount => _unreadNotificationCount;
@@ -79,15 +138,167 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<LoanRecord> get loanRecords => _loanRecords;
   List<LoanPayment> paymentsForLoan(int loanId) => _loanPayments[loanId] ?? [];
 
+  List<ExpenseDefinition> get expenseDefinitions => _expenseDefinitions;
+  List<CashTransaction> get cashTransactions => _cashTransactions;
+  double get cashBalance => _cashBalance;
+
+  // Stub for cash spending tracking (not yet implemented in DB)
+  List<dynamic> spendingsForTransaction(String transactionId) => [];
+
   // ── Loan convenience getters ──────────────────
   List<LoanRecord> get activeLoans =>
       _loanRecords.where((l) => l.status == 'active').toList();
   List<LoanRecord> get overdueLoans =>
-      _loanRecords.where((l) => l.isOverdue).toList();
+      _loanRecords.where((l) => l.isOverdue).toList()
+        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
   List<LoanRecord> get paidLoans =>
       _loanRecords.where((l) => l.isPaid).toList();
   int get activeLoanCount => activeLoans.length;
   int get overdueLoanCount => overdueLoans.length;
+
+  // ── Dashboard Banner Helpers ──────────────────
+  Map<String, dynamic>? get mostExpenseToday {
+    final now = DateTime.now();
+    final todayExpenses = _transactions
+        .where((tx) =>
+            tx.type == 'expense' &&
+            tx.date.year == now.year &&
+            tx.date.month == now.month &&
+            tx.date.day == now.day)
+        .toList();
+
+    if (todayExpenses.isEmpty) return null;
+
+    Map<String, double> reasonSubtotals = {};
+    for (var tx in todayExpenses) {
+      final key = tx.resolvedReason ?? 'Other';
+      reasonSubtotals[key] = (reasonSubtotals[key] ?? 0) + tx.amount;
+    }
+
+    String topReason = reasonSubtotals.keys.first;
+    double maxAmount = reasonSubtotals[topReason]!;
+    reasonSubtotals.forEach((key, value) {
+      if (value > maxAmount) {
+        maxAmount = value;
+        topReason = key;
+      }
+    });
+
+    return {'reason': topReason, 'amount': maxAmount};
+  }
+
+  Map<String, dynamic>? get mostExpenseThisMonth {
+    final now = DateTime.now();
+    final monthExpenses = _transactions
+        .where((tx) => tx.type == 'expense' && isDateInMonthOf(tx.date, now))
+        .toList();
+
+    if (monthExpenses.isEmpty) return null;
+
+    Map<String, double> reasonSubtotals = {};
+    for (var tx in monthExpenses) {
+      final key = tx.resolvedReason ?? 'Other';
+      reasonSubtotals[key] = (reasonSubtotals[key] ?? 0) + tx.amount;
+    }
+
+    String topReason = reasonSubtotals.keys.first;
+    double maxAmount = reasonSubtotals[topReason]!;
+    reasonSubtotals.forEach((key, value) {
+      if (value > maxAmount) {
+        maxAmount = value;
+        topReason = key;
+      }
+    });
+
+    return {'reason': topReason, 'amount': maxAmount};
+  }
+
+  Map<String, dynamic>? get topExpenseHighlight {
+    if (_transactions.isEmpty) return null;
+
+    final expenses = _transactions.where((t) => t.type == 'expense').toList();
+    if (expenses.isEmpty) return null;
+
+    Map<String, double> totals = {};
+    for (var tx in expenses) {
+      final key = tx.resolvedReason ?? 'Other';
+      totals[key] = (totals[key] ?? 0) + tx.amount;
+    }
+
+    String topKey = totals.keys.first;
+    double maxVal = totals[topKey]!;
+    totals.forEach((k, v) {
+      if (v > maxVal) {
+        maxVal = v;
+        topKey = k;
+      }
+    });
+
+    return {'reason': topKey, 'amount': maxVal};
+  }
+
+  AppSender? get mostAffectedAccount {
+    if (_senders.isEmpty) return null;
+
+    // Logic: Account with highest transaction count or latest transaction
+    Map<String, int> counts = {};
+    Map<String, DateTime> latestTimes = {};
+
+    for (var tx in _transactions) {
+      counts[tx.name] = (counts[tx.name] ?? 0) + 1;
+      if (latestTimes[tx.name] == null ||
+          tx.date.isAfter(latestTimes[tx.name]!)) {
+        latestTimes[tx.name] = tx.date;
+      }
+    }
+
+    AppSender? winner;
+    int maxCount = -1;
+    DateTime? maxDate;
+
+    for (var sender in _senders) {
+      int count = counts[sender.senderName] ?? 0;
+      DateTime? date = latestTimes[sender.senderName];
+
+      if (count > maxCount) {
+        maxCount = count;
+        winner = sender;
+        maxDate = date;
+      } else if (count == maxCount &&
+          count > 0 &&
+          date != null &&
+          maxDate != null) {
+        if (date.isAfter(maxDate)) {
+          winner = sender;
+          maxDate = date;
+        }
+      }
+    }
+
+    return winner ?? (_senders.isNotEmpty ? _senders.first : null);
+  }
+
+  AppSender? get lessAffectedAccount {
+    if (_senders.isEmpty) return null;
+
+    Map<String, int> counts = {};
+    for (var tx in _transactions) {
+      counts[tx.name] = (counts[tx.name] ?? 0) + 1;
+    }
+
+    AppSender? winner;
+    int minCount = 999999;
+
+    for (var sender in _senders) {
+      int count = counts[sender.senderName] ?? 0;
+      if (count < minCount) {
+        minCount = count;
+        winner = sender;
+      }
+    }
+
+    return winner;
+  }
 
   Future<void> requestPermission() async {
     _hasPermission = await SmsService().requestPermission();
@@ -97,6 +308,23 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     } else {
       notifyListeners();
     }
+  }
+
+  void setScreenIndex(int index) {
+    if (_currentScreenIndex == index) return;
+    _currentScreenIndex = index;
+    notifyListeners();
+  }
+
+  void toggleIsMenuOpen() {
+    _isMenuOpen = !_isMenuOpen;
+    notifyListeners();
+  }
+
+  void setIsMenuOpen(bool value) {
+    if (_isMenuOpen == value) return;
+    _isMenuOpen = value;
+    notifyListeners();
   }
 
   void toggleBalanceVisibility() {
@@ -150,24 +378,35 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _transactions = await DatabaseService.instance.getTransactions();
     _reasons = await DatabaseService.instance.getReasons();
     _reasonLinks = await DatabaseService.instance.getReasonLinks();
+    _expenseDefinitions =
+        await DatabaseService.instance.getExpenseDefinitions();
+    _cashTransactions = await DatabaseService.instance.getCashTransactions();
     await _loadLoans();
     await _refreshOverdueStatuses();
 
+    // Auto-apply recurring cash expenses
+    await _applyRecurringCashExpenses();
+
     // 2. Discover last fetch time & Install state
     final prefs = await SharedPreferences.getInstance();
-    bool isFirstBoot = prefs.getBool('is_first_boot_v3') ?? true;
+    bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
+
+    final anchorIso = prefs.getString('custom_month_anchor_date');
+    if (anchorIso != null) {
+      _customMonthAnchorDate = DateTime.tryParse(anchorIso);
+    }
 
     // The install_anchor_date marks the oldest boundary for message scanning.
     // Refresh NEVER looks at messages older than this date.
     // anchor_version guards against upgrades that stored wrong anchor dates.
-    const anchorVersion = 'v2';
+    const anchorVersion = 'v4';
     final bool needsAnchorReset =
         prefs.getString('anchor_version') != anchorVersion;
     if (needsAnchorReset) {
-      // Anchor = install date MINUS 2 days exactly.
-      // The app will never access messages older than 2 days before first launch.
+      // Anchor = install date MINUS 30 days exactly.
+      // The app will never access messages older than 30 days before first launch.
       await prefs.setString('install_anchor_date',
-          DateTime.now().subtract(const Duration(days: 2)).toIso8601String());
+          DateTime.now().subtract(const Duration(days: 30)).toIso8601String());
       await prefs.setString('anchor_version', anchorVersion);
     }
 
@@ -175,9 +414,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.getLastTransactionDate();
 
     if (isFirstBoot && lastTxDate == null) {
-      // First boot: fetch messages within the 2-day window before install.
-      // Consistent with the install_anchor_date = now - 2 days.
-      final installAnchor = DateTime.now().subtract(const Duration(days: 2));
+      // First boot: fetch messages within the 30-day window before install.
+      final installAnchor = DateTime.now().subtract(const Duration(days: 30));
       List<sms_inbox.SmsMessage> allMessages =
           await SmsService().getAllMessages(since: installAnchor);
 
@@ -224,7 +462,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           break;
         }
       }
-      await prefs.setBool('is_first_boot_v3', false);
+      await prefs.setBool('is_first_boot_v5', false);
     } else {
       // Not first boot: gap-fill scan from anchor to now
       await refreshData();
@@ -311,7 +549,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   Future<void> _reloadFromDatabase() async {
     _transactions = await DatabaseService.instance.getTransactions();
+    _expenseDefinitions =
+        await DatabaseService.instance.getExpenseDefinitions();
+    _cashTransactions = await DatabaseService.instance.getCashTransactions();
     await _loadNotifications();
+    await _applyRecurringCashExpenses();
     _calculateStats();
     notifyListeners();
   }
@@ -349,7 +591,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
 
     _transactions = await DatabaseService.instance.getTransactions();
+    _expenseDefinitions =
+        await DatabaseService.instance.getExpenseDefinitions();
+    _cashTransactions = await DatabaseService.instance.getCashTransactions();
     await _loadNotifications();
+    await _applyRecurringCashExpenses();
     _calculateStats();
     notifyListeners();
   }
@@ -418,16 +664,38 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _notifications.insert(0, notification);
     _unreadNotificationCount++;
     notifyListeners();
+
+    // Show actual OS push notification for system messages
+    if (sender.startsWith('Loan') || sender.startsWith('System')) {
+      final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+      await flutterLocalNotificationsPlugin.show(
+        id: DateTime.now().millisecond,
+        title: sender,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'my_foreground',
+            'Mobile Banking Service',
+            icon: 'ic_notification',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    }
   }
 
   void _calculateStats() {
     _totalBalance = 0;
+    _cashBalance = 0;
     _incomeThisMonth = 0;
     _expenseThisMonth = 0;
     _incomeForSelectedDate = 0;
     _expenseForSelectedDate = 0;
     _netForSelectedDate = 0;
     _incomePercentageChange = 0;
+    _netOverall = 0;
+    _percentageChangeOverall = 0;
     _todayTransactionCount = 0;
 
     DateTime now = DateTime.now();
@@ -447,6 +715,54 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _totalBalance += value;
     }
 
+    // Cash Wallet Balance Calculation
+    double cashInflows = 0;
+    // 1. Sum from SMS bank txns where reason == 'Cash'
+    for (var tx in _transactions) {
+      if (tx.reason?.toLowerCase() == 'cash' ||
+          tx.customReasonText?.toLowerCase() == 'cash' ||
+          tx.resolvedReason?.toLowerCase() == 'cash') {
+        // If it's income to a bank, that means cash logically decreased maybe?
+        // Wait, 'Cash' reason usually means ATM withdrawal (bank expense, but cash income).
+        // We will count any bank transaction tagged 'Cash' as an inflow to the Cash Wallet,
+        // strictly assuming the absolute amount was converted to cash.
+        cashInflows += tx.amount.abs();
+      }
+    }
+    // 2. Add manual additions and minus deductions
+    double manualInflows = 0;
+    double cashOutflows = 0;
+    for (var ctx in _cashTransactions) {
+      if (ctx.type == 'addition') {
+        manualInflows += ctx.amount;
+        // Manual additions to cash (not from bank) increase wealth
+        _netOverall += ctx.amount;
+        if (_isShowingAll ||
+            (ctx.date.year == _selectedDate.year &&
+                ctx.date.month == _selectedDate.month &&
+                ctx.date.day == _selectedDate.day)) {
+          _incomeForSelectedDate += ctx.amount;
+        }
+      } else if (ctx.type == 'expense') {
+        cashOutflows += ctx.amount;
+        // Manual cash expenses decrease wealth
+        _netOverall -= ctx.amount;
+        if (_isShowingAll ||
+            (ctx.date.year == _selectedDate.year &&
+                ctx.date.month == _selectedDate.month &&
+                ctx.date.day == _selectedDate.day)) {
+          _expenseForSelectedDate += ctx.amount;
+        }
+      }
+    }
+
+    _cashBalance = cashInflows + manualInflows - cashOutflows;
+
+    // Add cash balance to the grand total balance
+    if (_cashBalance > 0) {
+      _totalBalance += _cashBalance;
+    }
+
     for (var tx in _transactions) {
       if (tx.date.year == now.year &&
           tx.date.month == now.month &&
@@ -454,44 +770,55 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         _todayTransactionCount++;
       }
 
+      bool isCashTransfer = tx.reason?.toLowerCase() == 'cash' ||
+          tx.customReasonText?.toLowerCase() == 'cash' ||
+          tx.resolvedReason?.toLowerCase() == 'cash';
+
       if (tx.type == 'income') {
-        if (tx.date.month == now.month && tx.date.year == now.year) {
+        if (isDateInMonthOf(tx.date, now)) {
           _incomeThisMonth += tx.amount;
         }
         if (_isShowingAll ||
             (tx.date.year == _selectedDate.year &&
                 tx.date.month == _selectedDate.month &&
                 tx.date.day == _selectedDate.day)) {
-          _incomeForSelectedDate += tx.amount;
+          if (!isCashTransfer) {
+            _incomeForSelectedDate += tx.amount;
+          }
+        }
+        if (!isCashTransfer) {
+          _netOverall += tx.amount;
         }
       } else if (tx.type == 'expense') {
-        if (tx.date.month == now.month && tx.date.year == now.year) {
+        if (isDateInMonthOf(tx.date, now)) {
           _expenseThisMonth += tx.amount;
         }
         if (_isShowingAll ||
             (tx.date.year == _selectedDate.year &&
                 tx.date.month == _selectedDate.month &&
                 tx.date.day == _selectedDate.day)) {
-          _expenseForSelectedDate += tx.amount;
+          if (!isCashTransfer) {
+            _expenseForSelectedDate += tx.amount;
+          }
+        }
+        if (!isCashTransfer) {
+          _netOverall -= tx.amount;
         }
       }
     }
 
     _netForSelectedDate = _incomeForSelectedDate - _expenseForSelectedDate;
 
-    // Percentage = net / total-flow x 100
-    // Tells you what fraction of all money moved is yours (net).
-    // income=90000, expense=5   => (89995/90005)*100 = +99.98%
-    // income=5,     expense=90  => (-85/95)*100       = -89.47%
-    // income=100,   expense=0   => +100%
-    // income=0,     expense=100 => -100%
-    // income=0,     expense=0   =>  0%
-    final double totalFlow = _incomeForSelectedDate + _expenseForSelectedDate;
-    if (totalFlow > 0) {
-      _incomePercentageChange = (_netForSelectedDate / totalFlow) * 100;
+    // Percentage for summary card (Today or Selected Date)
+    if (_totalBalance > 0) {
+      _incomePercentageChange = (_netForSelectedDate / _totalBalance) * 100;
       _incomePercentageChange = _incomePercentageChange.clamp(-100.0, 100.0);
+
+      _percentageChangeOverall = (_netOverall / _totalBalance) * 100;
+      _percentageChangeOverall = _percentageChangeOverall.clamp(-100.0, 100.0);
     } else {
       _incomePercentageChange = 0;
+      _percentageChangeOverall = 0;
     }
   }
 
@@ -914,6 +1241,165 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         body: message,
         date: date,
       );
+    }
+  }
+
+  // ── Expense Definitions & Cash Transactions ───────────────────────────────
+
+  Future<void> addExpenseDefinition(ExpenseDefinition definition) async {
+    final id =
+        await DatabaseService.instance.insertExpenseDefinition(definition);
+    _expenseDefinitions.add(
+      ExpenseDefinition(
+        id: id,
+        name: definition.name,
+        defaultAmount: definition.defaultAmount,
+        isRecurring: definition.isRecurring,
+        recurringType: definition.recurringType,
+        intervalDays: definition.intervalDays,
+        specificDay: definition.specificDay,
+        lastAppliedDate: definition.lastAppliedDate,
+      ),
+    );
+    _expenseDefinitions.sort((a, b) => a.name.compareTo(b.name));
+    notifyListeners();
+  }
+
+  Future<void> updateExpenseDefinition(ExpenseDefinition definition) async {
+    await DatabaseService.instance.updateExpenseDefinition(definition);
+    final idx = _expenseDefinitions.indexWhere((d) => d.id == definition.id);
+    if (idx != -1) {
+      _expenseDefinitions[idx] = definition;
+      _expenseDefinitions.sort((a, b) => a.name.compareTo(b.name));
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteExpenseDefinition(int id) async {
+    await DatabaseService.instance.deleteExpenseDefinition(id);
+    _expenseDefinitions.removeWhere((d) => d.id == id);
+    notifyListeners();
+  }
+
+  Future<void> addCashTransaction(CashTransaction transaction) async {
+    final id =
+        await DatabaseService.instance.insertCashTransaction(transaction);
+    final mapped = transaction.toMap();
+    mapped['id'] = id;
+    _cashTransactions.insert(0, CashTransaction.fromMap(mapped));
+
+    // Update the last applied date if it's an expense linked to a definition
+    if (transaction.type == 'expense' &&
+        transaction.expenseDefinitionId != null) {
+      final defIdx = _expenseDefinitions
+          .indexWhere((d) => d.id == transaction.expenseDefinitionId);
+      if (defIdx != -1) {
+        final def = _expenseDefinitions[defIdx];
+        if (def.isRecurring) {
+          final updatedDef = def.copyWith(lastAppliedDate: transaction.date);
+          await updateExpenseDefinition(updatedDef);
+        }
+      }
+    }
+
+    _calculateStats();
+    notifyListeners();
+  }
+
+  Future<void> deleteCashTransaction(int id) async {
+    await DatabaseService.instance.deleteCashTransaction(id);
+    _cashTransactions.removeWhere((t) => t.id == id);
+    _calculateStats();
+    notifyListeners();
+  }
+
+  /// Automatically applies recurring expenses that are due today or were missed.
+  Future<void> _applyRecurringCashExpenses() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    bool anyAdded = false;
+
+    for (int i = 0; i < _expenseDefinitions.length; i++) {
+      final def = _expenseDefinitions[i];
+      if (!def.isRecurring) continue;
+
+      DateTime targetDate =
+          def.lastAppliedDate ?? today.subtract(const Duration(days: 1));
+      DateTime nextDateToApply;
+
+      if (def.recurringType == 'daily') {
+        nextDateToApply = targetDate.add(const Duration(days: 1));
+      } else if (def.recurringType == 'interval' && def.intervalDays != null) {
+        nextDateToApply = targetDate.add(Duration(days: def.intervalDays!));
+      } else if (def.recurringType == 'specific_day' &&
+          def.specificDay != null) {
+        // Calculate the next specific day
+        int year = targetDate.year;
+        int month = targetDate.month;
+        if (targetDate.day >= def.specificDay!) {
+          month += 1;
+          if (month > 12) {
+            month = 1;
+            year += 1;
+          }
+        }
+        nextDateToApply = DateTime(year, month, def.specificDay!);
+      } else {
+        continue; // Invalid recurring setup
+      }
+
+      // Apply any missed occurrences up to today
+      DateTime simulateDate = nextDateToApply;
+      DateTime latestApplied = targetDate;
+
+      while (simulateDate.isBefore(today) ||
+          simulateDate.isAtSameMomentAs(today)) {
+        int times = def.timesPerDay;
+        // Space out the times across an 8-hour window starting from morning for better UX
+        for (int t = 0; t < times; t++) {
+          final hourOffset = 8 + (t * (12 ~/ times));
+          final dateWithHour = simulateDate.add(Duration(hours: hourOffset));
+
+          final tx = CashTransaction(
+            type: 'expense',
+            amount: def.defaultAmount,
+            date: dateWithHour,
+            description: 'Auto-recurring: ${def.name}',
+            expenseDefinitionId: def.id,
+          );
+          final txId = await DatabaseService.instance.insertCashTransaction(tx);
+          final mapped = tx.toMap();
+          mapped['id'] = txId;
+          _cashTransactions.insert(0, CashTransaction.fromMap(mapped));
+          anyAdded = true;
+        }
+        latestApplied = simulateDate;
+
+        // Increment to next occurrence
+        if (def.recurringType == 'daily') {
+          simulateDate = simulateDate.add(const Duration(days: 1));
+        } else if (def.recurringType == 'interval') {
+          simulateDate = simulateDate.add(Duration(days: def.intervalDays!));
+        } else if (def.recurringType == 'specific_day') {
+          int year = simulateDate.year;
+          int month = simulateDate.month + 1;
+          if (month > 12) {
+            month = 1;
+            year += 1;
+          }
+          simulateDate = DateTime(year, month, def.specificDay!);
+        }
+      }
+
+      if (latestApplied.isAfter(targetDate)) {
+        final updatedDef = def.copyWith(lastAppliedDate: latestApplied);
+        await DatabaseService.instance.updateExpenseDefinition(updatedDef);
+        _expenseDefinitions[i] = updatedDef;
+      }
+    }
+
+    if (anyAdded) {
+      _cashTransactions.sort((a, b) => b.date.compareTo(a.date));
     }
   }
 }

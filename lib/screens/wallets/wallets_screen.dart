@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../dashboard/sender_detail_screen.dart';
+import '../dashboard/cash_wallet_detail_screen.dart';
 
 class WalletsScreen extends StatefulWidget {
   const WalletsScreen({super.key});
@@ -23,7 +24,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
     final fmt = NumberFormat('#,##0.00');
 
     // Compute totals across all wallets
-    double grandBalance = 0;
+    double grandBalance = provider.cashBalance;
     double grandIncome = 0;
     double grandExpense = 0;
     for (final s in senders) {
@@ -37,6 +38,17 @@ class _WalletsScreenState extends State<WalletsScreen> {
           .where((t) => t.type == 'expense')
           .fold<double>(0, (a, t) => a + t.amount);
     }
+
+    // Add cash transactions to grand income/expense
+    for (final ctx in provider.cashTransactions) {
+      if (ctx.type == 'addition') {
+        grandIncome += ctx.amount;
+      } else {
+        grandExpense += ctx.amount;
+      }
+    }
+    // Add bank transactions labeled "Cash" to grand income since it's an inflow to the wallet but an outflow from the bank. Wait, actually if it's an withdrawal, it's counted as an expense from the bank, which is already in `grandExpense`. So net worth isn't affected. Let's just keep grandIncome/grandExpense as-is for Cash Wallet additions.
+
     final grandNet = grandIncome - grandExpense;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -47,246 +59,278 @@ class _WalletsScreenState extends State<WalletsScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
-        body: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            // ── App bar ──────────────────────────────────────────────────────
-            SliverToBoxAdapter(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(0.0, -0.9),
-                    radius: 1.0,
-                    colors: [
-                      Color(0xFF0F3A4F),
-                      Color(0xFF091E2A),
-                      Color(0xFF0A0B0D),
-                    ],
-                    stops: [0.0, 0.55, 1.0],
-                  ),
-                ),
+        extendBody: true,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              colors: [
+                Color(0xFF1F1F25),
+                Color(0xFF1B1B21),
+              ],
+            ),
+          ),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // ── App bar ──────────────────────────────────────────────────────
+              SliverToBoxAdapter(
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header
-                        Row(
+                        // Title Section
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(13),
-                                border: Border.all(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.12)),
+                            Text(
+                              'My Wallets',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.3,
                               ),
-                              child: const Icon(
-                                  Icons.account_balance_wallet_outlined,
-                                  color: AppColors.accentBlue,
-                                  size: 20),
                             ),
-                            const SizedBox(width: 14),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  'My Wallets',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.4,
-                                  ),
-                                ),
-                                Text(
-                                  'Connected bank accounts',
-                                  style: TextStyle(
-                                      color: Color(0xFF6B8FA6), fontSize: 12),
-                                ),
-                              ],
+                            Text(
+                              'Connected bank accounts',
+                              style: TextStyle(
+                                  color: AppColors.textGray, fontSize: 12),
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 28),
-
-                        // ── Grand summary banner ────────────────────────────
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0B2133),
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.25)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.12),
-                                blurRadius: 30,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Total Net Worth',
-                                style: TextStyle(
-                                    color: Color(0xFF6B8FA6), fontSize: 12),
-                              ),
-                              const SizedBox(height: 6),
-                              _splitBalance(fmt.format(grandBalance), 36, 22),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  _miniStatChip(
-                                      'Income',
-                                      fmt.format(grandIncome),
-                                      AppColors.mintGreen,
-                                      Icons.arrow_downward_rounded),
-                                  const SizedBox(width: 10),
-                                  _miniStatChip(
-                                      'Expense',
-                                      fmt.format(grandExpense),
-                                      AppColors.alertRed,
-                                      Icons.arrow_upward_rounded),
-                                  const SizedBox(width: 10),
-                                  _miniStatChip(
-                                    'Net',
-                                    '${grandNet >= 0 ? '+' : ''}${fmt.format(grandNet)}',
-                                    grandNet >= 0
-                                        ? AppColors.mintGreen
-                                        : AppColors.alertRed,
-                                    grandNet >= 0
-                                        ? Icons.trending_up
-                                        : Icons.trending_down,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-
                         const SizedBox(height: 24),
-
-                        const Text(
-                          'ACCOUNTS',
-                          style: TextStyle(
-                            color: AppColors.textGray,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.3,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
                 ),
               ),
-            ),
 
-            // ── Wallet cards list ─────────────────────────────────────────
-            senders.isEmpty
-                ? SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.account_balance_wallet_outlined,
-                              color: AppColors.textGray.withValues(alpha: 0.4),
-                              size: 56),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'No wallets connected yet',
-                            style: TextStyle(
-                              color: AppColors.textGray,
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Set up senders in Settings to get started',
-                            style: TextStyle(
-                                color: Color(0xFF4A6572), fontSize: 12),
-                          ),
-                        ],
-                      ),
+              // ── Grand summary banner ────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08)),
                     ),
-                  )
-                : SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final sender = senders[index];
-                          final senderTxs = txs
-                              .where((t) => t.name == sender.senderName)
-                              .toList();
-
-                          double balance = 0;
-                          final withBal =
-                              senderTxs.where((t) => t.totalBalance > 0);
-                          if (withBal.isNotEmpty) {
-                            balance = withBal.first.totalBalance;
-                          }
-
-                          double income = senderTxs
-                              .where((t) => t.type == 'income')
-                              .fold<double>(0, (a, t) => a + t.amount);
-                          double expense = senderTxs
-                              .where((t) => t.type == 'expense')
-                              .fold<double>(0, (a, t) => a + t.amount);
-                          final net = income - expense;
-
-                          // This month's stats
-                          final now = DateTime.now();
-                          final monthTxs = senderTxs
-                              .where((t) =>
-                                  t.date.year == now.year &&
-                                  t.date.month == now.month)
-                              .toList();
-                          final monthIncome = monthTxs
-                              .where((t) => t.type == 'income')
-                              .fold<double>(0, (a, t) => a + t.amount);
-                          final monthExpense = monthTxs
-                              .where((t) => t.type == 'expense')
-                              .fold<double>(0, (a, t) => a + t.amount);
-
-                          return _WalletCard(
-                            sender: sender,
-                            balance: balance,
-                            totalIncome: income,
-                            totalExpense: expense,
-                            net: net,
-                            monthIncome: monthIncome,
-                            monthExpense: monthExpense,
-                            txCount: senderTxs.length,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    SenderDetailScreen(sender: sender),
-                              ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Net Worth',
+                          style:
+                              TextStyle(color: Color(0xFF6B8FA6), fontSize: 12),
+                        ),
+                        const SizedBox(height: 6),
+                        _splitBalance(fmt.format(grandBalance), 36, 22),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            _miniStatChip(
+                                'Income',
+                                fmt.format(grandIncome),
+                                AppColors.mintGreen,
+                                Icons.arrow_downward_rounded),
+                            const SizedBox(width: 10),
+                            _miniStatChip('Expense', fmt.format(grandExpense),
+                                AppColors.alertRed, Icons.arrow_upward_rounded),
+                            const SizedBox(width: 10),
+                            _miniStatChip(
+                              'Net',
+                              '${grandNet >= 0 ? '+' : ''}${fmt.format(grandNet)}',
+                              grandNet >= 0
+                                  ? AppColors.mintGreen
+                                  : AppColors.alertRed,
+                              grandNet >= 0
+                                  ? Icons.trending_up
+                                  : Icons.trending_down,
                             ),
-                          );
-                        },
-                        childCount: senders.length,
-                      ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-          ],
+                ),
+              ),
+
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                  child: const Text(
+                    'ACCOUNTS',
+                    style: TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.3,
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Wallet cards list ─────────────────────────────────────────
+              senders.isEmpty
+                  ? SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.account_balance_wallet_outlined,
+                                color:
+                                    AppColors.textGray.withValues(alpha: 0.4),
+                                size: 56),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'No wallets connected yet',
+                              style: TextStyle(
+                                color: AppColors.textGray,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Set up senders in Settings to get started',
+                              style: TextStyle(
+                                  color: Color(0xFF4A6572), fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            if (index == senders.length) {
+                              return _buildCashWalletRow(context, provider);
+                            }
+
+                            final sender = senders[index];
+                            final senderTxs = txs
+                                .where((t) => t.name == sender.senderName)
+                                .toList();
+
+                            double balance = 0;
+                            final withBal =
+                                senderTxs.where((t) => t.totalBalance > 0);
+                            if (withBal.isNotEmpty) {
+                              balance = withBal.first.totalBalance;
+                            }
+
+                            double income = senderTxs
+                                .where((t) => t.type == 'income')
+                                .fold<double>(0, (a, t) => a + t.amount);
+                            double expense = senderTxs
+                                .where((t) => t.type == 'expense')
+                                .fold<double>(0, (a, t) => a + t.amount);
+                            final net = income - expense;
+
+                            // This month's stats
+                            final now = DateTime.now();
+                            final monthTxs = senderTxs
+                                .where((t) =>
+                                    t.date.year == now.year &&
+                                    t.date.month == now.month)
+                                .toList();
+                            final monthIncome = monthTxs
+                                .where((t) => t.type == 'income')
+                                .fold<double>(0, (a, t) => a + t.amount);
+                            final monthExpense = monthTxs
+                                .where((t) => t.type == 'expense')
+                                .fold<double>(0, (a, t) => a + t.amount);
+
+                            return _WalletCard(
+                              senderName: sender.senderName,
+                              balance: balance,
+                              totalIncome: income,
+                              totalExpense: expense,
+                              net: net,
+                              monthIncome: monthIncome,
+                              monthExpense: monthExpense,
+                              txCount: senderTxs.length,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      SenderDetailScreen(sender: sender),
+                                ),
+                              ),
+                            );
+                          },
+                          childCount: senders.length + 1,
+                        ),
+                      ),
+                    ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCashWalletRow(BuildContext context, FinanceProvider provider) {
+    double income = 0;
+    double expense = 0;
+    int txCount = 0;
+    double monthIncome = 0;
+    double monthExpense = 0;
+    final now = DateTime.now();
+
+    // Combine SMS "Cash" withdrawals and manual additions
+    for (var tx in provider.transactions) {
+      if (tx.reason?.toLowerCase() == 'cash' ||
+          tx.customReasonText?.toLowerCase() == 'cash' ||
+          tx.resolvedReason?.toLowerCase() == 'cash') {
+        income += tx.amount.abs();
+        txCount++;
+        if (tx.date.year == now.year && tx.date.month == now.month) {
+          monthIncome += tx.amount.abs();
+        }
+      }
+    }
+
+    for (var ctx in provider.cashTransactions) {
+      txCount++;
+      if (ctx.type == 'addition') {
+        income += ctx.amount;
+        if (ctx.date.year == now.year && ctx.date.month == now.month) {
+          monthIncome += ctx.amount;
+        }
+      } else {
+        expense += ctx.amount;
+        if (ctx.date.year == now.year && ctx.date.month == now.month) {
+          monthExpense += ctx.amount;
+        }
+      }
+    }
+
+    return _WalletCard(
+      senderName: 'Cash Wallet',
+      balance: provider.cashBalance,
+      totalIncome: income,
+      totalExpense: expense,
+      net: income - expense,
+      monthIncome: monthIncome,
+      monthExpense: monthExpense,
+      txCount: txCount,
+      onTap: () {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const CashWalletDetailScreen()));
+      },
     );
   }
 
@@ -323,9 +367,9 @@ class _WalletsScreenState extends State<WalletsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,7 +407,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
 // Individual Wallet Card
 // ─────────────────────────────────────────────────────────────────────────────
 class _WalletCard extends StatelessWidget {
-  final dynamic sender;
+  final String senderName;
   final double balance;
   final double totalIncome;
   final double totalExpense;
@@ -374,7 +418,7 @@ class _WalletCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _WalletCard({
-    required this.sender,
+    required this.senderName,
     required this.balance,
     required this.totalIncome,
     required this.totalExpense,
@@ -431,6 +475,7 @@ class _WalletCard extends StatelessWidget {
     if (n == 'CBE') return 'Commercial Bank of Ethiopia';
     if (n == 'TELEBIRR') return 'Ethio Telecom · E-money';
     if (n == 'CBE BIRR' || n == 'CBEBIRR') return 'CBE Birr · Mobile Wallet';
+    if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     return 'Bank Account';
   }
 
@@ -451,9 +496,9 @@ class _WalletCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F1417),
+          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Column(
           children: [
@@ -463,14 +508,14 @@ class _WalletCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _bankLogo(sender.senderName),
+                  _bankLogo(senderName),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          sender.senderName,
+                          senderName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -480,7 +525,7 @@ class _WalletCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _subtitle(sender.senderName),
+                          _subtitle(senderName),
                           style: const TextStyle(
                               color: Color(0xFF4A6572), fontSize: 11),
                         ),
@@ -643,8 +688,9 @@ class _WalletCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
+import '../shell/custom_bottom_nav_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Backup & Restore Screen
@@ -145,8 +146,18 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
+        extendBody: true,
+        bottomNavigationBar: DynamicNavBarWrapper(
+          currentIndex: 4,
+          onTap: (_) {},
+          isDynamic: true,
+          dynamicActionLabel: 'Create Backup',
+          dynamicActionIcon: Icons.backup_outlined,
+          onDynamicAdd: _isExporting ? null : _runExport,
+          onDynamicBack: () => Navigator.pop(context),
+        ),
         body: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               _buildHeader(),
@@ -160,6 +171,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
                   ],
                 ),
               ),
+              const SizedBox(height: 100), // Padding for navbar
             ],
           ),
         ),
@@ -169,49 +181,18 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   // ─── Header ─────────────────────────────────────────────────────────────
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: AppColors.textWhite,
-                size: 16,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Backup & Restore',
-                style: TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Protect and recover your data',
-                style: TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ],
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Text(
+        'Backup & Restore',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 26,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.5,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -228,7 +209,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: const Color(0xFF0D739F),
+          color: AppColors.primaryBlue,
           borderRadius: BorderRadius.circular(10),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
@@ -265,7 +246,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           // Info card
           _infoCard(
             icon: Icons.cloud_upload_outlined,
-            color: const Color(0xFF4FC3F7),
+            color: AppColors.primaryBlue,
             title: 'Create a Backup',
             body:
                 'Your backup will be saved to a "Shibre_Backups" folder on your device storage. '
@@ -273,15 +254,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           ),
 
           const SizedBox(height: 24),
-
-          // Export button
-          _buildActionButton(
-            onTap: _isExporting ? null : _runExport,
-            loading: _isExporting,
-            icon: Icons.backup_outlined,
-            label: 'Create Backup Now',
-            color: const Color(0xFF0D739F),
-          ),
 
           const SizedBox(height: 24),
 
@@ -397,11 +369,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF0D739F).withValues(alpha: 0.15),
+              color: AppColors.primaryBlue.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.description_outlined,
-                color: Color(0xFF4FC3F7), size: 20),
+                color: AppColors.primaryBlue, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -452,7 +424,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           const SizedBox(height: 8),
           _infoCard(
             icon: Icons.cloud_download_outlined,
-            color: const Color(0xFFCE93D8),
+            color: AppColors.primaryBlue,
             title: 'Restore from Backup',
             body:
                 'Tap a backup file below to restore. Existing transactions will be '
@@ -465,7 +437,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: CircularProgressIndicator(
-                  color: Color(0xFF0D739F),
+                  color: AppColors.primaryBlue,
                   strokeWidth: 2,
                 ),
               ),
@@ -492,7 +464,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
                 child: Column(
                   children: [
                     const CircularProgressIndicator(
-                      color: Color(0xFF0D739F),
+                      color: AppColors.primaryBlue,
                       strokeWidth: 2,
                     ),
                     const SizedBox(height: 12),
@@ -572,11 +544,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFCE93D8).withValues(alpha: 0.12),
+                color: AppColors.primaryBlue.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.restore_outlined,
-                  color: Color(0xFFCE93D8), size: 22),
+                  color: AppColors.primaryBlue, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -625,7 +597,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.restore_outlined,
-                  color: Color(0xFFCE93D8), size: 40),
+                  color: AppColors.primaryBlue, size: 40),
               const SizedBox(height: 16),
               const Text(
                 'Restore Backup?',
@@ -669,8 +641,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
-                          color:
-                              const Color(0xFFCE93D8).withValues(alpha: 0.85),
+                          color: AppColors.primaryBlue.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         alignment: Alignment.center,
@@ -886,13 +857,13 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D739F).withValues(alpha: 0.25),
+                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text(
                   'Retry',
                   style: TextStyle(
-                    color: Color(0xFF4FC3F7),
+                    color: AppColors.primaryBlue,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -948,52 +919,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required VoidCallback? onTap,
-    required bool loading,
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: onTap == null ? color.withValues(alpha: 0.4) : color,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: loading
-            ? const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
       ),
     );
   }

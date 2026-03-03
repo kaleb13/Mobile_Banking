@@ -110,19 +110,58 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
-        body: FadeTransition(
-          opacity: _fadeAnim,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              _buildSliverAppBar(totalIncome, totalExpense, net),
-              SliverToBoxAdapter(
+        extendBody: true,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              colors: [
+                Color(0xFF1F1F25),
+                Color(0xFF1B1B21),
+              ],
+            ),
+          ),
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: SafeArea(
+                bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const SizedBox(height: 16),
+                      _buildHeader(),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                              child: _buildSumCard(
+                                  'In',
+                                  NumberFormat('#,##0.00').format(totalIncome),
+                                  const Color(0xFF3EB489),
+                                  Icons.arrow_downward_rounded)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                              child: _buildSumCard(
+                                  'Out',
+                                  NumberFormat('#,##0.00').format(totalExpense),
+                                  const Color(0xFFEF4444),
+                                  Icons.arrow_upward_rounded)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                              child: _buildSumCard(
+                                  'P/L',
+                                  NumberFormat('#,##0.00').format(net),
+                                  const Color(0xFFF0B90B),
+                                  Icons.auto_graph_rounded)),
+                        ],
+                      ),
                       const SizedBox(height: 24),
                       _buildPeriodSelector(),
                       const SizedBox(height: 28),
@@ -132,7 +171,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       const SizedBox(height: 28),
                       _buildSectionLabel('Spending by Category'),
                       const SizedBox(height: 14),
-                      _buildRadarSection(expenses),
+                      _buildRadarSection(txs, provider),
                       const SizedBox(height: 28),
                       _buildSectionLabel('Bank Performance'),
                       const SizedBox(height: 14),
@@ -140,124 +179,45 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       const SizedBox(height: 28),
                       _buildSectionLabel('Top Spending Reasons'),
                       const SizedBox(height: 14),
-                      _buildReasonBreakdown(expenses),
-                      const SizedBox(height: 100),
+                      _buildReasonBreakdown(txs, provider),
+                      const SizedBox(height: 120),
                     ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ─── Sliver App Bar ─────────────────────────────────────────────────────────
-  Widget _buildSliverAppBar(
-      double totalIncome, double totalExpense, double net) {
-    final fmt = NumberFormat('#,##0.00');
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      backgroundColor: const Color(0xFF0A0B0D),
-      surfaceTintColor: Colors.transparent,
-      leading: const SizedBox(),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0.0, -0.8),
-              radius: 1.1,
-              colors: [
-                Color(0xFF1A4D6E),
-                Color(0xFF0D2E40),
-                Color(0xFF0A0B0D),
-              ],
-              stops: [0.0, 0.55, 1.0],
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12)),
-                        ),
-                        child: const Icon(Icons.bar_chart_rounded,
-                            color: AppColors.accentBlue, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Analysis',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.3,
-                              )),
-                          Text('Spend with awareness',
-                              style: TextStyle(
-                                  color: Color(0xFF6B8FA6), fontSize: 11)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                          child: _buildSumCard(
-                              'Income',
-                              fmt.format(totalIncome),
-                              AppColors.mintGreen,
-                              Icons.arrow_downward_rounded)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _buildSumCard(
-                              'Expense',
-                              fmt.format(totalExpense),
-                              AppColors.alertRed,
-                              Icons.arrow_upward_rounded)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                          child: _buildSumCard(
-                              'Net',
-                              (net >= 0 ? '+' : '') + fmt.format(net),
-                              net >= 0
-                                  ? AppColors.mintGreen
-                                  : AppColors.alertRed,
-                              Icons.account_balance_wallet_outlined)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+  Widget _buildHeader() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Analysis',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.3,
+            )),
+        Text(
+          'Spend with awareness',
+          style: TextStyle(color: AppColors.textGray, fontSize: 12),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildSumCard(String label, String value, Color color, IconData icon) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,10 +225,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           Row(
             children: [
               Icon(icon, color: color, size: 12),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Text(label,
-                  style: TextStyle(
-                      color: color, fontSize: 10, fontWeight: FontWeight.w500)),
+                  style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
           const SizedBox(height: 4),
@@ -295,7 +257,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     ];
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF111315),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -311,14 +273,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.symmetric(vertical: 9),
                 decoration: BoxDecoration(
-                  color: isActive ? AppColors.primaryBlue : Colors.transparent,
+                  color:
+                      isActive ? const Color(0xFFF0B90B) : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: isActive
                       ? [
                           BoxShadow(
                             color:
-                                AppColors.primaryBlue.withValues(alpha: 0.35),
-                            blurRadius: 12,
+                                const Color(0xFFF0B90B).withValues(alpha: 0.25),
+                            blurRadius: 10,
                             offset: const Offset(0, 4),
                           )
                         ]
@@ -328,7 +291,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   child: Text(
                     item.$2,
                     style: TextStyle(
-                      color: isActive ? Colors.white : const Color(0xFF6B8FA6),
+                      color: isActive
+                          ? const Color(0xFF301900)
+                          : AppColors.textGray,
                       fontSize: 12,
                       fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                     ),
@@ -369,11 +334,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     return Container(
       height: 220,
-      padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(12, 20, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1214),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: BarChart(
         BarChartData(
@@ -403,7 +368,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 interval: yInterval,
                 getTitlesWidget: (value, meta) => Text(
                   _formatYAxis(value),
-                  style: const TextStyle(color: Color(0xFF3D5566), fontSize: 9),
+                  style:
+                      const TextStyle(color: AppColors.textGray, fontSize: 9),
                 ),
               ),
             ),
@@ -419,7 +385,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(labels[idx],
                         style: const TextStyle(
-                            color: Color(0xFF3D5566), fontSize: 9)),
+                            color: AppColors.textGray, fontSize: 9)),
                   );
                 },
               ),
@@ -498,9 +464,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       barRods: [
         BarChartRodData(
           toY: income,
-          color: AppColors.mintGreen,
-          width: 5,
-          borderRadius: BorderRadius.circular(4),
+          color: const Color(0xFFF0B90B),
+          width: 6,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
           backDrawRodData: BackgroundBarChartRodData(
             show: true,
             toY: 0,
@@ -509,9 +475,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
         BarChartRodData(
           toY: expense,
-          color: AppColors.alertRed.withValues(alpha: 0.85),
-          width: 5,
-          borderRadius: BorderRadius.circular(4),
+          color: const Color(0xFFEF4444).withValues(alpha: 0.8),
+          width: 6,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
         ),
       ],
       barsSpace: 2,
@@ -577,10 +543,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Radar Chart: Category Spending ─────────────────────────────────────────
-  Widget _buildRadarSection(List<AppTransaction> expenses) {
+  Widget _buildRadarSection(
+      List<AppTransaction> allTxs, FinanceProvider provider) {
     final categoryTotals = <String, double>{};
     // Regular expenses
-    for (var t in txs.where(
+    for (var t in allTxs.where(
         (t) => t.type == 'expense' && t.reason?.toLowerCase() != 'cash')) {
       final cat = (t.resolvedReason?.isNotEmpty == true)
           ? t.resolvedReason!
@@ -588,7 +555,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       categoryTotals[cat] = (categoryTotals[cat] ?? 0) + t.amount;
     }
     // Cash spendings
-    for (var tx in txs.where((t) => t.reason?.toLowerCase() == 'cash')) {
+    for (var tx in allTxs.where((t) => t.reason?.toLowerCase() == 'cash')) {
       final spendings = provider.spendingsForTransaction(tx.id!);
       for (final s in spendings) {
         final cat = s.expenseName;
@@ -603,20 +570,25 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final sorted = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final top = sorted.take(6).toList(); // radar works best with 5-7 axes
-    final maxVal = top.first.value;
+    final maxVal = top.isEmpty ? 0.0 : top.first.value;
     final totalExpense = top.fold<double>(0, (s, e) => s + e.value);
+
+    if (top.length < 3) {
+      return _buildEmptyState(
+          'Add at least 3 expense categories to see the spending chart.');
+    }
 
     return Column(
       children: [
         // ── Full Width Radar Chart ─────────────────
         Container(
           width: double.infinity,
-          height: 280,
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          height: 300,
+          padding: const EdgeInsets.symmetric(vertical: 24),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1214).withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: RadarChart(
             RadarChartData(
@@ -630,7 +602,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   color: Colors.white.withValues(alpha: 0.1), width: 1.5),
               titlePositionPercentageOffset: 0.2,
               titleTextStyle: const TextStyle(
-                  color: Color(0xFF6B8FA6),
+                  color: AppColors.textGray,
                   fontSize: 10,
                   fontWeight: FontWeight.w500),
               getTitle: (index, angle) {
@@ -647,10 +619,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       .map((e) => RadarEntry(
                           value: maxVal > 0 ? (e.value / maxVal) * 100 : 0))
                       .toList(),
-                  fillColor: AppColors.primaryBlue.withValues(alpha: 0.25),
-                  borderColor: AppColors.accentBlue,
-                  borderWidth: 2.5,
-                  entryRadius: 4,
+                  fillColor: const Color(0xFFF0B90B).withValues(alpha: 0.15),
+                  borderColor: const Color(0xFFF0B90B),
+                  borderWidth: 2,
+                  entryRadius: 3,
                 ),
               ],
             ),
@@ -675,9 +647,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               width: (MediaQuery.of(context).size.width - 52) / 2, // 2 columns
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F1214),
+                color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
               ),
               child: Row(
                 children: [
@@ -706,7 +678,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         Text(
                           '${NumberFormat('#,##0').format(entry.value.value)} · $pct%',
                           style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.4),
+                              color: Colors.white.withValues(alpha: 0.06),
                               fontSize: 10),
                         ),
                       ],
@@ -723,12 +695,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   Color _categoryColor(int i) {
     const colors = [
-      AppColors.accentBlue,
-      AppColors.mintGreen,
-      Color(0xFFF59E0B),
-      Color(0xFFEC4899),
-      Color(0xFF8B5CF6),
-      Color(0xFFEF4444),
+      Color(0xFFF0B90B), // Gold
+      Color(0xFF3EB489), // Mint
+      Color(0xFF64B5F6), // Blue
+      Color(0xFFCE93D8), // Purple
+      Color(0xFFF48FB1), // Pink
+      Color(0xFFEF4444), // Red
     ];
     return colors[i % colors.length];
   }
@@ -785,9 +757,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1214),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -808,7 +780,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 fontWeight: FontWeight.w500)),
                         Text('${s.txCount} transactions',
                             style: const TextStyle(
-                                color: Color(0xFF4A6572), fontSize: 11)),
+                                color: AppColors.textGray, fontSize: 11)),
                       ],
                     ),
                   ),
@@ -817,16 +789,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: (isPositive
-                              ? AppColors.mintGreen
-                              : AppColors.alertRed)
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
+                      color: const Color(0xFF2A2A34).withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                          color: (isPositive
-                                  ? AppColors.mintGreen
-                                  : AppColors.alertRed)
-                              .withValues(alpha: 0.25)),
+                          color:
+                              const Color(0xFFF0B90B).withValues(alpha: 0.1)),
                     ),
                     child: Row(
                       children: [
@@ -862,7 +829,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   height: 6,
                   child: LinearProgressIndicator(
                     value: incomeShare.clamp(0.0, 1.0),
-                    backgroundColor: AppColors.alertRed.withValues(alpha: 0.35),
+                    backgroundColor:
+                        const Color(0xFFEF4444).withValues(alpha: 0.1),
                     valueColor: const AlwaysStoppedAnimation<Color>(
                         AppColors.mintGreen),
                   ),
@@ -872,11 +840,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _statChip('▲ ${fmt.format(s.income)}', AppColors.mintGreen),
-                  _statChip('▼ ${fmt.format(s.expense)}', AppColors.alertRed),
+                  _statChip(
+                      '▲ ${fmt.format(s.income)}', const Color(0xFF3EB489)),
+                  _statChip(
+                      '▼ ${fmt.format(s.expense)}', const Color(0xFFEF4444)),
                   if (s.balance > 0)
-                    _statChip(
-                        'Bal: ${fmt.format(s.balance)}', AppColors.accentBlue),
+                    _statChip('Bal: ${fmt.format(s.balance)}',
+                        const Color(0xFFF0B90B)),
                 ],
               ),
               // Share pill
@@ -884,7 +854,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               Row(
                 children: [
                   const Text('Activity share:',
-                      style: TextStyle(color: Color(0xFF3D5566), fontSize: 10)),
+                      style:
+                          TextStyle(color: AppColors.textGray, fontSize: 10)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: ClipRRect(
@@ -892,9 +863,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       child: LinearProgressIndicator(
                         value: share.clamp(0.0, 1.0),
                         minHeight: 4,
-                        backgroundColor: Colors.white.withValues(alpha: 0.06),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.primaryBlue.withValues(alpha: 0.7),
+                        backgroundColor: Colors.white.withValues(alpha: 0.04),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFFF0B90B),
                         ),
                       ),
                     ),
@@ -902,7 +873,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   const SizedBox(width: 6),
                   Text('${(share * 100).toStringAsFixed(0)}%',
                       style: const TextStyle(
-                          color: Color(0xFF6B8FA6), fontSize: 10)),
+                          color: AppColors.textGray, fontSize: 10)),
                 ],
               ),
             ],
@@ -914,10 +885,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   Widget _statChip(String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(label,
           style: TextStyle(
@@ -948,12 +919,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.2),
+              color: const Color(0xFFF0B90B).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10)),
           child: Center(
             child: Text(name.substring(0, min(2, name.length)).toUpperCase(),
                 style: const TextStyle(
-                    color: AppColors.accentBlue,
+                    color: Color(0xFFF0B90B),
                     fontSize: 13,
                     fontWeight: FontWeight.w600)),
           ));
@@ -962,10 +933,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Reason Breakdown ────────────────────────────────────────────────────────
-  Widget _buildReasonBreakdown(List<AppTransaction> expenses) {
+  Widget _buildReasonBreakdown(
+      List<AppTransaction> allTxs, FinanceProvider provider) {
     final Map<String, double> reasonTotals = {};
     // Regular
-    for (var t in txs.where(
+    for (var t in allTxs.where(
         (t) => t.type == 'expense' && t.reason?.toLowerCase() != 'cash')) {
       final label = (t.resolvedReason?.isNotEmpty == true)
           ? t.resolvedReason!
@@ -973,7 +945,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       reasonTotals[label] = (reasonTotals[label] ?? 0) + t.amount;
     }
     // Cash
-    for (var tx in txs.where((t) => t.reason?.toLowerCase() == 'cash')) {
+    for (var tx in allTxs.where((t) => t.reason?.toLowerCase() == 'cash')) {
       final spendings = provider.spendingsForTransaction(tx.id!);
       for (final s in spendings) {
         final label = s.expenseName;
@@ -998,12 +970,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final color = _categoryColor(i);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1214),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Row(
             children: [
@@ -1058,7 +1030,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     const SizedBox(height: 4),
                     Text('${(pct * 100).toStringAsFixed(1)}% of total expenses',
                         style: const TextStyle(
-                            color: Color(0xFF3D5566), fontSize: 10)),
+                            color: AppColors.textGray, fontSize: 10)),
                   ],
                 ),
               ),
@@ -1071,12 +1043,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   Widget _buildEmptyState(String message) {
     return Container(
-      height: 100,
+      height: 120,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1214),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

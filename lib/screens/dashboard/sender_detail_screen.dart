@@ -37,8 +37,17 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         .where((tx) => tx.name == widget.sender.senderName)
         .toList();
 
-    // Filter transactions for listing
+    // Chart date filter
+    DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
+    if (_chartFilter == '1W') {
+      cutoff = DateTime.now().subtract(const Duration(days: 7));
+    } else if (_chartFilter == 'ALL') {
+      cutoff = DateTime(2000);
+    }
+
+    // Filter transactions for listing & chart
     final filteredTransactions = allTxForSender.where((tx) {
+      final matchesDate = tx.date.isAfter(cutoff);
       final matchesSearch =
           tx.sender.toLowerCase().contains(_searchQuery.toLowerCase()) ||
               (tx.resolvedReason
@@ -48,7 +57,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       final matchesType = _typeFilter == 'All' ||
           (_typeFilter == 'Income' && tx.type == 'income') ||
           (_typeFilter == 'Expense' && tx.type != 'income');
-      return matchesSearch && matchesType;
+      return matchesDate && matchesSearch && matchesType;
     }).toList();
 
     // Calculate Balance & Trends
@@ -83,7 +92,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
+        backgroundColor: const Color(0xFF1F1F25),
         extendBodyBehindAppBar: true,
         body: Stack(
           children: [
@@ -123,15 +132,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   Widget _buildBackground() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -1.0),
-          radius: 1.2,
+        gradient: LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
           colors: [
-            AppColors.accentBlue,
-            AppColors.primaryBlue,
-            Color(0xFF0A0B0D),
+            Color(0xFF1F1F25),
+            Color(0xFF1B1B21),
           ],
-          stops: [0.0, 0.3, 0.8],
         ),
       ),
     );
@@ -444,9 +451,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: TextField(
               controller: _searchController,
@@ -539,9 +546,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.03),
+          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.02)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           children: [

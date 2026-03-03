@@ -1,11 +1,13 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../dashboard/analysis_screen.dart';
 import '../dashboard/settings_screen.dart';
 import '../wallets/wallets_screen.dart';
-import '../../theme/app_theme.dart';
+import '../loans/loan_management_screen.dart';
+import '../../providers/finance_provider.dart';
+import 'custom_bottom_nav_bar.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -16,19 +18,17 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell>
     with SingleTickerProviderStateMixin {
-  int _currentIndex = 0;
-
   // Pages kept alive via IndexedStack
-  final List<Widget> _pages = const [
-    DashboardScreen(),
-    AnalysisScreen(),
-    WalletsScreen(),
-    SettingsScreen(),
-  ];
+  List<Widget> get _pages => const [
+        DashboardScreen(),
+        AnalysisScreen(),
+        WalletsScreen(),
+        LoanManagementScreen(),
+        SettingsScreen(),
+      ];
 
-  void _onTap(int index) {
-    if (_currentIndex == index) return;
-    setState(() => _currentIndex = index);
+  void _onTap(int index, FinanceProvider provider) {
+    provider.setScreenIndex(index);
   }
 
   @override
@@ -40,145 +40,69 @@ class _MainShellState extends State<MainShell>
         statusBarIconBrightness: Brightness.light,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0A0B0D),
-        extendBody: true,
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _pages,
-        ),
-        bottomNavigationBar: _BottomNavBar(
-          currentIndex: _currentIndex,
-          onTap: _onTap,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Bottom Nav Bar Widget
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomNavBar extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  const _BottomNavBar({
-    required this.currentIndex,
-    required this.onTap,
-  });
-
-  static const _items = [
-    _NavItem(icon: Icons.home_rounded, label: 'Home'),
-    _NavItem(icon: Icons.bar_chart_rounded, label: 'Analysis'),
-    _NavItem(icon: Icons.account_balance_wallet_outlined, label: 'Wallets'),
-    _NavItem(icon: Icons.settings_outlined, label: 'Settings'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF0A0B0D).withValues(alpha: 0.0),
-                const Color(0xFF0A0B0D).withValues(alpha: 0.92),
-                const Color(0xFF0A0B0D),
-              ],
-              stops: const [0.0, 0.35, 1.0],
+      child: Consumer<FinanceProvider>(
+        builder: (context, provider, child) {
+          final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+          return Scaffold(
+            backgroundColor: const Color(0xFF0A0B0D),
+            extendBody: true,
+            body: IndexedStack(
+              index: provider.currentScreenIndex,
+              children: _pages,
             ),
-          ),
-          padding: EdgeInsets.only(
-            top: 28,
-            bottom: bottomPadding + 14,
-            left: 8,
-            right: 8,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: _items.asMap().entries.map((entry) {
-              final i = entry.key;
-              final item = entry.value;
-              final isActive = currentIndex == i;
-              return _NavItemWidget(
-                item: item,
-                isActive: isActive,
-                onTap: () => onTap(i),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem {
-  final IconData icon;
-  final String label;
-  const _NavItem({required this.icon, required this.label});
-}
-
-class _NavItemWidget extends StatelessWidget {
-  final _NavItem item;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _NavItemWidget({
-    required this.item,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.primaryBlue.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: isActive
-              ? Border.all(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.3), width: 1)
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                item.icon,
-                key: ValueKey(isActive),
-                color: isActive ? AppColors.accentBlue : AppColors.textGray,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                color: isActive ? AppColors.accentBlue : AppColors.textGray,
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              ),
-              child: Text(item.label),
-            ),
-          ],
-        ),
+            bottomNavigationBar: (provider.isMenuOpen || isKeyboardOpen)
+                ? const SizedBox.shrink()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (provider.currentScreenIndex == 3)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                              left: 24, right: 24, bottom: 8),
+                          child: GestureDetector(
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => AddLoanSheet(
+                                    provider: context.read<FinanceProvider>()),
+                              );
+                            },
+                            child: Container(
+                              width: double.infinity,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0B90B),
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add,
+                                      color: Color(0xFF301900), size: 18),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'New Loan',
+                                    style: TextStyle(
+                                        color: Color(0xFF301900),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      DynamicNavBarWrapper(
+                        currentIndex: provider.currentScreenIndex,
+                        onTap: (index) => _onTap(index, provider),
+                        isDynamic: false,
+                      ),
+                    ],
+                  ),
+          );
+        },
       ),
     );
   }

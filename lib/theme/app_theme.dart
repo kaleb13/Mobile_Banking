@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  static const Color primaryBlue = Color(0xFF0D739F); // Success/Income/Primary
-  static const Color accentBlue = Color(0xFF87C0DA); // Lighter accent
+  static const Color primaryBlue = Color(0xFFF0B90B); // Golden accent
+  static const Color accentBlue = Color(0xFFF0B90B); // Matching accent
+  static const Color dashboardGrey = Color(0xFF1B1B21); // Surface top color
+  static const Color dashboardDark = Color(0xFF1F1F25); // Surface bottom color
   static const Color mintGreen = Color(0xFF3EB489); // Trending up / positive
   static const Color alertRed = Color(0xFFE11D48); // Expense
   static const Color surfaceDark = Color(0xFF121417); // Card background
@@ -16,12 +18,22 @@ class AppColors {
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [
-      Color(0xFF0A0B0D), // dark top
-      Color(0xFF0F171A), // deep blue-black middle
+      Color(0xFF1F1F25),
+      Color(0xFF1B1B21), // refined deep tone
       Color(0xFF121417), // dark surface
       Color(0xFF0A0B0D), // pure dark
     ],
     stops: [0.0, 0.4, 0.7, 1.0],
+  );
+
+  // New gradient for specific screens as per instruction
+  static const LinearGradient screenBackgroundGradient = LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [
+      Color(0xFF1F1F25),
+      Color(0xFF1B1B21),
+    ],
   );
 }
 
@@ -30,7 +42,7 @@ class AppTheme {
     return ThemeData(
       brightness: Brightness.dark,
       primaryColor: AppColors.primaryBlue,
-      scaffoldBackgroundColor: const Color(0xFF0A0B0D),
+      scaffoldBackgroundColor: const Color(0xFF1F1F25),
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
         bodyColor: AppColors.textWhite,
         displayColor: AppColors.textWhite,

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../loans/loan_management_screen.dart';
 
 class ReasonManagementScreen extends StatefulWidget {
   const ReasonManagementScreen({super.key});
@@ -427,8 +426,8 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
           const SizedBox(height: 10),
           ...systemReasons.map((r) => _ReasonTile(
                 reason: r,
-                links: provider.linksForReason(r.id!),
                 onLinkTap: () => _showLinkDialog(context, provider, r),
+                provider: provider,
               )),
 
           const SizedBox(height: 24),
@@ -447,8 +446,8 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
             ),
           ...userReasons.map((r) => _ReasonTile(
                 reason: r,
-                links: provider.linksForReason(r.id!),
                 onLinkTap: () => _showLinkDialog(context, provider, r),
+                provider: provider,
                 onEditTap: () =>
                     _showAddEditDialog(context, provider, existing: r),
                 onDeleteTap: () async {
@@ -506,14 +505,14 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
 // ─────────────────────────────────────────────────────────
 class _ReasonTile extends StatelessWidget {
   final AppReason reason;
-  final List<AppReasonLink> links;
+  final FinanceProvider provider;
   final VoidCallback onLinkTap;
   final VoidCallback? onEditTap;
   final VoidCallback? onDeleteTap;
 
   const _ReasonTile({
     required this.reason,
-    required this.links,
+    required this.provider,
     required this.onLinkTap,
     this.onEditTap,
     this.onDeleteTap,
@@ -521,6 +520,7 @@ class _ReasonTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final links = provider.linksForReason(reason.id!);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -563,11 +563,8 @@ class _ReasonTile extends StatelessWidget {
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const LoanManagementScreen()),
-                    );
+                    provider.setScreenIndex(3);
+                    Navigator.popUntil(context, (route) => route.isFirst);
                   },
                   child: Container(
                     padding:

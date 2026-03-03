@@ -19,154 +19,248 @@ class NotificationsScreen extends StatelessWidget {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0B0D),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0B0D),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: AppColors.textWhite, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Notifications',
-          style: TextStyle(
-            color: AppColors.textWhite,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        actions: [
-          if (provider.notifications.isNotEmpty)
-            TextButton(
-              onPressed: () => _showClearAll(context, provider),
-              child: const Text(
-                'Clear all',
-                style:
-                    TextStyle(color: AppColors.primaryBlue, fontSize: 13),
-              ),
-            ),
-        ],
-      ),
-      body: provider.notifications.isEmpty
-          ? _buildEmpty()
-          : ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: provider.notifications.length,
-              separatorBuilder: (_, __) => const Divider(
-                color: AppColors.surfaceDark,
-                height: 1,
-              ),
-              itemBuilder: (context, index) {
-                final notif = provider.notifications[index];
-                return GestureDetector(
-                  onLongPress: () =>
-                      _showLongPressModal(context, provider, notif.id),
-                  child: Dismissible(
-                    key: Key(notif.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      color: AppColors.alertRed.withValues(alpha: 0.8),
-                      child:
-                          const Icon(Icons.delete_outline, color: Colors.white),
-                    ),
-                    onDismissed: (_) => provider.deleteNotification(notif.id),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: AppColors.alertRed.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.sms_failed_outlined,
-                              color: AppColors.alertRed,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.alertRed
-                                            .withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        notif.sender,
-                                        style: const TextStyle(
-                                          color: AppColors.alertRed,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.textGray
-                                            .withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Text(
-                                        'Unregistered Message',
-                                        style: TextStyle(
-                                          color: AppColors.textGray,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      DateFormat('MMM d, HH:mm')
-                                          .format(notif.date),
-                                      style: const TextStyle(
-                                        color: AppColors.textGray,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  notif.body,
-                                  style: const TextStyle(
-                                    color: AppColors.textWhite,
-                                    fontSize: 13,
-                                    height: 1.5,
-                                  ),
-                                  maxLines: 4,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+      backgroundColor: const Color(0xFF1F1F25),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.only(right: 16.0, top: 4.0, bottom: 4.0),
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                   ),
-                );
-              },
+                  const Expanded(
+                    child: Text(
+                      'Notifications',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (provider.notifications.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => _showClearAll(context, provider),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
+
+            // List / Empty State
+            Expanded(
+              child: provider.notifications.isEmpty
+                  ? _buildEmpty()
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(top: 8, bottom: 40),
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: provider.notifications.length,
+                      itemBuilder: (context, index) {
+                        final notif = provider.notifications[index];
+                        return GestureDetector(
+                          onLongPress: () =>
+                              _showLongPressModal(context, provider, notif.id),
+                          child: Dismissible(
+                            key: Key(notif.id),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              margin: const EdgeInsets.only(
+                                  bottom: 12, left: 24, right: 24),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 24),
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.alertRed.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(Icons.delete_outline,
+                                  color: Colors.white, size: 26),
+                            ),
+                            onDismissed: (_) =>
+                                provider.deleteNotification(notif.id),
+                            child: Container(
+                              margin: const EdgeInsets.only(
+                                  bottom: 12, left: 20, right: 20),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceLight
+                                    .withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.03)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryBlue
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(
+                                      Icons.notifications_active_rounded,
+                                      color: AppColors.primaryBlue,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Wrap(
+                                                spacing: 8,
+                                                runSpacing: 4,
+                                                children: [
+                                                  Text(
+                                                    notif.sender,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  if (notif.sender
+                                                          .startsWith('Loan') ||
+                                                      notif.sender
+                                                          .startsWith('System'))
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors
+                                                            .primaryBlue
+                                                            .withValues(
+                                                                alpha: 0.15),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                      ),
+                                                      child: const Text(
+                                                        'System Message',
+                                                        style: TextStyle(
+                                                          color: AppColors
+                                                              .primaryBlue,
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  else
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors
+                                                            .textGray
+                                                            .withValues(
+                                                                alpha: 0.12),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                      ),
+                                                      child: const Text(
+                                                        'Unregistered',
+                                                        style: TextStyle(
+                                                          color: AppColors
+                                                              .textGray,
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              DateFormat('MMM d, HH:mm')
+                                                  .format(notif.date),
+                                              style: TextStyle(
+                                                color: AppColors.textGray
+                                                    .withValues(alpha: 0.8),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          notif.body,
+                                          style: const TextStyle(
+                                            color: AppColors.textGray,
+                                            fontSize: 13,
+                                            height: 1.5,
+                                          ),
+                                          maxLines: 4,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
