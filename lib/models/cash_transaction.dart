@@ -36,4 +36,21 @@ class CashTransaction {
       expenseDefinitionId: map['expenseDefinitionId'] as int?,
     );
   }
+
+  CashTransaction copyWith({
+    String? type,
+    double? amount,
+    DateTime? date,
+    String? description,
+    int? expenseDefinitionId,
+  }) {
+    return CashTransaction(
+      id: id,
+      type: type ?? this.type,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      description: description ?? this.description,
+      expenseDefinitionId: expenseDefinitionId ?? this.expenseDefinitionId,
+    );
+  }
 }

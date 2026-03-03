@@ -5,6 +5,7 @@ import '../models/transaction.dart';
 import '../models/app_notification.dart';
 import '../models/reason.dart';
 import '../models/loan_record.dart';
+import '../models/loan_repayment_request.dart';
 import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
 
@@ -25,7 +26,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 7, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 11, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -106,6 +107,9 @@ CREATE TABLE IF NOT EXISTS expense_definitions (
   recurringType TEXT,
   intervalDays INTEGER,
   specificDay INTEGER,
+  selectedDaysOfWeek TEXT,
+  timesPerDay INTEGER NOT NULL DEFAULT 1,
+  isActive INTEGER NOT NULL DEFAULT 1,
   lastAppliedDate TEXT
 )
 ''');
@@ -147,6 +151,19 @@ CREATE TABLE IF NOT EXISTS loan_payments (
   paymentDate TEXT NOT NULL,
   linkedTransactionId TEXT,
   note TEXT,
+  FOREIGN KEY(loanId) REFERENCES loan_records(id) ON DELETE CASCADE
+)
+''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS loan_repayment_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  loanId INTEGER NOT NULL,
+  transactionId TEXT NOT NULL,
+  senderFound TEXT NOT NULL,
+  trackedName TEXT NOT NULL,
+  amount REAL NOT NULL,
+  createdAt TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
   FOREIGN KEY(loanId) REFERENCES loan_records(id) ON DELETE CASCADE
 )
 ''');
@@ -214,6 +231,40 @@ CREATE TABLE IF NOT EXISTS reason_links (
     }
     if (oldVersion < 7) {
       await _createCashTables(db);
+    }
+    if (oldVersion < 8) {
+      // Add loan_repayment_requests table
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS loan_repayment_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  loanId INTEGER NOT NULL,
+  transactionId TEXT NOT NULL,
+  senderFound TEXT NOT NULL,
+  trackedName TEXT NOT NULL,
+  amount REAL NOT NULL,
+  createdAt TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  FOREIGN KEY(loanId) REFERENCES loan_records(id) ON DELETE CASCADE
+)
+''');
+    }
+    if (oldVersion < 9) {
+      try {
+        await db.execute(
+            'ALTER TABLE expense_definitions ADD COLUMN selectedDaysOfWeek TEXT;');
+      } catch (_) {}
+    }
+    if (oldVersion < 10) {
+      try {
+        await db.execute(
+            'ALTER TABLE expense_definitions ADD COLUMN timesPerDay INTEGER NOT NULL DEFAULT 1;');
+      } catch (_) {}
+    }
+    if (oldVersion < 11) {
+      try {
+        await db.execute(
+            'ALTER TABLE expense_definitions ADD COLUMN isActive INTEGER NOT NULL DEFAULT 1;');
+      } catch (_) {}
     }
   }
 
@@ -312,6 +363,32 @@ CREATE TABLE IF NOT EXISTS reason_links (
       if (dateString != null) return DateTime.parse(dateString);
     }
     return null;
+  }
+
+  /// Wipes every row from the transactions table.
+  Future<void> deleteAllTransactions() async {
+    final db = await instance.database;
+    await db.delete('transactions');
+  }
+
+  /// Wipes user-created reasons and all reason_links.
+  /// System reasons (isSystem == 1) are preserved.
+  Future<void> deleteAllUserReasons() async {
+    final db = await instance.database;
+    await db.delete('reason_links');
+    await db.delete('reasons', where: 'isSystem = 0');
+  }
+
+  /// Wipes all reason_links only (keeps reason names, removes assignments).
+  Future<void> deleteAllReasonLinks() async {
+    final db = await instance.database;
+    await db.delete('reason_links');
+  }
+
+  /// Wipes all in-app notifications.
+  Future<void> deleteAllNotifications() async {
+    final db = await instance.database;
+    await db.delete('notifications');
   }
 
   // ──────────────────────────────────────────────
@@ -500,6 +577,43 @@ CREATE TABLE IF NOT EXISTS reason_links (
     return maps.map((m) => LoanRecord.fromMap(m)).toList();
   }
 
+  // ──────────────────────────────────────────────
+  // Loan Repayment Request Methods
+  // ──────────────────────────────────────────────
+
+  Future<int> insertLoanRepaymentRequest(LoanRepaymentRequest req) async {
+    final db = await instance.database;
+    // Avoid duplicate pending requests for the same transaction
+    final existing = await db.query('loan_repayment_requests',
+        where: 'transactionId = ? AND status = ?',
+        whereArgs: [req.transactionId, 'pending']);
+    if (existing.isNotEmpty) return existing.first['id'] as int;
+    return await db.insert('loan_repayment_requests', req.toMap());
+  }
+
+  Future<List<LoanRepaymentRequest>> getPendingRepaymentRequests() async {
+    final db = await instance.database;
+    final maps = await db.query('loan_repayment_requests',
+        where: 'status = ?', whereArgs: ['pending'], orderBy: 'createdAt DESC');
+    return maps.map((m) => LoanRepaymentRequest.fromMap(m)).toList();
+  }
+
+  Future<void> updateRepaymentRequestStatus(int id, String status) async {
+    final db = await instance.database;
+    await db.update(
+      'loan_repayment_requests',
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteRepaymentRequest(int id) async {
+    final db = await instance.database;
+    await db
+        .delete('loan_repayment_requests', where: 'id = ?', whereArgs: [id]);
+  }
+
   /// Recompute paidAmount from all payments and update loan status.
   Future<LoanRecord?> recalcLoanPaid(int loanId) async {
     final db = await instance.database;
@@ -577,5 +691,11 @@ CREATE TABLE IF NOT EXISTS reason_links (
     final db = await instance.database;
     return await db
         .delete('cash_transactions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> updateCashTransaction(CashTransaction transaction) async {
+    final db = await instance.database;
+    return await db.update('cash_transactions', transaction.toMap(),
+        where: 'id = ?', whereArgs: [transaction.id]);
   }
 }

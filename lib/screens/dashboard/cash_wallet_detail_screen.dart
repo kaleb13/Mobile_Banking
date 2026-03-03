@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
@@ -61,8 +62,13 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new,
-                                color: Colors.white, size: 20),
+                            icon: SvgPicture.asset(
+                              'assets/images/BackForNav.svg',
+                              colorFilter: const ColorFilter.mode(
+                                  Colors.white, BlendMode.srcIn),
+                              width: 20,
+                              height: 20,
+                            ),
                             onPressed: () => Navigator.pop(context),
                           ),
                           const Text(
@@ -179,12 +185,14 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
 
     for (var ctx in provider.cashTransactions) {
       allTxs.add({
+        'id': ctx.id,
         'date': ctx.date,
         'title':
             ctx.type == 'addition' ? 'Manual Addition' : 'Expense Deducted',
         'subtitle': ctx.description ?? '',
         'amount': ctx.amount,
         'isPositive': ctx.type == 'addition',
+        'isCashTx': true,
       });
     }
 
@@ -205,61 +213,71 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           final date = tx['date'] as DateTime;
           final isPositive = tx['isPositive'] as bool;
 
-          return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.08))),
-              child: Row(children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: isPositive
-                        ? AppColors.mintGreen.withValues(alpha: 0.1)
-                        : AppColors.alertRed.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
+          return InkWell(
+            onLongPress: tx['isCashTx'] == true
+                ? () {
+                    _showOverrideAmountDialog(
+                        context, provider, tx['id'], tx['amount']);
+                  }
+                : null,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08))),
+                child: Row(children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isPositive
+                          ? AppColors.mintGreen.withValues(alpha: 0.1)
+                          : AppColors.alertRed.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isPositive ? Icons.arrow_downward : Icons.arrow_upward,
+                      color:
+                          isPositive ? AppColors.mintGreen : AppColors.alertRed,
+                      size: 18,
+                    ),
                   ),
-                  child: Icon(
-                    isPositive ? Icons.arrow_downward : Icons.arrow_upward,
-                    color:
-                        isPositive ? AppColors.mintGreen : AppColors.alertRed,
-                    size: 18,
+                  const SizedBox(width: 16),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(tx['title'] as String,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600)),
+                        if ((tx['subtitle'] as String).isNotEmpty)
+                          Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Text(tx['subtitle'] as String,
+                                  style: const TextStyle(
+                                      color: AppColors.textGray,
+                                      fontSize: 12))),
+                        const SizedBox(height: 4),
+                        Text(DateFormat('MMM d, yyyy · hm a').format(date),
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.4),
+                                fontSize: 10)),
+                      ])),
+                  Text(
+                    '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])} ETB',
+                    style: TextStyle(
+                        color: isPositive ? AppColors.mintGreen : Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(tx['title'] as String,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600)),
-                      if ((tx['subtitle'] as String).isNotEmpty)
-                        Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Text(tx['subtitle'] as String,
-                                style: const TextStyle(
-                                    color: AppColors.textGray, fontSize: 12))),
-                      const SizedBox(height: 4),
-                      Text(DateFormat('MMM d, yyyy · hm a').format(date),
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              fontSize: 10)),
-                    ])),
-                Text(
-                  '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])} ETB',
-                  style: TextStyle(
-                      color: isPositive ? AppColors.mintGreen : Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold),
-                ),
-              ]));
+                ])),
+          );
         });
   }
 
@@ -503,6 +521,69 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           const SizedBox(height: 8),
           Text(label,
               style: const TextStyle(color: AppColors.textWhite, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  void _showOverrideAmountDialog(BuildContext context, FinanceProvider provider,
+      int id, double currentAmount) {
+    final amountController =
+        TextEditingController(text: currentAmount.toStringAsFixed(2));
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1F24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Override Amount',
+            style: TextStyle(color: Colors.white, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enter the correct amount for this transaction:',
+                style: TextStyle(color: AppColors.textGray, fontSize: 14)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textGray)),
+          ),
+          TextButton(
+            onPressed: () {
+              final newAmount = double.tryParse(amountController.text.trim());
+              if (newAmount != null) {
+                provider.updateCashTransactionAmount(id, newAmount);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Amount updated successfully')),
+                );
+              }
+            },
+            child: const Text('Update',
+                style: TextStyle(
+                    color: AppColors.mintGreen, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );

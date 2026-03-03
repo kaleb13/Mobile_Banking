@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
@@ -199,8 +200,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: Colors.white, size: 20),
+            icon: SvgPicture.asset(
+              'assets/images/BackForNav.svg',
+              colorFilter:
+                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              width: 20,
+              height: 20,
+            ),
             onPressed: () => Navigator.pop(context),
           ),
           actions: [

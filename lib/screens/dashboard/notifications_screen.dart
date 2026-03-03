@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
@@ -32,13 +33,15 @@ class NotificationsScreen extends StatelessWidget {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     behavior: HitTestBehavior.opaque,
-                    child: const Padding(
-                      padding:
-                          EdgeInsets.only(right: 16.0, top: 4.0, bottom: 4.0),
-                      child: Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 24,
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                          right: 16.0, top: 4.0, bottom: 4.0),
+                      child: SvgPicture.asset(
+                        'assets/images/BackForNav.svg',
+                        colorFilter: const ColorFilter.mode(
+                            Colors.white, BlendMode.srcIn),
+                        width: 22,
+                        height: 22,
                       ),
                     ),
                   ),

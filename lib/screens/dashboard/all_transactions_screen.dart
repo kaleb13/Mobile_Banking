@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
@@ -142,8 +143,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 color: Colors.white.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
-                  color: Colors.white, size: 18),
+              child: SvgPicture.asset(
+                'assets/images/BackForNav.svg',
+                colorFilter:
+                    const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                width: 18,
+                height: 18,
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -326,12 +332,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primaryBlue
+              ? Colors.white.withValues(alpha: 0.08)
               : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? AppColors.primaryBlue
+                ? Colors.transparent
                 : Colors.white.withValues(alpha: 0.1),
           ),
         ),
@@ -347,10 +353,9 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             Text(
               label,
               style: TextStyle(
-                color:
-                    isSelected ? const Color(0xFF1F1F25) : AppColors.textWhite,
+                color: isSelected ? Colors.white : AppColors.textWhite,
                 fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
               ),
             ),
             const SizedBox(width: 4),

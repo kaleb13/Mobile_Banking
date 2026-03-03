@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -151,7 +152,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _buildNavIconButton(
-            Icons.arrow_back_ios_new,
+            'assets/images/BackForNav.svg',
+            isSvg: true,
             onTap: () => Navigator.pop(context),
           ),
           Row(
@@ -184,7 +186,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
-  Widget _buildNavIconButton(IconData icon, {required VoidCallback onTap}) {
+  Widget _buildNavIconButton(dynamic icon,
+      {bool isSvg = false, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -195,7 +198,17 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           color: Colors.white.withValues(alpha: 0.08),
           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
-        child: Icon(icon, color: Colors.white, size: 18),
+        child: Center(
+          child: isSvg
+              ? SvgPicture.asset(
+                  icon as String,
+                  colorFilter:
+                      const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                  width: 18,
+                  height: 18,
+                )
+              : Icon(icon as IconData, color: Colors.white, size: 18),
+        ),
       ),
     );
   }
@@ -420,18 +433,17 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.accentBlue.withValues(alpha: 0.2)
+                    ? Colors.white.withValues(alpha: 0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: isSelected ? AppColors.accentBlue : Colors.white10),
+                border: Border.all(color: Colors.transparent),
               ),
               child: Text(
                 f,
                 style: TextStyle(
-                  color: isSelected ? AppColors.accentBlue : AppColors.textGray,
+                  color: isSelected ? Colors.white : AppColors.textGray,
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 ),
               ),
             ),
@@ -479,17 +491,16 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   selected: isSelected,
                   onSelected: (v) => setState(() => _typeFilter = t),
                   backgroundColor: Colors.transparent,
-                  selectedColor: AppColors.primaryBlue.withValues(alpha: 0.2),
+                  selectedColor: Colors.white.withValues(alpha: 0.08),
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : AppColors.textGray,
                     fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
                   ),
                   shape: StadiumBorder(
                     side: BorderSide(
-                        color: isSelected
-                            ? AppColors.primaryBlue
-                            : Colors.white12),
+                        color:
+                            isSelected ? Colors.transparent : Colors.white12),
                   ),
                 ),
               );

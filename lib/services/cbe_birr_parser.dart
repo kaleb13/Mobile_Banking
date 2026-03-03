@@ -63,7 +63,17 @@ class CbeBirrParser {
 
       final senderMatch = RegExp(r'from\s+(.*?)\s+on', caseSensitive: false)
           .firstMatch(message);
-      if (senderMatch != null) senderOrRecipient = senderMatch.group(1)!.trim();
+      if (senderMatch != null) {
+        String rawSender = senderMatch.group(1)!.trim();
+        // Strip leading phone number: "251921607264 - nahom abreham" → "nahom abreham"
+        final dashSplit = rawSender.split(' - ');
+        if (dashSplit.length >= 2 &&
+            RegExp(r'^\d+$').hasMatch(dashSplit.first.trim())) {
+          senderOrRecipient = dashSplit.sublist(1).join(' - ').trim();
+        } else {
+          senderOrRecipient = rawSender;
+        }
+      }
 
       final dateMatch =
           RegExp(r'on\s+(.*?)(\s*,eqn|\s*,txn id)', caseSensitive: false)

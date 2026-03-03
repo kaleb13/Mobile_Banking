@@ -3,12 +3,14 @@ class ExpenseDefinition {
   final String name;
   final double defaultAmount;
   final bool isRecurring;
-  final String? recurringType; // 'daily', 'interval', 'specific_day'
+  final String?
+      recurringType; // 'daily', 'interval', 'specific_day', 'days_of_week'
   final int? intervalDays; // e.g. every 2 days
   final int? specificDay; // e.g. 15th of month
+  final String? selectedDaysOfWeek; // e.g. "1,3,5" for Mon, Wed, Fri
+  final int timesPerDay;
+  final bool isActive;
   final DateTime? lastAppliedDate;
-
-  int get timesPerDay => (recurringType == 'daily') ? (intervalDays ?? 1) : 1;
 
   ExpenseDefinition({
     this.id,
@@ -18,6 +20,9 @@ class ExpenseDefinition {
     this.recurringType,
     this.intervalDays,
     this.specificDay,
+    this.selectedDaysOfWeek,
+    this.timesPerDay = 1,
+    this.isActive = true,
     this.lastAppliedDate,
   });
 
@@ -30,6 +35,9 @@ class ExpenseDefinition {
       'recurringType': recurringType,
       'intervalDays': intervalDays,
       'specificDay': specificDay,
+      'selectedDaysOfWeek': selectedDaysOfWeek,
+      'timesPerDay': timesPerDay,
+      'isActive': isActive ? 1 : 0,
       'lastAppliedDate': lastAppliedDate?.toIso8601String(),
     };
   }
@@ -43,6 +51,9 @@ class ExpenseDefinition {
       recurringType: map['recurringType'] as String?,
       intervalDays: map['intervalDays'] as int?,
       specificDay: map['specificDay'] as int?,
+      selectedDaysOfWeek: map['selectedDaysOfWeek'] as String?,
+      timesPerDay: map['timesPerDay'] as int? ?? 1,
+      isActive: (map['isActive'] as int? ?? 1) == 1,
       lastAppliedDate: map['lastAppliedDate'] != null
           ? DateTime.parse(map['lastAppliedDate'] as String)
           : null,
@@ -50,22 +61,29 @@ class ExpenseDefinition {
   }
 
   ExpenseDefinition copyWith({
+    int? id,
     String? name,
     double? defaultAmount,
     bool? isRecurring,
     String? recurringType,
     int? intervalDays,
     int? specificDay,
+    String? selectedDaysOfWeek,
+    int? timesPerDay,
+    bool? isActive,
     DateTime? lastAppliedDate,
   }) {
     return ExpenseDefinition(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       defaultAmount: defaultAmount ?? this.defaultAmount,
       isRecurring: isRecurring ?? this.isRecurring,
       recurringType: recurringType ?? this.recurringType,
       intervalDays: intervalDays ?? this.intervalDays,
       specificDay: specificDay ?? this.specificDay,
+      selectedDaysOfWeek: selectedDaysOfWeek ?? this.selectedDaysOfWeek,
+      timesPerDay: timesPerDay ?? this.timesPerDay,
+      isActive: isActive ?? this.isActive,
       lastAppliedDate: lastAppliedDate ?? this.lastAppliedDate,
     );
   }

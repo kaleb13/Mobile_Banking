@@ -691,22 +691,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? AppColors.primaryBlue.withValues(alpha: 0.2)
+                        ? Colors.white.withValues(alpha: 0.08)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                        color: isSelected
-                            ? AppColors.primaryBlue
-                            : Colors.white10),
+                    border: Border.all(color: Colors.transparent),
                   ),
                   child: Text(
                     f,
                     style: TextStyle(
-                      color: isSelected
-                          ? AppColors.primaryBlue
-                          : AppColors.textGray,
+                      color: isSelected ? Colors.white : AppColors.textGray,
                       fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.w600,
                     ),
                   ),
                 ),

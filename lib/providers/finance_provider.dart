@@ -6,6 +6,7 @@ import '../models/transaction.dart';
 import '../models/app_notification.dart';
 import '../models/reason.dart';
 import '../models/loan_record.dart';
+import '../models/loan_repayment_request.dart';
 import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
 import '../services/database_service.dart';
@@ -27,6 +28,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppReasonLink> _reasonLinks = [];
   List<LoanRecord> _loanRecords = [];
   Map<int, List<LoanPayment>> _loanPayments = {}; // keyed by loanId
+  List<LoanRepaymentRequest> _pendingRepaymentRequests = [];
 
   // Cash Wallet & Expenses
   List<ExpenseDefinition> _expenseDefinitions = [];
@@ -137,6 +139,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppReasonLink> get reasonLinks => _reasonLinks;
   List<LoanRecord> get loanRecords => _loanRecords;
   List<LoanPayment> paymentsForLoan(int loanId) => _loanPayments[loanId] ?? [];
+  List<LoanRepaymentRequest> get pendingRepaymentRequests =>
+      _pendingRepaymentRequests;
 
   List<ExpenseDefinition> get expenseDefinitions => _expenseDefinitions;
   List<CashTransaction> get cashTransactions => _cashTransactions;
@@ -505,6 +509,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _loanPayments[loan.id!] =
           await DatabaseService.instance.getPaymentsForLoan(loan.id!);
     }
+    _pendingRepaymentRequests =
+        await DatabaseService.instance.getPendingRepaymentRequests();
   }
 
   /// Refresh statuses for active loans whose due date has passed.
@@ -1002,12 +1008,21 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     String? linkedTransactionId,
     String? note,
   }) async {
+    // Determine the loan creation date
+    DateTime startingDate = DateTime.now();
+    if (linkedTransactionId != null) {
+      final idx = _transactions.indexWhere((t) => t.id == linkedTransactionId);
+      if (idx != -1) {
+        startingDate = _transactions[idx].date;
+      }
+    }
+
     final loan = LoanRecord(
       loanType: loanType,
       personName: personName,
       trackedSenderName: trackedSenderName,
       principalAmount: principalAmount,
-      loanDate: DateTime.now(),
+      loanDate: startingDate,
       dueDate: dueDate,
       linkedTransactionId: linkedTransactionId,
       note: note,
@@ -1028,6 +1043,82 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     );
     _loanRecords.insert(0, withId);
     _loanPayments[id] = [];
+
+    // Auto-assign the 'Loan' reason to the original triggering transaction
+    if (linkedTransactionId != null) {
+      final loanReason = _reasons.cast<AppReason?>().firstWhere(
+            (r) => r?.name.toLowerCase() == 'loan',
+            orElse: () => null,
+          );
+      await updateTransactionReason(
+        linkedTransactionId,
+        reasonId: loanReason?.id,
+        customReasonText: loanReason == null ? 'Loan' : null,
+      );
+    }
+
+    // If the loan has a tracked sender and the loan was created in the past,
+    // we should scan memory for transactions that arrived AFTER the loan date
+    // and BEFORE now to see if the user already paid it back.
+    if (trackedSenderName != null) {
+      final potentialRepayments = _transactions
+          .where((tx) =>
+              tx.type == 'income' &&
+              tx.date.isAfter(startingDate) &&
+              tx.id != linkedTransactionId)
+          .toList()
+        ..sort((a, b) => a.date.compareTo(b.date)); // Oldest first
+
+      for (var tx in potentialRepayments) {
+        // Run it through the exact matching logic
+        final senderLower = tx.sender.trim().toLowerCase();
+        final exactMatch = (senderLower == trackedSenderName.toLowerCase() ||
+            tx.name.toLowerCase() == trackedSenderName.toLowerCase());
+
+        if (exactMatch) {
+          // We have to fetch the most up-to-date loan state from memory
+          // since previous iterations in this loop might have paid it down
+          final currentLoanState = _loanRecords.firstWhere((l) => l.id == id);
+          if (currentLoanState.status == 'active') {
+            await _applyRepayment(currentLoanState, tx);
+          }
+        } else {
+          // Pass 2: First-two-words partial match
+          final senderWords = senderLower.trim().split(RegExp(r'\s+'));
+          final trackedWords =
+              trackedSenderName.toLowerCase().trim().split(RegExp(r'\s+'));
+
+          if (senderWords.length >= 2 && trackedWords.length >= 2) {
+            final incomingPrefix = '${senderWords[0]} ${senderWords[1]}';
+            final trackedPrefix = '${trackedWords[0]} ${trackedWords[1]}';
+
+            if (incomingPrefix == trackedPrefix) {
+              final currentLoanState =
+                  _loanRecords.firstWhere((l) => l.id == id);
+              if (currentLoanState.status == 'active') {
+                // Create pending request
+                final req = LoanRepaymentRequest(
+                  loanId: id,
+                  transactionId:
+                      tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
+                  senderFound: tx.sender,
+                  trackedName: trackedSenderName,
+                  amount:
+                      tx.amount.clamp(0.0, currentLoanState.remainingAmount),
+                  createdAt: DateTime.now(),
+                );
+                await DatabaseService.instance.insertLoanRepaymentRequest(req);
+              }
+            }
+          }
+        }
+      }
+
+      // After historical playback, make sure we reload the pending requests UI array
+      _pendingRepaymentRequests =
+          await DatabaseService.instance.getPendingRepaymentRequests();
+    }
+
     notifyListeners();
     return withId;
   }
@@ -1112,22 +1203,118 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// Called when a new income SMS arrives — checks if the sender is tracked
   /// by any active loan and auto-records a payment.
   Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
-    // Look for active loans whose trackedSenderName matches sender or name
-    final matchingLoans =
-        await DatabaseService.instance.findActiveLoansForSender(tx.sender);
-    if (matchingLoans.isEmpty) {
-      // Also try matching by bank name
-      final byName =
-          await DatabaseService.instance.findActiveLoansForSender(tx.name);
-      if (byName.isEmpty) return;
-      for (final loan in byName) {
+    final senderLower = tx.sender.trim().toLowerCase();
+
+    // ── Pass 1: Exact match (case-insensitive) → auto-settle ──────────────
+    final exactLoans =
+        await DatabaseService.instance.findActiveLoansForSender(senderLower);
+    if (exactLoans.isNotEmpty) {
+      for (final loan in exactLoans) {
         await _applyRepayment(loan, tx);
       }
       return;
     }
-    for (final loan in matchingLoans) {
-      await _applyRepayment(loan, tx);
+
+    // Also try matching by bank name exactly
+    final byBankName = await DatabaseService.instance
+        .findActiveLoansForSender(tx.name.toLowerCase());
+    if (byBankName.isNotEmpty) {
+      for (final loan in byBankName) {
+        await _applyRepayment(loan, tx);
+      }
+      return;
     }
+
+    // ── Pass 2: First-two-words partial match → ask for approval ──────────
+    // Extract first two words from the incoming sender name
+    final senderWords = senderLower.trim().split(RegExp(r'\s+'));
+    if (senderWords.length < 2) return; // Can't do partial match with 1 word
+
+    final incomingPrefix = '${senderWords[0]} ${senderWords[1]}';
+
+    // Get all active loans that have a trackedSenderName
+    final allActive = _loanRecords
+        .where((l) => l.status == 'active' && l.trackedSenderName != null)
+        .toList();
+
+    for (final loan in allActive) {
+      final trackedWords =
+          loan.trackedSenderName!.trim().toLowerCase().split(RegExp(r'\s+'));
+
+      // Build first-two-word prefix of the tracked name
+      if (trackedWords.isEmpty) continue;
+      final trackedPrefix = trackedWords.length >= 2
+          ? '${trackedWords[0]} ${trackedWords[1]}'
+          : trackedWords[0];
+
+      // Check: incoming prefix matches tracked prefix (in either direction)
+      // e.g. tracked="Nahom Abreham", incoming="Nahom Abreham Hailesilase" → match
+      // e.g. tracked="Nahom Abreham Hailesilase", incoming="Nahom Abreham" → match
+      if (incomingPrefix == trackedPrefix ||
+          (trackedWords.length >= 2 &&
+              '${senderWords[0]} ${senderWords[1]}' == trackedPrefix)) {
+        // Don't create duplicate pending requests for same tx
+        final req = LoanRepaymentRequest(
+          loanId: loan.id!,
+          transactionId:
+              tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
+          senderFound: tx.sender,
+          trackedName: loan.trackedSenderName!,
+          amount: tx.amount.clamp(0.0, loan.remainingAmount),
+          createdAt: DateTime.now(),
+        );
+        await DatabaseService.instance.insertLoanRepaymentRequest(req);
+        _pendingRepaymentRequests =
+            await DatabaseService.instance.getPendingRepaymentRequests();
+
+        // Notify user via in-app notification
+        await addUnrecognizedNotification(
+          sender: '⚠️ Loan Match Approval',
+          body: '"${tx.sender}" sent ${tx.amount.toStringAsFixed(2)} ETB. '
+              'This might be from "${loan.trackedSenderName}" (${loan.personName}). '
+              'Go to Loans → Pending to approve or reject.',
+          date: DateTime.now(),
+        );
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Approve a pending repayment request — records the payment on the loan.
+  Future<void> approveLoanRepaymentRequest(LoanRepaymentRequest req) async {
+    final loan = await DatabaseService.instance.getLoanById(req.loanId);
+    if (loan == null) return;
+
+    await DatabaseService.instance
+        .updateRepaymentRequestStatus(req.id!, 'approved');
+
+    // Find the original transaction to pass to _applyRepayment
+    final matchTx =
+        _transactions.where((t) => t.id == req.transactionId).toList();
+    if (matchTx.isNotEmpty) {
+      await _applyRepayment(loan, matchTx.first);
+    } else {
+      // Transaction might not be in memory; apply directly by amount
+      await recordLoanPayment(
+        loanId: loan.id!,
+        amount: req.amount,
+        linkedTransactionId: req.transactionId,
+        note: 'Approved via partial-match (SMS: ${req.senderFound})',
+      );
+    }
+
+    _pendingRepaymentRequests =
+        await DatabaseService.instance.getPendingRepaymentRequests();
+    notifyListeners();
+  }
+
+  /// Reject a pending repayment request — marks it rejected so it never shows again.
+  Future<void> rejectLoanRepaymentRequest(LoanRepaymentRequest req) async {
+    await DatabaseService.instance
+        .updateRepaymentRequestStatus(req.id!, 'rejected');
+    _pendingRepaymentRequests =
+        await DatabaseService.instance.getPendingRepaymentRequests();
+    notifyListeners();
   }
 
   Future<void> _applyRepayment(LoanRecord loan, AppTransaction tx) async {
@@ -1140,6 +1327,20 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       linkedTransactionId: tx.id,
       note: 'Auto-detected from SMS (${tx.name})',
     );
+
+    // Auto-assign the 'Loan' reason to this transaction so the user isn't prompted
+    if (tx.id != null) {
+      final loanReason = _reasons.cast<AppReason?>().firstWhere(
+            (r) => r?.name.toLowerCase() == 'loan',
+            orElse: () => null,
+          );
+
+      await updateTransactionReason(
+        tx.id!,
+        reasonId: loanReason?.id,
+        customReasonText: loanReason == null ? 'Loan Settlement' : null,
+      );
+    }
   }
 
   Future<List<LoanPayment>> getPaymentsForLoan(int loanId) async {
@@ -1249,18 +1450,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   Future<void> addExpenseDefinition(ExpenseDefinition definition) async {
     final id =
         await DatabaseService.instance.insertExpenseDefinition(definition);
-    _expenseDefinitions.add(
-      ExpenseDefinition(
-        id: id,
-        name: definition.name,
-        defaultAmount: definition.defaultAmount,
-        isRecurring: definition.isRecurring,
-        recurringType: definition.recurringType,
-        intervalDays: definition.intervalDays,
-        specificDay: definition.specificDay,
-        lastAppliedDate: definition.lastAppliedDate,
-      ),
-    );
+    _expenseDefinitions.add(definition.copyWith(id: id));
     _expenseDefinitions.sort((a, b) => a.name.compareTo(b.name));
     notifyListeners();
   }
@@ -1313,6 +1503,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> updateCashTransactionAmount(int id, double newAmount) async {
+    final idx = _cashTransactions.indexWhere((t) => t.id == id);
+    if (idx != -1) {
+      final oldTx = _cashTransactions[idx];
+      final newTx = oldTx.copyWith(amount: newAmount);
+      await DatabaseService.instance.updateCashTransaction(newTx);
+      _cashTransactions[idx] = newTx;
+      _calculateStats();
+      notifyListeners();
+    }
+  }
+
   /// Automatically applies recurring expenses that are due today or were missed.
   Future<void> _applyRecurringCashExpenses() async {
     final now = DateTime.now();
@@ -1321,7 +1523,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     for (int i = 0; i < _expenseDefinitions.length; i++) {
       final def = _expenseDefinitions[i];
-      if (!def.isRecurring) continue;
+      if (!def.isRecurring || !def.isActive) continue;
 
       DateTime targetDate =
           def.lastAppliedDate ?? today.subtract(const Duration(days: 1));
@@ -1333,7 +1535,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         nextDateToApply = targetDate.add(Duration(days: def.intervalDays!));
       } else if (def.recurringType == 'specific_day' &&
           def.specificDay != null) {
-        // Calculate the next specific day
         int year = targetDate.year;
         int month = targetDate.month;
         if (targetDate.day >= def.specificDay!) {
@@ -1344,6 +1545,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           }
         }
         nextDateToApply = DateTime(year, month, def.specificDay!);
+      } else if (def.recurringType == 'days_of_week' &&
+          def.selectedDaysOfWeek != null) {
+        final selected = def.selectedDaysOfWeek!
+            .split(',')
+            .map((e) => int.tryParse(e) ?? 1)
+            .toList();
+        DateTime candidate = targetDate.add(const Duration(days: 1));
+        int limit = 0; // fallback in case of empty array
+        while (!selected.contains(candidate.weekday) && limit < 10) {
+          candidate = candidate.add(const Duration(days: 1));
+          limit++;
+        }
+        nextDateToApply = candidate;
       } else {
         continue; // Invalid recurring setup
       }
@@ -1375,7 +1589,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         }
         latestApplied = simulateDate;
 
-        // Increment to next occurrence
         if (def.recurringType == 'daily') {
           simulateDate = simulateDate.add(const Duration(days: 1));
         } else if (def.recurringType == 'interval') {
@@ -1388,6 +1601,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             year += 1;
           }
           simulateDate = DateTime(year, month, def.specificDay!);
+        } else if (def.recurringType == 'days_of_week') {
+          final selected = def.selectedDaysOfWeek!
+              .split(',')
+              .map((e) => int.tryParse(e) ?? 1)
+              .toList();
+          simulateDate = simulateDate.add(const Duration(days: 1));
+          int limit = 0;
+          while (!selected.contains(simulateDate.weekday) && limit < 10) {
+            simulateDate = simulateDate.add(const Duration(days: 1));
+            limit++;
+          }
         }
       }
 
@@ -1401,5 +1625,176 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     if (anyAdded) {
       _cashTransactions.sort((a, b) => b.date.compareTo(a.date));
     }
+  }
+
+  // ── Cache Clearing ────────────────────────────────────────────────────────
+
+  /// FULL RESET: Deletes ALL transactions, ALL reasons/links, ALL notifications,
+  /// resets the boot flag, then rescans all SMS messages from scratch.
+  Future<void> fullReset() async {
+    _isLoading = true;
+    notifyListeners();
+
+    // 1. Wipe everything
+    await DatabaseService.instance.deleteAllTransactions();
+    await DatabaseService.instance.deleteAllUserReasons();
+    await DatabaseService.instance.deleteAllNotifications();
+
+    // 2. Reset SharedPreferences flags so the app treats this as first boot
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_first_boot_v5', true);
+    await prefs.remove('anchor_version'); // forces anchor recalculation
+
+    // 3. Reload from cleared DB
+    _transactions = [];
+    _notifications = [];
+    _reasons = await DatabaseService.instance.getReasons();
+    _reasonLinks = await DatabaseService.instance.getReasonLinks();
+
+    // 4. Re-run init (will detect first-boot and rescan)
+    await init();
+  }
+
+  /// SMART REFRESH: Keeps all reason assignments intact.
+  ///
+  /// Rules:
+  /// - Transactions that already have a reason (linked or custom) are LEFT ALONE.
+  /// - For all other (unlinked) transactions: delete them, rescan from SMS.
+  ///   - If the SMS has an embedded date  → use the SMS date.
+  ///   - If the SMS has NO embedded date  → restore the previously stored date.
+  Future<void> smartRefresh() async {
+    _isLoading = true;
+    notifyListeners();
+
+    // 1. Keep ALL old transactions in memory mapped by ID so we can restore reasons
+    final oldTxMap = <String, AppTransaction>{};
+    for (final tx in _transactions) {
+      if (tx.id != null) {
+        oldTxMap[tx.id!] = tx;
+      }
+    }
+
+    // 2. Delete ALL transactions from DB so we can rewrite them with fresh names
+    await DatabaseService.instance.deleteAllTransactions();
+
+    // 3. Also clear notifications (will be rebuilt)
+    await DatabaseService.instance.deleteAllNotifications();
+
+    // 4. Rescan SMS from the install anchor
+    final prefs = await SharedPreferences.getInstance();
+    final anchorStr = prefs.getString('install_anchor_date');
+    final anchorDate = anchorStr != null ? DateTime.tryParse(anchorStr) : null;
+
+    List<sms_inbox.SmsMessage> messages =
+        await SmsService().getAllMessages(since: anchorDate);
+
+    // Sort oldest-first for chronological insertion
+    messages.sort((a, b) {
+      if (a.date == null || b.date == null) return 0;
+      return a.date!.compareTo(b.date!);
+    });
+
+    for (final msg in messages) {
+      if (msg.sender == null || msg.body == null || msg.date == null) continue;
+      final msgDate = msg.date!;
+      final sender = msg.sender!;
+      final body = msg.body!;
+
+      // Parse the SMS with the appropriate parser
+      AppTransaction? parsed;
+      if (sender == TelebirrParser.senderNumber ||
+          sender.toLowerCase() == TelebirrParser.senderName.toLowerCase()) {
+        parsed = TelebirrParser.parse(body, msgDate);
+      } else if (sender.toUpperCase() == CbeParser.senderName) {
+        parsed = CbeParser.parse(body, msgDate);
+      } else if (sender.toUpperCase() ==
+          CbeBirrParser.senderName.toUpperCase()) {
+        parsed = CbeBirrParser.parse(body, msgDate);
+      }
+
+      if (parsed == null || parsed.id == null) continue;
+
+      final oldTx = oldTxMap[parsed.id];
+
+      // Honour the "preserve old date if SMS has no embedded date" rule.
+      DateTime finalDate = parsed.date;
+      if (oldTx != null && parsed.date == msgDate) {
+        // Parser used the SMS arrival date as fallback → restore stored date
+        finalDate = oldTx.date;
+      }
+
+      // Check if we can restore the reason from oldTx.
+      // Rule: ONLY restore reason if the sender name hasn't changed.
+      // If the parser logic changed the name (e.g. stripped numbers), the old reason is discarded
+      // so the user can assign a new reason to the NEW correct name.
+      int? finalReasonId;
+      String? finalReason;
+      String? finalCustomReasonText;
+
+      if (oldTx != null) {
+        if (oldTx.sender.toLowerCase().trim() ==
+            parsed.sender.toLowerCase().trim()) {
+          finalReasonId = oldTx.reasonId;
+          finalReason = oldTx.reason;
+          finalCustomReasonText = oldTx.customReasonText;
+        }
+      }
+
+      // If no valid old manual reason, check if the NEW name matches any global auto-link
+      if (finalReasonId == null &&
+          (finalCustomReasonText == null || finalCustomReasonText.isEmpty)) {
+        final expectedLinkType =
+            parsed.type == 'income' ? 'sender' : 'receiver';
+        final autoLink = _reasonLinks.cast<AppReasonLink?>().firstWhere(
+            (l) =>
+                l!.linkedName.toLowerCase().trim() ==
+                    parsed!.sender.toLowerCase().trim() &&
+                l.linkType == expectedLinkType,
+            orElse: () => null);
+
+        if (autoLink != null) {
+          final autoReason = _reasons.cast<AppReason?>().firstWhere(
+              (r) => r!.id == autoLink.reasonId,
+              orElse: () => null);
+          if (autoReason != null) {
+            finalReasonId = autoReason.id;
+            finalReason = autoReason.name;
+          }
+        }
+      }
+
+      final txToInsert = AppTransaction(
+        id: parsed.id,
+        name: parsed.name,
+        amount: parsed.amount,
+        type: parsed.type,
+        date: finalDate,
+        sender: parsed.sender,
+        category: parsed.category,
+        rawMessage: parsed.rawMessage,
+        isAutoDetected: parsed.isAutoDetected,
+        totalBalance: parsed.totalBalance,
+        reasonId: finalReasonId,
+        reason: finalReason,
+        customReasonText: finalCustomReasonText,
+      );
+
+      await DatabaseService.instance.insertTransaction(txToInsert);
+
+      // Auto-detect loan repayment if this is an income SMS and we didn't just inherit a manual reason
+      if (txToInsert.type == 'income') {
+        await _checkAndApplyLoanRepayment(txToInsert);
+      }
+    }
+
+    // 5. Reload everything from DB
+    _transactions = await DatabaseService.instance.getTransactions();
+    _reasons = await DatabaseService.instance.getReasons();
+    _reasonLinks = await DatabaseService.instance.getReasonLinks();
+    await _loadNotifications();
+    _calculateStats();
+
+    _isLoading = false;
+    notifyListeners();
   }
 }

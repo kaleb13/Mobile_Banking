@@ -21,9 +21,12 @@ class _AddEditExpenseDefinitionScreenState
   late TextEditingController _amountController;
   late TextEditingController _intervalDaysController;
   late TextEditingController _specificDayController;
+  late TextEditingController _timesPerDayController;
 
   bool _isRecurring = false;
-  String _recurringType = 'daily'; // 'daily', 'interval', 'specific_day'
+  String _recurringType =
+      'daily'; // 'daily', 'interval', 'specific_day', 'days_of_week'
+  List<int> _selectedDays = [];
 
   @override
   void initState() {
@@ -36,9 +39,18 @@ class _AddEditExpenseDefinitionScreenState
         TextEditingController(text: def?.intervalDays?.toString() ?? '');
     _specificDayController =
         TextEditingController(text: def?.specificDay?.toString() ?? '');
+    _timesPerDayController =
+        TextEditingController(text: def?.timesPerDay.toString() ?? '1');
 
     _isRecurring = def?.isRecurring ?? false;
     _recurringType = def?.recurringType ?? 'daily';
+    if (def?.selectedDaysOfWeek != null &&
+        def!.selectedDaysOfWeek!.isNotEmpty) {
+      _selectedDays = def.selectedDaysOfWeek!
+          .split(',')
+          .map((e) => int.tryParse(e) ?? 1)
+          .toList();
+    }
   }
 
   @override
@@ -47,6 +59,7 @@ class _AddEditExpenseDefinitionScreenState
     _amountController.dispose();
     _intervalDaysController.dispose();
     _specificDayController.dispose();
+    _timesPerDayController.dispose();
     super.dispose();
   }
 
@@ -57,18 +70,18 @@ class _AddEditExpenseDefinitionScreenState
     final amount = double.parse(_amountController.text.trim());
     int? intervalDays;
     int? specificDay;
+    int timesPerDay = 1;
 
     if (_isRecurring) {
-      if (_recurringType == 'daily') {
-        int times = int.tryParse(_intervalDaysController.text.trim()) ?? 1;
-        if (times < 1 || times > 10) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Please enter a valid number of times per day (1-10).')));
-          return;
-        }
-        intervalDays = times;
-      } else if (_recurringType == 'interval') {
+      timesPerDay = int.tryParse(_timesPerDayController.text.trim()) ?? 1;
+      if (timesPerDay < 1 || timesPerDay > 24) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Please enter a valid number of times per day (1-24).')));
+        return;
+      }
+
+      if (_recurringType == 'interval') {
         intervalDays = int.tryParse(_intervalDaysController.text.trim());
         if (intervalDays == null || intervalDays <= 0) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -82,6 +95,12 @@ class _AddEditExpenseDefinitionScreenState
               content: Text('Please enter a valid day between 1 and 31.')));
           return;
         }
+      } else if (_recurringType == 'days_of_week') {
+        if (_selectedDays.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Please select at least one day.')));
+          return;
+        }
       }
     }
 
@@ -91,12 +110,14 @@ class _AddEditExpenseDefinitionScreenState
       defaultAmount: amount,
       isRecurring: _isRecurring,
       recurringType: _isRecurring ? _recurringType : null,
-      intervalDays: _isRecurring &&
-              (_recurringType == 'interval' || _recurringType == 'daily')
-          ? intervalDays
-          : null,
+      intervalDays:
+          _isRecurring && _recurringType == 'interval' ? intervalDays : null,
       specificDay:
           _isRecurring && _recurringType == 'specific_day' ? specificDay : null,
+      selectedDaysOfWeek: _isRecurring && _recurringType == 'days_of_week'
+          ? _selectedDays.join(',')
+          : null,
+      timesPerDay: _isRecurring ? timesPerDay : 1,
       lastAppliedDate: widget.expenseDefinition?.lastAppliedDate,
     );
 
@@ -200,6 +221,13 @@ class _AddEditExpenseDefinitionScreenState
               ),
               if (_isRecurring) ...[
                 const SizedBox(height: 24),
+                _buildTextField(
+                  controller: _timesPerDayController,
+                  label: 'Times per Day',
+                  hintText: 'e.g., 3 (for breakfast, lunch, dinner)',
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 24),
                 const Text('Schedule Type',
                     style: TextStyle(
                         color: Colors.white,
@@ -229,6 +257,9 @@ class _AddEditExpenseDefinitionScreenState
                     DropdownMenuItem(
                         value: 'specific_day',
                         child: Text('Specific Day of Month')),
+                    DropdownMenuItem(
+                        value: 'days_of_week',
+                        child: Text('Specific Days of Week')),
                   ],
                   onChanged: (val) {
                     setState(() {
@@ -244,19 +275,14 @@ class _AddEditExpenseDefinitionScreenState
                     hintText: 'e.g., 2 (for every other day)',
                     keyboardType: TextInputType.number,
                   ),
-                if (_recurringType == 'daily')
-                  _buildTextField(
-                    controller: _intervalDaysController,
-                    label: 'Times per Day',
-                    hintText: 'e.g., 3 (for breakfast, lunch, dinner)',
-                    keyboardType: TextInputType.number,
-                  ),
                 if (_recurringType == 'specific_day')
                   _buildTextField(
                     controller: _specificDayController,
                     label: 'Day of the Month (1-31)',
                     keyboardType: TextInputType.number,
                   ),
+                if (_recurringType == 'days_of_week')
+                  _buildDaysOfWeekSelector(),
               ],
               const SizedBox(height: 120),
             ],
@@ -302,6 +328,54 @@ class _AddEditExpenseDefinitionScreenState
         ),
       ),
       validator: validator,
+    );
+  }
+
+  Widget _buildDaysOfWeekSelector() {
+    const days = [
+      {'val': 1, 'label': 'Mon'},
+      {'val': 2, 'label': 'Tue'},
+      {'val': 3, 'label': 'Wed'},
+      {'val': 4, 'label': 'Thu'},
+      {'val': 5, 'label': 'Fri'},
+      {'val': 6, 'label': 'Sat'},
+      {'val': 7, 'label': 'Sun'},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 8.0),
+          child: Text('Select Days',
+              style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+        ),
+        Wrap(
+          spacing: 8.0,
+          runSpacing: 8.0,
+          children: days.map((day) {
+            final isSelected = _selectedDays.contains(day['val']);
+            return ChoiceChip(
+              label: Text(day['label'] as String),
+              selected: isSelected,
+              selectedColor: const Color(0xFFF0B90B),
+              backgroundColor: const Color(0xFF1C1F24),
+              labelStyle: TextStyle(
+                  color: isSelected ? Colors.black : Colors.white,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedDays.add(day['val'] as int);
+                  } else {
+                    _selectedDays.remove(day['val'] as int);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }

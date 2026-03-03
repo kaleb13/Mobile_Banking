@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class DynamicNavBarWrapper extends StatelessWidget {
   final int currentIndex;
@@ -119,7 +120,7 @@ class CustomBottomNavBar extends StatelessWidget {
           // Width/Position interpolations
           final homeWidth = 56.0 * (1 - t);
           final middleLeft = 64.0 * (1 - t);
-          final middleWidth = (totalWidth - 128) + (72.0 * t);
+          final middleWidth = (totalWidth - 128) + (64.0 * t);
           final backLeft = totalWidth - 56.0;
 
           // Color interpolations
@@ -225,31 +226,35 @@ class CustomBottomNavBar extends StatelessWidget {
                           child: Transform.scale(
                             scale: 0.5 + (t * 0.5),
                             child: dynamicActionLabel != null
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (dynamicActionIcon != null) ...[
-                                        Icon(dynamicActionIcon,
-                                            color: const Color(0xFF301900),
-                                            size: 20),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      Text(
-                                        dynamicActionLabel!,
-                                        style: const TextStyle(
-                                          color: Color(0xFF301900),
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
+                                ? Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 20),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (dynamicActionIcon != null) ...[
+                                          Icon(dynamicActionIcon,
+                                              color: const Color(0xFF301900),
+                                              size: 18),
+                                          const SizedBox(width: 6),
+                                        ],
+                                        Text(
+                                          dynamicActionLabel!,
+                                          style: const TextStyle(
+                                            color: Color(0xFF301900),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   )
                                 : Icon(
                                     dynamicActionIcon ?? Icons.add,
                                     color: const Color(0xFF301900),
-                                    size: 28,
+                                    size: 22,
                                   ),
                           ),
                         ),
@@ -299,10 +304,12 @@ class CustomBottomNavBar extends StatelessWidget {
                         // Dynamic Back Icon
                         Opacity(
                           opacity: t.clamp(0.0, 1.0),
-                          child: const Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: Colors.white,
-                            size: 20,
+                          child: SvgPicture.asset(
+                            'assets/images/BackForNav.svg',
+                            colorFilter: const ColorFilter.mode(
+                                Colors.white, BlendMode.srcIn),
+                            width: 20,
+                            height: 20,
                           ),
                         ),
                       ],

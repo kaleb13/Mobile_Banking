@@ -35,11 +35,20 @@ class TelebirrParser {
       type = 'income';
       amount = extractAmount(RegExp(r'received ETB ([0-9,.]+)'));
 
-      // Extract from: "from Amanuel Mandefro(2519****1346) 101305 on "
-      final fromMatch =
-          RegExp(r'from\s+(.*?)(?=\s*\(|on\s+\d{2}/\d{2})').firstMatch(message);
-      if (fromMatch != null) {
-        senderOrRecipient = fromMatch.group(1)?.trim() ?? '';
+      // NEW template: "from Commercial Bank of Ethiopia to your telebirr Account"
+      final bankDepositMatch = RegExp(
+              r'from\s+(.*?)\s+to your telebirr Account',
+              caseSensitive: false)
+          .firstMatch(message);
+      if (bankDepositMatch != null) {
+        senderOrRecipient = bankDepositMatch.group(1)?.trim() ?? '';
+      } else {
+        // OLD template: "from Amanuel Mandefro(2519****1346) 101305 on "
+        final fromMatch = RegExp(r'from\s+(.*?)(?=\s*\(|on\s+\d{2}/\d{2})')
+            .firstMatch(message);
+        if (fromMatch != null) {
+          senderOrRecipient = fromMatch.group(1)?.trim() ?? '';
+        }
       }
     } else if (lowerMsg.contains('transferred')) {
       type = 'expense';
@@ -69,8 +78,12 @@ class TelebirrParser {
     if (amount <= 0) return null; // Safety check
 
     // 3. Extract Transaction ID
+    // Supports both:
+    //   OLD: "transaction number is XXXXX"
+    //   NEW: "transaction number XXXXX"  (no "is")
     String? id;
-    final idRegex = RegExp(r'transaction number is\s*([A-Z0-9]+)');
+    final idRegex = RegExp(r'transaction number(?:\s+is)?\s+([A-Z0-9]+)',
+        caseSensitive: false);
     final idMatch = idRegex.firstMatch(message);
     if (idMatch != null) {
       id = idMatch.group(1);
@@ -97,17 +110,34 @@ class TelebirrParser {
     }
 
     // 5. Extract Date
+    // Supports both:
+    //   OLD: "on DD/MM/YYYY HH:mm:ss"
+    //   NEW: "on YYYY-MM-DD HH:mm:ss"  (ISO-style from bank deposit messages)
     DateTime txDate = fallbackDate;
-    // Look for format dd/MM/yyyy HH:mm:ss
-    final dateRegex = RegExp(r'on\s+(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})');
-    final dateMatch = dateRegex.firstMatch(message);
-    if (dateMatch != null) {
+
+    // Try OLD format first: dd/MM/yyyy HH:mm:ss
+    final oldDateRegex =
+        RegExp(r'on\s+(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})');
+    final oldDateMatch = oldDateRegex.firstMatch(message);
+    if (oldDateMatch != null) {
       try {
-        // telebirr dates can be "24/01/2026 15:59:11"
         final format = DateFormat('dd/MM/yyyy HH:mm:ss');
-        txDate = format.parse(dateMatch.group(1)!);
+        txDate = format.parse(oldDateMatch.group(1)!);
       } catch (e) {
         // use fallbackDate
+      }
+    } else {
+      // Try NEW ISO format: yyyy-MM-dd HH:mm:ss
+      final newDateRegex =
+          RegExp(r'on\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})');
+      final newDateMatch = newDateRegex.firstMatch(message);
+      if (newDateMatch != null) {
+        try {
+          final format = DateFormat('yyyy-MM-dd HH:mm:ss');
+          txDate = format.parse(newDateMatch.group(1)!);
+        } catch (e) {
+          // use fallbackDate
+        }
       }
     }
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/loan_record.dart';
+import '../../models/loan_repayment_request.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../shell/custom_bottom_nav_bar.dart';
@@ -89,6 +90,14 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                 child: _LoanHeader(
                     totalLent: totalLent, totalBorrowed: totalBorrowed),
               ),
+
+              // ── Pending Approvals Banner ───────────────────────────────────
+              if (provider.pendingRepaymentRequests.isNotEmpty)
+                _PendingApprovalsBanner(
+                  requests: provider.pendingRepaymentRequests,
+                  loans: provider.loanRecords,
+                  provider: provider,
+                ),
 
               // ── Tab bar ───────────────────────────────────────────────────
               Container(
@@ -1651,6 +1660,277 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pending Approvals Banner
+// ─────────────────────────────────────────────────────────────────────────────
+class _PendingApprovalsBanner extends StatefulWidget {
+  final List<LoanRepaymentRequest> requests;
+  final List<LoanRecord> loans;
+  final FinanceProvider provider;
+
+  const _PendingApprovalsBanner({
+    required this.requests,
+    required this.loans,
+    required this.provider,
+  });
+
+  @override
+  State<_PendingApprovalsBanner> createState() =>
+      _PendingApprovalsBannerState();
+}
+
+class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE67E22).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border:
+            Border.all(color: const Color(0xFFE67E22).withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          // Header row
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.pending_actions_rounded,
+                      color: Color(0xFFE67E22), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${widget.requests.length} Pending Loan Approval${widget.requests.length > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        color: Color(0xFFE67E22),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: const Color(0xFFE67E22),
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Cards
+          if (_expanded)
+            ...widget.requests.map((req) {
+              final loan =
+                  widget.loans.where((l) => l.id == req.loanId).toList();
+              final loanName =
+                  loan.isNotEmpty ? loan.first.personName : req.trackedName;
+              final fmt = NumberFormat('#,##0.00');
+
+              return Container(
+                margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E26),
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sender info
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFFE67E22).withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.person_rounded,
+                              color: Color(0xFFE67E22), size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                req.senderFound,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'Sent ${fmt.format(req.amount)} ETB',
+                                style: const TextStyle(
+                                    color: Color(0xFF3EB489),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Match info
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.06)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.compare_arrows_rounded,
+                              color: AppColors.textGray, size: 14),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: const TextStyle(
+                                    fontSize: 11, color: AppColors.textGray),
+                                children: [
+                                  const TextSpan(text: 'Possible match for '),
+                                  TextSpan(
+                                    text: loanName,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  TextSpan(
+                                      text: ' (tracking: ${req.trackedName})'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        // Approve
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              await widget.provider
+                                  .approveLoanRepaymentRequest(req);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('Payment approved & applied ✓'),
+                                    backgroundColor: Color(0xFF3EB489),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3EB489)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: const Color(0xFF3EB489)
+                                        .withValues(alpha: 0.4)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_rounded,
+                                      color: Color(0xFF3EB489), size: 14),
+                                  SizedBox(width: 6),
+                                  Text('Approve',
+                                      style: TextStyle(
+                                          color: Color(0xFF3EB489),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Reject
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              await widget.provider
+                                  .rejectLoanRepaymentRequest(req);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Payment request rejected'),
+                                    backgroundColor: Color(0xFF4A6572),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.alertRed.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: AppColors.alertRed
+                                        .withValues(alpha: 0.35)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.close_rounded,
+                                      color: AppColors.alertRed, size: 14),
+                                  SizedBox(width: 6),
+                                  Text('Reject',
+                                      style: TextStyle(
+                                          color: AppColors.alertRed,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
