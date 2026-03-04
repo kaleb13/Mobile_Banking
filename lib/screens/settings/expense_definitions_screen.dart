@@ -89,8 +89,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                           child: Text(
                             'No Expense Templates Defined.\n\nCreate templates for manual or recurring cash expenses.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: AppColors.textGray.withOpacity(0.5),
+                            style: const TextStyle(
+                                color: AppColors.labelGray,
                                 fontSize: 15,
                                 height: 1.5),
                           ),
@@ -133,7 +133,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                         : Icons.receipt_long,
                                     color: (def.isRecurring && def.isActive)
                                         ? AppColors.primaryBlue
-                                        : AppColors.textGray.withOpacity(0.5),
+                                        : AppColors.labelGray,
                                     size: 20,
                                   ),
                                 ),
@@ -149,7 +149,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                         style: TextStyle(
                                             color: def.isActive
                                                 ? Colors.white
-                                                : Colors.white.withOpacity(0.4),
+                                                : AppColors.labelGray,
                                             fontWeight: FontWeight.w600,
                                             fontSize: 16),
                                         maxLines: 1,
@@ -158,11 +158,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                       const SizedBox(height: 4),
                                       Text(
                                         '${def.defaultAmount.toStringAsFixed(2)} ETB',
-                                        style: TextStyle(
-                                            color: def.isActive
-                                                ? AppColors.textGray
-                                                : AppColors.textGray
-                                                    .withOpacity(0.3),
+                                        style: const TextStyle(
+                                            color: AppColors.labelGray,
                                             fontSize: 12),
                                       ),
                                       Row(
@@ -173,8 +170,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                 color: (def.isRecurring &&
                                                         def.isActive)
                                                     ? AppColors.mintGreen
-                                                    : AppColors.textGray
-                                                        .withOpacity(0.4),
+                                                    : AppColors.labelGray,
                                                 fontSize: 12,
                                                 fontWeight: def.isRecurring
                                                     ? FontWeight.w500
@@ -221,7 +217,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                               provider.updateExpenseDefinition(
                                                   def.copyWith(isActive: val));
                                             },
-                                            activeThumbColor: AppColors.mintGreen,
+                                            activeThumbColor:
+                                                AppColors.mintGreen,
                                             activeTrackColor: AppColors
                                                 .mintGreen
                                                 .withOpacity(0.3),
@@ -325,6 +322,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
               4, // Settings is typically active here, but hidden by dynamic state
           onTap: (_) {},
           isDynamic: true,
+          heroTag: 'navbar_expense_definitions',
           onDynamicAdd: () {
             Navigator.push(
               context,

@@ -33,19 +33,22 @@ class TelebirrParser {
 
     if (lowerMsg.contains('received')) {
       type = 'income';
-      amount = extractAmount(RegExp(r'received ETB ([0-9,.]+)'));
+      amount = extractAmount(RegExp(r'received\s+ETB\s+([0-9,.]+)'));
 
       // NEW template: "from Commercial Bank of Ethiopia to your telebirr Account"
+      // Note: We search the whole message since the order might vary
       final bankDepositMatch = RegExp(
               r'from\s+(.*?)\s+to your telebirr Account',
               caseSensitive: false)
           .firstMatch(message);
+
       if (bankDepositMatch != null) {
         senderOrRecipient = bankDepositMatch.group(1)?.trim() ?? '';
       } else {
-        // OLD template: "from Amanuel Mandefro(2519****1346) 101305 on "
-        final fromMatch = RegExp(r'from\s+(.*?)(?=\s*\(|on\s+\d{2}/\d{2})')
-            .firstMatch(message);
+        // Check for "from" appearing elsewhere if the specific "to your telebirr Account" isn't strictly after it
+        final fromMatch =
+            RegExp(r'from\s+(.*?)(?=\s*\(|on\s+\d{2}/\d{2}|to\s+your|$)')
+                .firstMatch(message);
         if (fromMatch != null) {
           senderOrRecipient = fromMatch.group(1)?.trim() ?? '';
         }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -20,7 +21,7 @@ class SenderDetailScreen extends StatefulWidget {
 }
 
 class _SenderDetailScreenState extends State<SenderDetailScreen> {
-  String _chartFilter = '1M'; // 1W, 1M, ALL
+  String _chartFilter = '30D'; // 1D, 7D, 30D, 180D, 360D
   String _searchQuery = '';
   String _typeFilter = 'All'; // All, Income, Expense
   final TextEditingController _searchController = TextEditingController();
@@ -40,10 +41,16 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
     // Chart date filter
     DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
-    if (_chartFilter == '1W') {
+    if (_chartFilter == '1D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 1));
+    } else if (_chartFilter == '7D') {
       cutoff = DateTime.now().subtract(const Duration(days: 7));
-    } else if (_chartFilter == 'ALL') {
-      cutoff = DateTime(2000);
+    } else if (_chartFilter == '30D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 30));
+    } else if (_chartFilter == '180D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 180));
+    } else if (_chartFilter == '360D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 360));
     }
 
     // Filter transactions for listing & chart
@@ -90,38 +97,38 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
         backgroundColor: const Color(0xFF1F1F25),
+        extendBody: true,
         extendBodyBehindAppBar: true,
+        // ── Floating bottom pill nav bar ──
+        bottomNavigationBar: _buildBottomNav(context, provider),
         body: Stack(
           children: [
-            // Background Gradient (Trading app style)
+            // Background Gradient
             _buildBackground(),
 
             SafeArea(
-              child: Column(
-                children: [
-                  _buildTopNav(context, provider),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        children: [
-                          _buildBalanceSection(
-                              currentBalance, monthChange, monthPercent),
-                          _buildChartSection(allTxForSender),
-                          _buildChartFilters(),
-                          const SizedBox(height: 32),
-                          _buildActivityFilterSection(),
-                          _buildTransactionList(filteredTransactions),
-                          const SizedBox(height: 40),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              bottom: false,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildBalanceSection(
+                        currentBalance, monthChange, monthPercent),
+                    _buildChartSection(allTxForSender),
+                    _buildChartFilters(),
+                    const SizedBox(height: 32),
+                    _buildActivityFilterSection(),
+                    _buildTransactionList(filteredTransactions),
+                    // Extra space so last item clears the bottom bar
+                    const SizedBox(height: 110),
+                  ],
+                ),
               ),
             ),
           ],
@@ -145,70 +152,148 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
-  Widget _buildTopNav(BuildContext context, FinanceProvider provider) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _buildNavIconButton(
-            'assets/images/BackForNav.svg',
-            isSvg: true,
-            onTap: () => Navigator.pop(context),
-          ),
-          Row(
+  /// Variant bottom nav — same sizing/geometry as the home CustomBottomNavBar,
+  /// with bank-specific content (refresh | logo+name pill | back).
+  Widget _buildBottomNav(BuildContext context, FinanceProvider provider) {
+    return Container(
+      // Identical margins to CustomBottomNavBar
+      margin: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
+      height: 56,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalWidth = constraints.maxWidth;
+          // Two 56-wide circles + the pill fills the rest
+          const circleW = 56.0;
+          const gap = 8.0;
+          final pillWidth = totalWidth - (circleW * 2) - (gap * 2);
+
+          return Stack(
+            clipBehavior: Clip.none,
             children: [
-              Hero(
-                tag: 'sender_logo_${widget.sender.senderName}',
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: _getSenderLogo(size: 14),
+              // ── LEFT: Refresh circle ──────────────────────────────────
+              Positioned(
+                left: 0,
+                top: 0,
+                width: circleW,
+                height: 56,
+                child: GestureDetector(
+                  onTap: () => provider.refreshData(),
+                  behavior: HitTestBehavior.opaque,
+                  child: ClipOval(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.refresh_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                widget.sender.senderName.toLowerCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w400,
+
+              // ── CENTER: Bank logo + name pill ─────────────────────────
+              Positioned(
+                left: circleW + gap,
+                top: 0,
+                width: pillWidth,
+                height: 56,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  clipBehavior: Clip.antiAlias,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          width: 1,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Bank logo — same compact circle
+                          Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.12),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: _getSenderLogo(size: 11),
+                          ),
+                          const SizedBox(width: 9),
+                          Text(
+                            widget.sender.senderName.toLowerCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── RIGHT: Back circle ────────────────────────────────────
+              Positioned(
+                left: totalWidth - circleW,
+                top: 0,
+                width: circleW,
+                height: 56,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  behavior: HitTestBehavior.opaque,
+                  child: ClipOval(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: SvgPicture.asset(
+                          'assets/images/BackForNav.svg',
+                          colorFilter: const ColorFilter.mode(
+                              Colors.white, BlendMode.srcIn),
+                          width: 20,
+                          height: 20,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
-          ),
-          _buildNavIconButton(
-            Icons.refresh,
-            onTap: () => provider.refreshData(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavIconButton(dynamic icon,
-      {bool isSvg = false, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withValues(alpha: 0.08),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Center(
-          child: isSvg
-              ? SvgPicture.asset(
-                  icon as String,
-                  colorFilter:
-                      const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-                  width: 18,
-                  height: 18,
-                )
-              : Icon(icon as IconData, color: Colors.white, size: 18),
-        ),
+          );
+        },
       ),
     );
   }
@@ -222,7 +307,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           Text(
             'Net Account Value',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: AppColors.labelGray,
               fontSize: 14,
               fontWeight: FontWeight.w400,
             ),
@@ -256,7 +341,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     Text(
                       '.${parts[1]}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.33),
+                        color: AppColors.labelGray,
                         fontSize: 28,
                         fontWeight: FontWeight.w400,
                       ),
@@ -288,7 +373,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               Text(
                 'Profit & Loss',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
+                  color: AppColors.labelGray,
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                 ),
@@ -299,7 +384,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           Text(
             'Net balance change over the last 30 days',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.25),
+              color: AppColors.labelGray,
               fontSize: 10,
               fontWeight: FontWeight.w400,
               letterSpacing: 0.2,
@@ -315,10 +400,16 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
     // Filter data based on selection
     DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
-    if (_chartFilter == '1W') {
+    if (_chartFilter == '1D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 1));
+    } else if (_chartFilter == '7D') {
       cutoff = DateTime.now().subtract(const Duration(days: 7));
-    } else if (_chartFilter == 'ALL') {
-      cutoff = DateTime(2000);
+    } else if (_chartFilter == '30D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 30));
+    } else if (_chartFilter == '180D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 180));
+    } else if (_chartFilter == '360D') {
+      cutoff = DateTime.now().subtract(const Duration(days: 360));
     }
 
     final filtered = transactions
@@ -332,88 +423,50 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       return FlSpot(e.key.toDouble(), e.value.totalBalance);
     }).toList();
 
-    // Peak marker logic
-    double maxY = 0;
-    int peakIndex = 0;
-    for (int i = 0; i < spots.length; i++) {
-      if (spots[i].y > maxY) {
-        maxY = spots[i].y;
-        peakIndex = i;
-      }
-    }
-
     return Container(
       height: 100, // Further decreased height
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: ShaderMask(
-        shaderCallback: (rect) => const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Colors.transparent,
-            Colors.black,
-            Colors.black,
-            Colors.transparent
-          ],
-          stops: [0.0, 0.15, 0.85, 1.0],
-        ).createShader(rect),
-        blendMode: BlendMode.dstIn,
-        child: LineChart(
-          LineChartData(
-            gridData: const FlGridData(show: false),
-            titlesData: const FlTitlesData(show: false),
-            borderData: FlBorderData(show: false),
-            lineTouchData: LineTouchData(
-              touchTooltipData: LineTouchTooltipData(
-                getTooltipColor: (_) => AppColors.surfaceLight,
-                getTooltipItems: (touchedSpots) {
-                  return touchedSpots.map((s) {
-                    return LineTooltipItem(
-                      'ETB ${NumberFormat('#,##0').format(s.y)}',
-                      const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
-                    );
-                  }).toList();
-                },
+      child: LineChart(
+        LineChartData(
+          gridData: const FlGridData(show: false),
+          titlesData: const FlTitlesData(show: false),
+          borderData: FlBorderData(show: false),
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) => AppColors.surfaceLight,
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((s) {
+                  return LineTooltipItem(
+                    'ETB ${NumberFormat('#,##0').format(s.y)}',
+                    const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              color: AppColors.accentBlue,
+              barWidth: 1.5,
+              isStrokeCapRound: true,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.accentBlue.withValues(alpha: 0.15),
+                    AppColors.accentBlue.withValues(alpha: 0),
+                  ],
+                ),
               ),
             ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                color: AppColors.accentBlue,
-                barWidth: 2.5,
-                isStrokeCapRound: true,
-                dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, percent, bar, index) {
-                    if (index == peakIndex) {
-                      return FlDotCirclePainter(
-                        radius: 5,
-                        color: Colors.white,
-                        strokeWidth: 2,
-                        strokeColor: AppColors.accentBlue,
-                      );
-                    }
-                    return FlDotCirclePainter(
-                        radius: 0, color: Colors.transparent);
-                  },
-                ),
-                belowBarData: BarAreaData(
-                  show: true,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.accentBlue.withValues(alpha: 0.15),
-                      AppColors.accentBlue.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -424,13 +477,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: ['1W', '1M', 'ALL'].map((f) {
+        children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
           final isSelected = _chartFilter == f;
           return GestureDetector(
             onTap: () => setState(() => _chartFilter = f),
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isSelected
                     ? Colors.white.withValues(alpha: 0.08)
@@ -441,8 +494,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               child: Text(
                 f,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textGray,
-                  fontSize: 12,
+                  color: isSelected ? Colors.white : AppColors.labelGray,
+                  fontSize: 10,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 ),
               ),
@@ -473,8 +526,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               style: const TextStyle(color: Colors.white, fontSize: 14),
               decoration: const InputDecoration(
                 hintText: 'Search transactions...',
-                hintStyle: TextStyle(color: AppColors.textGray),
-                icon: Icon(Icons.search, color: AppColors.textGray, size: 20),
+                hintStyle: TextStyle(color: AppColors.labelGray),
+                icon: Icon(Icons.search, color: AppColors.labelGray, size: 20),
                 border: InputBorder.none,
               ),
             ),
@@ -484,23 +537,31 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           Row(
             children: ['All', 'Income', 'Expense'].map((t) {
               final isSelected = _typeFilter == t;
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: ChoiceChip(
-                  label: Text(t),
-                  selected: isSelected,
-                  onSelected: (v) => setState(() => _typeFilter = t),
-                  backgroundColor: Colors.transparent,
-                  selectedColor: Colors.white.withValues(alpha: 0.08),
-                  labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textGray,
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
+              return GestureDetector(
+                onTap: () => setState(() => _typeFilter = t),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.transparent
+                          : Colors.white.withValues(alpha: 0.12),
+                    ),
                   ),
-                  shape: StadiumBorder(
-                    side: BorderSide(
-                        color:
-                            isSelected ? Colors.transparent : Colors.white12),
+                  child: Text(
+                    t,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : AppColors.labelGray,
+                      fontSize: 12,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
                 ),
               );
@@ -510,7 +571,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           const Text(
             'ACTIVITY',
             style: TextStyle(
-              color: AppColors.textGray,
+              color: AppColors.labelGray,
               fontSize: 11,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
@@ -528,7 +589,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
           child: Text('No matching transactions.',
-              style: TextStyle(color: AppColors.textGray)),
+              style: TextStyle(color: AppColors.labelGray)),
         ),
       );
     }
@@ -569,13 +630,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isIncome
-                    ? AppColors.mintGreen.withValues(alpha: 0.1)
-                    : Colors.white.withValues(alpha: 0.06),
+                    ? AppColors.mintGreen.withValues(alpha: 0.10)
+                    : AppColors.alertRed.withValues(alpha: 0.10),
               ),
               child: Icon(
                 isIncome ? Icons.south_west : Icons.north_east,
                 size: 18,
-                color: isIncome ? AppColors.mintGreen : AppColors.textGray,
+                color: isIncome ? AppColors.mintGreen : AppColors.alertRed,
               ),
             ),
             const SizedBox(width: 16),
@@ -594,7 +655,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   Text(
                     DateFormat('MMM dd, yyyy').format(tx.date),
                     style: const TextStyle(
-                        color: AppColors.textGray, fontSize: 11),
+                        color: AppColors.labelGray, fontSize: 11),
                   ),
                 ],
               ),
@@ -613,8 +674,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'ETB',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.3), fontSize: 10),
+                  style:
+                      const TextStyle(color: AppColors.labelGray, fontSize: 10),
                 ),
               ],
             ),

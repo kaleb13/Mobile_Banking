@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:ui';
+import '../../theme/app_theme.dart';
 
 class DynamicNavBarWrapper extends StatelessWidget {
   final int currentIndex;
@@ -19,12 +21,16 @@ class DynamicNavBarWrapper extends StatelessWidget {
     this.onDynamicBack,
     this.dynamicActionLabel,
     this.dynamicActionIcon,
+    this.heroTag = 'dynamic_navbar_hero',
   });
+
+  final String heroTag;
 
   @override
   Widget build(BuildContext context) {
     return Hero(
-      tag: 'dynamic_navbar_hero',
+      tag: heroTag,
+      transitionOnUserGestures: true,
       flightShuttleBuilder: (
         flightContext,
         animation,
@@ -123,11 +129,14 @@ class CustomBottomNavBar extends StatelessWidget {
           final middleWidth = (totalWidth - 128) + (64.0 * t);
           final backLeft = totalWidth - 56.0;
 
-          // Color interpolations
-          final middleColor =
-              Color.lerp(const Color(0xFF2A2A34), const Color(0xFFF0B90B), t)!;
-          final homeColor = const Color(0xFF2A2A34);
-          final backColor = const Color(0xFF2A2A34);
+          // Color interpolations (Main bar is more transparent, Dynamic bar is more solid)
+          final middleColor = Color.lerp(
+            const Color(0xFF2A2A34).withValues(alpha: 0.25),
+            const Color(0xFFF0B90B).withValues(alpha: 0.85),
+            t,
+          )!;
+          final homeColor = const Color(0xFF2A2A34).withValues(alpha: 0.25);
+          final backColor = const Color(0xFF2A2A34).withValues(alpha: 0.25);
 
           return Stack(
             clipBehavior: Clip.none,
@@ -140,22 +149,32 @@ class CustomBottomNavBar extends StatelessWidget {
                 height: 56,
                 child: Opacity(
                   opacity: (1 - t).clamp(0.0, 1.0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: homeColor,
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    alignment: Alignment.center,
-                    child: GestureDetector(
-                      onTap: () => onTap?.call(0),
-                      behavior: HitTestBehavior.opaque,
-                      child: Image.asset(
-                        'assets/images/Shibre Icon.png',
-                        width: 20,
-                        height: 20,
-                        color: currentIndex == 0
-                            ? Colors.white
-                            : Colors.white.withAlpha((0.4 * 255).round()),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: homeColor,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: GestureDetector(
+                          onTap: () => onTap?.call(0),
+                          behavior: HitTestBehavior.opaque,
+                          child: Image.asset(
+                            'assets/images/Shibre Icon.png',
+                            width: 20,
+                            height: 20,
+                            color: currentIndex == 0
+                                ? Colors.white
+                                : AppColors.labelGray,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -174,91 +193,102 @@ class CustomBottomNavBar extends StatelessWidget {
                       onDynamicAdd?.call();
                     }
                   },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: middleColor,
-                      borderRadius: BorderRadius.circular(28),
-                    ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
                     clipBehavior: Clip.antiAlias,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Navigation Icons (Fade out)
-                        Opacity(
-                          opacity: (1 - t).clamp(0.0, 1.0),
-                          child: SingleChildScrollView(
-                            physics: const NeverScrollableScrollPhysics(),
-                            scrollDirection: Axis.horizontal,
-                            child: SizedBox(
-                              width: totalWidth - 128,
-                              height: 56,
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  _buildMiddleItem(
-                                    isActive: currentIndex == 1,
-                                    iconData: Icons.insert_chart_outlined,
-                                    label: 'Analysis',
-                                    onTap: () => onTap?.call(1),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: middleColor,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Navigation Icons (Fade out)
+                            Opacity(
+                              opacity: (1 - t).clamp(0.0, 1.0),
+                              child: SingleChildScrollView(
+                                physics: const NeverScrollableScrollPhysics(),
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: totalWidth - 128,
+                                  height: 56,
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      _buildMiddleItem(
+                                        isActive: currentIndex == 1,
+                                        iconData: Icons.insert_chart_outlined,
+                                        label: 'Analysis',
+                                        onTap: () => onTap?.call(1),
+                                      ),
+                                      _buildMiddleItem(
+                                        isActive: currentIndex == 2,
+                                        iconData: Icons
+                                            .account_balance_wallet_outlined,
+                                        label: 'Wallet',
+                                        onTap: () => onTap?.call(2),
+                                      ),
+                                      _buildMiddleItem(
+                                        isActive: currentIndex == 3,
+                                        iconData: Icons.payments_outlined,
+                                        label: 'Loan',
+                                        onTap: () => onTap?.call(3),
+                                      ),
+                                    ],
                                   ),
-                                  _buildMiddleItem(
-                                    isActive: currentIndex == 2,
-                                    iconData:
-                                        Icons.account_balance_wallet_outlined,
-                                    label: 'Wallet',
-                                    onTap: () => onTap?.call(2),
-                                  ),
-                                  _buildMiddleItem(
-                                    isActive: currentIndex == 3,
-                                    iconData: Icons.payments_outlined,
-                                    label: 'Loan',
-                                    onTap: () => onTap?.call(3),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        // Action Icons/Label (Fade in)
-                        Opacity(
-                          opacity: t.clamp(0.0, 1.0),
-                          child: Transform.scale(
-                            scale: 0.5 + (t * 0.5),
-                            child: dynamicActionLabel != null
-                                ? Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 20),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (dynamicActionIcon != null) ...[
-                                          Icon(dynamicActionIcon,
-                                              color: const Color(0xFF301900),
-                                              size: 18),
-                                          const SizedBox(width: 6),
-                                        ],
-                                        Text(
-                                          dynamicActionLabel!,
-                                          style: const TextStyle(
-                                            color: Color(0xFF301900),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                            // Action Icons/Label (Fade in)
+                            Opacity(
+                              opacity: t.clamp(0.0, 1.0),
+                              child: Transform.scale(
+                                scale: 0.5 + (t * 0.5),
+                                child: dynamicActionLabel != null
+                                    ? Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 20),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (dynamicActionIcon != null) ...[
+                                              Icon(dynamicActionIcon,
+                                                  color:
+                                                      const Color(0xFF301900),
+                                                  size: 18),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Text(
+                                              dynamicActionLabel!,
+                                              style: const TextStyle(
+                                                color: Color(0xFF301900),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  )
-                                : Icon(
-                                    dynamicActionIcon ?? Icons.add,
-                                    color: const Color(0xFF301900),
-                                    size: 22,
-                                  ),
-                          ),
+                                      )
+                                    : Icon(
+                                        dynamicActionIcon ?? Icons.add,
+                                        color: const Color(0xFF301900),
+                                        size: 22,
+                                      ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -281,38 +311,47 @@ class CustomBottomNavBar extends StatelessWidget {
                     }
                   },
                   behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: backColor,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Normal Settings Icon
-                        Opacity(
-                          opacity: (1 - t).clamp(0.0, 1.0),
-                          child: Icon(
-                            Icons.settings_outlined,
-                            color: currentIndex == 4
-                                ? Colors.white
-                                : Colors.white.withAlpha((0.4 * 255).round()),
-                            size: 24,
+                  child: ClipOval(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: backColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            width: 1,
                           ),
                         ),
-                        // Dynamic Back Icon
-                        Opacity(
-                          opacity: t.clamp(0.0, 1.0),
-                          child: SvgPicture.asset(
-                            'assets/images/BackForNav.svg',
-                            colorFilter: const ColorFilter.mode(
-                                Colors.white, BlendMode.srcIn),
-                            width: 20,
-                            height: 20,
-                          ),
+                        alignment: Alignment.center,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Normal Settings Icon
+                            Opacity(
+                              opacity: (1 - t).clamp(0.0, 1.0),
+                              child: Icon(
+                                Icons.settings_outlined,
+                                color: currentIndex == 4
+                                    ? Colors.white
+                                    : AppColors.labelGray,
+                                size: 24,
+                              ),
+                            ),
+                            // Dynamic Back Icon
+                            Opacity(
+                              opacity: t.clamp(0.0, 1.0),
+                              child: SvgPicture.asset(
+                                'assets/images/BackForNav.svg',
+                                colorFilter: const ColorFilter.mode(
+                                    Colors.white, BlendMode.srcIn),
+                                width: 20,
+                                height: 20,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -341,18 +380,14 @@ class CustomBottomNavBar extends StatelessWidget {
           children: [
             Icon(
               iconData,
-              color: isActive
-                  ? Colors.white
-                  : Colors.white.withAlpha((0.4 * 255).round()),
+              color: isActive ? Colors.white : AppColors.labelGray,
               size: 20,
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: isActive
-                    ? Colors.white
-                    : Colors.white.withAlpha((0.4 * 255).round()),
+                color: isActive ? Colors.white : AppColors.labelGray,
                 fontSize: 9,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
               ),

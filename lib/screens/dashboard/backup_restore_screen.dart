@@ -40,6 +40,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadBackupFiles();
   }
 
@@ -70,14 +73,17 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
     try {
       final path = await _backupService.createBackup();
-      if (mounted) {
-        setState(() {
-          _exportedPath = path;
-          _isExporting = false;
-        });
-        // Refresh file list
-        await _loadBackupFiles();
+      if (!mounted) return;
+      if (path == null) {
+        setState(() => _isExporting = false);
+        return;
       }
+      setState(() {
+        _exportedPath = path;
+        _isExporting = false;
+      });
+      // Refresh file list
+      await _loadBackupFiles();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -126,6 +132,14 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
     }
   }
 
+  // Pick any backup file from anywhere on the device and restore it
+  Future<void> _pickAndRestore() async {
+    final file = await _backupService.pickBackupFile();
+    if (file == null) return; // user cancelled
+    await _loadBackupFiles();
+    if (mounted) await _confirmRestore(file);
+  }
+
   // ─── Retry single failed item ──────────────────────────────────────────
   Future<void> _retryItem(int index) async {
     final failed = _importResults![index];
@@ -151,28 +165,49 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           currentIndex: 4,
           onTap: (_) {},
           isDynamic: true,
-          dynamicActionLabel: 'Create Backup',
-          dynamicActionIcon: Icons.backup_outlined,
-          onDynamicAdd: _isExporting ? null : _runExport,
+          heroTag: 'navbar_backup_restore',
+          dynamicActionLabel: _tabController.index == 0
+              ? 'Create Backup'
+              : 'Browse & Pick File',
+          dynamicActionIcon: _tabController.index == 0
+              ? Icons.backup_outlined
+              : Icons.folder_open_rounded,
+          onDynamicAdd: _tabController.index == 0
+              ? (_isExporting ? null : _runExport)
+              : (_isImporting ? null : _pickAndRestore),
           onDynamicBack: () => Navigator.pop(context),
         ),
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              _buildHeader(),
-              _buildTabBar(),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildBackupTab(),
-                    _buildRestoreTab(),
-                  ],
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              colors: [
+                Color(0xFF1F1F25),
+                Color(0xFF1B1B21),
+              ],
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildTabBar(),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildBackupTab(),
+                      _buildRestoreTab(),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 100), // Padding for navbar
-            ],
+                const SizedBox(height: 100), // Padding for navbar
+              ],
+            ),
           ),
         ),
       ),
@@ -200,21 +235,23 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   // ─── Tab Bar ─────────────────────────────────────────────────────────────
   Widget _buildTabBar() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: AppColors.primaryBlue,
+          color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
-        unselectedLabelColor: AppColors.textGray,
+        unselectedLabelColor: AppColors.labelGray,
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(
           fontSize: 13,
@@ -283,7 +320,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   }
 
   Widget _exportSuccessCard() {
-    final fileName = _exportedPath!.split('/').last;
+    final parts = _exportedPath!.split('/');
+    final fileName = parts.last;
+    final folder = parts.sublist(0, parts.length - 1).join('/');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -314,8 +353,17 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
                 Text(
                   fileName,
                   style: TextStyle(
-                    color: AppColors.mintGreen.withValues(alpha: 0.7),
+                    color: AppColors.mintGreen.withValues(alpha: 0.85),
                     fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '📁 $folder',
+                  style: TextStyle(
+                    color: AppColors.mintGreen.withValues(alpha: 0.55),
+                    fontSize: 10,
                   ),
                 ),
               ],
@@ -360,8 +408,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [
@@ -427,9 +476,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             color: AppColors.primaryBlue,
             title: 'Restore from Backup',
             body:
-                'Tap a backup file below to restore. Existing transactions will be '
-                'kept and the system will start scanning SMS messages from the date '
-                'of your latest imported transaction onwards.',
+                'Tap a backup file below to restore, or use the bottom action to '
+                'pick a backup from any folder. Existing transactions are kept.',
           ),
           const SizedBox(height: 24),
           if (_isLoadingFiles)
@@ -446,7 +494,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             _noBackupsPlaceholder()
           else ...[
             const Text(
-              'SELECT A BACKUP TO RESTORE',
+              'RECENT BACKUPS',
               style: TextStyle(
                 color: AppColors.textGray,
                 fontSize: 11,
@@ -534,9 +582,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF161616),
+          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           children: [
@@ -589,7 +637,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF161616),
+        backgroundColor: const Color(0xFF2A2A34),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -681,8 +729,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF161616),
+            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Row(
             children: [
@@ -796,13 +845,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF161616),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: result.success
-              ? Colors.white.withValues(alpha: 0.04)
-              : AppColors.alertRed.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [

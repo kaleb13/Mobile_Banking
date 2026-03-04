@@ -85,7 +85,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                       const Text(
                         'Available Cash',
                         style:
-                            TextStyle(color: Color(0xFF6B8FA6), fontSize: 14),
+                            TextStyle(color: AppColors.labelGray, fontSize: 14),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -199,7 +199,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     if (allTxs.isEmpty) {
       return const Center(
           child: Text('No cash transactions yet.',
-              style: TextStyle(color: AppColors.textGray)));
+              style: TextStyle(color: AppColors.labelGray)));
     }
 
     allTxs.sort(
@@ -261,13 +261,12 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               padding: const EdgeInsets.only(top: 4.0),
                               child: Text(tx['subtitle'] as String,
                                   style: const TextStyle(
-                                      color: AppColors.textGray,
+                                      color: AppColors.labelGray,
                                       fontSize: 12))),
                         const SizedBox(height: 4),
                         Text(DateFormat('MMM d, yyyy · hm a').format(date),
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.4),
-                                fontSize: 10)),
+                            style: const TextStyle(
+                                color: AppColors.labelGray, fontSize: 10)),
                       ])),
                   Text(
                     '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])} ETB',

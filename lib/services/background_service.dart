@@ -107,6 +107,61 @@ Future<void> backgroundMessageHandler(SmsMessage message) async {
   await processBackgroundSms(message);
 }
 
+/// Returns true if [msg] contains at least one English financial keyword.
+/// Also returns false for messages containing Amharic/Ethiopic script.
+bool _hasFinancialKeyword(String msg) {
+  // Reject messages with Ethiopic/Amharic characters
+  final hasEthiopic = RegExp(r'[\u1200-\u137F\uAB01-\uAB2F]').hasMatch(msg);
+  if (hasEthiopic) return false;
+
+  const keywords = [
+    'received',
+    'sent',
+    'send',
+    'transferred',
+    'transfer',
+    'paid',
+    'pay',
+    'payment',
+    'credited',
+    'credit',
+    'debited',
+    'debit',
+    'deposited',
+    'deposit',
+    'withdrawn',
+    'withdrawal',
+    'withdraw',
+    'balance',
+    'account',
+    'available',
+    'remaining',
+    'amount',
+    'total',
+    'birr',
+    'etb',
+    'usd',
+    'loan',
+    'repay',
+    'due',
+    'transaction',
+    'txn',
+    'ref no',
+    'reference',
+    'purchase',
+    'charged',
+    'fee',
+    'bank',
+    'wallet',
+    'mobile money',
+    'telebirr',
+    'cbe',
+  ];
+
+  final lower = msg.toLowerCase();
+  return keywords.any((kw) => lower.contains(kw));
+}
+
 Future<void> processBackgroundSms(SmsMessage message) async {
   if (message.address == null || message.body == null) return;
   final senderAddress = message.address!;
@@ -173,7 +228,9 @@ Future<void> processBackgroundSms(SmsMessage message) async {
         isAutoDetected: true,
       );
     } else {
-      // Unrecognized: save to in-app notifications instead of pending
+      // Unrecognized: only save to in-app notifications if it looks financial
+      if (!_hasFinancialKeyword(body)) return;
+
       final notificationId = '${senderAddress}_${date.millisecondsSinceEpoch}';
 
       // We do not have easy access to SharedPreferences ignored_notification_ids

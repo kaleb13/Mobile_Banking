@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
@@ -27,42 +28,103 @@ class ImportResult {
 
 /// Full backup/restore service for Shibre app data.
 class BackupService {
-  static const String _appFolderName = 'Shibre_Backups';
   static const String _appName = 'Shibre';
+  static const String _savedPathsKey = 'backup_saved_paths';
 
   // ─── Export ──────────────────────────────────────────────────────────────
 
-  /// Creates a backup JSON file in the Shibre_Backups folder on external storage.
-  /// Returns the absolute path of the created file.
-  Future<String> createBackup() async {
+  /// Builds the backup JSON string without writing it yet.
+  Future<String> _buildBackupJson() async {
     final data = await _collectAllData();
-    final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
-
-    final dir = await _getBackupDirectory();
-    final dateStr = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
-    final fileName = '${_appName}_backup_$dateStr.json';
-    final file = File('${dir.path}/$fileName');
-
-    await file.writeAsString(jsonStr, encoding: utf8);
-    return file.path;
+    return const JsonEncoder.withIndent('  ').convert(data);
   }
 
-  /// Returns all backup files found in the Shibre_Backups folder, newest first.
-  Future<List<File>> listBackupFiles() async {
-    final dir = await _getBackupDirectory();
-    if (!await dir.exists()) return [];
+  /// Opens the native Android folder picker (SAF) so the user can choose
+  /// any destination directory. Writes the backup there and returns the path.
+  /// Returns null if the user cancels.
+  Future<String?> createBackup() async {
+    final jsonStr = await _buildBackupJson();
+    final dateStr = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+    final suggestedName = '${_appName}_backup_$dateStr.json';
 
-    final files = dir
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.json'))
-        .toList();
+    // Show the native Android folder picker (ACTION_OPEN_DOCUMENT_TREE via SAF).
+    // getDirectoryPath() returns a real filesystem path — no content:// URI
+    // issues — so we can write to it directly with dart:io.
+    final String? dirPath = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: 'Choose folder to save your backup',
+    );
+
+    if (dirPath == null) return null; // user cancelled
+
+    // Attempt to write directly into the chosen directory.
+    try {
+      final file = File('$dirPath/$suggestedName');
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonStr, encoding: utf8);
+      await _trackSavedPath(file.path);
+      return file.path;
+    } catch (_) {
+      // Fallback: some ROMs restrict writing to certain SAF paths via dart:io.
+      // Write to the app-scoped external directory instead (always accessible).
+      final fallbackDir = await _defaultBackupDirectory();
+      await fallbackDir.create(recursive: true);
+      final fallbackFile = File('${fallbackDir.path}/$suggestedName');
+      await fallbackFile.writeAsString(jsonStr, encoding: utf8);
+      await _trackSavedPath(fallbackFile.path);
+      return fallbackFile.path;
+    }
+  }
+
+  /// Returns all previously saved backup files (tracked paths + fallback dir),
+  /// newest first, filtering out files that no longer exist.
+  Future<List<File>> listBackupFiles() async {
+    final Set<String> paths = {};
+
+    // 1. Paths the user saved via the SAF picker (tracked in prefs)
+    final tracked = await _getTrackedPaths();
+    paths.addAll(tracked);
+
+    // 2. Fallback: scan the default app-scoped external dir for .json files
+    try {
+      final defaultDir = await _defaultBackupDirectory();
+      if (await defaultDir.exists()) {
+        for (final entity in defaultDir.listSync()) {
+          if (entity is File && entity.path.endsWith('.json')) {
+            paths.add(entity.path);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Build File objects, filter to existing files only
+    final files =
+        paths.map((p) => File(p)).where((f) => f.existsSync()).toList();
 
     files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
     return files;
   }
 
   // ─── Import ──────────────────────────────────────────────────────────────
+
+  /// Opens the native file picker so the user can pick any .json backup file
+  /// from anywhere on the device.
+  Future<File?> pickBackupFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Select Backup File',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      allowMultiple: false,
+    );
+
+    if (result == null || result.files.isEmpty) return null;
+
+    final path = result.files.single.path;
+    if (path == null) return null;
+
+    // Track this path so it appears in the restore list next time
+    await _trackSavedPath(path);
+    return File(path);
+  }
 
   /// Imports data from [file].
   ///
@@ -85,7 +147,6 @@ class BackupService {
     for (final raw in sendersRaw) {
       try {
         final sender = AppSender.fromMap(Map<String, dynamic>.from(raw));
-        // Only insert if not already present by name
         final existing = await DatabaseService.instance.getSenders();
         final alreadyExists = existing.any(
           (s) => s.senderName.toLowerCase() == sender.senderName.toLowerCase(),
@@ -111,7 +172,6 @@ class BackupService {
 
     // ── Reasons ─────────────────────────────────────────────────
     final reasonsRaw = (data['reasons'] as List<dynamic>?) ?? [];
-    // Map old ID → new ID for re-linking
     final Map<int, int> reasonIdMap = {};
     for (final raw in reasonsRaw) {
       try {
@@ -120,9 +180,7 @@ class BackupService {
           name: raw['name'] as String,
           isSystem: (raw['isSystem'] as int) == 1,
         );
-        // Skip system reasons (they're seeded)
         if (reason.isSystem) {
-          // Find the existing system reason with the same name
           final existing = await DatabaseService.instance.getReasons();
           final match = existing.firstWhere(
             (r) => r.name == reason.name && r.isSystem,
@@ -190,7 +248,6 @@ class BackupService {
 
     for (final raw in transactionsRaw) {
       try {
-        // Re-map reason IDs
         final rawMap = Map<String, dynamic>.from(raw);
         if (rawMap['reasonId'] != null) {
           final oldId = rawMap['reasonId'] as int;
@@ -199,7 +256,6 @@ class BackupService {
         final tx = AppTransaction.fromMap(rawMap);
         await DatabaseService.instance.insertTransaction(tx);
 
-        // Track latest date
         if (latestDate == null || tx.date.isAfter(latestDate)) {
           latestDate = tx.date;
         }
@@ -223,11 +279,8 @@ class BackupService {
     // ── Set anchor from latest imported transaction ──────────────
     if (latestDate != null) {
       final prefs = await SharedPreferences.getInstance();
-      // The anchor is the date of the latest imported transaction.
-      // The refresh scan will pick up ALL messages AFTER this point.
       await prefs.setString(
           'install_anchor_date', latestDate.toIso8601String());
-      // Mark as not first boot so refresh scan runs next time
       await prefs.setBool('is_first_boot_v3', false);
     }
 
@@ -290,7 +343,38 @@ class BackupService {
     }
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
+  // ─── Path tracking (SharedPreferences) ───────────────────────────────────
+
+  Future<List<String>> _getTrackedPaths() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_savedPathsKey) ?? [];
+  }
+
+  Future<void> _trackSavedPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getStringList(_savedPathsKey) ?? [];
+    if (!existing.contains(path)) {
+      existing.insert(0, path); // prepend so newest is first
+      await prefs.setStringList(_savedPathsKey, existing);
+    }
+  }
+
+  // ─── Default fallback directory (no permission needed) ────────────────────
+
+  Future<Directory> _defaultBackupDirectory() async {
+    Directory? dir;
+    try {
+      final extDirs = await getExternalStorageDirectories();
+      if (extDirs != null && extDirs.isNotEmpty) {
+        dir = Directory('${extDirs.first.path}/Shibre_Backups');
+      }
+    } catch (_) {}
+    dir ??= Directory(
+        '${(await getApplicationDocumentsDirectory()).path}/Shibre_Backups');
+    return dir;
+  }
+
+  // ─── Data collection ──────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> _collectAllData() async {
     final transactions = await DatabaseService.instance.getTransactions();
@@ -320,34 +404,6 @@ class BackupService {
           .toList(),
       'transactions': transactions.map((t) => t.toMap()).toList(),
     };
-  }
-
-  Future<Directory> _getBackupDirectory() async {
-    Directory? baseDir;
-
-    // Prefer external storage (Downloads) so user can find the file easily
-    try {
-      final extDirs = await getExternalStorageDirectories();
-      if (extDirs != null && extDirs.isNotEmpty) {
-        // Go up to the root external storage
-        String path = extDirs.first.path;
-        // Navigate up to the root external dir
-        final parts = path.split('/');
-        final androidIdx = parts.indexOf('Android');
-        if (androidIdx > 0) {
-          path = parts.sublist(0, androidIdx).join('/');
-        }
-        baseDir = Directory(path);
-      }
-    } catch (_) {}
-
-    baseDir ??= await getApplicationDocumentsDirectory();
-
-    final backupDir = Directory('${baseDir.path}/$_appFolderName');
-    if (!await backupDir.exists()) {
-      await backupDir.create(recursive: true);
-    }
-    return backupDir;
   }
 
   String _txLabel(dynamic raw) {

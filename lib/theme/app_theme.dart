@@ -12,6 +12,7 @@ class AppColors {
   static const Color surfaceLight = Color(0xFF1C1F24); // Card elevated
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFF9CA3AF);
+  static const Color labelGray = Color(0xCCFFFFFF); // 80% capacity white
   static const Color borderSubtle = Color(0x33FFFFFF);
 
   static const LinearGradient bgGradient = LinearGradient(

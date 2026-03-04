@@ -4,8 +4,9 @@ import '../../theme/app_theme.dart';
 import 'backup_restore_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
-
+import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
+import 'reason_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,7 +16,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _isResetting = false;
+  final bool _isResetting = false;
 
   // Helper for grouped cards
   Widget _buildCardBase(List<Widget> children) {
@@ -62,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(
                             'Customize your app experience',
                             style: TextStyle(
-                                color: AppColors.textGray, fontSize: 12),
+                                color: AppColors.labelGray, fontSize: 12),
                           ),
                         ],
                       ),
@@ -83,6 +84,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context,
                           MaterialPageRoute(
                               builder: (_) => const ExpenseDefinitionsScreen()),
+                        ),
+                        showDivider: true,
+                      ),
+                      _settingsTile(
+                        context,
+                        icon: Icons.category_outlined,
+                        iconColor: const Color(0xFFAB47BC), // Purple
+                        label: 'Reason Management',
+                        subtitle: 'Manage transaction reasons and bank links',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ReasonManagementScreen()),
                         ),
                         showDivider: true,
                       ),
@@ -128,14 +142,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           trailing: anchor != null
                               ? IconButton(
                                   icon: const Icon(Icons.clear,
-                                      color: AppColors.textGray, size: 20),
+                                      color: AppColors.labelGray, size: 20),
                                   onPressed: () =>
                                       provider.setCustomMonthAnchorDate(null),
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
                                 )
                               : const Icon(Icons.arrow_forward_ios_rounded,
-                                  color: AppColors.textGray, size: 14),
+                                  color: AppColors.labelGray, size: 14),
                           showDivider: false,
                         );
                       }),
@@ -164,141 +178,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     // ── Section: Cache & Data ──────────────────────────
-                    _sectionLabel('Cache & Data'),
+                    _sectionLabel('Maintenance'),
                     _buildCardBase([
                       _settingsTile(
                         context,
-                        icon: Icons.refresh_rounded,
+                        icon: Icons.auto_awesome_rounded,
                         iconColor: const Color(0xFF4FC3F7),
-                        label: 'Smart Refresh',
-                        subtitle: 'Rescan SMS, keep your reason tags',
-                        showDivider: true,
-                        onTap: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: const Color(0xFF2A2A34),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20)),
-                              title: const Row(
-                                children: [
-                                  Icon(Icons.refresh_rounded,
-                                      color: Color(0xFF4FC3F7), size: 20),
-                                  SizedBox(width: 10),
-                                  Text('Smart Refresh',
-                                      style: TextStyle(
-                                          color: Colors.white, fontSize: 16)),
-                                ],
-                              ),
-                              content: const Text(
-                                'This will:\n\n'
-                                '• Keep all transactions that have a reason tag\n'
-                                '• Rescan all other messages from SMS\n'
-                                '• Restore previous dates for messages without an embedded date\n\n'
-                                'Your reason labels and linked transactions are safe.',
-                                style: TextStyle(
-                                    color: AppColors.textGray, fontSize: 13),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancel',
-                                      style:
-                                          TextStyle(color: AppColors.textGray)),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Refresh',
-                                      style:
-                                          TextStyle(color: Color(0xFF4FC3F7))),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true && context.mounted) {
-                            setState(() => _isResetting = true);
-                            await context
-                                .read<FinanceProvider>()
-                                .smartRefresh();
-                            if (context.mounted) {
-                              setState(() => _isResetting = false);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Smart Refresh complete ✓'),
-                                  backgroundColor: Color(0xFF3EB489),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                      _settingsTile(
-                        context,
-                        icon: Icons.delete_sweep_rounded,
-                        iconColor: AppColors.alertRed,
-                        label: 'Full Reset',
-                        subtitle: 'Erase all data & rescan all messages',
+                        label: 'Data Maintenance',
+                        subtitle: 'Refresh or reset your local database',
                         showDivider: false,
-                        onTap: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: const Color(0xFF2A2A34),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20)),
-                              title: const Row(
-                                children: [
-                                  Icon(Icons.warning_amber_rounded,
-                                      color: AppColors.alertRed, size: 20),
-                                  SizedBox(width: 10),
-                                  Text('Full Reset',
-                                      style: TextStyle(
-                                          color: Colors.white, fontSize: 16)),
-                                ],
-                              ),
-                              content: const Text(
-                                'This will permanently delete:\n\n'
-                                '• ALL transactions\n'
-                                '• ALL custom reasons and tags\n'
-                                '• ALL notifications\n\n'
-                                'The app will then rescan all SMS messages from scratch. '
-                                'This cannot be undone.',
-                                style: TextStyle(
-                                    color: AppColors.textGray, fontSize: 13),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancel',
-                                      style:
-                                          TextStyle(color: AppColors.textGray)),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Reset Everything',
-                                      style: TextStyle(
-                                          color: AppColors.alertRed,
-                                          fontWeight: FontWeight.w600)),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true && context.mounted) {
-                            setState(() => _isResetting = true);
-                            await context.read<FinanceProvider>().fullReset();
-                            if (context.mounted) {
-                              setState(() => _isResetting = false);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Full reset complete ✓'),
-                                  backgroundColor: Color(0xFF3EB489),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          }
-                        },
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const DataMaintenanceScreen()),
+                        ),
                       ),
                     ]),
 
@@ -390,7 +283,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Text(
         label.toUpperCase(),
         style: const TextStyle(
-          color: AppColors.textGray,
+          color: AppColors.labelGray,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.2,
@@ -432,7 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing ??
                     const Icon(
                       Icons.arrow_forward_ios_rounded,
-                      color: AppColors.textGray,
+                      color: AppColors.labelGray,
                       size: 14,
                     ),
               ],

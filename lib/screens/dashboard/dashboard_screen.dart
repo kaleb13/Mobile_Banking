@@ -10,6 +10,7 @@ import 'sender_detail_screen.dart';
 import 'transaction_detail_screen.dart';
 import 'notifications_screen.dart';
 import 'cash_wallet_detail_screen.dart';
+import 'transaction_search_screen.dart';
 import '../../models/transaction.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -28,9 +29,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _bannerTimer;
   final int _bannerLoopFactor = 10000;
   bool _isOverallChartVisible = false;
-  String _chartFilter = '1M';
+  String _chartFilter = '30D';
   int _searchLabelIndex = 0;
   Timer? _searchLabelTimer;
+  double? _touchedX;
 
   @override
   void initState() {
@@ -264,85 +266,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 16),
-                  const Icon(Icons.search, color: Color(0xFF9CA3AF), size: 16),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        if (_searchQuery.isEmpty)
-                          IgnorePointer(
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 600),
-                              switchInCurve: Curves.easeInOutCubic,
-                              switchOutCurve: Curves.easeInOutCubic,
-                              layoutBuilder: (Widget? currentChild,
-                                  List<Widget> previousChildren) {
-                                return Stack(
-                                  alignment: Alignment.centerLeft,
-                                  children: [
-                                    ...previousChildren,
-                                    if (currentChild != null) currentChild,
-                                  ],
-                                );
-                              },
-                              transitionBuilder:
-                                  (Widget child, Animation<double> animation) {
-                                final inAnimation = Tween<Offset>(
-                                  begin: const Offset(0.0, 1.2),
-                                  end: Offset.zero,
-                                ).animate(animation);
-                                final outAnimation = Tween<Offset>(
-                                  begin: const Offset(0.0, -1.2),
-                                  end: Offset.zero,
-                                ).animate(animation);
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const TransactionSearchScreen()),
+                );
+              },
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A2A34),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 16),
+                    const Icon(Icons.search,
+                        color: AppColors.labelGray, size: 16),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [
+                          if (_searchQuery.isEmpty)
+                            IgnorePointer(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 600),
+                                switchInCurve: Curves.easeInOutCubic,
+                                switchOutCurve: Curves.easeInOutCubic,
+                                layoutBuilder: (Widget? currentChild,
+                                    List<Widget> previousChildren) {
+                                  return Stack(
+                                    alignment: Alignment.centerLeft,
+                                    children: [
+                                      ...previousChildren,
+                                      if (currentChild != null) currentChild,
+                                    ],
+                                  );
+                                },
+                                transitionBuilder: (Widget child,
+                                    Animation<double> animation) {
+                                  final inAnimation = Tween<Offset>(
+                                    begin: const Offset(0.0, 1.2),
+                                    end: Offset.zero,
+                                  ).animate(animation);
+                                  final outAnimation = Tween<Offset>(
+                                    begin: const Offset(0.0, -1.2),
+                                    end: Offset.zero,
+                                  ).animate(animation);
 
-                                return ClipRect(
-                                  child: SlideTransition(
-                                    position:
-                                        child.key == ValueKey(_searchLabelIndex)
-                                            ? inAnimation
-                                            : outAnimation,
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                _getSearchHint(provider),
-                                key: ValueKey(_searchLabelIndex),
-                                style: const TextStyle(
-                                    color: Color(0xFF9CA3AF), fontSize: 12),
+                                  return ClipRect(
+                                    child: SlideTransition(
+                                      position: child.key ==
+                                              ValueKey(_searchLabelIndex)
+                                          ? inAnimation
+                                          : outAnimation,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  _getSearchHint(provider),
+                                  key: ValueKey(_searchLabelIndex),
+                                  style: const TextStyle(
+                                      color: AppColors.labelGray, fontSize: 12),
+                                ),
                               ),
                             ),
+                          TextField(
+                            enabled: false,
+                            controller: _searchController,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 12),
+                            decoration: const InputDecoration(
+                              hintText: '',
+                              border: InputBorder.none,
+                              isDense: true,
+                            ),
                           ),
-                        TextField(
-                          controller: _searchController,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 12),
-                          decoration: const InputDecoration(
-                            hintText: '',
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                          onChanged: (val) {
-                            setState(() {
-                              _searchQuery = val;
-                            });
-                          },
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -398,7 +406,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               const Text(
                 'Your total balance',
-                style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+                style: TextStyle(color: AppColors.labelGray, fontSize: 13),
               ),
               const SizedBox(height: 4),
               GestureDetector(
@@ -419,8 +427,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     Text(
                       '.$decimals',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.4),
+                      style: const TextStyle(
+                        color: AppColors.labelGray,
                         fontSize: 20,
                         fontWeight: FontWeight.w400,
                       ),
@@ -441,7 +449,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(
                       _isShowingTodayOnly ? 'TODAY PNL  ' : 'OVERALL PNL  ',
                       style: const TextStyle(
-                        color: Color(0xB3FFFFFF),
+                        color: AppColors.labelGray,
                         fontSize: 9, // Reduced
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.5,
@@ -555,9 +563,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
     List<FlSpot> spots = [];
     int daysLimit = 30;
-    if (_chartFilter == '1W') {
+    if (_chartFilter == '1D') {
+      daysLimit = 1;
+    } else if (_chartFilter == '7D') {
       daysLimit = 7;
-    } else if (_chartFilter == 'ALL') daysLimit = 90;
+    } else if (_chartFilter == '30D') {
+      daysLimit = 30;
+    } else if (_chartFilter == '180D') {
+      daysLimit = 180;
+    } else if (_chartFilter == '360D') {
+      daysLimit = 360;
+    }
 
     DateTime now = DateTime.now();
     double currentBal = provider.totalBalance;
@@ -589,12 +605,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     spots = spots.reversed.toList();
 
-    double maxY = 0;
-    int peakIndex = 0;
-    for (int i = 0; i < spots.length; i++) {
-      if (spots[i].y > maxY) {
-        maxY = spots[i].y;
-        peakIndex = i;
+    // ── Gradient configuration ──────────────────────────────────────────────
+    // LINE  : always left→right so stops map to horizontal chart positions.
+    // FILL  : always top→bottom for that strong area-chart fade effect.
+    //         When touched we simply dim the entire fill uniformly; the clear
+    //         left/right distinction is shown by the line gradient + indicator.
+    List<double> lineStops = [0.0, 1.0];
+    List<Color> lineColors = [AppColors.accentBlue, AppColors.accentBlue];
+
+    // Fill: top strong → bottom fully transparent (always top→bottom)
+    List<Color> fillColors = [
+      AppColors.accentBlue.withValues(alpha: 0.28),
+      AppColors.accentBlue.withValues(alpha: 0.0),
+    ];
+
+    if (_touchedX != null && spots.isNotEmpty) {
+      final maxX = spots.last.x;
+      if (maxX > 0) {
+        double ratio = (_touchedX! / maxX).clamp(0.0, 1.0);
+        lineStops = [0.0, ratio, ratio, 1.0];
+        // Line: full left of indicator, nearly invisible right of it
+        lineColors = [
+          AppColors.accentBlue,
+          AppColors.accentBlue,
+          AppColors.accentBlue.withValues(alpha: 0.08),
+          AppColors.accentBlue.withValues(alpha: 0.08),
+        ];
+        // Fill: dim the whole fill uniformly when touching
+        fillColors = [
+          AppColors.accentBlue.withValues(alpha: 0.07),
+          AppColors.accentBlue.withValues(alpha: 0.0),
+        ];
       }
     }
 
@@ -605,74 +646,100 @@ class _DashboardScreenState extends State<DashboardScreen> {
           height: 120,
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: ShaderMask(
-            shaderCallback: (rect) => const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Colors.transparent,
-                Colors.black,
-                Colors.black,
-                Colors.transparent
-              ],
-              stops: [0.0, 0.15, 0.85, 1.0],
-            ).createShader(rect),
-            blendMode: BlendMode.dstIn,
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (_) => AppColors.surfaceLight,
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((s) {
-                        return LineTooltipItem(
-                          'ETB ${NumberFormat('#,##0').format(s.y)}',
-                          const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        );
-                      }).toList();
-                    },
+          child: LineChart(
+            LineChartData(
+              gridData: const FlGridData(show: false),
+              titlesData: const FlTitlesData(show: false),
+              borderData: FlBorderData(show: false),
+              lineTouchData: LineTouchData(
+                touchCallback:
+                    (FlTouchEvent event, LineTouchResponse? touchResponse) {
+                  setState(() {
+                    if (!event.isInterestedForInteractions ||
+                        touchResponse == null ||
+                        touchResponse.lineBarSpots == null ||
+                        touchResponse.lineBarSpots!.isEmpty) {
+                      _touchedX = null;
+                      return;
+                    }
+                    _touchedX = touchResponse.lineBarSpots!.first.x;
+                  });
+                },
+                getTouchedSpotIndicator:
+                    (LineChartBarData barData, List<int> spotIndexes) {
+                  return spotIndexes.map((index) {
+                    return TouchedSpotIndicatorData(
+                      FlLine(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        strokeWidth: 1,
+                        dashArray: [4, 4],
+                      ),
+                      FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) =>
+                            FlDotCirclePainter(
+                          radius: 3,
+                          color: AppColors.accentBlue,
+                          strokeWidth: 0,
+                          strokeColor: Colors.transparent,
+                        ),
+                      ),
+                    );
+                  }).toList();
+                },
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (_) => Colors.transparent,
+                  tooltipPadding: EdgeInsets.zero,
+                  tooltipMargin: 8,
+                  getTooltipItems: (touchedSpots) {
+                    return touchedSpots.map((s) {
+                      return LineTooltipItem(
+                        '',
+                        const TextStyle(),
+                        children: [
+                          TextSpan(
+                            text: 'ETB ',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          TextSpan(
+                            text: NumberFormat('#,##0').format(s.y),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList();
+                  },
+                ),
+              ),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  gradient: LinearGradient(
+                    colors: lineColors,
+                    stops: lineStops,
+                  ),
+                  barWidth: 1.8,
+                  isStrokeCapRound: true,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: fillColors,
+                    ),
                   ),
                 ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: AppColors.accentBlue,
-                    barWidth: 2.5,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, bar, index) {
-                        if (index == peakIndex) {
-                          return FlDotCirclePainter(
-                            radius: 5,
-                            color: Colors.white,
-                            strokeWidth: 2,
-                            strokeColor: AppColors.accentBlue,
-                          );
-                        }
-                        return FlDotCirclePainter(
-                            radius: 0, color: Colors.transparent);
-                      },
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppColors.accentBlue.withValues(alpha: 0.15),
-                          AppColors.accentBlue.withValues(alpha: 0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -681,14 +748,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: ['1W', '1M', 'ALL'].map((f) {
+            children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
               final isSelected = _chartFilter == f;
               return GestureDetector(
                 onTap: () => setState(() => _chartFilter = f),
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? Colors.white.withValues(alpha: 0.08)
@@ -699,7 +766,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Text(
                     f,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textGray,
+                      color: isSelected ? Colors.white : AppColors.labelGray,
                       fontSize: 10,
                       fontWeight:
                           isSelected ? FontWeight.bold : FontWeight.w600,
@@ -1181,7 +1248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: AppColors.labelGray,
                     fontSize: 8.5,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
@@ -1218,12 +1285,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     final filteredTransactions = allTransactions.where((tx) {
-      final nameStr = tx.name.toLowerCase();
-      final reasonStr = tx.reason?.toLowerCase() ?? '';
-      final amountStr = tx.amount.toString();
       final searchLower = query.toLowerCase();
+      final nameStr = tx.name.toLowerCase();
+      final senderStr = tx.sender.toLowerCase();
+      final reasonStr = tx.reason?.toLowerCase() ?? '';
+      final customReasonStr = tx.customReasonText?.toLowerCase() ?? '';
+      final amountStr = tx.amount.toString();
+
       return nameStr.contains(searchLower) ||
+          senderStr.contains(searchLower) ||
           reasonStr.contains(searchLower) ||
+          customReasonStr.contains(searchLower) ||
           amountStr.contains(searchLower);
     }).toList();
 
@@ -1260,7 +1332,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: EdgeInsets.symmetric(vertical: 40.0),
               child: Center(
                 child: Text('No transactions found',
-                    style: TextStyle(color: Color(0xFF9CA3AF))),
+                    style: TextStyle(color: AppColors.labelGray)),
               ),
             )
           else
@@ -1295,7 +1367,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             label,
             style: TextStyle(
-              color: active ? Colors.white : Colors.white.withOpacity(0.4),
+              color: active ? Colors.white : AppColors.labelGray,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -1370,8 +1442,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(subLabel,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.4), fontSize: 10)),
+                      style: const TextStyle(
+                          color: AppColors.labelGray, fontSize: 10)),
                 ],
               ),
             ),

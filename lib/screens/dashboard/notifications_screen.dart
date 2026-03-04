@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
+import '../../models/app_notification.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import 'manual_transaction_sheet.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -94,26 +98,43 @@ class NotificationsScreen extends StatelessWidget {
                         final notif = provider.notifications[index];
                         return GestureDetector(
                           onLongPress: () =>
-                              _showLongPressModal(context, provider, notif.id),
-                          child: Dismissible(
+                              _showLongPressModal(context, provider, notif),
+                          child: Slidable(
                             key: Key(notif.id),
-                            direction: DismissDirection.endToStart,
-                            background: Container(
-                              alignment: Alignment.centerRight,
-                              margin: const EdgeInsets.only(
-                                  bottom: 12, left: 24, right: 24),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 24),
-                              decoration: BoxDecoration(
-                                color:
-                                    AppColors.alertRed.withValues(alpha: 0.8),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: const Icon(Icons.delete_outline,
-                                  color: Colors.white, size: 26),
+                            direction: Axis.horizontal,
+                            endActionPane: ActionPane(
+                              motion: const DrawerMotion(),
+                              extentRatio: 0.7,
+                              children: [
+                                SlidableAction(
+                                  onPressed: (context) =>
+                                      provider.deleteNotification(notif.id),
+                                  backgroundColor: AppColors.surfaceLight,
+                                  foregroundColor: AppColors.alertRed,
+                                  icon: Icons.delete_outline,
+                                  label: 'Delete',
+                                  borderRadius: const BorderRadius.horizontal(
+                                      left: Radius.circular(16)),
+                                ),
+                                SlidableAction(
+                                  onPressed: (context) => _showManualInsert(
+                                      context, provider, notif),
+                                  backgroundColor: AppColors.surfaceLight,
+                                  foregroundColor: AppColors.primaryBlue,
+                                  icon: Icons.add_circle_outline,
+                                  label: 'Insert',
+                                ),
+                                SlidableAction(
+                                  onPressed: (context) => _informDeveloper(),
+                                  backgroundColor: AppColors.surfaceLight,
+                                  foregroundColor: const Color(0xFF229ED9),
+                                  icon: Icons.telegram,
+                                  label: 'Inform',
+                                  borderRadius: const BorderRadius.horizontal(
+                                      right: Radius.circular(16)),
+                                ),
+                              ],
                             ),
-                            onDismissed: (_) =>
-                                provider.deleteNotification(notif.id),
                             child: Container(
                               margin: const EdgeInsets.only(
                                   bottom: 12, left: 20, right: 20),
@@ -205,7 +226,7 @@ class NotificationsScreen extends StatelessWidget {
                                                           vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: AppColors
-                                                            .textGray
+                                                            .labelGray
                                                             .withValues(
                                                                 alpha: 0.12),
                                                         borderRadius:
@@ -216,7 +237,7 @@ class NotificationsScreen extends StatelessWidget {
                                                         'Unregistered',
                                                         style: TextStyle(
                                                           color: AppColors
-                                                              .textGray,
+                                                              .labelGray,
                                                           fontSize: 10,
                                                           fontWeight:
                                                               FontWeight.w500,
@@ -230,9 +251,8 @@ class NotificationsScreen extends StatelessWidget {
                                             Text(
                                               DateFormat('MMM d, HH:mm')
                                                   .format(notif.date),
-                                              style: TextStyle(
-                                                color: AppColors.textGray
-                                                    .withValues(alpha: 0.8),
+                                              style: const TextStyle(
+                                                color: AppColors.labelGray,
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -243,7 +263,7 @@ class NotificationsScreen extends StatelessWidget {
                                         Text(
                                           notif.body,
                                           style: const TextStyle(
-                                            color: AppColors.textGray,
+                                            color: AppColors.labelGray,
                                             fontSize: 13,
                                             height: 1.5,
                                           ),
@@ -298,143 +318,131 @@ class NotificationsScreen extends StatelessWidget {
           const Text(
             'Unrecognized messages from\nregistered senders will appear here',
             textAlign: TextAlign.center,
-            style:
-                TextStyle(color: AppColors.textGray, fontSize: 14, height: 1.6),
+            style: TextStyle(
+                color: AppColors.labelGray, fontSize: 14, height: 1.6),
           ),
         ],
       ),
     );
   }
 
+  void _showManualInsert(
+      BuildContext context, FinanceProvider provider, AppNotification notif) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ManualTransactionSheet(
+        notification: notif,
+        provider: provider,
+      ),
+    );
+  }
+
+  Future<void> _informDeveloper() async {
+    final Uri url = Uri.parse('https://t.me/your_telegram_handle');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      // Could show a snackbar failing to launch
+    }
+  }
+
   void _showLongPressModal(
-      BuildContext context, FinanceProvider provider, String id) {
+      BuildContext context, FinanceProvider provider, AppNotification notif) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        margin: const EdgeInsets.all(16),
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         decoration: BoxDecoration(
           color: AppColors.surfaceDark,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle bar
             Container(
               margin: const EdgeInsets.only(top: 12, bottom: 16),
-              width: 40,
+              width: 44,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textGray.withValues(alpha: 0.4),
+                color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
             const Text(
               'Message Options',
               style: TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 16,
+                color: Colors.white,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'What would you like to do with this message?',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textGray, fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Ignore permanently
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () async {
+            const SizedBox(height: 12),
+            _buildModalItem(
+              icon: Icons.add_circle_outline,
+              label: 'Insert Transaction Manually',
+              color: AppColors.primaryBlue,
+              onTap: () {
                 Navigator.pop(ctx);
-                await provider.ignoreNotification(id);
+                _showManualInsert(context, provider, notif);
               },
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.alertRed.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.alertRed.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.block_rounded,
-                        color: AppColors.alertRed, size: 20),
-                    SizedBox(width: 10),
-                    Text(
-                      'Ignore this message',
-                      style: TextStyle(
-                        color: AppColors.alertRed,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
-            const SizedBox(height: 10),
-            // Just delete (not ignored — can come back on refresh)
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () async {
+            _buildModalItem(
+              icon: Icons.telegram,
+              label: 'Inform Developer',
+              color: const Color(0xFF229ED9),
+              onTap: () {
                 Navigator.pop(ctx);
-                await provider.deleteNotification(id);
+                _informDeveloper();
               },
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.textGray.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.delete_outline,
-                        color: AppColors.textGray, size: 20),
-                    SizedBox(width: 10),
-                    Text(
-                      'Just delete',
-                      style: TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            _buildModalItem(
+              icon: Icons.delete_outline,
+              label: 'Delete Message',
+              color: AppColors.alertRed,
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.deleteNotification(notif.id);
+              },
+            ),
+            _buildModalItem(
+              icon: Icons.block_rounded,
+              label: 'Ignore Permanently',
+              color: AppColors.labelGray,
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.ignoreNotification(notif.id);
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModalItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 10),
-            // Cancel
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => Navigator.pop(ctx),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(
-                    color: AppColors.primaryBlue,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -450,13 +458,13 @@ class NotificationsScreen extends StatelessWidget {
             style: TextStyle(color: AppColors.textWhite)),
         content: const Text(
           'Remove all notifications?',
-          style: TextStyle(color: AppColors.textGray),
+          style: TextStyle(color: AppColors.labelGray),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textGray)),
+                style: TextStyle(color: AppColors.labelGray)),
           ),
           TextButton(
             onPressed: () async {

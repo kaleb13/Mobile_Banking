@@ -57,7 +57,26 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   int _currentScreenIndex = 0;
 
   List<AppSender> get senders => _senders;
+
+  /// Returns all unique person/sender names captured in transaction records.
+  /// Used to power "pick from existing contacts" in the loan form.
+  List<String> get allTrackedPersonNames {
+    final names = <String>{};
+    for (final tx in _transactions) {
+      if (tx.sender.isNotEmpty && tx.sender != 'Manual Entry') {
+        names.add(tx.sender);
+      }
+    }
+    final sorted = names.toList()..sort();
+    return sorted;
+  }
+
+  /// Returns the hardcoded bank/system sender names (always available).
+  List<String> get bankSenderNames =>
+      _senders.map((s) => s.senderName).toList();
+
   List<AppTransaction> get transactions => _transactions;
+
   List<AppTransaction> get transactionsForSelectedDate {
     if (_isShowingAll) return _transactions;
     return _transactions
@@ -501,6 +520,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> loadSenders() async {
+    final fromDb = await DatabaseService.instance.getSenders();
+    if (fromDb.isNotEmpty) {
+      _senders = fromDb;
+    }
+    notifyListeners();
+  }
+
   // ── Load loans helper ─────────────────────────────────────────────────────
   Future<void> _loadLoans() async {
     _loanRecords = await DatabaseService.instance.getLoanRecords();
@@ -648,11 +675,51 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
+  /// Returns true if [msg] contains at least one English financial keyword.
+  static bool _hasFinancialKeyword(String msg) {
+    // Skip non-English messages (Amharic and most Ethiopic scripts use these Unicode ranges)
+    final hasEthiopic = RegExp(r'[\u1200-\u137F\uAB01-\uAB2F]').hasMatch(msg);
+    if (hasEthiopic) return false;
+
+    const keywords = [
+      // Movement / transfer verbs
+      'received', 'sent', 'send', 'transferred', 'transfer',
+      'paid', 'pay', 'payment',
+      // Credit / debit
+      'credited', 'credit', 'debited', 'debit',
+      // Deposit / withdraw
+      'deposited', 'deposit', 'withdrawn', 'withdrawal', 'withdraw',
+      // Balance and account
+      'balance', 'account', 'available', 'remaining',
+      // Amounts
+      'amount', 'total', 'birr', 'etb', 'usd',
+      // Loan
+      'loan', 'repay', 'due',
+      // Transaction identifiers
+      'transaction', 'txn', 'ref no', 'reference',
+      'purchase', 'charged', 'fee',
+      // Bank / wallet
+      'bank', 'wallet', 'mobile money', 'telebirr', 'cbe',
+    ];
+
+    final lower = msg.toLowerCase();
+    return keywords.any((kw) => lower.contains(kw));
+  }
+
   Future<void> addUnrecognizedNotification({
     required String sender,
     required String body,
     required DateTime date,
   }) async {
+    // ── Loan/System messages always pass through (internal app alerts) ──────
+    final isSystemAlert = sender.startsWith('Loan') ||
+        sender.startsWith('System') ||
+        sender.startsWith('⚠️') ||
+        sender.contains('✅');
+
+    // ── External SMS: only save if it looks like a financial message ────────
+    if (!isSystemAlert && !_hasFinancialKeyword(body)) return;
+
     final id = '${sender}_${date.millisecondsSinceEpoch}';
 
     // Check if this message was permanently ignored by the user
@@ -1204,8 +1271,36 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// by any active loan and auto-records a payment.
   Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
     final senderLower = tx.sender.trim().toLowerCase();
+    final nameLower = tx.name.trim().toLowerCase();
 
-    // ── Pass 1: Exact match (case-insensitive) → auto-settle ──────────────
+    // ── Pass 1: Exact match (case-insensitive) against each tracked token ──
+    // trackedSenderName may be a comma-separated list e.g. "Telebirr,CBE,CBE Birr"
+    final allActive = _loanRecords
+        .where((l) => l.status == 'active' && l.trackedSenderName != null)
+        .toList();
+
+    // Check multi-token exact matches first
+    final exactMultiMatches = allActive.where((loan) {
+      final tokens = loan.trackedSenderName!
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .where((t) => t.isNotEmpty)
+          .toList();
+      return tokens.any((t) =>
+          senderLower.contains(t) ||
+          nameLower.contains(t) ||
+          t.contains(senderLower) ||
+          t.contains(nameLower));
+    }).toList();
+
+    if (exactMultiMatches.isNotEmpty) {
+      for (final loan in exactMultiMatches) {
+        await _applyRepayment(loan, tx);
+      }
+      return;
+    }
+
+    // Fall back to DB exact query (handles legacy single-value tracked names)
     final exactLoans =
         await DatabaseService.instance.findActiveLoansForSender(senderLower);
     if (exactLoans.isNotEmpty) {
@@ -1215,9 +1310,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       return;
     }
 
-    // Also try matching by bank name exactly
-    final byBankName = await DatabaseService.instance
-        .findActiveLoansForSender(tx.name.toLowerCase());
+    final byBankName =
+        await DatabaseService.instance.findActiveLoansForSender(nameLower);
     if (byBankName.isNotEmpty) {
       for (final loan in byBankName) {
         await _applyRepayment(loan, tx);
@@ -1232,50 +1326,53 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     final incomingPrefix = '${senderWords[0]} ${senderWords[1]}';
 
-    // Get all active loans that have a trackedSenderName
-    final allActive = _loanRecords
-        .where((l) => l.status == 'active' && l.trackedSenderName != null)
-        .toList();
-
     for (final loan in allActive) {
-      final trackedWords =
-          loan.trackedSenderName!.trim().toLowerCase().split(RegExp(r'\s+'));
+      // Split multi-bank tracked names and check each token
+      final trackedTokens = loan.trackedSenderName!
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .where((t) => t.isNotEmpty)
+          .toList();
 
-      // Build first-two-word prefix of the tracked name
-      if (trackedWords.isEmpty) continue;
-      final trackedPrefix = trackedWords.length >= 2
-          ? '${trackedWords[0]} ${trackedWords[1]}'
-          : trackedWords[0];
+      bool alreadyQueued = false;
+      for (final token in trackedTokens) {
+        if (alreadyQueued) break;
+        final trackedWords = token.split(RegExp(r'\s+'));
 
-      // Check: incoming prefix matches tracked prefix (in either direction)
-      // e.g. tracked="Nahom Abreham", incoming="Nahom Abreham Hailesilase" → match
-      // e.g. tracked="Nahom Abreham Hailesilase", incoming="Nahom Abreham" → match
-      if (incomingPrefix == trackedPrefix ||
-          (trackedWords.length >= 2 &&
-              '${senderWords[0]} ${senderWords[1]}' == trackedPrefix)) {
-        // Don't create duplicate pending requests for same tx
-        final req = LoanRepaymentRequest(
-          loanId: loan.id!,
-          transactionId:
-              tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
-          senderFound: tx.sender,
-          trackedName: loan.trackedSenderName!,
-          amount: tx.amount.clamp(0.0, loan.remainingAmount),
-          createdAt: DateTime.now(),
-        );
-        await DatabaseService.instance.insertLoanRepaymentRequest(req);
-        _pendingRepaymentRequests =
-            await DatabaseService.instance.getPendingRepaymentRequests();
+        // Build first-two-word prefix of the tracked token
+        if (trackedWords.isEmpty) continue;
+        final trackedPrefix = trackedWords.length >= 2
+            ? '${trackedWords[0]} ${trackedWords[1]}'
+            : trackedWords[0];
 
-        // Notify user via in-app notification
-        await addUnrecognizedNotification(
-          sender: '⚠️ Loan Match Approval',
-          body: '"${tx.sender}" sent ${tx.amount.toStringAsFixed(2)} ETB. '
-              'This might be from "${loan.trackedSenderName}" (${loan.personName}). '
-              'Go to Loans → Pending to approve or reject.',
-          date: DateTime.now(),
-        );
-        notifyListeners();
+        // Check: incoming prefix matches tracked prefix (in either direction)
+        if (incomingPrefix == trackedPrefix ||
+            (trackedWords.length >= 2 &&
+                '${senderWords[0]} ${senderWords[1]}' == trackedPrefix)) {
+          final req = LoanRepaymentRequest(
+            loanId: loan.id!,
+            transactionId:
+                tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
+            senderFound: tx.sender,
+            trackedName: loan.trackedSenderName!,
+            amount: tx.amount.clamp(0.0, loan.remainingAmount),
+            createdAt: DateTime.now(),
+          );
+          await DatabaseService.instance.insertLoanRepaymentRequest(req);
+          _pendingRepaymentRequests =
+              await DatabaseService.instance.getPendingRepaymentRequests();
+
+          // Notify user via in-app notification
+          await addUnrecognizedNotification(
+            sender: '⚠️ Loan Match Approval',
+            body: '"${tx.sender}" sent ${tx.amount.toStringAsFixed(2)} ETB. '
+                'This might be from "${loan.trackedSenderName}" (${loan.personName}). '
+                'Go to Loans → Pending to approve or reject.',
+            date: DateTime.now(),
+          );
+          notifyListeners();
+          alreadyQueued = true;
+        }
       }
     }
   }

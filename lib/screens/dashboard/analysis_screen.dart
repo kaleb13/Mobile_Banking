@@ -9,7 +9,7 @@ import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 
 // ─── Period Enum ──────────────────────────────────────────────────────────────
-enum AnalysisPeriod { daily, weekly, monthly, all }
+enum AnalysisPeriod { d1, d7, d30, d180, d360 }
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -20,7 +20,7 @@ class AnalysisScreen extends StatefulWidget {
 
 class _AnalysisScreenState extends State<AnalysisScreen>
     with TickerProviderStateMixin {
-  AnalysisPeriod _period = AnalysisPeriod.monthly;
+  AnalysisPeriod _period = AnalysisPeriod.d30;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
@@ -42,32 +42,30 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   void _changePeriod(AnalysisPeriod p) {
     if (_period == p) return;
     setState(() => _period = p);
-    _fadeCtrl
-      ..reset()
-      ..forward();
   }
 
   // ─── Filtered transactions ──────────────────────────────────────────────────
   List<AppTransaction> _filtered(List<AppTransaction> all) {
     final now = DateTime.now();
+    DateTime cutoff;
     switch (_period) {
-      case AnalysisPeriod.daily:
-        return all
-            .where((t) =>
-                t.date.year == now.year &&
-                t.date.month == now.month &&
-                t.date.day == now.day)
-            .toList();
-      case AnalysisPeriod.weekly:
-        final week = now.subtract(const Duration(days: 7));
-        return all.where((t) => t.date.isAfter(week)).toList();
-      case AnalysisPeriod.monthly:
-        return all
-            .where((t) => t.date.year == now.year && t.date.month == now.month)
-            .toList();
-      case AnalysisPeriod.all:
-        return all;
+      case AnalysisPeriod.d1:
+        cutoff = now.subtract(const Duration(days: 1));
+        break;
+      case AnalysisPeriod.d7:
+        cutoff = now.subtract(const Duration(days: 7));
+        break;
+      case AnalysisPeriod.d30:
+        cutoff = now.subtract(const Duration(days: 30));
+        break;
+      case AnalysisPeriod.d180:
+        cutoff = now.subtract(const Duration(days: 180));
+        break;
+      case AnalysisPeriod.d360:
+        cutoff = now.subtract(const Duration(days: 360));
+        break;
     }
+    return all.where((t) => t.date.isAfter(cutoff)).toList();
   }
 
   @override
@@ -205,7 +203,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             )),
         Text(
           'Spend with awareness',
-          style: TextStyle(color: AppColors.textGray, fontSize: 12),
+          style: TextStyle(color: AppColors.labelGray, fontSize: 12),
         ),
       ],
     );
@@ -228,7 +226,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               const SizedBox(width: 6),
               Text(label,
                   style: const TextStyle(
-                      color: AppColors.textGray,
+                      color: AppColors.labelGray,
                       fontSize: 10,
                       fontWeight: FontWeight.w500)),
             ],
@@ -250,10 +248,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // ─── Period Selector ────────────────────────────────────────────────────────
   Widget _buildPeriodSelector() {
     final periods = [
-      (AnalysisPeriod.daily, 'Daily'),
-      (AnalysisPeriod.weekly, 'Weekly'),
-      (AnalysisPeriod.monthly, 'Monthly'),
-      (AnalysisPeriod.all, 'All Time'),
+      (AnalysisPeriod.d1, '1D'),
+      (AnalysisPeriod.d7, '7D'),
+      (AnalysisPeriod.d30, '30D'),
+      (AnalysisPeriod.d180, '180D'),
+      (AnalysisPeriod.d360, '360D'),
     ];
     return Container(
       decoration: BoxDecoration(
@@ -271,18 +270,18 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 9),
+                padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
-                  color:
-                      isActive ? const Color(0xFFF0B90B) : Colors.transparent,
+                  color: isActive
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color:
-                                const Color(0xFFF0B90B).withValues(alpha: 0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           )
                         ]
                       : [],
@@ -291,11 +290,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   child: Text(
                     item.$2,
                     style: TextStyle(
-                      color: isActive
-                          ? const Color(0xFF301900)
-                          : AppColors.textGray,
-                      fontSize: 12,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                      color: isActive ? Colors.white : AppColors.labelGray,
+                      fontSize: 10,
+                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                 ),
@@ -369,7 +366,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 getTitlesWidget: (value, meta) => Text(
                   _formatYAxis(value),
                   style:
-                      const TextStyle(color: AppColors.textGray, fontSize: 9),
+                      const TextStyle(color: AppColors.labelGray, fontSize: 9),
                 ),
               ),
             ),
@@ -385,7 +382,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(labels[idx],
                         style: const TextStyle(
-                            color: AppColors.textGray, fontSize: 9)),
+                            color: AppColors.labelGray, fontSize: 9)),
                   );
                 },
               ),
@@ -421,16 +418,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   List<String> _barLabels(List<AppTransaction> txs) {
     switch (_period) {
-      case AnalysisPeriod.daily:
+      case AnalysisPeriod.d1:
         return List.generate(24, (i) => i % 4 == 0 ? '$i' : '');
-      case AnalysisPeriod.weekly:
+      case AnalysisPeriod.d7:
         return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      case AnalysisPeriod.monthly:
+      case AnalysisPeriod.d30:
         final daysInMonth =
             DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
         return List.generate(
             daysInMonth, (i) => (i + 1) % 5 == 0 ? '${i + 1}' : '');
-      case AnalysisPeriod.all:
+      case AnalysisPeriod.d180:
+      case AnalysisPeriod.d360:
         final months = txs
             .map((t) => '${t.date.year}-${t.date.month}')
             .toSet()
@@ -446,13 +444,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   List<BarChartGroupData> _buildBarGroups(List<AppTransaction> txs) {
     switch (_period) {
-      case AnalysisPeriod.daily:
+      case AnalysisPeriod.d1:
         return _groupByHour(txs);
-      case AnalysisPeriod.weekly:
+      case AnalysisPeriod.d7:
         return _groupByWeekday(txs);
-      case AnalysisPeriod.monthly:
+      case AnalysisPeriod.d30:
         return _groupByDayOfMonth(txs);
-      case AnalysisPeriod.all:
+      case AnalysisPeriod.d180:
+      case AnalysisPeriod.d360:
         return _groupByMonth(txs);
     }
   }
@@ -633,55 +632,72 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
         const SizedBox(height: 24),
 
-        // ── Descriptions Below (Legend) ─────────────
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 8,
+          runSpacing: 8,
           children: top.asMap().entries.map((entry) {
             final pct = totalExpense > 0
                 ? (entry.value.value / totalExpense * 100).toStringAsFixed(1)
                 : '0';
             final color = _categoryColor(entry.key);
 
+            // 3 cards per row: (screenWidth - 48 horizontal padding - 2 gaps of 8) / 3
+            final cardWidth = (MediaQuery.of(context).size.width - 48 - 16) / 3;
+
             return Container(
-              width: (MediaQuery.of(context).size.width - 52) / 2, // 2 columns
-              padding: const EdgeInsets.all(12),
+              width: cardWidth,
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 4,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                  // Color dot + category name
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
                           entry.value.key,
                           style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600),
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        Text(
-                          '${NumberFormat('#,##0').format(entry.value.value)} · $pct%',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.06),
-                              fontSize: 10),
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Percentage
+                  Text(
+                    '$pct%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  // Amount
+                  Text(
+                    NumberFormat('#,##0').format(entry.value.value),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -780,7 +796,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 fontWeight: FontWeight.w500)),
                         Text('${s.txCount} transactions',
                             style: const TextStyle(
-                                color: AppColors.textGray, fontSize: 11)),
+                                color: AppColors.labelGray, fontSize: 11)),
                       ],
                     ),
                   ),
@@ -1056,8 +1072,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           Icon(Icons.bar_chart_outlined,
               color: Colors.white.withValues(alpha: 0.12), size: 28),
           const SizedBox(height: 8),
-          Text(message,
-              style: const TextStyle(color: Color(0xFF3D5566), fontSize: 12)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.labelGray, fontSize: 12),
+            ),
+          ),
         ],
       ),
     );

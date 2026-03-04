@@ -284,8 +284,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             ),
                             Text(
                               '.${(widget.transaction.amount % 1).toStringAsFixed(2).split('.')[1]}',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.4),
+                              style: const TextStyle(
+                                color: AppColors.labelGray,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w400,
                               ),
@@ -295,8 +295,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'ETB',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.4),
+                          style: const TextStyle(
+                            color: AppColors.labelGray,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
@@ -475,9 +475,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           currentLabel != null
                                               ? 'Tap to change reason'
                                               : 'Assign a reason for tracking',
-                                          style: TextStyle(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.4),
+                                          style: const TextStyle(
+                                            color: AppColors.labelGray,
                                             fontSize: 12,
                                           ),
                                         ),
@@ -605,8 +604,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       ),
                       child: Text(
                         widget.transaction.rawMessage,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.4),
+                        style: const TextStyle(
+                          color: AppColors.labelGray,
                           height: 1.6,
                           fontSize: 12,
                           fontFamily: 'monospace',
@@ -674,8 +673,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.3),
+                  style: const TextStyle(
+                    color: AppColors.labelGray,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -788,8 +787,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             children: [
               Text(
                 'Repaid: ${fmt.format(loan.paidAmount)} ETB',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                style:
+                    const TextStyle(color: AppColors.labelGray, fontSize: 11),
               ),
               Text(
                 'Remaining: ${fmt.format(loan.remainingAmount)} ETB',

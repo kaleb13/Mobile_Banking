@@ -140,8 +140,9 @@ class _AddEditExpenseDefinitionScreenState
         currentIndex: 4,
         onTap: (_) {},
         isDynamic: true,
+        heroTag: 'navbar_add_edit_expense',
         dynamicActionLabel: 'Save Expense Definition',
-        dynamicActionIcon: Icons.check, // Or any relevant save icon
+        dynamicActionIcon: Icons.check,
         onDynamicAdd: _saveDefinition,
         onDynamicBack: () => Navigator.pop(context),
       ),

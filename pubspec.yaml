@@ -25,6 +25,9 @@ dependencies:
   flutter_background_service_android: ^6.3.1
   flutter_svg: any
   fl_chart: ^1.1.1
+  file_picker: any
+  flutter_slidable: ^4.0.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -33,9 +36,9 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: true
   ios: false
-  image_path: "assets/images/Shibre Logo.png"
+  image_path: "assets/images/launcher_foreground.png"
   adaptive_icon_background: "assets/images/launcher_background.png"
   adaptive_icon_foreground: "assets/images/launcher_foreground.png"
   min_sdk_android: 21

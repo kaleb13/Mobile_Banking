@@ -130,8 +130,8 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       children: [
                         const Text(
                           'Total Net Worth',
-                          style:
-                              TextStyle(color: Color(0xFF6B8FA6), fontSize: 12),
+                          style: TextStyle(
+                              color: AppColors.labelGray, fontSize: 12),
                         ),
                         const SizedBox(height: 6),
                         _splitBalance(fmt.format(grandBalance), 36, 22),
@@ -204,7 +204,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                             const Text(
                               'Set up senders in Settings to get started',
                               style: TextStyle(
-                                  color: Color(0xFF4A6572), fontSize: 12),
+                                  color: AppColors.labelGray, fontSize: 12),
                             ),
                           ],
                         ),
@@ -527,7 +527,7 @@ class _WalletCard extends StatelessWidget {
                         Text(
                           _subtitle(senderName),
                           style: const TextStyle(
-                              color: Color(0xFF4A6572), fontSize: 11),
+                              color: AppColors.labelGray, fontSize: 11),
                         ),
                         const SizedBox(height: 12),
                         // Balance
@@ -556,7 +556,7 @@ class _WalletCard extends StatelessWidget {
                             const Text(
                               'ETB',
                               style: TextStyle(
-                                  color: Color(0xFF4A6572),
+                                  color: AppColors.labelGray,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500),
                             ),
@@ -630,12 +630,12 @@ class _WalletCard extends StatelessWidget {
                       Text(
                         'This month',
                         style: const TextStyle(
-                            color: Color(0xFF4A6572), fontSize: 11),
+                            color: AppColors.labelGray, fontSize: 11),
                       ),
                       Text(
                         '$txCount transactions total',
                         style: const TextStyle(
-                            color: Color(0xFF4A6572), fontSize: 11),
+                            color: AppColors.labelGray, fontSize: 11),
                       ),
                     ],
                   ),
@@ -672,7 +672,7 @@ class _WalletCard extends StatelessWidget {
                           AppColors.alertRed),
                       const Spacer(),
                       const Icon(Icons.arrow_forward_ios_rounded,
-                          color: Color(0xFF3D5566), size: 13),
+                          color: AppColors.labelGray, size: 13),
                     ],
                   ),
                 ],
