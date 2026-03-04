@@ -162,7 +162,11 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                             color: AppColors.labelGray,
                                             fontSize: 12),
                                       ),
-                                      Row(
+                                      Wrap(
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        spacing: 8,
+                                        runSpacing: 4,
                                         children: [
                                           Text(
                                             _getRecurringText(def),
@@ -177,12 +181,10 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                     : FontWeight.normal),
                                           ),
                                           if (def.isRecurring) ...[
-                                            const SizedBox(width: 8),
                                             const Text('•',
                                                 style: TextStyle(
                                                     color: AppColors.textGray,
                                                     fontSize: 12)),
-                                            const SizedBox(width: 8),
                                             Text(
                                               def.isActive
                                                   ? 'Active'

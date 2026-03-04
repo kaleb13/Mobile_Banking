@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'manual_transaction_sheet.dart';
 import '../../models/sender.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
@@ -25,6 +26,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _searchQuery = '';
   String _typeFilter = 'All'; // All, Income, Expense
   final TextEditingController _searchController = TextEditingController();
+  double? _touchedX;
 
   @override
   void dispose() {
@@ -118,8 +120,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 physics: const BouncingScrollPhysics(),
                 child: Column(
                   children: [
-                    _buildBalanceSection(
-                        currentBalance, monthChange, monthPercent),
+                    _buildBankCard(currentBalance, monthChange, monthPercent),
+                    const SizedBox(height: 24),
                     _buildChartSection(allTxForSender),
                     _buildChartFilters(),
                     const SizedBox(height: 32),
@@ -137,17 +139,226 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
+  Widget _buildBankCard(double balance, double change, double percent) {
+    final nameUp = widget.sender.senderName.toUpperCase();
+    String subTitle = '';
+    String imagePath = 'assets/images/CBE logo 1.png';
+
+    if (nameUp.contains('CBE')) {
+      subTitle = 'Bank';
+    }
+    if (nameUp.contains('TELEBIRR')) {
+      subTitle = 'E-money';
+      imagePath = 'assets/images/Telebirr Logo.png';
+    } else if (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR')) {
+      subTitle = 'Wallet';
+      imagePath = 'assets/images/CBEBirr Logo.png';
+    }
+
+    List<Color> cardGradient;
+    if (nameUp == 'CBE') {
+      cardGradient = [
+        const Color(0xFF3D1B0F),
+        const Color(0xFF6E482F),
+        const Color(0xFF3D1B0F)
+      ];
+    } else if (nameUp.contains('TELEBIRR')) {
+      cardGradient = [
+        const Color(0xFF0BA751),
+        const Color(0xFF88BF47),
+        const Color(0xFF0BA751)
+      ];
+    } else if (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR')) {
+      cardGradient = [
+        const Color(0xFFAFAFB3),
+        const Color(0xFFFFFFFF),
+        const Color(0xFFAFAFB3)
+      ];
+    } else {
+      cardGradient = [
+        const Color(0xFF1E1E26),
+        const Color(0xFF3E3E4A),
+        const Color(0xFF1E1E26)
+      ];
+    }
+
+    final textColor =
+        (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR'))
+            ? Colors.black
+            : Colors.white;
+    final isPositive = change >= 0;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: double.infinity,
+            height: 200,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                  color: cardGradient.first.withOpacity(0.5), width: 1.5),
+            ),
+            child: Container(
+              margin: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(29),
+                gradient: RadialGradient(
+                  center: Alignment.centerRight,
+                  radius: 1.5,
+                  colors: cardGradient,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(29),
+                child: Stack(
+                  children: [
+                    // Right aligned huge logo/image
+                    Positioned(
+                      right: -10,
+                      top: 10,
+                      bottom: 0,
+                      child: Image.asset(
+                        imagePath,
+                        fit: BoxFit.contain,
+                        width: 140,
+                      ),
+                    ),
+                    // Content padding
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.sender.senderName,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.5,
+                                  height: 1.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (subTitle.isNotEmpty)
+                                Text(
+                                  subTitle,
+                                  style: TextStyle(
+                                    color: textColor.withOpacity(0.6),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your balance',
+                                style: TextStyle(
+                                  color: textColor.withOpacity(0.7),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Consumer<FinanceProvider>(
+                                builder: (context, provider, child) {
+                                  return GestureDetector(
+                                    onTap: provider.toggleBalanceVisibility,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Text(
+                                      provider.isBalanceVisible
+                                          ? NumberFormat('#,##0.00')
+                                              .format(balance)
+                                          : '****.**',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: 0.5,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Text(
+                                    '30D PNL  ',
+                                    style: TextStyle(
+                                      color: textColor.withOpacity(0.7),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())}',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '(',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    isPositive
+                                        ? Icons.trending_up
+                                        : Icons.trending_down,
+                                    color: textColor,
+                                    size: 12,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${percent.abs().toStringAsFixed(2)}%)',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBackground() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [
-            Color(0xFF1F1F25),
-            Color(0xFF1B1B21),
-          ],
-        ),
+        color: Color(0xFF1F1F25),
       ),
     );
   }
@@ -184,11 +395,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color:
-                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                          color: const Color(0xFF2A2A34).withOpacity(0.25),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: Colors.white.withOpacity(0.1),
                             width: 1,
                           ),
                         ),
@@ -204,52 +414,45 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 ),
               ),
 
-              // ── CENTER: Bank logo + name pill ─────────────────────────
+              // ── CENTER: Plus Button for Manual Transaction ───────────────────
               Positioned(
                 left: circleW + gap,
                 top: 0,
                 width: pillWidth,
                 height: 56,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  clipBehavior: Clip.antiAlias,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2A34).withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
-                          width: 1,
-                        ),
+                child: GestureDetector(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => ManualTransactionSheet(
+                        provider: provider,
+                        initialSender: widget.sender,
                       ),
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Bank logo — same compact circle
-                          Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.12),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: _getSenderLogo(size: 11),
+                    );
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    clipBehavior: Clip.antiAlias,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                            width: 1,
                           ),
-                          const SizedBox(width: 9),
-                          Text(
-                            widget.sender.senderName.toLowerCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: Color(0xFF301900),
+                          size: 28,
+                        ),
                       ),
                     ),
                   ),
@@ -270,11 +473,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color:
-                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                          color: const Color(0xFF2A2A34).withOpacity(0.25),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: Colors.white.withOpacity(0.1),
                             width: 1,
                           ),
                         ),
@@ -294,103 +496,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildBalanceSection(double balance, double change, double percent) {
-    final isPositive = change >= 0;
-    return Padding(
-      padding: const EdgeInsets.only(top: 40, bottom: 20),
-      child: Column(
-        children: [
-          Text(
-            'Net Account Value',
-            style: TextStyle(
-              color: AppColors.labelGray,
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Consumer<FinanceProvider>(
-            builder: (context, provider, child) {
-              final formatter = NumberFormat('#,##0.00');
-              final String fullyFormatted = provider.isBalanceVisible
-                  ? formatter.format(balance)
-                  : '****.**';
-              final parts = fullyFormatted.split('.');
-
-              return GestureDetector(
-                onTap: provider.toggleBalanceVisibility,
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      parts[0],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 48,
-                        fontWeight: FontWeight.w400,
-                        height: 1.0,
-                      ),
-                    ),
-                    Text(
-                      '.${parts[1]}',
-                      style: TextStyle(
-                        color: AppColors.labelGray,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                isPositive ? Icons.trending_up : Icons.trending_down,
-                color: isPositive ? AppColors.mintGreen : AppColors.alertRed,
-                size: 16,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '${isPositive ? '+' : ''}${NumberFormat('#,##0.00').format(change)} (${percent.toStringAsFixed(2)}%)',
-                style: TextStyle(
-                  color: isPositive ? AppColors.mintGreen : AppColors.alertRed,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Profit & Loss',
-                style: TextStyle(
-                  color: AppColors.labelGray,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Net balance change over the last 30 days',
-            style: TextStyle(
-              color: AppColors.labelGray,
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -423,24 +528,105 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       return FlSpot(e.key.toDouble(), e.value.totalBalance);
     }).toList();
 
+    // Gradient configuration
+    List<double> lineStops = [0.0, 1.0];
+    List<Color> lineColors = [AppColors.accentBlue, AppColors.accentBlue];
+
+    List<Color> fillColors = [
+      AppColors.accentBlue.withOpacity(0.28),
+      AppColors.accentBlue.withOpacity(0.0),
+    ];
+
+    if (_touchedX != null && spots.isNotEmpty) {
+      final maxX = spots.last.x;
+      if (maxX > 0) {
+        double ratio = (_touchedX! / maxX).clamp(0.0, 1.0);
+        lineStops = [0.0, ratio, ratio, 1.0];
+        lineColors = [
+          AppColors.accentBlue,
+          AppColors.accentBlue,
+          AppColors.accentBlue.withOpacity(0.08),
+          AppColors.accentBlue.withOpacity(0.08),
+        ];
+        fillColors = [
+          AppColors.accentBlue.withOpacity(0.07),
+          AppColors.accentBlue.withOpacity(0.0),
+        ];
+      }
+    }
+
     return Container(
-      height: 100, // Further decreased height
+      height: 120, // Match Dashboard height
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       child: LineChart(
         LineChartData(
           gridData: const FlGridData(show: false),
           titlesData: const FlTitlesData(show: false),
           borderData: FlBorderData(show: false),
           lineTouchData: LineTouchData(
+            touchCallback:
+                (FlTouchEvent event, LineTouchResponse? touchResponse) {
+              setState(() {
+                if (!event.isInterestedForInteractions ||
+                    touchResponse == null ||
+                    touchResponse.lineBarSpots == null ||
+                    touchResponse.lineBarSpots!.isEmpty) {
+                  _touchedX = null;
+                  return;
+                }
+                _touchedX = touchResponse.lineBarSpots!.first.x;
+              });
+            },
+            getTouchedSpotIndicator:
+                (LineChartBarData barData, List<int> spotIndexes) {
+              return spotIndexes.map((index) {
+                return TouchedSpotIndicatorData(
+                  FlLine(
+                    color: Colors.white.withOpacity(0.2),
+                    strokeWidth: 1,
+                    dashArray: [4, 4],
+                  ),
+                  FlDotData(
+                    show: true,
+                    getDotPainter: (spot, percent, barData, index) =>
+                        FlDotCirclePainter(
+                      radius: 3,
+                      color: AppColors.accentBlue,
+                      strokeWidth: 0,
+                      strokeColor: Colors.transparent,
+                    ),
+                  ),
+                );
+              }).toList();
+            },
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => AppColors.surfaceLight,
+              getTooltipColor: (_) => Colors.transparent,
+              tooltipPadding: EdgeInsets.zero,
+              tooltipMargin: 8,
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((s) {
                   return LineTooltipItem(
-                    'ETB ${NumberFormat('#,##0').format(s.y)}',
-                    const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
+                    '',
+                    const TextStyle(),
+                    children: [
+                      TextSpan(
+                        text: 'ETB ',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      TextSpan(
+                        text: NumberFormat('#,##0').format(s.y),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   );
                 }).toList();
               },
@@ -450,8 +636,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             LineChartBarData(
               spots: spots,
               isCurved: true,
-              color: AppColors.accentBlue,
-              barWidth: 1.5,
+              gradient: LinearGradient(
+                colors: lineColors,
+                stops: lineStops,
+              ),
+              barWidth: 1.8,
               isStrokeCapRound: true,
               dotData: const FlDotData(show: false),
               belowBarData: BarAreaData(
@@ -459,10 +648,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.accentBlue.withValues(alpha: 0.15),
-                    AppColors.accentBlue.withValues(alpha: 0),
-                  ],
+                  colors: fillColors,
                 ),
               ),
             ),
@@ -474,7 +660,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
   Widget _buildChartFilters() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
@@ -486,7 +672,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? Colors.white.withValues(alpha: 0.08)
+                    ? Colors.white.withOpacity(0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.transparent),
@@ -508,7 +694,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
   Widget _buildActivityFilterSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -516,9 +702,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+              color: const Color(0xFF2A2A34).withOpacity(0.45),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
             ),
             child: TextField(
               controller: _searchController,
@@ -545,7 +731,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? Colors.white.withValues(alpha: 0.08)
+                        ? Colors.white.withOpacity(0.08)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
@@ -597,7 +783,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: transactions.length,
       itemBuilder: (context, index) {
         final tx = transactions[index];
@@ -680,30 +866,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _getSenderLogo({double size = 20}) {
-    final name = widget.sender.senderName.toUpperCase();
-    if (name == 'CBE') {
-      return ClipOval(
-          child: Image.asset('assets/images/CBE.png', fit: BoxFit.cover));
-    } else if (name == 'TELEBIRR') {
-      return ClipOval(
-          child: Image.asset('assets/images/Telebirr.png', fit: BoxFit.cover));
-    } else if (name == 'CBE BIRR' || name == 'CBEBIRR') {
-      return ClipOval(
-          child: Image.asset('assets/images/CBEBirr.png', fit: BoxFit.cover));
-    }
-    return Center(
-      child: Text(
-        name.length >= 3 ? name.substring(0, 3) : name,
-        style: TextStyle(
-          color: AppColors.textWhite,
-          fontSize: size,
-          fontWeight: FontWeight.bold,
         ),
       ),
     );

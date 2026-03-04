@@ -129,7 +129,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -641,8 +641,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 : '0';
             final color = _categoryColor(entry.key);
 
-            // 3 cards per row: (screenWidth - 48 horizontal padding - 2 gaps of 8) / 3
-            final cardWidth = (MediaQuery.of(context).size.width - 48 - 16) / 3;
+            // 3 cards per row: (screenWidth - 32 horizontal padding - 16 gaps of 8) / 3
+            final cardWidth = (MediaQuery.of(context).size.width - 32 - 16) / 3;
 
             return Container(
               width: cardWidth,

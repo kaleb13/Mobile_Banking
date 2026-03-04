@@ -81,7 +81,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -115,7 +115,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
               // ── Grand summary banner ────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -167,7 +167,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
 
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
                   child: const Text(
                     'ACCOUNTS',
                     style: TextStyle(
@@ -211,7 +211,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       ),
                     )
                   : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 140),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
@@ -431,40 +431,82 @@ class _WalletCard extends StatelessWidget {
 
   Widget _bankLogo(String name) {
     final nameUp = name.toUpperCase();
+    String imagePath = '';
+    List<Color> cardGradient;
+
     if (nameUp == 'CBE') {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset('assets/images/CBE.png',
-            width: 48, height: 48, fit: BoxFit.cover),
-      );
+      cardGradient = [
+        const Color(0xFF3D1B0F),
+        const Color(0xFF6E482F),
+        const Color(0xFF3D1B0F)
+      ];
+      imagePath = 'assets/images/CBE logo 1.png';
     } else if (nameUp == 'TELEBIRR') {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset('assets/images/Telebirr.png',
-            width: 48, height: 48, fit: BoxFit.cover),
-      );
+      cardGradient = [
+        const Color(0xFF0BA751),
+        const Color(0xFF88BF47),
+        const Color(0xFF0BA751)
+      ];
+      imagePath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset('assets/images/CBEBirr.png',
-            width: 48, height: 48, fit: BoxFit.cover),
-      );
+      cardGradient = [
+        const Color(0xFFAFAFB3),
+        const Color(0xFFFFFFFF),
+        const Color(0xFFAFAFB3)
+      ];
+      imagePath = 'assets/images/CBEBirr Logo.png';
+    } else if (nameUp == 'CASH WALLET') {
+      cardGradient = [
+        const Color(0xFF2F2F39),
+        const Color(0xFF4F4F59),
+        const Color(0xFF2F2F39)
+      ];
+    } else {
+      cardGradient = [
+        const Color(0xFF1E1E26),
+        const Color(0xFF3E3E4A),
+        const Color(0xFF1E1E26)
+      ];
     }
+
     return Container(
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        border: Border.all(
+            color: cardGradient.first.withValues(alpha: 0.5), width: 1.5),
       ),
-      child: Center(
-        child: Text(
-          name.substring(0, min(3, name.length)).toUpperCase(),
-          style: const TextStyle(
-              color: AppColors.accentBlue,
-              fontSize: 13,
-              fontWeight: FontWeight.w600),
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(13),
+          gradient: SweepGradient(
+            center: Alignment.center,
+            transform: const GradientRotation(pi / 4),
+            colors: cardGradient,
+          ),
+        ),
+        child: Center(
+          child: imagePath.isNotEmpty
+              ? Image.asset(
+                  imagePath,
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.contain,
+                )
+              : (nameUp == 'CASH WALLET'
+                  ? const Icon(Icons.account_balance_wallet_outlined,
+                      color: Colors.white, size: 24)
+                  : Text(
+                      name.isNotEmpty
+                          ? name.substring(0, min(3, name.length)).toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    )),
         ),
       ),
     );
@@ -567,8 +609,8 @@ class _WalletCard extends StatelessWidget {
                   ),
                   // Net badge
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: (isPositiveNet
                               ? AppColors.mintGreen
@@ -620,7 +662,7 @@ class _WalletCard extends StatelessWidget {
 
             // Bottom stats row
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               child: Column(
                 children: [
                   // This month section

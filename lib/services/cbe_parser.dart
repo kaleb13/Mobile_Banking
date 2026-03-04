@@ -25,11 +25,6 @@ class CbeParser {
     }
 
     if (lowerMsg.contains('transfered')) {
-      type =
-          'expense'; // Or 'Transfer', but system currently uses 'expense' and 'income' for calculations logic. Let's use 'expense' for UI color handling (red), but we can store it as 'expense' and category 'Transfer'.
-      // Wait, user asks for type -> Transfer, Withdrawal, Deposit.
-      // Let's stick to 'expense' for debited/transferred and 'income' for credited, but we can set the type exactly as requested if the system supports it.
-      // Our UI expects `tx.type == 'income'` or `tx.type == 'expense'` for colors and math. Let's map: Deposit -> income, Transfer/Withdrawal -> expense. We'll use category for the specific detail or adjust the model type.
       type = 'expense';
       category = 'Transferred';
       amount = extractAmount(
@@ -43,12 +38,19 @@ class CbeParser {
       }
     } else if (lowerMsg.contains('debited')) {
       type = 'expense';
-      category = 'Transferred';
+      category = 'Withdrawed';
+      senderOrRecipient = 'ATM'; // Default recipient for debited/withdrawal
+
       final startStr = 'has been debited with ETB ';
       final startIdx = message.indexOf(startStr);
       if (startIdx != -1) {
         final valStart = startIdx + startStr.length;
-        final valEnd = message.indexOf('.', valStart);
+        // Search for ' including' as the end of the amount string
+        int valEnd = message.indexOf(' including', valStart);
+        if (valEnd == -1) {
+          // fallback if not found
+          valEnd = message.indexOf(' ', valStart);
+        }
         if (valEnd != -1) {
           final amtStr =
               message.substring(valStart, valEnd).replaceAll(',', '').trim();
@@ -102,7 +104,9 @@ class CbeParser {
       }
     }
 
-    if (id == null) return null; // Needs an ID
+    // Since ATM withdrawals don't have a transaction ID in the text,
+    // we generate a unique fallback ID using the date/message hash.
+    id ??= 'CBE-ATM-${fallbackDate.millisecondsSinceEpoch}-${message.hashCode.abs()}';
 
     // Extract Balance
     double totalBalance = 0.0;
@@ -113,10 +117,14 @@ class CbeParser {
       final valStart = balIdx + balStartStr.length;
       final valEnd = singleLineMsg.indexOf(' Thank', valStart);
       if (valEnd != -1) {
-        final balStr = singleLineMsg
+        String balStr = singleLineMsg
             .substring(valStart, valEnd)
             .replaceAll(',', '')
             .trim();
+        // Remove trailing period if it exists right before 'Thank'
+        if (balStr.endsWith('.')) {
+          balStr = balStr.substring(0, balStr.length - 1);
+        }
         totalBalance = double.tryParse(balStr) ?? 0.0;
       }
     }

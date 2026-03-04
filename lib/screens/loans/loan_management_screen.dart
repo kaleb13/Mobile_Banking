@@ -100,7 +100,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
 
               // ── Tab bar ───────────────────────────────────────────────────
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
@@ -176,7 +176,7 @@ class _LoanHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -317,7 +317,7 @@ class _LoanList extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 140),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
       physics: const BouncingScrollPhysics(),
       itemCount: loans.length,
       itemBuilder: (ctx, i) => _LoanCard(
@@ -448,6 +448,8 @@ class _LoanCard extends StatelessWidget {
                                   color: Colors.white,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Row(
@@ -614,14 +616,26 @@ class _LoanCard extends StatelessWidget {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        const Icon(Icons.track_changes_rounded,
-                            color: AppColors.primaryBlue, size: 12),
+                        Icon(
+                          loan.isPaid
+                              ? Icons.verified_rounded
+                              : Icons.track_changes_rounded,
+                          color: loan.isPaid
+                              ? AppColors.labelGray
+                              : AppColors.primaryBlue,
+                          size: 12,
+                        ),
                         const SizedBox(width: 5),
                         Expanded(
                           child: Text(
-                            'Watching: ${loan.trackedSenderName}',
-                            style: const TextStyle(
-                                color: AppColors.primaryBlue, fontSize: 10),
+                            loan.isPaid
+                                ? 'Auto-settled via: ${loan.trackedSenderName}'
+                                : 'Watching: ${loan.trackedSenderName}',
+                            style: TextStyle(
+                                color: loan.isPaid
+                                    ? AppColors.labelGray
+                                    : AppColors.primaryBlue,
+                                fontSize: 10),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -789,7 +803,7 @@ class LoanDetailScreen extends StatelessWidget {
         isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0B0D),
+      backgroundColor: const Color(0xFF1F1F25),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -797,6 +811,8 @@ class LoanDetailScreen extends StatelessWidget {
           current.personName,
           style: const TextStyle(
               color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           if (!current.isPaid)
@@ -846,9 +862,9 @@ class LoanDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.06),
+              color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               children: [
@@ -949,9 +965,17 @@ class LoanDetailScreen extends StatelessWidget {
                       const Text('🔍 Tracking sender',
                           style: TextStyle(
                               color: AppColors.primaryBlue, fontSize: 11)),
-                      Text(current.trackedSenderName!,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          current.trackedSenderName!,
                           style: const TextStyle(
-                              color: Colors.white, fontSize: 11)),
+                              color: Colors.white, fontSize: 11),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -1049,9 +1073,9 @@ class _PaymentTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1214),
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [

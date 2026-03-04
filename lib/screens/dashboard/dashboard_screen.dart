@@ -23,7 +23,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+  final String _searchQuery = '';
   late PageController _bannerController;
   bool _isShowingTodayOnly = false;
   Timer? _bannerTimer;

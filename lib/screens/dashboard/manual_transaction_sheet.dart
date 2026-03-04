@@ -8,13 +8,15 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 
 class ManualTransactionSheet extends StatefulWidget {
-  final AppNotification notification;
+  final AppNotification? notification;
   final FinanceProvider provider;
+  final AppSender? initialSender;
 
   const ManualTransactionSheet({
     super.key,
-    required this.notification,
+    this.notification,
     required this.provider,
+    this.initialSender,
   });
 
   @override
@@ -33,27 +35,35 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
   @override
   void initState() {
     super.initState();
-    _selectedDate = widget.notification.date;
+    _selectedDate = widget.notification?.date ?? DateTime.now();
+    _selectedSender = widget.initialSender;
 
-    // Try to extract amount from notification body
-    final amountMatch = RegExp(r'(\d{1,3}(,\d{3})*(\.\d{1,2})?)')
-        .firstMatch(widget.notification.body);
-    if (amountMatch != null) {
-      _amountController.text = amountMatch.group(1)?.replaceAll(',', '') ?? '';
+    if (widget.notification != null) {
+      // Try to extract amount from notification body
+      final amountMatch = RegExp(r'(\d{1,3}(,\d{3})*(\.\d{1,2})?)')
+          .firstMatch(widget.notification!.body);
+      if (amountMatch != null) {
+        _amountController.text =
+            amountMatch.group(1)?.replaceAll(',', '') ?? '';
+      }
+
+      // Try to find matching sender
+      if (widget.provider.senders.isNotEmpty && _selectedSender == null) {
+        _selectedSender = widget.provider.senders.firstWhere(
+          (s) =>
+              s.senderName
+                  .toLowerCase()
+                  .contains(widget.notification!.sender.toLowerCase()) ||
+              widget.notification!.sender
+                  .toLowerCase()
+                  .contains(s.senderName.toLowerCase()),
+          orElse: () => widget.provider.senders.first,
+        );
+      }
     }
 
-    // Try to find matching sender
-    if (widget.provider.senders.isNotEmpty) {
-      _selectedSender = widget.provider.senders.firstWhere(
-        (s) =>
-            s.senderName
-                .toLowerCase()
-                .contains(widget.notification.sender.toLowerCase()) ||
-            widget.notification.sender
-                .toLowerCase()
-                .contains(s.senderName.toLowerCase()),
-        orElse: () => widget.provider.senders.first,
-      );
+    if (_selectedSender == null && widget.provider.senders.isNotEmpty) {
+      _selectedSender = widget.provider.senders.first;
     }
 
     _amountController.addListener(() {
@@ -86,14 +96,16 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
           ? 'Manual Entry'
           : _receiverController.text,
       category: _selectedReason?.name ?? 'Uncategorized',
-      rawMessage: widget.notification.body,
+      rawMessage: widget.notification?.body ?? 'Manual entry via UI',
       isAutoDetected: false,
       reasonId: _selectedReason?.id,
       reason: _selectedReason?.name,
     );
 
     await widget.provider.addTransaction(tx);
-    await widget.provider.deleteNotification(widget.notification.id);
+    if (widget.notification != null) {
+      await widget.provider.deleteNotification(widget.notification!.id);
+    }
 
     if (mounted) {
       Navigator.pop(context);
@@ -134,11 +146,14 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'From: ${widget.notification.sender}',
-              style: const TextStyle(color: AppColors.labelGray, fontSize: 13),
-            ),
+            if (widget.notification != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'From: ${widget.notification!.sender}',
+                style:
+                    const TextStyle(color: AppColors.labelGray, fontSize: 13),
+              ),
+            ],
             const SizedBox(height: 20),
 
             // Type Selector
