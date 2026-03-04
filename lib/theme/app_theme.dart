@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   static const Color primaryBlue = Color(0xFFF0B90B); // Golden accent
@@ -44,10 +43,11 @@ class AppTheme {
       brightness: Brightness.dark,
       primaryColor: AppColors.primaryBlue,
       scaffoldBackgroundColor: const Color(0xFF1F1F25),
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
-        bodyColor: AppColors.textWhite,
-        displayColor: AppColors.textWhite,
-      ),
+      textTheme: ThemeData.dark().textTheme.apply(
+            bodyColor: AppColors.textWhite,
+            displayColor: AppColors.textWhite,
+            fontFamily: 'Inter',
+          ),
       cardTheme: CardThemeData(
         color: AppColors.surfaceDark,
         elevation: 0,

@@ -125,7 +125,8 @@ class NotificationsScreen extends StatelessWidget {
                                   label: 'Insert',
                                 ),
                                 SlidableAction(
-                                  onPressed: (context) => _informDeveloper(),
+                                  onPressed: (context) =>
+                                      _informDeveloper(notif.body),
                                   backgroundColor: AppColors.surfaceLight,
                                   foregroundColor: const Color(0xFF229ED9),
                                   icon: Icons.telegram,
@@ -339,10 +340,19 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _informDeveloper() async {
-    final Uri url = Uri.parse('https://t.me/your_telegram_handle');
+  Future<void> _informDeveloper(String rawMessage) async {
+    final String template =
+        'HI Caleb developer of Shibre the app is not reding this messgae ```$rawMessage```';
+    final String encodedMsg = Uri.encodeComponent(template);
+    // Using t.me/Zkaleb specifically as requested.
+    // Note: Some platforms/apps may not pre-fill text for direct user links,
+    // but this is the standard way to direct link to a user.
+    final Uri url = Uri.parse('https://t.me/Zkaleb?text=$encodedMsg');
+
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      // Could show a snackbar failing to launch
+      // Fallback to profile only if sharing fails
+      final Uri profileUrl = Uri.parse('https://t.me/Zkaleb');
+      await launchUrl(profileUrl, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -393,7 +403,7 @@ class NotificationsScreen extends StatelessWidget {
               color: const Color(0xFF229ED9),
               onTap: () {
                 Navigator.pop(ctx);
-                _informDeveloper();
+                _informDeveloper(notif.body);
               },
             ),
             _buildModalItem(

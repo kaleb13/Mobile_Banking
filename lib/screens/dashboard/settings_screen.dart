@@ -7,6 +7,8 @@ import '../../providers/finance_provider.dart';
 import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
 import 'reason_management_screen.dart';
+import 'about_app_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -231,9 +233,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context,
                         icon: Icons.info_outline_rounded,
                         iconColor: const Color(0xFFFFCC80),
-                        label: 'App Version',
-                        subtitle: '1.0.0',
-                        onTap: () {},
+                        label: 'About App',
+                        subtitle: 'Developer, contributors, and app info',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const AboutAppScreen()),
+                        ),
                         showDivider: true,
                       ),
                       _settingsTile(
@@ -242,7 +248,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         iconColor: const Color(0xFFA5D6A7),
                         label: 'Privacy Policy',
                         subtitle: 'How we handle your data',
-                        onTap: () {},
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const PrivacyPolicyScreen()),
+                        ),
                         showDivider: false,
                       ),
                     ]),

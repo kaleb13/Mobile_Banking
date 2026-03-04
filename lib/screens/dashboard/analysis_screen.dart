@@ -918,17 +918,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (nameUp == 'CBE') {
       logo = ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Image.asset('assets/images/CBE.png',
+          child: Image.asset('assets/images/CBE logo 1.png',
               width: 38, height: 38, fit: BoxFit.cover));
     } else if (nameUp == 'TELEBIRR') {
       logo = ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Image.asset('assets/images/Telebirr.png',
+          child: Image.asset('assets/images/Telebirr Logo.png',
               width: 38, height: 38, fit: BoxFit.cover));
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       logo = ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Image.asset('assets/images/CBEBirr.png',
+          child: Image.asset('assets/images/CBEBirr Logo.png',
               width: 38, height: 38, fit: BoxFit.cover));
     } else {
       logo = Container(

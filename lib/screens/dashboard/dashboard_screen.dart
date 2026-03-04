@@ -93,6 +93,96 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  void _showPNLInfo(BuildContext context, bool isToday) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1F1F25),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black54,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  isToday ? "Today's PNL" : "Overall PNL",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  isToday
+                      ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\n\nIt represents your net increase or decrease in wealth today."
+                      : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\n\nThis shows your cumulative financial progress since using the app.",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF0B90B),
+                    foregroundColor: const Color(0xFF1F1F25),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    "OK",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   IconData _getReasonIcon(String? reason) {
     if (reason == null) {
       return Icons.help_outline;
@@ -369,13 +459,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Colors.white, size: 22),
                 if (provider.unreadNotificationCount > 0)
                   Positioned(
-                    right: -2,
-                    top: -2,
+                    right: -6,
+                    top: -6,
                     child: Container(
-                      width: 10,
-                      height: 10,
+                      padding: const EdgeInsets.all(2),
                       decoration: const BoxDecoration(
-                          color: Colors.red, shape: BoxShape.circle),
+                        color: AppColors.primaryBlue,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Center(
+                        child: Text(
+                          provider.unreadNotificationCount > 9
+                              ? '9+'
+                              : provider.unreadNotificationCount.toString(),
+                          style: const TextStyle(
+                            color: Color(0xFF1F1F25),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -416,6 +523,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '\$',
+                        style: TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Text(
                       fullyFormatted,
                       style: const TextStyle(
@@ -437,91 +556,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _isOverallChartVisible = !_isOverallChartVisible;
-                  });
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  children: [
-                    Text(
-                      _isShowingTodayOnly ? 'TODAY PNL  ' : 'OVERALL PNL  ',
-                      style: const TextStyle(
-                        color: AppColors.labelGray,
-                        fontSize: 9, // Reduced
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => _showPNLInfo(context, _isShowingTodayOnly),
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
+                          style: const TextStyle(
+                            color: AppColors.labelGray,
+                            fontSize: 9, // Reduced
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        CustomPaint(
+                          size: Size(_isShowingTodayOnly ? 50 : 60, 1),
+                          painter: DashedUnderlinePainter(
+                              color: AppColors.labelGray.withOpacity(0.4)),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '${(_isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall) >= 0 ? '+' : '-'}${NumberFormat('#,##0').format((_isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall).abs())}',
-                      style: TextStyle(
-                        color: (_isShowingTodayOnly
-                                    ? provider.netForSelectedDate
-                                    : provider.netOverall) >=
-                                0
-                            ? AppColors.mintGreen
-                            : AppColors.alertRed,
-                        fontSize: 10, // Reduced
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isOverallChartVisible = !_isOverallChartVisible;
+                      });
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      children: [
+                        Text(
+                          '${(_isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall) >= 0 ? '+' : '-'}${NumberFormat('#,##0').format((_isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall).abs())}',
+                          style: TextStyle(
+                            color: (_isShowingTodayOnly
+                                        ? provider.netForSelectedDate
+                                        : provider.netOverall) >=
+                                    0
+                                ? AppColors.mintGreen
+                                : AppColors.alertRed,
+                            fontSize: 10, // Reduced
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4), // Reduced from 8
+                        Text(
+                          '(',
+                          style: TextStyle(
+                            color: (_isShowingTodayOnly
+                                        ? provider.incomePercentageChange
+                                        : provider.percentageChangeOverall) >=
+                                    0
+                                ? AppColors.mintGreen
+                                : AppColors.alertRed,
+                            fontSize: 10, // Reduced
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          (_isShowingTodayOnly
+                                      ? provider.incomePercentageChange
+                                      : provider.percentageChangeOverall) >=
+                                  0
+                              ? Icons.trending_up
+                              : Icons.trending_down,
+                          color: (_isShowingTodayOnly
+                                      ? provider.incomePercentageChange
+                                      : provider.percentageChangeOverall) >=
+                                  0
+                              ? AppColors.mintGreen
+                              : AppColors.alertRed,
+                          size: 12, // Reduced from 14
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${(_isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall).abs().toStringAsFixed(2)}%)',
+                          style: TextStyle(
+                            color: (_isShowingTodayOnly
+                                        ? provider.incomePercentageChange
+                                        : provider.percentageChangeOverall) >=
+                                    0
+                                ? AppColors.mintGreen
+                                : AppColors.alertRed,
+                            fontSize: 10, // Reduced
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          _isOverallChartVisible
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4), // Reduced from 8
-                    Text(
-                      '(',
-                      style: TextStyle(
-                        color: (_isShowingTodayOnly
-                                    ? provider.incomePercentageChange
-                                    : provider.percentageChangeOverall) >=
-                                0
-                            ? AppColors.mintGreen
-                            : AppColors.alertRed,
-                        fontSize: 10, // Reduced
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Icon(
-                      (_isShowingTodayOnly
-                                  ? provider.incomePercentageChange
-                                  : provider.percentageChangeOverall) >=
-                              0
-                          ? Icons.trending_up
-                          : Icons.trending_down,
-                      color: (_isShowingTodayOnly
-                                  ? provider.incomePercentageChange
-                                  : provider.percentageChangeOverall) >=
-                              0
-                          ? AppColors.mintGreen
-                          : AppColors.alertRed,
-                      size: 12, // Reduced from 14
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      '${(_isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall).abs().toStringAsFixed(2)}%)',
-                      style: TextStyle(
-                        color: (_isShowingTodayOnly
-                                    ? provider.incomePercentageChange
-                                    : provider.percentageChangeOverall) >=
-                                0
-                            ? AppColors.mintGreen
-                            : AppColors.alertRed,
-                        fontSize: 10, // Reduced
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _isOverallChartVisible
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      color: Colors.white54,
-                      size: 16,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1054,9 +1193,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ),
                                     Text(
                                       provider.isBalanceVisible
-                                          ? NumberFormat('#,##0.00')
-                                              .format(senderBalance)
-                                          : '****.**',
+                                          ? '\$${NumberFormat('#,##0.00').format(senderBalance)}'
+                                          : '\$****.**',
                                       style: TextStyle(
                                           color: textColor,
                                           fontSize: 10,
@@ -1500,7 +1638,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
+          color: Colors.white.withOpacity(0.05), shape: BoxShape.circle),
       child: Center(child: img),
     );
   }
@@ -1522,4 +1660,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     return Icon(Icons.account_balance, color: Colors.white, size: size);
   }
+}
+
+class DashedUnderlinePainter extends CustomPainter {
+  final Color color;
+  DashedUnderlinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    const dashWidth = 1.5;
+    const dashSpace = 1.0;
+    double startX = 0;
+    while (startX < size.width) {
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

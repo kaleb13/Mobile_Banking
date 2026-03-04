@@ -683,11 +683,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final nameUp = tx.name.toUpperCase();
     String? assetPath;
     if (nameUp == 'CBE') {
-      assetPath = 'assets/images/CBE.png';
+      assetPath = 'assets/images/CBE logo 1.png';
     } else if (nameUp == 'TELEBIRR')
-      assetPath = 'assets/images/Telebirr.png';
+      assetPath = 'assets/images/Telebirr Logo.png';
     else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR')
-      assetPath = 'assets/images/CBEBirr.png';
+      assetPath = 'assets/images/CBEBirr Logo.png';
 
     if (assetPath != null) {
       return ClipRRect(

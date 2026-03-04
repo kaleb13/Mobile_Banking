@@ -51,10 +51,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   DateTime? _customMonthAnchorDate;
 
   bool _hasPermission = false;
+  bool _isOnboardingComplete;
   bool _isBalanceVisible = true;
   bool _isShowingAll = false;
   bool _isMenuOpen = false;
   int _currentScreenIndex = 0;
+
+  /// [initialOnboardingComplete] should be read from SharedPreferences in
+  /// main() BEFORE runApp() so the first frame is always correct.
+  FinanceProvider({bool initialOnboardingComplete = false})
+      : _isOnboardingComplete = initialOnboardingComplete;
 
   List<AppSender> get senders => _senders;
 
@@ -128,6 +134,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   bool get isLoading => _isLoading;
   bool get hasPermission => _hasPermission;
+  bool get isOnboardingComplete => _isOnboardingComplete;
   bool get isBalanceVisible => _isBalanceVisible;
   bool get isShowingAll => _isShowingAll;
   bool get isMenuOpen => _isMenuOpen;
@@ -333,6 +340,21 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
+  Future<bool> requestStoragePermission() async {
+    final status = await Permission.storage.request();
+    return status.isGranted;
+  }
+
+  Future<void> completeOnboarding() async {
+    _isOnboardingComplete = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_onboarding_complete_v1', true);
+    // Now run init() to load all financial data.
+    // Since _isOnboardingComplete is now true, init() will show the
+    // loading spinner correctly and then route to MainShell.
+    await init();
+  }
+
   void setScreenIndex(int index) {
     if (_currentScreenIndex == index) return;
     _currentScreenIndex = index;
@@ -371,8 +393,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   Future<void> init() async {
     WidgetsBinding.instance.addObserver(this);
 
-    _isLoading = true;
-    notifyListeners();
+    // Load onboarding state first.
+    final prefs = await SharedPreferences.getInstance();
+    _isOnboardingComplete = prefs.getBool('is_onboarding_complete_v1') ?? false;
+
+    if (!_isOnboardingComplete) {
+      _isLoading = false;
+      notifyListeners();
+      return; // Stay on OnboardingScreen; nothing to load yet.
+    }
 
     _hasPermission = await Permission.sms.status.isGranted;
 
@@ -411,7 +440,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await _applyRecurringCashExpenses();
 
     // 2. Discover last fetch time & Install state
-    final prefs = await SharedPreferences.getInstance();
     bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
 
     final anchorIso = prefs.getString('custom_month_anchor_date');
@@ -486,10 +514,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         }
       }
       await prefs.setBool('is_first_boot_v5', false);
-    } else {
-      // Not first boot: gap-fill scan from anchor to now
-      await refreshData();
     }
+    // On subsequent opens we do NOT rescan SMS — the background service
+    // keeps the database up to date silently. We just load from DB below.
 
     // Refresh after all updates inserted
     _transactions = await DatabaseService.instance.getTransactions();
@@ -1207,6 +1234,23 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final idx = _loanRecords.indexWhere((l) => l.id == loan.id);
     if (idx != -1) _loanRecords[idx] = loan;
     notifyListeners();
+  }
+
+  Future<void> updateLoanDueDate(int loanId, DateTime newDueDate) async {
+    final idx = _loanRecords.indexWhere((l) => l.id == loanId);
+    if (idx != -1) {
+      final oldLoan = _loanRecords[idx];
+      // Recalculate status based on new due date
+      String newStatus = oldLoan.status;
+      if (oldLoan.status != 'paid') {
+        newStatus = DateTime.now().isAfter(newDueDate) ? 'overdue' : 'active';
+      }
+
+      final updated = oldLoan.copyWith(dueDate: newDueDate, status: newStatus);
+      await DatabaseService.instance.updateLoanRecord(updated);
+      _loanRecords[idx] = updated;
+      notifyListeners();
+    }
   }
 
   /// Add a manual repayment against a loan.

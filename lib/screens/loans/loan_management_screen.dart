@@ -815,7 +815,55 @@ class LoanDetailScreen extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          if (!current.isPaid)
+          if (!current.isPaid) ...[
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: current.dueDate.isBefore(DateTime.now())
+                      ? DateTime.now()
+                      : current.dueDate,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.dark(
+                        primary: AppColors.primaryBlue,
+                        surface: Color(0xFF1C1F24),
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) {
+                  await provider.updateLoanDueDate(current.id!, picked);
+                }
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.event_repeat_rounded,
+                        color: Colors.white70, size: 14),
+                    SizedBox(width: 4),
+                    Text('Extend',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: GestureDetector(
@@ -852,6 +900,7 @@ class LoanDetailScreen extends StatelessWidget {
                 ),
               ),
             ),
+          ],
         ],
       ),
       body: ListView(

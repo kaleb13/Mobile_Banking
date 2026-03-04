@@ -15,7 +15,6 @@ dependencies:
   path_provider: any
   provider: any
   intl: any
-  google_fonts: any
   shared_preferences: any
   permission_handler: any # For SMS permissions
   path: any
@@ -47,3 +46,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/fonts/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
