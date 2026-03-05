@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/expense_definition.dart';
 import '../../providers/finance_provider.dart';
 import '../shell/custom_bottom_nav_bar.dart';
+import '../../theme/app_theme.dart';
 
 class AddEditExpenseDefinitionScreen extends StatefulWidget {
   final ExpenseDefinition? expenseDefinition;
@@ -197,28 +198,34 @@ class _AddEditExpenseDefinitionScreenState
               const SizedBox(height: 32),
               const Divider(color: Color(0x33FFFFFF)),
               const SizedBox(height: 16),
-              Theme(
-                data: ThemeData(
-                  unselectedWidgetColor: const Color(0xFF9CA3AF),
-                ),
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Recurring Expense',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16)),
-                  subtitle: const Text(
-                      'Automatically deduct this expense on a schedule',
-                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12)),
-                  value: _isRecurring,
-                  activeThumbColor: const Color(0xFFF0B90B), // primaryBlue
-                  onChanged: (val) {
-                    setState(() {
-                      _isRecurring = val;
-                    });
-                  },
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Recurring Expense',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16)),
+                        SizedBox(height: 4),
+                        Text('Automatically deduct this expense on a schedule',
+                            style: TextStyle(
+                                color: Color(0xFF9CA3AF), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  AppSwitch(
+                    value: _isRecurring,
+                    onChanged: (val) {
+                      setState(() {
+                        _isRecurring = val;
+                      });
+                    },
+                  ),
+                ],
               ),
               if (_isRecurring) ...[
                 const SizedBox(height: 24),
@@ -237,15 +244,17 @@ class _AddEditExpenseDefinitionScreenState
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _recurringType,
-                  dropdownColor: const Color(0xFF2A2A34),
+                  dropdownColor: const Color(0xFF1C1F24),
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color(0xFF1C1F24),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.1))),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide:
+                            const BorderSide(color: AppColors.primaryBlue)),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                   ),
@@ -309,23 +318,21 @@ class _AddEditExpenseDefinitionScreenState
         hintText: hintText,
         labelStyle: const TextStyle(color: Color(0xFF9CA3AF)),
         hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-        filled: true,
-        fillColor: const Color(0xFF1C1F24),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF0B90B), width: 1),
+          borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE11D48), width: 1),
+          borderSide: const BorderSide(color: AppColors.alertRed, width: 1),
         ),
       ),
       validator: validator,

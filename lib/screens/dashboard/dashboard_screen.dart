@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_banking_app/providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import 'dart:math';
@@ -455,8 +456,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.notifications_none_outlined,
-                    color: Colors.white, size: 22),
+                SvgPicture.asset('assets/images/Notification.svg',
+                    colorFilter:
+                        const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                    width: 20,
+                    height: 20),
                 if (provider.unreadNotificationCount > 0)
                   Positioned(
                     right: -6,
@@ -545,15 +549,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ],
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 3),
-                      child: Text(
-                        '.$decimals',
-                        style: const TextStyle(
-                          color: AppColors.labelGray,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w400,
-                        ),
+                    Text(
+                      '.$decimals',
+                      style: const TextStyle(
+                        color: AppColors.labelGray,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w400,
+                        height: 1.0,
                       ),
                     ),
                   ],
@@ -711,7 +713,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     List<FlSpot> spots = [];
     int daysLimit = 30;
     if (_chartFilter == '1D') {
-      daysLimit = 1;
+      daysLimit = 2; // need at least 2 points to draw a line
     } else if (_chartFilter == '7D') {
       daysLimit = 7;
     } else if (_chartFilter == '30D') {
@@ -723,34 +725,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     DateTime now = DateTime.now();
-    double currentBal = provider.totalBalance;
 
-    // Group transactions by date string
-    Map<String, double> netFlowPerDay = {};
-    for (var tx in provider.transactions) {
-      String key = '${tx.date.year}-${tx.date.month}-${tx.date.day}';
-      netFlowPerDay.putIfAbsent(key, () => 0.0);
-      netFlowPerDay[key] =
-          netFlowPerDay[key]! + (tx.type == 'income' ? tx.amount : -tx.amount);
+    // ── Direct totalBalance approach (same as bank detail page chart) ───────
+    // Instead of reconstructing balances from net flows (fragile, breaks with
+    // cash wallet additions), we use the ACTUAL totalBalance that each bank
+    // SMS reports. For each day, we track the latest known balance per bank,
+    // sum them, and plot that sum. This is always accurate because banks
+    // report the real balance after every transaction.
+
+    // Clip daysLimit to actual data range so the chart fills its width.
+    if (provider.transactions.isNotEmpty) {
+      final firstTxDate = provider.transactions
+          .map((t) => t.date)
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+      final daysSinceFirst = now.difference(firstTxDate).inDays + 1;
+      daysLimit = daysSinceFirst.clamp(2, daysLimit);
     }
-    for (var ctx in provider.cashTransactions) {
-      String key = '${ctx.date.year}-${ctx.date.month}-${ctx.date.day}';
-      netFlowPerDay.putIfAbsent(key, () => 0.0);
-      netFlowPerDay[key] = netFlowPerDay[key]! +
-          (ctx.type == 'addition' ? ctx.amount : -ctx.amount);
+
+    // Sort all transactions oldest-first
+    final sortedTxs = List.from(provider.transactions)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    // Walk day by day. For each day, carry forward each bank's last known
+    // balance, overriding when we hit a transaction for that bank on that day.
+    final DateTime chartStart = now.subtract(Duration(days: daysLimit - 1));
+    final Map<String, double> lastKnownBalance = {};
+
+    // Pre-seed with balances from transactions BEFORE the chart window
+    for (final tx in sortedTxs) {
+      if (tx.date.isBefore(chartStart) && tx.totalBalance > 0) {
+        lastKnownBalance[tx.name] = tx.totalBalance;
+      }
     }
 
-    double runningBal = currentBal;
+    // Build a list of transactions grouped by their day key for fast lookup
+    final Map<String, List<dynamic>> txsByDay = {};
+    for (final tx in sortedTxs) {
+      final key = '${tx.date.year}-${tx.date.month}-${tx.date.day}';
+      txsByDay.putIfAbsent(key, () => []);
+      txsByDay[key]!.add(tx);
+    }
 
-    // Process backwards
     for (int i = 0; i < daysLimit; i++) {
-      DateTime d = now.subtract(Duration(days: i));
-      spots.add(FlSpot((daysLimit - i - 1).toDouble(), runningBal));
-      String key = '${d.year}-${d.month}-${d.day}';
-      runningBal -= (netFlowPerDay[key] ?? 0.0);
-    }
+      final d = chartStart.add(Duration(days: i));
+      final key = '${d.year}-${d.month}-${d.day}';
 
-    spots = spots.reversed.toList();
+      // Update balances with any transactions on this day
+      final dayTxs = txsByDay[key];
+      if (dayTxs != null) {
+        for (final tx in dayTxs) {
+          if (tx.totalBalance > 0) {
+            lastKnownBalance[tx.name] = tx.totalBalance;
+          }
+        }
+      }
+
+      // Sum all banks' latest known balances
+      final totalBal = lastKnownBalance.values.fold(0.0, (sum, v) => sum + v);
+      spots.add(FlSpot(i.toDouble(), totalBal));
+    }
 
     // ── Gradient configuration ──────────────────────────────────────────────
     // LINE  : always left→right so stops map to horizontal chart positions.

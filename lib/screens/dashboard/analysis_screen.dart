@@ -1131,38 +1131,66 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   Widget _bankLogo(String name) {
     final nameUp = name.toUpperCase();
-    Widget logo;
+    Widget logoWidget;
+    List<Color> cardGradient;
+
     if (nameUp == 'CBE') {
-      logo = ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.asset('assets/images/CBE logo 1.png',
-              width: 38, height: 38, fit: BoxFit.cover));
+      logoWidget = Image.asset('assets/images/CBE logo 1.png',
+          width: 22, height: 22, fit: BoxFit.contain);
+      cardGradient = [
+        const Color(0xFF3D1B0F),
+        const Color(0xFF6E482F),
+        const Color(0xFF3D1B0F)
+      ];
     } else if (nameUp == 'TELEBIRR') {
-      logo = ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.asset('assets/images/Telebirr Logo.png',
-              width: 38, height: 38, fit: BoxFit.cover));
+      logoWidget = Image.asset('assets/images/Telebirr Logo.png',
+          width: 22, height: 22, fit: BoxFit.contain);
+      cardGradient = [
+        const Color(0xFF0BA751),
+        const Color(0xFF88BF47),
+        const Color(0xFF0BA751)
+      ];
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      logo = ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.asset('assets/images/CBEBirr Logo.png',
-              width: 38, height: 38, fit: BoxFit.cover));
+      logoWidget = Image.asset('assets/images/CBEBirr Logo.png',
+          width: 22, height: 22, fit: BoxFit.contain);
+      cardGradient = [
+        const Color(0xFFAFAFB3),
+        const Color(0xFFFFFFFF),
+        const Color(0xFFAFAFB3)
+      ];
     } else {
-      logo = Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-              color: const Color(0xFFF0B90B).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10)),
-          child: Center(
-            child: Text(name.substring(0, min(2, name.length)).toUpperCase(),
-                style: const TextStyle(
-                    color: Color(0xFFF0B90B),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
-          ));
+      logoWidget = Text(
+        name.substring(0, min(1, name.length)).toUpperCase(),
+        style: const TextStyle(
+            color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+      );
+      cardGradient = [
+        const Color(0xFF1E1E26),
+        const Color(0xFF3E3E4A),
+        const Color(0xFF1E1E26)
+      ];
     }
-    return logo;
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cardGradient.first, width: 1.5),
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: SweepGradient(
+            center: Alignment.center,
+            transform: const GradientRotation(pi / 4),
+            colors: cardGradient,
+          ),
+        ),
+        child: Center(child: logoWidget),
+      ),
+    );
   }
 
   // ─── Reason Breakdown ────────────────────────────────────────────────────────

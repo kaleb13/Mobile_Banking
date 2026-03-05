@@ -214,17 +214,12 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                         child: Transform.scale(
                                           scale: 0.75,
                                           alignment: Alignment.centerRight,
-                                          child: Switch(
+                                          child: AppSwitch(
                                             value: def.isActive,
                                             onChanged: (val) {
                                               provider.updateExpenseDefinition(
                                                   def.copyWith(isActive: val));
                                             },
-                                            activeThumbColor:
-                                                AppColors.mintGreen,
-                                            activeTrackColor: AppColors
-                                                .mintGreen
-                                                .withValues(alpha: 0.3),
                                           ),
                                         ),
                                       ),

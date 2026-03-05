@@ -116,25 +116,102 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
             SafeArea(
               bottom: false,
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildBankCard(currentBalance, monthChange, monthPercent),
-                    const SizedBox(height: 24),
-                    _buildChartSection(allTxForSender),
-                    _buildChartFilters(),
-                    const SizedBox(height: 32),
-                    _buildActivityFilterSection(),
-                    _buildTransactionList(filteredTransactions),
-                    // Extra space so last item clears the bottom bar
-                    const SizedBox(height: 110),
-                  ],
-                ),
+              child: Column(
+                children: [
+                  _buildSearchHeader(context),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        children: [
+                          _buildBankCard(
+                              currentBalance, monthChange, monthPercent),
+                          const SizedBox(height: 24),
+                          _buildChartSection(allTxForSender),
+                          _buildChartFilters(),
+                          const SizedBox(height: 32),
+                          _buildActivityFilterSection(),
+                          _buildTransactionList(filteredTransactions),
+                          const SizedBox(height: 110), // clears the bottom bar
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          // Search Input
+          Expanded(
+            child: Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A34),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 16),
+                  const Icon(Icons.search_rounded,
+                      color: AppColors.labelGray, size: 16),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        hintText: 'Search in ${widget.sender.senderName}...',
+                        hintStyle: const TextStyle(
+                          color: AppColors.labelGray,
+                          fontSize: 12,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 12),
+                        suffixIconConstraints:
+                            const BoxConstraints(minHeight: 24, minWidth: 24),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _searchQuery = '';
+                                    _searchController.clear();
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 12.0),
+                                  child: Icon(Icons.cancel_rounded,
+                                      color:
+                                          Colors.white.withValues(alpha: 0.3),
+                                      size: 16),
+                                ),
+                              )
+                            : null,
+                      ),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -700,27 +777,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (v) => setState(() => _searchQuery = v),
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: const InputDecoration(
-                hintText: 'Search transactions...',
-                hintStyle: TextStyle(color: AppColors.labelGray),
-                icon: Icon(Icons.search, color: AppColors.labelGray, size: 20),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
           // Type Filter Chips
           Row(
             children: ['All', 'Income', 'Expense'].map((t) {

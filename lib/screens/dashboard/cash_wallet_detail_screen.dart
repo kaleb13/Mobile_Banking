@@ -8,6 +8,7 @@ import '../../models/cash_transaction.dart';
 import '../../models/expense_definition.dart';
 import '../../theme/app_theme.dart';
 import '../settings/expense_definitions_screen.dart';
+import 'transaction_detail_screen.dart';
 
 class CashWalletDetailScreen extends StatefulWidget {
   const CashWalletDetailScreen({super.key});
@@ -96,9 +97,9 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _actionButton(
                             context,
@@ -108,18 +109,29 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               _showAddCashModal(context, provider);
                             },
                           ),
+                          const SizedBox(width: 24),
+                          _actionButton(
+                            context,
+                            icon: Icons.money_off,
+                            label: 'One-Time',
+                            onTap: () {
+                              _showOneTimeExpenseModal(context, provider);
+                            },
+                          ),
+                          const SizedBox(width: 24),
                           _actionButton(
                             context,
                             icon: Icons.receipt_long,
-                            label: 'Deduct Expense',
+                            label: 'Template',
                             onTap: () {
                               _showDeductExpenseModal(context, provider);
                             },
                           ),
+                          const SizedBox(width: 24),
                           _actionButton(
                             context,
                             icon: Icons.settings,
-                            label: 'Templates',
+                            label: 'Manage',
                             onTap: () {
                               Navigator.push(
                                   context,
@@ -173,12 +185,14 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           tx.resolvedReason?.toLowerCase() == 'cash');
       if (isCash) {
         allTxs.add({
+          'appTransaction': tx,
           'date': tx.date,
           'title': 'Bank SMS Injection',
           'subtitle': tx.name, // Bank name
           'amount': tx.amount,
           'isPositive':
               true, // Cash withdrawn from bank -> added to cash wallet
+          'isCashTx': false,
         });
       }
     }
@@ -214,6 +228,17 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           final isPositive = tx['isPositive'] as bool;
 
           return InkWell(
+            onTap: tx['isCashTx'] == false && tx['appTransaction'] != null
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TransactionDetailScreen(
+                            transaction: tx['appTransaction']),
+                      ),
+                    );
+                  }
+                : null,
             onLongPress: tx['isCashTx'] == true
                 ? () {
                     _showOverrideAmountDialog(
@@ -378,6 +403,105 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     );
   }
 
+  void _showOneTimeExpenseModal(
+      BuildContext context, FinanceProvider provider) {
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0F1417),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 24,
+            left: 24,
+            right: 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Add One-Time Expense',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Amount (ETB)',
+                  labelStyle: const TextStyle(color: AppColors.textGray),
+                  enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1))),
+                  focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primaryBlue)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: noteController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Expense Name / Note',
+                  labelStyle: const TextStyle(color: AppColors.textGray),
+                  enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1))),
+                  focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primaryBlue)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.alertRed,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    final amountstr = amountController.text.trim();
+                    if (amountstr.isNotEmpty &&
+                        double.tryParse(amountstr) != null) {
+                      final amt = double.parse(amountstr);
+                      provider.addCashTransaction(CashTransaction(
+                        type: 'expense',
+                        amount: amt,
+                        date: DateTime.now(),
+                        description: noteController.text.trim().isEmpty
+                            ? 'One-Time Expense'
+                            : noteController.text.trim(),
+                      ));
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('Deduct Expense',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showDeductExpenseModal(BuildContext context, FinanceProvider provider) {
     if (provider.expenseDefinitions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -509,17 +633,17 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
       child: Column(
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.white, size: 24),
+            child: Icon(icon, color: Colors.white, size: 20),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(label,
-              style: const TextStyle(color: AppColors.textWhite, fontSize: 12)),
+              style: const TextStyle(color: AppColors.textWhite, fontSize: 11)),
         ],
       ),
     );

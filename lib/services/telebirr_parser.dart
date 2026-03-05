@@ -63,6 +63,17 @@ class TelebirrParser {
       if (toMatch != null) {
         senderOrRecipient = toMatch.group(1)?.trim() ?? '';
       }
+    } else if (lowerMsg.contains('debited')) {
+      type = 'expense';
+      amount = extractAmount(RegExp(r'debited\s+with\s+ETB\s+([0-9,.]+)'));
+
+      // Extract at: "at telebirr Agent 248168. Your transaction number"
+      final atMatch = RegExp(r'at\s+(.*?)\.\s+Your\s+transaction\s+number',
+              caseSensitive: false)
+          .firstMatch(message);
+      if (atMatch != null) {
+        senderOrRecipient = atMatch.group(1)?.trim() ?? '';
+      }
     } else if (lowerMsg.contains('paid')) {
       type = 'expense';
       amount = extractAmount(RegExp(r'paid ETB ([0-9,.]+)'));

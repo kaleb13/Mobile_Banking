@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../theme/app_theme.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
@@ -127,7 +128,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
 
             _buildSection(
-              icon: Icons.notifications_none_outlined,
+              customIcon: SvgPicture.asset(
+                'assets/images/Notification.svg',
+                width: 16,
+                height: 16,
+                colorFilter:
+                    const ColorFilter.mode(Color(0xFFFF8A65), BlendMode.srcIn),
+              ),
               iconColor: const Color(0xFFFF8A65),
               title: 'Notifications',
               body:
@@ -186,7 +193,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
   }
 
   Widget _buildSection({
-    required IconData icon,
+    IconData? icon,
+    Widget? customIcon,
     required Color iconColor,
     required String title,
     required String body,
@@ -211,7 +219,10 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     color: iconColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: iconColor, size: 16),
+                  child: customIcon ??
+                      (icon != null
+                          ? Icon(icon, color: iconColor, size: 16)
+                          : const SizedBox()),
                 ),
                 const SizedBox(width: 12),
                 Text(

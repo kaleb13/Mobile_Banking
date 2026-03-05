@@ -153,19 +153,19 @@ class CustomBottomNavBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(28),
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: homeColor,
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 1,
+                      child: GestureDetector(
+                        onTap: () => onTap?.call(0),
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: homeColor,
+                            borderRadius: BorderRadius.circular(28),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              width: 1,
+                            ),
                           ),
-                        ),
-                        alignment: Alignment.center,
-                        child: GestureDetector(
-                          onTap: () => onTap?.call(0),
-                          behavior: HitTestBehavior.opaque,
+                          alignment: Alignment.center,
                           child: Image.asset(
                             'assets/images/Shibre Icon.png',
                             width: 20,
@@ -369,30 +369,33 @@ class CustomBottomNavBar extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              iconData,
-              color: isActive ? Colors.white : AppColors.labelGray,
-              size: 20,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          color: Colors.transparent, // Ensures the entire box is clickable
+          height: 56, // Stretches fully top-to-bottom inside the row
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                iconData,
                 color: isActive ? Colors.white : AppColors.labelGray,
-                fontSize: 9,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                size: 20,
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.white : AppColors.labelGray,
+                  fontSize: 9,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

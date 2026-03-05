@@ -201,6 +201,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         unselectedLabelStyle:
             const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
         tabs: const [
           Tab(height: 38, text: 'Smart Refresh'),
           Tab(height: 38, text: 'Full Reset'),

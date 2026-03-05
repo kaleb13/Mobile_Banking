@@ -261,6 +261,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           fontSize: 13,
           fontWeight: FontWeight.w400,
         ),
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
         tabs: const [
           Tab(height: 38, text: 'Backup'),
           Tab(height: 38, text: 'Restore'),

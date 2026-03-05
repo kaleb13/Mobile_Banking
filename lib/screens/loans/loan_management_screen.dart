@@ -124,6 +124,9 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                       fontSize: 13, fontWeight: FontWeight.w600),
                   unselectedLabelStyle: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w400),
+                  // Remove the default rectangular Material splash/ripple
+                  splashFactory: NoSplash.splashFactory,
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
                   tabs: _tabs.map((t) => Tab(height: 38, text: t)).toList(),
                 ),
               ),
@@ -365,15 +368,12 @@ class _LoanCard extends StatelessWidget {
       ),
       child: Center(
         child: asset != null
-            ? ClipOval(
-                child: Image.asset(
-                  asset,
-                  width: 28,
-                  height: 28,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) =>
-                      _fallbackAvatar(),
-                ),
+            ? Image.asset(
+                asset,
+                width: 26,
+                height: 26,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => _fallbackAvatar(),
               )
             : _fallbackAvatar(),
       ),
@@ -1082,6 +1082,85 @@ class LoanDetailScreen extends StatelessWidget {
               ),
             ),
           ],
+
+          // ── Linked Messages ────────────────────────────────────────────
+          // Collect the originating transaction + any repayment transactions
+          // that were auto-linked via SMS, then display their raw messages.
+          Builder(builder: (context) {
+            // 1. Originating transaction (the one that created this loan)
+            final originTx = current.linkedTransactionId != null
+                ? provider.transactions
+                    .where((t) => t.id == current.linkedTransactionId)
+                    .cast<dynamic>()
+                    .firstOrNull
+                : null;
+
+            // 2. Repayment transactions linked to each payment
+            final repaymentTxs = payments
+                .where((p) => p.linkedTransactionId != null)
+                .map((p) => (
+                      payment: p,
+                      tx: provider.transactions
+                          .where((t) => t.id == p.linkedTransactionId)
+                          .cast<dynamic>()
+                          .firstOrNull,
+                    ))
+                .where((pair) => pair.tx != null)
+                .toList();
+
+            if (originTx == null && repaymentTxs.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 28),
+                const Text(
+                  'LINKED MESSAGES',
+                  style: TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Originating loan SMS
+                if (originTx != null) ...[
+                  _LinkedMessageCard(
+                    label: current.isPaid
+                        ? '📄 Originating Transaction (Settled)'
+                        : '📄 Originating Transaction',
+                    sublabel:
+                        'Created this loan on ${DateFormat('MMM d, y').format(current.loanDate)}',
+                    rawMessage: originTx.rawMessage as String,
+                    accentColor: accentColor,
+                    isPrimary: true,
+                  ),
+                  if (repaymentTxs.isNotEmpty) const SizedBox(height: 10),
+                ],
+
+                // Repayment SMS messages
+                ...repaymentTxs.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final pair = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _LinkedMessageCard(
+                      label: '💸 Repayment #${idx + 1}',
+                      sublabel:
+                          '${fmt.format(pair.payment.amount)} ETB on ${DateFormat('MMM d, y').format(pair.payment.paymentDate)}',
+                      rawMessage: pair.tx.rawMessage as String,
+                      accentColor: const Color(0xFF3EB489),
+                      isPrimary: false,
+                    ),
+                  );
+                }),
+              ],
+            );
+          }),
         ],
       ),
     );
@@ -1105,6 +1184,121 @@ class _DetailStat extends StatelessWidget {
         Text(label,
             style: const TextStyle(color: AppColors.labelGray, fontSize: 10)),
       ],
+    );
+  }
+}
+
+// ── Linked Message Card ────────────────────────────────────────────────────
+class _LinkedMessageCard extends StatefulWidget {
+  final String label;
+  final String sublabel;
+  final String rawMessage;
+  final Color accentColor;
+  final bool isPrimary;
+
+  const _LinkedMessageCard({
+    required this.label,
+    required this.sublabel,
+    required this.rawMessage,
+    required this.accentColor,
+    required this.isPrimary,
+  });
+
+  @override
+  State<_LinkedMessageCard> createState() => _LinkedMessageCardState();
+}
+
+class _LinkedMessageCardState extends State<_LinkedMessageCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.accentColor.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: widget.accentColor.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          // ── Header row (always visible) ─────────────────────────────
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: widget.accentColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      widget.isPrimary
+                          ? Icons.receipt_long_outlined
+                          : Icons.payments_outlined,
+                      color: widget.accentColor,
+                      size: 14,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.label,
+                          style: TextStyle(
+                            color: widget.accentColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          widget.sublabel,
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: widget.accentColor,
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // ── Expandable raw message ───────────────────────────────────
+          if (_expanded)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D0E10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: SelectableText(
+                widget.rawMessage,
+                style: const TextStyle(
+                  color: AppColors.labelGray,
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  height: 1.6,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1227,10 +1421,13 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
   final _nameCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  final _trackedNameCtrl = TextEditingController();
   // Multi-select repayment sources — all banks selected by default
   late Set<String> _selectedBanks;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
   bool _saving = false;
+  // Tracking toggle — only relevant when prefilledTrackedSender is set
+  bool _trackingEnabled = true;
 
   @override
   void initState() {
@@ -1245,7 +1442,8 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
       _nameCtrl.text = widget.prefilledName!;
     }
     if (widget.prefilledTrackedSender != null) {
-      // Pre-fill from a single prefilled tracked sender
+      // Pre-fill the custom tracking field with the transaction's sender
+      _trackedNameCtrl.text = widget.prefilledTrackedSender!;
       _selectedBanks = {widget.prefilledTrackedSender!};
     }
     if (widget.prefilledType != null) {
@@ -1258,6 +1456,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
     _nameCtrl.dispose();
     _amountCtrl.dispose();
     _noteCtrl.dispose();
+    _trackedNameCtrl.dispose();
     super.dispose();
   }
 
@@ -1307,8 +1506,20 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
 
     setState(() => _saving = true);
 
-    // Build comma-separated tracked sender string from selected banks
-    final tracked = _selectedBanks.isEmpty ? null : _selectedBanks.join(',');
+    String? tracked;
+    if (widget.prefilledTrackedSender != null) {
+      // When opened from a transaction: use the editable custom name or null if
+      // the user turned tracking off.
+      if (_trackingEnabled) {
+        final custom = _trackedNameCtrl.text.trim();
+        tracked = custom.isNotEmpty ? custom : null;
+      } else {
+        tracked = null;
+      }
+    } else {
+      // Standard flow: build from multi-select bank chips
+      tracked = _selectedBanks.isEmpty ? null : _selectedBanks.join(',');
+    }
 
     await widget.provider.createLoan(
       loanType: _loanType,
@@ -1490,6 +1701,137 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                 const SizedBox(height: 12),
 
                 // ── Tracked sender / repayment source ──────────────────
+                // Case A: Opened from a transaction detail page — show compact
+                //         editable tracking section with an enable/disable toggle.
+                if (widget.prefilledTrackedSender != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C1F24),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Toggle row
+                        Row(
+                          children: [
+                            const Icon(Icons.track_changes_rounded,
+                                color: AppColors.primaryBlue, size: 18),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Track Repayment',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Auto-detect when this loan is repaid via SMS',
+                                    style: TextStyle(
+                                        color: AppColors.textGray,
+                                        fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            AppSwitch(
+                              value: _trackingEnabled,
+                              onChanged: (v) =>
+                                  setState(() => _trackingEnabled = v),
+                            ),
+                          ],
+                        ),
+                        // ── Tracked-name field (only when tracking is ON)
+                        if (_trackingEnabled) ...[
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Repayment sender name',
+                            style: TextStyle(
+                                color: AppColors.textGray,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _SheetField(
+                                  controller: _trackedNameCtrl,
+                                  hint: 'Name whose SMS triggers repayment…',
+                                  icon: Icons.person_search_outlined,
+                                ),
+                              ),
+                              if (widget.provider.allTrackedPersonNames
+                                  .isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) => _NamePickerSheet(
+                                      title: 'Pick Tracked Sender',
+                                      names:
+                                          widget.provider.allTrackedPersonNames,
+                                      onSelected: (name) => setState(
+                                          () => _trackedNameCtrl.text = name),
+                                    ),
+                                  ),
+                                  child: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryBlue
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: AppColors.primaryBlue
+                                              .withValues(alpha: 0.3)),
+                                    ),
+                                    child: const Icon(
+                                        Icons.people_outline_rounded,
+                                        color: AppColors.primaryBlue,
+                                        size: 20),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4, top: 4),
+                            child: Text(
+                              'Leave as-is to track the original sender, or enter a different name',
+                              style: TextStyle(
+                                  color: AppColors.labelGray
+                                      .withValues(alpha: 0.5),
+                                  fontSize: 10),
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Repayment will NOT be auto-detected. You can record it manually later.',
+                            style: TextStyle(
+                                color:
+                                    AppColors.labelGray.withValues(alpha: 0.55),
+                                fontSize: 10),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Case B: Standard flow (not from a transaction) — show bank chips
                 if (widget.prefilledTrackedSender == null) ...[
                   Row(
                     children: [
@@ -1626,10 +1968,12 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
+                                color: Color(0xFF1F1F25), strokeWidth: 2))
                         : const Text('Save Loan Record',
                             style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w600)),
+                                color: Color(0xFF1F1F25),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -2088,205 +2432,227 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
             ),
           ),
 
-          // Cards
+          // Approval cards — scrollable when many requests overflow
           if (_expanded)
-            ...widget.requests.map((req) {
-              final loan =
-                  widget.loans.where((l) => l.id == req.loanId).toList();
-              final loanName =
-                  loan.isNotEmpty ? loan.first.personName : req.trackedName;
-              final fmt = NumberFormat('#,##0.00');
-
-              return Container(
-                margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E26),
-                  borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.06)),
-                ),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.40,
+              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Sender info
-                    Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFFE67E22).withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.person_rounded,
-                              color: Color(0xFFE67E22), size: 18),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                req.senderFound,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                'Sent ${fmt.format(req.amount)} ETB',
-                                style: const TextStyle(
-                                    color: Color(0xFF3EB489),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
+                  mainAxisSize: MainAxisSize.min,
+                  children: widget.requests.map((req) {
+                    final loan =
+                        widget.loans.where((l) => l.id == req.loanId).toList();
+                    final loanName = loan.isNotEmpty
+                        ? loan.first.personName
+                        : req.trackedName;
+                    final fmt = NumberFormat('#,##0.00');
 
-                    // Match info
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 7),
+                    return Container(
+                      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.03),
-                        borderRadius: BorderRadius.circular(10),
+                        color: const Color(0xFF1E1E26),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                             color: Colors.white.withValues(alpha: 0.06)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.compare_arrows_rounded,
-                              color: AppColors.textGray, size: 14),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: RichText(
-                              text: TextSpan(
-                                style: const TextStyle(
-                                    fontSize: 11, color: AppColors.textGray),
-                                children: [
-                                  const TextSpan(text: 'Possible match for '),
-                                  TextSpan(
-                                    text: loanName,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  TextSpan(
-                                      text: ' (tracking: ${req.trackedName})'),
-                                ],
+                          // Sender info
+                          Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE67E22)
+                                      .withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.person_rounded,
+                                    color: Color(0xFFE67E22), size: 18),
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      req.senderFound,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      'Sent ${fmt.format(req.amount)} ETB',
+                                      style: const TextStyle(
+                                          color: Color(0xFF3EB489),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          // Match info
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.03),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.06)),
                             ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.compare_arrows_rounded,
+                                    color: AppColors.textGray, size: 14),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textGray),
+                                      children: [
+                                        const TextSpan(
+                                            text: 'Possible match for '),
+                                        TextSpan(
+                                          text: loanName,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                        TextSpan(
+                                            text:
+                                                ' (tracking: ${req.trackedName})'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Action buttons
+                          Row(
+                            children: [
+                              // Approve
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    await widget.provider
+                                        .approveLoanRepaymentRequest(req);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Payment approved & applied ✓'),
+                                          backgroundColor: Color(0xFF3EB489),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: Container(
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF3EB489)
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                          color: const Color(0xFF3EB489)
+                                              .withValues(alpha: 0.4)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.check_rounded,
+                                            color: Color(0xFF3EB489), size: 14),
+                                        SizedBox(width: 6),
+                                        Text('Approve',
+                                            style: TextStyle(
+                                                color: Color(0xFF3EB489),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Reject
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    await widget.provider
+                                        .rejectLoanRepaymentRequest(req);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content:
+                                              Text('Payment request rejected'),
+                                          backgroundColor: AppColors.labelGray,
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: Container(
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.alertRed
+                                          .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                          color: AppColors.alertRed
+                                              .withValues(alpha: 0.35)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.close_rounded,
+                                            color: AppColors.alertRed,
+                                            size: 14),
+                                        SizedBox(width: 6),
+                                        Text('Reject',
+                                            style: TextStyle(
+                                                color: AppColors.alertRed,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // Action buttons
-                    Row(
-                      children: [
-                        // Approve
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              await widget.provider
-                                  .approveLoanRepaymentRequest(req);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text('Payment approved & applied ✓'),
-                                    backgroundColor: Color(0xFF3EB489),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-                            child: Container(
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3EB489)
-                                    .withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: const Color(0xFF3EB489)
-                                        .withValues(alpha: 0.4)),
-                              ),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.check_rounded,
-                                      color: Color(0xFF3EB489), size: 14),
-                                  SizedBox(width: 6),
-                                  Text('Approve',
-                                      style: TextStyle(
-                                          color: Color(0xFF3EB489),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Reject
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              await widget.provider
-                                  .rejectLoanRepaymentRequest(req);
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Payment request rejected'),
-                                    backgroundColor: AppColors.labelGray,
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-                            child: Container(
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color:
-                                    AppColors.alertRed.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: AppColors.alertRed
-                                        .withValues(alpha: 0.35)),
-                              ),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.close_rounded,
-                                      color: AppColors.alertRed, size: 14),
-                                  SizedBox(width: 6),
-                                  Text('Reject',
-                                      style: TextStyle(
-                                          color: AppColors.alertRed,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
-              );
-            }),
+              ),
+            ),
         ],
       ),
     );

@@ -261,16 +261,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: 'Dark mode (default)',
                         onTap: () {},
                         trailing: _comingSoon(),
-                        showDivider: true,
-                      ),
-                      _settingsTile(
-                        context,
-                        icon: Icons.language_outlined,
-                        iconColor: const Color(0xFF80DEEA),
-                        label: 'Language',
-                        subtitle: 'English (default)',
-                        onTap: () {},
-                        trailing: _comingSoon(),
                         showDivider: false,
                       ),
                     ]),
@@ -438,13 +428,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          Switch(
+          AppSwitch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: const Color(0xFFF0B90B),
-            activeTrackColor: const Color(0xFFF0B90B).withValues(alpha: 0.3),
-            inactiveThumbColor: AppColors.labelGray,
-            inactiveTrackColor: Colors.white.withValues(alpha: 0.08),
           ),
         ],
       ),
@@ -455,8 +441,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.15),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: const Text(
         'Soon',

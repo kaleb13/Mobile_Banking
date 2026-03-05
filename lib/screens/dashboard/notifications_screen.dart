@@ -167,10 +167,13 @@ class NotificationsScreen extends StatelessWidget {
                                             .withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: const Icon(
-                                        Icons.notifications_active_rounded,
-                                        color: AppColors.primaryBlue,
-                                        size: 22,
+                                      child: SvgPicture.asset(
+                                        'assets/images/Notification.svg',
+                                        colorFilter: const ColorFilter.mode(
+                                            AppColors.primaryBlue,
+                                            BlendMode.srcIn),
+                                        width: 20,
+                                        height: 20,
                                       ),
                                     ),
                                     const SizedBox(width: 14),
@@ -303,18 +306,12 @@ class NotificationsScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceDark,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              color: AppColors.primaryBlue,
-              size: 40,
-            ),
+          SvgPicture.asset(
+            'assets/images/Notification.svg',
+            colorFilter:
+                const ColorFilter.mode(AppColors.primaryBlue, BlendMode.srcIn),
+            width: 48,
+            height: 48,
           ),
           const SizedBox(height: 20),
           const Text(
