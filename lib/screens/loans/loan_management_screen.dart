@@ -100,7 +100,8 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
 
               // ── Tab bar ───────────────────────────────────────────────────
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
@@ -112,18 +113,18 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                   indicatorSize: TabBarIndicatorSize.tab,
                   indicator: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                        Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   dividerColor: Colors.transparent,
                   labelColor: Colors.white,
                   unselectedLabelColor: AppColors.labelGray,
                   labelStyle: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700),
+                      fontSize: 13, fontWeight: FontWeight.w600),
                   unselectedLabelStyle: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w500),
-                  tabs: _tabs.map((t) => Tab(text: t)).toList(),
+                      fontSize: 13, fontWeight: FontWeight.w400),
+                  tabs: _tabs.map((t) => Tab(height: 38, text: t)).toList(),
                 ),
               ),
 
@@ -176,7 +177,7 @@ class _LoanHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

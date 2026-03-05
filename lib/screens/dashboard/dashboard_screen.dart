@@ -121,7 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -147,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\n\nIt represents your net increase or decrease in wealth today."
                       : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\n\nThis shows your cumulative financial progress since using the app.",
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
+                    color: Colors.white.withValues(alpha: 0.6),
                     fontSize: 13,
                     height: 1.5,
                   ),
@@ -520,36 +520,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: provider.toggleBalanceVisibility,
                 behavior: HitTestBehavior.opaque,
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        '\$',
-                        style: TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w500,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          '\$',
+                          style: TextStyle(
+                            color: AppColors.textWhite,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 4),
+                        Text(
+                          fullyFormatted,
+                          style: const TextStyle(
+                            color: AppColors.textWhite,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w600,
+                            height: 1.0,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      fullyFormatted,
-                      style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 34,
-                        fontWeight: FontWeight.w600,
-                        height: 1.0,
-                      ),
-                    ),
-                    Text(
-                      '.$decimals',
-                      style: const TextStyle(
-                        color: AppColors.labelGray,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w400,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(
+                        '.$decimals',
+                        style: const TextStyle(
+                          color: AppColors.labelGray,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w400,
+                        ),
                       ),
                     ),
                   ],
@@ -561,25 +565,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   GestureDetector(
                     onTap: () => _showPNLInfo(context, _isShowingTodayOnly),
                     behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
-                          style: const TextStyle(
-                            color: AppColors.labelGray,
-                            fontSize: 9, // Reduced
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                    child: IntrinsicWidth(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
+                            style: const TextStyle(
+                              color: AppColors.labelGray,
+                              fontSize: 9, // Reduced
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
-                        const SizedBox(height: 1),
-                        CustomPaint(
-                          size: Size(_isShowingTodayOnly ? 50 : 60, 1),
-                          painter: DashedUnderlinePainter(
-                              color: AppColors.labelGray.withOpacity(0.4)),
-                        ),
-                      ],
+                          const SizedBox(height: 1),
+                          CustomPaint(
+                            size: const Size(double.infinity, 1),
+                            painter: DashedUnderlinePainter(
+                                color:
+                                    AppColors.labelGray.withValues(alpha: 0.4)),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1183,8 +1191,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           Text(
                                             subTitle,
                                             style: TextStyle(
-                                                color:
-                                                    textColor.withOpacity(0.7),
+                                                color: textColor.withValues(
+                                                    alpha: 0.7),
                                                 fontSize: 7),
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -1560,7 +1568,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   fontSize: 8,
                                   fontWeight: FontWeight.bold)),
                         ),
-                      if (tx.reasonId == null && isLatest)
+                      // Show REASON? on every transaction missing a reason
+                      if (tx.reasonId == null &&
+                          (tx.customReasonText == null ||
+                              tx.customReasonText!.isEmpty) &&
+                          (tx.reason == null || tx.reason!.isEmpty))
                         Padding(
                           padding: const EdgeInsets.only(left: 4.0),
                           child: Container(
@@ -1638,7 +1650,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05), shape: BoxShape.circle),
+          color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
       child: Center(child: img),
     );
   }

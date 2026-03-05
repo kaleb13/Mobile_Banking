@@ -455,14 +455,15 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                         },
                       );
                       if (picked != null) {
+                        if (!context.mounted) return;
                         setState(() => _selectedDateRange = picked);
-                        if (mounted) Navigator.pop(context);
+                        Navigator.pop(context);
                       }
                     },
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -599,7 +600,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.search_off_rounded,
-                size: 64, color: Colors.white.withOpacity(0.1)),
+                size: 64, color: Colors.white.withValues(alpha: 0.1)),
             const SizedBox(height: 16),
             const Text(
               'No transactions found',
@@ -629,7 +630,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFC7C7C7).withOpacity(0.06),
+              color: const Color(0xFFC7C7C7).withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
@@ -684,10 +685,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     String? assetPath;
     if (nameUp == 'CBE') {
       assetPath = 'assets/images/CBE logo 1.png';
-    } else if (nameUp == 'TELEBIRR')
+    } else if (nameUp == 'TELEBIRR') {
       assetPath = 'assets/images/Telebirr Logo.png';
-    else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR')
+    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       assetPath = 'assets/images/CBEBirr Logo.png';
+    }
 
     if (assetPath != null) {
       return ClipRRect(

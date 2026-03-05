@@ -18,8 +18,12 @@ class CbeParser {
     double extractAmount(RegExp regex) {
       final match = regex.firstMatch(message);
       if (match != null) {
-        return double.tryParse(match.group(1)?.replaceAll(',', '') ?? '0') ??
-            0.0;
+        String amtStr = match.group(1)?.replaceAll(',', '') ?? '0';
+        // Clean up trailing period if the amount is at the end of a sentence
+        if (amtStr.endsWith('.')) {
+          amtStr = amtStr.substring(0, amtStr.length - 1);
+        }
+        return double.tryParse(amtStr) ?? 0.0;
       }
       return 0.0;
     }
@@ -39,27 +43,42 @@ class CbeParser {
     } else if (lowerMsg.contains('debited')) {
       type = 'expense';
       category = 'Withdrawed';
-      senderOrRecipient = 'ATM'; // Default recipient for debited/withdrawal
+      senderOrRecipient =
+          'ATM or Other'; // Default recipient for debited/withdrawal
 
-      final startStr = 'has been debited with ETB ';
-      final startIdx = message.indexOf(startStr);
+      // 'has been debited with ETB5.00' OR 'has been debited with ETB 5.00'
+      final startStr = 'has been debited with ETB';
+      final startIdx = message.toLowerCase().indexOf(startStr.toLowerCase());
       if (startIdx != -1) {
         final valStart = startIdx + startStr.length;
-        // Search for ' including' as the end of the amount string
-        int valEnd = message.indexOf(' including', valStart);
-        if (valEnd == -1) {
-          // fallback if not found
-          valEnd = message.indexOf(' ', valStart);
+        // Skip optional whitespace between ETB and number
+        int numStart = valStart;
+        while (numStart < message.length && message[numStart] == ' ') {
+          numStart++;
         }
+        // End markers: ' including', '.Including', '.', ' '
+        int valEnd = -1;
+        for (final marker in [' .', '.Including', ' including', ' Including']) {
+          final idx = message.indexOf(marker, numStart);
+          if (idx != -1 && (valEnd == -1 || idx < valEnd)) {
+            valEnd = idx;
+          }
+        }
+        if (valEnd == -1) valEnd = message.indexOf(' ', numStart);
         if (valEnd != -1) {
-          final amtStr =
-              message.substring(valStart, valEnd).replaceAll(',', '').trim();
+          String amtStr =
+              message.substring(numStart, valEnd).replaceAll(',', '').trim();
+          // Remove trailing period if it exists (e.g. "50.00.")
+          if (amtStr.endsWith('.')) {
+            amtStr = amtStr.substring(0, amtStr.length - 1);
+          }
           amount = double.tryParse(amtStr) ?? 0.0;
         }
       }
+      // Regex fallback: ETB with optional whitespace before amount
       if (amount <= 0) {
         amount = extractAmount(
-            RegExp(r'debited\s+with\s+ETB\s+([0-9,.]+)', caseSensitive: false));
+            RegExp(r'debited\s+with\s+ETB\s*([0-9,.]+)', caseSensitive: false));
       }
     } else if (lowerMsg.contains('credited')) {
       type = 'income';
@@ -106,7 +125,8 @@ class CbeParser {
 
     // Since ATM withdrawals don't have a transaction ID in the text,
     // we generate a unique fallback ID using the date/message hash.
-    id ??= 'CBE-ATM-${fallbackDate.millisecondsSinceEpoch}-${message.hashCode.abs()}';
+    id ??=
+        'CBE-ATM-${fallbackDate.millisecondsSinceEpoch}-${message.hashCode.abs()}';
 
     // Extract Balance
     double totalBalance = 0.0;

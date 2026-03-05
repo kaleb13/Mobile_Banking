@@ -235,7 +235,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   // ─── Tab Bar ─────────────────────────────────────────────────────────────
   Widget _buildTabBar() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
@@ -246,7 +246,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         controller: _tabController,
         indicator: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
@@ -255,15 +255,15 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
         unselectedLabelStyle: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w400,
         ),
         tabs: const [
-          Tab(text: '  Backup  '),
-          Tab(text: '  Restore  '),
+          Tab(height: 38, text: 'Backup'),
+          Tab(height: 38, text: 'Restore'),
         ],
       ),
     );

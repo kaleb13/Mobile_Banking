@@ -1,9 +1,11 @@
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import 'backup_restore_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
+import '../../services/database_service.dart';
 import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
 import 'reason_management_screen.dart';
@@ -19,6 +21,38 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final bool _isResetting = false;
+  bool _showPersistentNotification = true; // default ON
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationPref();
+  }
+
+  Future<void> _loadNotificationPref() async {
+    final val = await DatabaseService.instance
+        .getSetting('show_persistent_notification');
+    if (mounted) {
+      setState(() {
+        // null = not yet set → default true
+        _showPersistentNotification = val == null || val == '1';
+      });
+    }
+  }
+
+  Future<void> _setNotificationPref(bool value) async {
+    await DatabaseService.instance
+        .setSetting('show_persistent_notification', value ? '1' : '0');
+    if (mounted) setState(() => _showPersistentNotification = value);
+
+    // Tell the background service to sync its mode immediately
+    try {
+      final service = FlutterBackgroundService();
+      if (await service.isRunning()) {
+        service.invoke('syncNotification');
+      }
+    } catch (_) {}
+  }
 
   // Helper for grouped cards
   Widget _buildCardBase(List<Widget> children) {
@@ -199,6 +233,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     const SizedBox(height: 16),
 
+                    // ── Section: Notifications ─────────────────────────
+                    _sectionLabel('Notifications'),
+                    _buildCardBase([
+                      _toggleTile(
+                        icon: Icons.notifications_outlined,
+                        iconColor: const Color(0xFFFFB74D),
+                        label: 'Status Bar Notification',
+                        subtitle: _showPersistentNotification
+                            ? 'Shown in status bar while active'
+                            : 'Hidden — service still runs in background',
+                        value: _showPersistentNotification,
+                        onChanged: _setNotificationPref,
+                      ),
+                    ]),
+
+                    const SizedBox(height: 16),
+
                     // ── Section: Appearance ────────────────────────────
                     _sectionLabel('Appearance'),
                     _buildCardBase([
@@ -317,7 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
-          splashColor: Colors.white.withOpacity(0.04),
+          splashColor: Colors.white.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
@@ -346,9 +397,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Container(
             height: 1,
             margin: const EdgeInsets.only(left: 16, right: 16),
-            color: Colors.white.withOpacity(0.04),
+            color: Colors.white.withValues(alpha: 0.04),
           ),
       ],
+    );
+  }
+
+  Widget _toggleTile({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.labelGray,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: const Color(0xFFF0B90B),
+            activeTrackColor: const Color(0xFFF0B90B).withValues(alpha: 0.3),
+            inactiveThumbColor: AppColors.labelGray,
+            inactiveTrackColor: Colors.white.withValues(alpha: 0.08),
+          ),
+        ],
+      ),
     );
   }
 
@@ -356,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withOpacity(0.15),
+        color: AppColors.primaryBlue.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Text(

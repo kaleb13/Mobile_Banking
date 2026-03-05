@@ -89,8 +89,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     for (final tx in cashWithdrawals) {
       final spendings = provider.spendingsForTransaction(tx.id!);
       for (final s in spendings) {
-        // Need to filter spendings by the same period Logic?
-        // Better: just include all spendings linked to these specific withdrawals
         totalExpense += s.amount;
         allSpendingsInPeriod.add(s);
       }
@@ -99,6 +97,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final incomes = txs.where((t) => t.type == 'income').toList();
     final totalIncome = incomes.fold<double>(0, (s, t) => s + t.amount);
     final net = totalIncome - totalExpense;
+
+    // Smart P/L values from provider
+    final dailyPnl = provider.dailyPnl;
+    final monthlyPnl = provider.monthlyPnl;
+    final overallPnl = provider.overallPnl;
+    final borrowedLiability = provider.totalBorrowedLiability;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -162,6 +166,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       ),
                       const SizedBox(height: 24),
                       _buildPeriodSelector(),
+                      const SizedBox(height: 28),
+                      _buildSectionLabel('Profit & Loss'),
+                      const SizedBox(height: 14),
+                      _buildPnlSection(
+                          dailyPnl, monthlyPnl, overallPnl, borrowedLiability),
                       const SizedBox(height: 28),
                       _buildSectionLabel('Cash Flow'),
                       const SizedBox(height: 14),
@@ -300,6 +309,214 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  // ─── Profit & Loss Section ──────────────────────────────────────────────────
+  Widget _buildPnlSection(
+      double daily, double monthly, double overall, double borrowedLiability) {
+    final fmt = NumberFormat('#,##0.00');
+    final hasBorrowedDebt = borrowedLiability > 0;
+
+    return Column(
+      children: [
+        // Three P/L cards
+        Row(
+          children: [
+            Expanded(
+              child: _buildPnlCard(
+                label: 'Today',
+                value: daily,
+                fmt: fmt,
+                tooltip: 'Can go negative if expenses exceed income today',
+                canBeNegative: true,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildPnlCard(
+                label: 'This Month',
+                value: monthly,
+                fmt: fmt,
+                tooltip: hasBorrowedDebt
+                    ? 'Your borrowed loan balance reduces monthly profit'
+                    : 'Floors at 0 unless borrowed debt exceeds income',
+                canBeNegative: hasBorrowedDebt,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildPnlCard(
+                label: 'Overall',
+                value: overall,
+                fmt: fmt,
+                tooltip: hasBorrowedDebt
+                    ? 'Borrowed debt deducted from overall growth'
+                    : 'Growth since first measurement',
+                canBeNegative: hasBorrowedDebt,
+              ),
+            ),
+          ],
+        ),
+
+        // Loan liability callout — only shown when there's borrowed debt
+        if (hasBorrowedDebt) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE11D48).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: const Color(0xFFE11D48).withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    color: Color(0xFFE11D48),
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Active Loan Liability',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'You have ${NumberFormat('#,##0.00').format(borrowedLiability)} ETB in outstanding borrowed funds. '
+                        'This amount is treated as a liability and reduces your monthly and overall P/L. '
+                        'Once repaid, your true profit will reflect accurately.',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 11,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // Explanation row
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A2A34).withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline_rounded,
+                  color: Colors.white.withValues(alpha: 0.3), size: 14),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Daily P/L can be negative. Monthly & overall P/L only go negative when borrowed loan liabilities exceed your assets.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 11,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPnlCard({
+    required String label,
+    required double value,
+    required NumberFormat fmt,
+    required String tooltip,
+    bool canBeNegative = false,
+  }) {
+    final isNeg = value < 0;
+    final isZero = value == 0;
+    final Color color = isNeg
+        ? const Color(0xFFE11D48)
+        : isZero
+            ? AppColors.labelGray
+            : const Color(0xFF3EB489);
+    final IconData icon = isNeg
+        ? Icons.trending_down_rounded
+        : isZero
+            ? Icons.trending_flat_rounded
+            : Icons.trending_up_rounded;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A34).withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: color.withValues(alpha: isNeg ? 0.2 : 0.1), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 12),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.labelGray.withValues(alpha: 0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${isNeg ? '-' : ''}${fmt.format(value.abs())}',
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (canBeNegative && isNeg) ...[
+            const SizedBox(height: 4),
+            Text(
+              '⚠ Debt drag',
+              style: TextStyle(
+                color: const Color(0xFFE11D48).withValues(alpha: 0.7),
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

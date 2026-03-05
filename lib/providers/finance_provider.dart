@@ -186,6 +186,101 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   int get activeLoanCount => activeLoans.length;
   int get overdueLoanCount => overdueLoans.length;
 
+  // ── Profit & Loss Getters ────────────────────────────────────────────────
+
+  /// Total outstanding liability from money the user has BORROWED (not lent).
+  /// Borrowed money is in the user's hands but is a liability in P/L analysis.
+  double get totalBorrowedLiability {
+    return _loanRecords
+        .where((l) => l.loanType == 'borrowed' && !l.isPaid)
+        .fold(0.0, (sum, l) => sum + l.remainingAmount);
+  }
+
+  /// The date of the earliest transaction ever recorded.
+  DateTime? get installDate {
+    if (_transactions.isEmpty) return null;
+    return _transactions.reduce((a, b) => a.date.isBefore(b.date) ? a : b).date;
+  }
+
+  /// Daily P/L: income minus expenses for today. CAN be negative.
+  double get dailyPnl {
+    final now = DateTime.now();
+    double income = 0;
+    double expense = 0;
+    for (final tx in _transactions) {
+      if (tx.date.year == now.year &&
+          tx.date.month == now.month &&
+          tx.date.day == now.day) {
+        final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
+        if (!isCash) {
+          if (tx.type == 'income') income += tx.amount;
+          if (tx.type == 'expense') expense += tx.amount;
+        }
+      }
+    }
+    for (final ctx in _cashTransactions) {
+      if (ctx.date.year == now.year &&
+          ctx.date.month == now.month &&
+          ctx.date.day == now.day) {
+        if (ctx.type == 'addition') income += ctx.amount;
+        if (ctx.type == 'expense') expense += ctx.amount;
+      }
+    }
+    return income - expense;
+  }
+
+  /// Monthly P/L: cannot go below 0 UNLESS borrowed liabilities exceed gross income.
+  double get monthlyPnl {
+    double income = 0;
+    double expense = 0;
+    final now = DateTime.now();
+    for (final tx in _transactions) {
+      if (!isDateInMonthOf(tx.date, now)) continue;
+      final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
+      if (!isCash) {
+        if (tx.type == 'income') income += tx.amount;
+        if (tx.type == 'expense') expense += tx.amount;
+      }
+    }
+    for (final ctx in _cashTransactions) {
+      if (!isDateInMonthOf(ctx.date, now)) continue;
+      if (ctx.type == 'addition') income += ctx.amount;
+      if (ctx.type == 'expense') expense += ctx.amount;
+    }
+    final rawPnl = income - expense;
+    final liabilityDrag = totalBorrowedLiability;
+    // Only allow going below zero when borrowed amount exceeds gross income
+    if (liabilityDrag > income) {
+      return rawPnl - liabilityDrag;
+    }
+    return rawPnl.clamp(0.0, double.infinity);
+  }
+
+  /// All-time P/L. Baseline = initial detected bank balances at first boot.
+  /// Can only be negative if borrowed liabilities exceed total current assets.
+  double get overallPnl {
+    double baseline = 0;
+    if (_transactions.isNotEmpty) {
+      final Map<String, double> earliestBalances = {};
+      final sorted = List<AppTransaction>.from(_transactions)
+        ..sort((a, b) => a.date.compareTo(b.date));
+      for (final tx in sorted) {
+        if (!earliestBalances.containsKey(tx.name) && tx.totalBalance > 0) {
+          earliestBalances[tx.name] = tx.totalBalance;
+        }
+      }
+      baseline = earliestBalances.values.fold(0.0, (s, v) => s + v);
+    }
+    final currentAssets = _totalBalance;
+    final rawPnl = currentAssets - baseline;
+    final liabilityDrag = totalBorrowedLiability;
+    final adjustedPnl = rawPnl - liabilityDrag;
+    if (liabilityDrag > currentAssets) {
+      return adjustedPnl;
+    }
+    return adjustedPnl.clamp(0.0, double.infinity);
+  }
+
   // ── Dashboard Banner Helpers ──────────────────
   Map<String, dynamic>? get mostExpenseToday {
     final now = DateTime.now();
@@ -480,30 +575,34 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       for (var msg in allMessages) {
         if (msg.sender != null && msg.body != null && msg.date != null) {
           final msgDate = msg.date!;
+          final upSender = msg.sender!.toUpperCase();
+          final upBody = msg.body!.toUpperCase();
 
-          if ((msg.sender == TelebirrParser.senderNumber ||
-                  msg.sender!.toLowerCase() ==
-                      TelebirrParser.senderName.toLowerCase()) &&
+          if (!_isEnglishBankingMessage(msg.body!)) continue;
+
+          if ((upSender.contains('TELEBIRR') ||
+                  msg.sender == TelebirrParser.senderNumber) &&
               !processedSenders.contains('Telebirr')) {
             AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
               processedSenders.add('Telebirr');
             }
-          } else if (msg.sender!.toUpperCase() == CbeParser.senderName &&
-              !processedSenders.contains('CBE')) {
-            AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-              processedSenders.add('CBE');
-            }
-          } else if (msg.sender!.toUpperCase() ==
-                  CbeBirrParser.senderName.toUpperCase() &&
+          } else if (upSender.contains('CBE') &&
+              upSender.contains('BIRR') &&
               !processedSenders.contains('CBE Birr')) {
             AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
               processedSenders.add('CBE Birr');
+            }
+          } else if ((upSender.contains('CBE') ||
+                  upBody.contains('BANKING WITH CBE')) &&
+              !processedSenders.contains('CBE')) {
+            AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
+            if (tx != null) {
+              await addTransaction(tx);
+              processedSenders.add('CBE');
             }
           }
         }
@@ -702,31 +801,54 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
-  /// Returns true if [msg] contains at least one English financial keyword.
-  static bool _hasFinancialKeyword(String msg) {
-    // Skip non-English messages (Amharic and most Ethiopic scripts use these Unicode ranges)
+  /// Returns true if [msg] is primarily English and doesn't contain Ethiopic script.
+  static bool _isEnglishBankingMessage(String msg) {
+    // Reject messages with any Ethiopic/Amharic characters immediately
     final hasEthiopic = RegExp(r'[\u1200-\u137F\uAB01-\uAB2F]').hasMatch(msg);
     if (hasEthiopic) return false;
 
     const keywords = [
-      // Movement / transfer verbs
-      'received', 'sent', 'send', 'transferred', 'transfer',
-      'paid', 'pay', 'payment',
-      // Credit / debit
-      'credited', 'credit', 'debited', 'debit',
-      // Deposit / withdraw
-      'deposited', 'deposit', 'withdrawn', 'withdrawal', 'withdraw',
-      // Balance and account
-      'balance', 'account', 'available', 'remaining',
-      // Amounts
-      'amount', 'total', 'birr', 'etb', 'usd',
-      // Loan
-      'loan', 'repay', 'due',
-      // Transaction identifiers
-      'transaction', 'txn', 'ref no', 'reference',
-      'purchase', 'charged', 'fee',
-      // Bank / wallet
-      'bank', 'wallet', 'mobile money', 'telebirr', 'cbe',
+      'received',
+      'sent',
+      'send',
+      'transferred',
+      'transfer',
+      'paid',
+      'pay',
+      'payment',
+      'credited',
+      'credit',
+      'debited',
+      'debit',
+      'deposited',
+      'deposit',
+      'withdrawn',
+      'withdrawal',
+      'withdraw',
+      'balance',
+      'account',
+      'available',
+      'remaining',
+      'amount',
+      'total',
+      'birr',
+      'etb',
+      'usd',
+      'loan',
+      'repay',
+      'due',
+      'transaction',
+      'txn',
+      'ref no',
+      'reference',
+      'purchase',
+      'charged',
+      'fee',
+      'bank',
+      'wallet',
+      'mobile money',
+      'telebirr',
+      'cbe',
     ];
 
     final lower = msg.toLowerCase();
@@ -745,7 +867,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         sender.contains('✅');
 
     // ── External SMS: only save if it looks like a financial message ────────
-    if (!isSystemAlert && !_hasFinancialKeyword(body)) return;
+    if (!isSystemAlert && !_isEnglishBankingMessage(body)) return;
 
     final id = '${sender}_${date.millisecondsSinceEpoch}';
 
@@ -1174,7 +1296,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           // since previous iterations in this loop might have paid it down
           final currentLoanState = _loanRecords.firstWhere((l) => l.id == id);
           if (currentLoanState.status == 'active') {
-            await _applyRepayment(currentLoanState, tx);
+            // Queue as pending approval instead of auto-settling
+            await _queueRepaymentRequest(
+              loan: currentLoanState,
+              tx: tx,
+              matchType: 'exact',
+            );
           }
         } else {
           // Pass 2: First-two-words partial match
@@ -1318,12 +1445,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final nameLower = tx.name.trim().toLowerCase();
 
     // ── Pass 1: Exact match (case-insensitive) against each tracked token ──
-    // trackedSenderName may be a comma-separated list e.g. "Telebirr,CBE,CBE Birr"
+    // Now creates a PENDING REQUEST instead of auto-settling, even for exact matches.
     final allActive = _loanRecords
         .where((l) => l.status == 'active' && l.trackedSenderName != null)
         .toList();
 
-    // Check multi-token exact matches first
     final exactMultiMatches = allActive.where((loan) {
       final tokens = loan.trackedSenderName!
           .split(',')
@@ -1339,7 +1465,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     if (exactMultiMatches.isNotEmpty) {
       for (final loan in exactMultiMatches) {
-        await _applyRepayment(loan, tx);
+        await _queueRepaymentRequest(
+          loan: loan,
+          tx: tx,
+          matchType: 'exact',
+        );
       }
       return;
     }
@@ -1349,7 +1479,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.findActiveLoansForSender(senderLower);
     if (exactLoans.isNotEmpty) {
       for (final loan in exactLoans) {
-        await _applyRepayment(loan, tx);
+        await _queueRepaymentRequest(
+          loan: loan,
+          tx: tx,
+          matchType: 'exact',
+        );
       }
       return;
     }
@@ -1358,20 +1492,22 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.findActiveLoansForSender(nameLower);
     if (byBankName.isNotEmpty) {
       for (final loan in byBankName) {
-        await _applyRepayment(loan, tx);
+        await _queueRepaymentRequest(
+          loan: loan,
+          tx: tx,
+          matchType: 'exact',
+        );
       }
       return;
     }
 
     // ── Pass 2: First-two-words partial match → ask for approval ──────────
-    // Extract first two words from the incoming sender name
     final senderWords = senderLower.trim().split(RegExp(r'\s+'));
-    if (senderWords.length < 2) return; // Can't do partial match with 1 word
+    if (senderWords.length < 2) return;
 
     final incomingPrefix = '${senderWords[0]} ${senderWords[1]}';
 
     for (final loan in allActive) {
-      // Split multi-bank tracked names and check each token
       final trackedTokens = loan.trackedSenderName!
           .split(',')
           .map((t) => t.trim().toLowerCase())
@@ -1383,42 +1519,56 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         if (alreadyQueued) break;
         final trackedWords = token.split(RegExp(r'\s+'));
 
-        // Build first-two-word prefix of the tracked token
         if (trackedWords.isEmpty) continue;
         final trackedPrefix = trackedWords.length >= 2
             ? '${trackedWords[0]} ${trackedWords[1]}'
             : trackedWords[0];
 
-        // Check: incoming prefix matches tracked prefix (in either direction)
         if (incomingPrefix == trackedPrefix ||
             (trackedWords.length >= 2 &&
                 '${senderWords[0]} ${senderWords[1]}' == trackedPrefix)) {
-          final req = LoanRepaymentRequest(
-            loanId: loan.id!,
-            transactionId:
-                tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
-            senderFound: tx.sender,
-            trackedName: loan.trackedSenderName!,
-            amount: tx.amount.clamp(0.0, loan.remainingAmount),
-            createdAt: DateTime.now(),
+          await _queueRepaymentRequest(
+            loan: loan,
+            tx: tx,
+            matchType: 'partial',
           );
-          await DatabaseService.instance.insertLoanRepaymentRequest(req);
-          _pendingRepaymentRequests =
-              await DatabaseService.instance.getPendingRepaymentRequests();
-
-          // Notify user via in-app notification
-          await addUnrecognizedNotification(
-            sender: '⚠️ Loan Match Approval',
-            body: '"${tx.sender}" sent ${tx.amount.toStringAsFixed(2)} ETB. '
-                'This might be from "${loan.trackedSenderName}" (${loan.personName}). '
-                'Go to Loans → Pending to approve or reject.',
-            date: DateTime.now(),
-          );
-          notifyListeners();
           alreadyQueued = true;
         }
       }
     }
+  }
+
+  /// Creates a pending repayment approval request and notifies the user.
+  /// Used for BOTH exact and partial matches — nothing is auto-settled.
+  Future<void> _queueRepaymentRequest({
+    required LoanRecord loan,
+    required AppTransaction tx,
+    required String matchType, // 'exact' or 'partial'
+  }) async {
+    final applicable = tx.amount.clamp(0.0, loan.remainingAmount);
+    if (applicable <= 0) return;
+
+    final req = LoanRepaymentRequest(
+      loanId: loan.id!,
+      transactionId: tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
+      senderFound: tx.sender,
+      trackedName: loan.trackedSenderName!,
+      amount: applicable,
+      createdAt: DateTime.now(),
+    );
+    await DatabaseService.instance.insertLoanRepaymentRequest(req);
+    _pendingRepaymentRequests =
+        await DatabaseService.instance.getPendingRepaymentRequests();
+
+    final matchLabel = matchType == 'exact' ? 'exact match' : 'possible match';
+    await addUnrecognizedNotification(
+      sender: '⚠️ Loan Match — Approval Needed',
+      body: '"${tx.sender}" sent ${tx.amount.toStringAsFixed(2)} ETB '
+          '($matchLabel for "${loan.trackedSenderName}" — ${loan.personName}). '
+          'Go to Loans → Pending to approve or reject.',
+      date: DateTime.now(),
+    );
+    notifyListeners();
   }
 
   /// Approve a pending repayment request — records the payment on the loan.
@@ -1841,16 +1991,22 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       final sender = msg.sender!;
       final body = msg.body!;
 
+      // Skip non-English/Amharic messages entirely during rescan
+      if (!_isEnglishBankingMessage(body)) continue;
+
+      final upSender = sender.toUpperCase();
+      final upBody = body.toUpperCase();
+
       // Parse the SMS with the appropriate parser
       AppTransaction? parsed;
-      if (sender == TelebirrParser.senderNumber ||
-          sender.toLowerCase() == TelebirrParser.senderName.toLowerCase()) {
+      if (upSender.contains('TELEBIRR') ||
+          sender == TelebirrParser.senderNumber) {
         parsed = TelebirrParser.parse(body, msgDate);
-      } else if (sender.toUpperCase() == CbeParser.senderName) {
-        parsed = CbeParser.parse(body, msgDate);
-      } else if (sender.toUpperCase() ==
-          CbeBirrParser.senderName.toUpperCase()) {
+      } else if (upSender.contains('CBE') && upSender.contains('BIRR')) {
         parsed = CbeBirrParser.parse(body, msgDate);
+      } else if (upSender.contains('CBE') ||
+          upBody.contains('BANKING WITH CBE')) {
+        parsed = CbeParser.parse(body, msgDate);
       }
 
       if (parsed == null || parsed.id == null) continue;

@@ -38,7 +38,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A34),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,7 +48,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withOpacity(0.12),
+                          color: AppColors.primaryBlue.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.lock_outline_rounded,
@@ -84,7 +84,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   Text(
                     'Shibre is built on a single core promise: your financial data never leaves your device.',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.55),
+                      color: Colors.white.withValues(alpha: 0.55),
                       fontSize: 13,
                       height: 1.5,
                     ),
@@ -163,15 +163,16 @@ class PrivacyPolicyScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withOpacity(0.08),
+                color: AppColors.primaryBlue.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: AppColors.primaryBlue.withOpacity(0.2), width: 1),
+                    color: AppColors.primaryBlue.withValues(alpha: 0.2),
+                    width: 1),
               ),
               child: Text(
-                'For questions or concerns about this Privacy Policy, contact the developer directly via Telegram: @zkaleb',
+                'For questions or concerns about this Privacy Policy, contact the developer directly via Telegram: @Shibre_Plus',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 12,
                   height: 1.5,
                 ),
@@ -197,7 +198,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF2A2A34),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.04)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,7 +208,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
+                    color: iconColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: iconColor, size: 16),
@@ -227,7 +228,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             Text(
               body,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 13,
                 height: 1.6,
               ),

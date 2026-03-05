@@ -51,7 +51,7 @@ class AboutAppScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A34),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Row(
         children: [
@@ -84,7 +84,7 @@ class AboutAppScreen extends StatelessWidget {
                 Text(
                   'Developer and UI/UX Designer of Shibre',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12,
                     height: 1.3,
                   ),
@@ -96,7 +96,7 @@ class AboutAppScreen extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF64B5F6).withOpacity(0.12),
+                      color: const Color(0xFF64B5F6).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Row(
@@ -106,7 +106,7 @@ class AboutAppScreen extends StatelessWidget {
                             color: Color(0xFF64B5F6), size: 12),
                         SizedBox(width: 6),
                         Text(
-                          '@zkaleb',
+                          '@Shibre_Plus',
                           style: TextStyle(
                             color: Color(0xFF64B5F6),
                             fontSize: 12,
@@ -147,14 +147,14 @@ class AboutAppScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A34),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
+              color: Colors.white.withValues(alpha: 0.04),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.person_outline_rounded,
@@ -181,12 +181,12 @@ class AboutAppScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A34),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Text(
         'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from CBE, Telebirr, and CBE Birr, providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',
         style: TextStyle(
-          color: Colors.white.withOpacity(0.65),
+          color: Colors.white.withValues(alpha: 0.65),
           fontSize: 14,
           height: 1.7,
         ),
@@ -195,7 +195,7 @@ class AboutAppScreen extends StatelessWidget {
   }
 
   Future<void> _launchTelegram() async {
-    final Uri url = Uri.parse('https://t.me/zkaleb');
+    final Uri url = Uri.parse('https://t.me/Shibre_Plus');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       // Fallback or log error
     }

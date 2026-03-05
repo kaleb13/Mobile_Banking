@@ -180,7 +180,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildTabBar() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
@@ -202,8 +202,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         unselectedLabelStyle:
             const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
         tabs: const [
-          Tab(text: 'Smart Refresh'),
-          Tab(text: 'Full Reset'),
+          Tab(height: 38, text: 'Smart Refresh'),
+          Tab(height: 38, text: 'Full Reset'),
         ],
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../../models/app_notification.dart';
@@ -96,185 +97,194 @@ class NotificationsScreen extends StatelessWidget {
                       itemCount: provider.notifications.length,
                       itemBuilder: (context, index) {
                         final notif = provider.notifications[index];
-                        return GestureDetector(
-                          onLongPress: () =>
-                              _showLongPressModal(context, provider, notif),
+                        final isSystem = notif.sender.startsWith('Loan') ||
+                            notif.sender.startsWith('System');
+
+                        return Container(
+                          margin: const EdgeInsets.only(
+                              bottom: 12, left: 20, right: 20),
                           child: Slidable(
                             key: Key(notif.id),
                             direction: Axis.horizontal,
                             endActionPane: ActionPane(
                               motion: const DrawerMotion(),
-                              extentRatio: 0.7,
+                              extentRatio: isSystem ? 0.35 : 0.78,
+                              dismissible: DismissiblePane(
+                                onDismissed: () =>
+                                    provider.deleteNotification(notif.id),
+                              ),
                               children: [
-                                SlidableAction(
+                                _buildSlidableAction(
                                   onPressed: (context) =>
                                       provider.deleteNotification(notif.id),
-                                  backgroundColor: AppColors.surfaceLight,
-                                  foregroundColor: AppColors.alertRed,
-                                  icon: Icons.delete_outline,
+                                  icon: Icons.delete_rounded,
                                   label: 'Delete',
-                                  borderRadius: const BorderRadius.horizontal(
-                                      left: Radius.circular(16)),
+                                  color: AppColors.alertRed,
+                                  isFirst: true,
+                                  isLast: isSystem,
                                 ),
-                                SlidableAction(
-                                  onPressed: (context) => _showManualInsert(
-                                      context, provider, notif),
-                                  backgroundColor: AppColors.surfaceLight,
-                                  foregroundColor: AppColors.primaryBlue,
-                                  icon: Icons.add_circle_outline,
-                                  label: 'Insert',
-                                ),
-                                SlidableAction(
-                                  onPressed: (context) =>
-                                      _informDeveloper(notif.body),
-                                  backgroundColor: AppColors.surfaceLight,
-                                  foregroundColor: const Color(0xFF229ED9),
-                                  icon: Icons.telegram,
-                                  label: 'Inform',
-                                  borderRadius: const BorderRadius.horizontal(
-                                      right: Radius.circular(16)),
-                                ),
-                              ],
-                            ),
-                            child: Container(
-                              margin: const EdgeInsets.only(
-                                  bottom: 12, left: 20, right: 20),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceLight
-                                    .withValues(alpha: 0.5),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.03)),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 44,
-                                    height: 44,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryBlue
-                                          .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(
-                                      Icons.notifications_active_rounded,
-                                      color: AppColors.primaryBlue,
-                                      size: 22,
-                                    ),
+                                if (!isSystem) ...[
+                                  _buildSlidableAction(
+                                    onPressed: (context) => _showManualInsert(
+                                        context, provider, notif),
+                                    icon: Icons.add_circle_outline_rounded,
+                                    label: 'Insert',
+                                    color: AppColors.primaryBlue,
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Wrap(
-                                                spacing: 8,
-                                                runSpacing: 4,
-                                                children: [
-                                                  Text(
-                                                    notif.sender,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 15,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                  if (notif.sender
-                                                          .startsWith('Loan') ||
-                                                      notif.sender
-                                                          .startsWith('System'))
-                                                    Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors
-                                                            .primaryBlue
-                                                            .withValues(
-                                                                alpha: 0.15),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(6),
-                                                      ),
-                                                      child: const Text(
-                                                        'System Message',
-                                                        style: TextStyle(
-                                                          color: AppColors
-                                                              .primaryBlue,
-                                                          fontSize: 10,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    )
-                                                  else
-                                                    Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors
-                                                            .labelGray
-                                                            .withValues(
-                                                                alpha: 0.12),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(6),
-                                                      ),
-                                                      child: const Text(
-                                                        'Unregistered',
-                                                        style: TextStyle(
-                                                          color: AppColors
-                                                              .labelGray,
-                                                          fontSize: 10,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              DateFormat('MMM d, HH:mm')
-                                                  .format(notif.date),
-                                              style: const TextStyle(
-                                                color: AppColors.labelGray,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          notif.body,
-                                          style: const TextStyle(
-                                            color: AppColors.labelGray,
-                                            fontSize: 13,
-                                            height: 1.5,
-                                          ),
-                                          maxLines: 4,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
+                                  _buildSlidableAction(
+                                    onPressed: (context) =>
+                                        _informDeveloper(context, notif.body),
+                                    icon: Icons.telegram_rounded,
+                                    label: 'Inform',
+                                    color: AppColors.labelGray
+                                        .withValues(alpha: 0.7),
+                                    isLast: true,
                                   ),
                                 ],
+                              ],
+                            ),
+                            child: GestureDetector(
+                              onLongPress: () =>
+                                  _showLongPressModal(context, provider, notif),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceLight
+                                      .withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.03)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryBlue
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(
+                                        Icons.notifications_active_rounded,
+                                        color: AppColors.primaryBlue,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Wrap(
+                                                  spacing: 8,
+                                                  runSpacing: 4,
+                                                  children: [
+                                                    Text(
+                                                      notif.sender,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 15,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    if (isSystem)
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 2),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: AppColors
+                                                              .primaryBlue
+                                                              .withValues(
+                                                                  alpha: 0.15),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(6),
+                                                        ),
+                                                        child: const Text(
+                                                          'System Message',
+                                                          style: TextStyle(
+                                                            color: AppColors
+                                                                .primaryBlue,
+                                                            fontSize: 10,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    else
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 2),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: AppColors
+                                                              .labelGray
+                                                              .withValues(
+                                                                  alpha: 0.12),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(6),
+                                                        ),
+                                                        child: const Text(
+                                                          'Unregistered',
+                                                          style: TextStyle(
+                                                            color: AppColors
+                                                                .labelGray,
+                                                            fontSize: 10,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                DateFormat('MMM d, HH:mm')
+                                                    .format(notif.date),
+                                                style: const TextStyle(
+                                                  color: AppColors.labelGray,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            notif.body,
+                                            style: const TextStyle(
+                                              color: AppColors.labelGray,
+                                              fontSize: 13,
+                                              height: 1.5,
+                                            ),
+                                            maxLines: 4,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -340,24 +350,45 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _informDeveloper(String rawMessage) async {
+  Future<void> _informDeveloper(BuildContext context, String rawMessage) async {
     final String template =
-        'HI Caleb developer of Shibre the app is not reding this messgae ```$rawMessage```';
-    final String encodedMsg = Uri.encodeComponent(template);
-    // Using t.me/Zkaleb specifically as requested.
-    // Note: Some platforms/apps may not pre-fill text for direct user links,
-    // but this is the standard way to direct link to a user.
-    final Uri url = Uri.parse('https://t.me/Zkaleb?text=$encodedMsg');
+        'I found a transaction message that was not automatically categorized. Sharing it here for feedback:\n\n```$rawMessage```';
 
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      // Fallback to profile only if sharing fails
-      final Uri profileUrl = Uri.parse('https://t.me/Zkaleb');
-      await launchUrl(profileUrl, mode: LaunchMode.externalApplication);
+    // 1. Copy to clipboard because Telegram often ignores pre-filled text for private users
+    await Clipboard.setData(ClipboardData(text: template));
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message copied! Please paste it in the chat.'),
+          backgroundColor: Color(0xFF3EB489),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // 2. Attempt to open Telegram
+    final String encodedMsg = Uri.encodeComponent(template);
+    // tg://msg?text= format is more likely to work with the app if installed
+    final Uri tgUrl = Uri.parse('tg://msg?text=$encodedMsg');
+    final Uri webUrl = Uri.parse('https://t.me/Shibre_Plus');
+
+    try {
+      if (await canLaunchUrl(tgUrl)) {
+        await launchUrl(tgUrl);
+      } else {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
     }
   }
 
   void _showLongPressModal(
       BuildContext context, FinanceProvider provider, AppNotification notif) {
+    final isSystem =
+        notif.sender.startsWith('Loan') || notif.sender.startsWith('System');
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -388,26 +419,28 @@ class NotificationsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            if (!isSystem) ...[
+              _buildModalItem(
+                icon: Icons.add_circle_outline_rounded,
+                label: 'Insert Transaction Manually',
+                color: AppColors.primaryBlue,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showManualInsert(context, provider, notif);
+                },
+              ),
+              _buildModalItem(
+                icon: Icons.telegram_rounded,
+                label: 'Inform Developer',
+                color: AppColors.labelGray.withValues(alpha: 0.7),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _informDeveloper(context, notif.body);
+                },
+              ),
+            ],
             _buildModalItem(
-              icon: Icons.add_circle_outline,
-              label: 'Insert Transaction Manually',
-              color: AppColors.primaryBlue,
-              onTap: () {
-                Navigator.pop(ctx);
-                _showManualInsert(context, provider, notif);
-              },
-            ),
-            _buildModalItem(
-              icon: Icons.telegram,
-              label: 'Inform Developer',
-              color: const Color(0xFF229ED9),
-              onTap: () {
-                Navigator.pop(ctx);
-                _informDeveloper(notif.body);
-              },
-            ),
-            _buildModalItem(
-              icon: Icons.delete_outline,
+              icon: Icons.delete_rounded,
               label: 'Delete Message',
               color: AppColors.alertRed,
               onTap: () {
@@ -488,6 +521,67 @@ class NotificationsScreen extends StatelessWidget {
                 style: TextStyle(color: AppColors.alertRed)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSlidableAction({
+    required Function(BuildContext) onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    return CustomSlidableAction(
+      onPressed: onPressed,
+      backgroundColor: Colors.transparent,
+      padding: EdgeInsets.zero,
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: const Color(
+              0xFF2A2D36), // Visibly elevated grey-blue that matches premium dark themes
+          borderRadius: BorderRadius.horizontal(
+            left: Radius.circular(isFirst ? 16 : 0),
+            right: Radius.circular(isLast ? 16 : 0),
+          ),
+          border: isLast
+              ? null
+              : Border(
+                  right: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    width: 1,
+                  ),
+                ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8), // More compact padding
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: color.withValues(alpha: 0.9),
+                size: 22, // Standard cleaner size
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label, // Standard capitalization
+              style: TextStyle(
+                color: color.withValues(alpha: 0.85),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

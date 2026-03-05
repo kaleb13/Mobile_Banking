@@ -107,10 +107,10 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                           margin: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.03),
+                            color: Colors.white.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                                color: Colors.white.withOpacity(0.02)),
+                                color: Colors.white.withValues(alpha: 0.02)),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
@@ -123,8 +123,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: (def.isRecurring && def.isActive)
                                         ? AppColors.primaryBlue
-                                            .withOpacity(0.12)
-                                        : Colors.white.withOpacity(0.05),
+                                            .withValues(alpha: 0.12)
+                                        : Colors.white.withValues(alpha: 0.05),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Icon(
@@ -193,7 +193,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                   color: def.isActive
                                                       ? AppColors.mintGreen
                                                       : AppColors.alertRed
-                                                          .withOpacity(0.5),
+                                                          .withValues(
+                                                              alpha: 0.5),
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.bold),
                                             ),
@@ -223,7 +224,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                 AppColors.mintGreen,
                                             activeTrackColor: AppColors
                                                 .mintGreen
-                                                .withOpacity(0.3),
+                                                .withValues(alpha: 0.3),
                                           ),
                                         ),
                                       ),

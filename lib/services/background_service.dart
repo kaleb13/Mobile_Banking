@@ -63,30 +63,20 @@ void onStart(ServiceInstance service) async {
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
         FlutterLocalNotificationsPlugin();
 
-    // Periodically update the notification to keep it permanently pinned and "active"
-    Timer.periodic(const Duration(seconds: 15), (timer) async {
-      if (await service.isForegroundService()) {
-        flutterLocalNotificationsPlugin.show(
-          id: 888,
-          title: 'Shibre is Active',
-          body: 'Looking for transaction SMS',
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'my_foreground',
-              'Mobile Banking Service',
-              icon: 'ic_notification',
-              ongoing: true, // This is explicitly sticky (cannot be swiped)
-              autoCancel: false,
-              priority: Priority
-                  .min, // Low/min priority usually puts it strictly in status bar without heads-up
-              importance: Importance.low, // doesn't make sound
-              playSound: false,
-              enableVibration: false,
-              showWhen: false, // Don't keep updating the timestamp constantly
-            ),
-          ),
-        );
-      }
+    // Fix for "leaf icon": Must initialize explicitly in this isolate
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('ic_notification');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(
+        settings: initializationSettings);
+
+    // Initial sync
+    _syncNotificationMode(service, flutterLocalNotificationsPlugin);
+
+    // Sync on request from UI
+    service.on('syncNotification').listen((event) {
+      _syncNotificationMode(service, flutterLocalNotificationsPlugin);
     });
   }
 
@@ -101,16 +91,60 @@ void onStart(ServiceInstance service) async {
   );
 }
 
+/// Toggles between foreground (visible) and background (hidden) modes.
+Future<void> _syncNotificationMode(AndroidServiceInstance service,
+    FlutterLocalNotificationsPlugin plugin) async {
+  final showPersistent = await _getPersistentNotificationPref();
+
+  if (showPersistent) {
+    await service.setAsForegroundService();
+    // Explicitly show/update the notification to ensure ic_notification is used
+    await plugin.show(
+      id: 888,
+      title: 'Shibre is Active',
+      body: 'Looking for transaction SMS',
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'my_foreground',
+          'Mobile Banking Service',
+          icon: 'ic_notification',
+          ongoing: true,
+          autoCancel: false,
+          priority: Priority.min,
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
+          showWhen: false,
+        ),
+      ),
+    );
+  } else {
+    await service.setAsBackgroundService();
+  }
+}
+
+/// Reads the persistent notification preference from the app database.
+/// Defaults to true (show notification) when not yet set.
+Future<bool> _getPersistentNotificationPref() async {
+  try {
+    final pref = await DatabaseService.instance
+        .getSetting('show_persistent_notification');
+    if (pref == null) return true; // default ON
+    return pref == '1';
+  } catch (_) {
+    return true; // safe fallback
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> backgroundMessageHandler(SmsMessage message) async {
   DartPluginRegistrant.ensureInitialized();
   await processBackgroundSms(message);
 }
 
-/// Returns true if [msg] contains at least one English financial keyword.
-/// Also returns false for messages containing Amharic/Ethiopic script.
-bool _hasFinancialKeyword(String msg) {
-  // Reject messages with Ethiopic/Amharic characters
+/// Returns true if [msg] is primarily English and doesn't contain Ethiopic script.
+bool _isEnglishBankingMessage(String msg) {
+  // Reject messages with any Ethiopic/Amharic characters immediately
   final hasEthiopic = RegExp(r'[\u1200-\u137F\uAB01-\uAB2F]').hasMatch(msg);
   if (hasEthiopic) return false;
 
@@ -166,19 +200,25 @@ Future<void> processBackgroundSms(SmsMessage message) async {
   if (message.address == null || message.body == null) return;
   final senderAddress = message.address!;
   final body = message.body!;
+
+  // Ignore non-English banking messages entirely
+  if (!_isEnglishBankingMessage(body)) return;
+
   final date = DateTime.fromMillisecondsSinceEpoch(
       message.date ?? DateTime.now().millisecondsSinceEpoch);
 
   AppTransaction? tx;
 
-  if (senderAddress == TelebirrParser.senderNumber ||
-      senderAddress.toLowerCase() == TelebirrParser.senderName.toLowerCase()) {
+  final upSender = senderAddress.toUpperCase();
+  final upBody = body.toUpperCase();
+
+  if (upSender.contains('TELEBIRR') ||
+      senderAddress == TelebirrParser.senderNumber) {
     tx = TelebirrParser.parse(body, date);
-  } else if (senderAddress.toUpperCase() == CbeParser.senderName) {
-    tx = CbeParser.parse(body, date);
-  } else if (senderAddress.toUpperCase() ==
-      CbeBirrParser.senderName.toUpperCase()) {
+  } else if (upSender.contains('CBE') && upSender.contains('BIRR')) {
     tx = CbeBirrParser.parse(body, date);
+  } else if (upSender.contains('CBE') || upBody.contains('BANKING WITH CBE')) {
+    tx = CbeParser.parse(body, date);
   } else {
     // Custom Senders matching
     final senders = await DatabaseService.instance.getSenders();
@@ -228,9 +268,7 @@ Future<void> processBackgroundSms(SmsMessage message) async {
         isAutoDetected: true,
       );
     } else {
-      // Unrecognized: only save to in-app notifications if it looks financial
-      if (!_hasFinancialKeyword(body)) return;
-
+      // Unrecognized: save as notification
       final notificationId = '${senderAddress}_${date.millisecondsSinceEpoch}';
 
       // We do not have easy access to SharedPreferences ignored_notification_ids

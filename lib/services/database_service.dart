@@ -26,7 +26,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 11, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 12, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -95,6 +95,14 @@ CREATE TABLE reason_links (
 
     // Cash Wallet and Recurring Expenses tables
     await _createCashTables(db);
+
+    // App settings key-value table
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+)
+''');
   }
 
   Future<void> _createCashTables(Database db) async {
@@ -265,6 +273,14 @@ CREATE TABLE IF NOT EXISTS loan_repayment_requests (
         await db.execute(
             'ALTER TABLE expense_definitions ADD COLUMN isActive INTEGER NOT NULL DEFAULT 1;');
       } catch (_) {}
+    }
+    if (oldVersion < 12) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+)
+''');
     }
   }
 
@@ -697,5 +713,29 @@ CREATE TABLE IF NOT EXISTS loan_repayment_requests (
     final db = await instance.database;
     return await db.update('cash_transactions', transaction.toMap(),
         where: 'id = ?', whereArgs: [transaction.id]);
+  }
+
+  // ──────────────────────────────────────────────
+  // App Settings (key-value store)
+  // ──────────────────────────────────────────────
+  Future<String?> getSetting(String key) async {
+    try {
+      final db = await instance.database;
+      final maps =
+          await db.query('app_settings', where: 'key = ?', whereArgs: [key]);
+      if (maps.isEmpty) return null;
+      return maps.first['value'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    final db = await instance.database;
+    await db.insert(
+      'app_settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 }

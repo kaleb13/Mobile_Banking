@@ -85,82 +85,75 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
 
   Widget _buildSearchHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 46,
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34),
-                borderRadius: BorderRadius.circular(23),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 16),
-                  const Icon(Icons.search_rounded,
-                      color: AppColors.labelGray, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      decoration: const InputDecoration(
-                        hintText: 'Search by sender, bank, or reason...',
-                        hintStyle: TextStyle(
-                            color: AppColors.labelGray,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      onChanged: (val) {
-                        setState(() {
-                          _searchQuery = val;
-                        });
-                      },
-                    ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2A34),
+          borderRadius: BorderRadius.circular(23),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.05),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            const Icon(Icons.search_rounded,
+                color: AppColors.labelGray, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search by sender, bank, or reason...',
+                  hintStyle: const TextStyle(
+                      color: AppColors.labelGray,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  suffixIconConstraints: const BoxConstraints(
+                    minHeight: 24,
+                    minWidth: 24,
                   ),
-                  if (_searchQuery.isNotEmpty)
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _searchQuery = '';
-                          _searchController.clear();
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        child: Icon(Icons.cancel_rounded,
-                            color: Colors.white.withValues(alpha: 0.3),
-                            size: 18),
-                      ),
-                    ),
-                  const SizedBox(width: 4),
-                ],
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _searchQuery = '';
+                              _searchController.clear();
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: Icon(Icons.cancel_rounded,
+                                color: Colors.white.withValues(alpha: 0.3),
+                                size: 18),
+                          ),
+                        )
+                      : null,
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val;
+                  });
+                },
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.close_rounded,
+            IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close_rounded,
                   color: Colors.white, size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+          ],
+        ),
       ),
     );
   }
@@ -171,12 +164,12 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.search_rounded,
-              size: 64, color: Colors.white.withOpacity(0.05)),
+              size: 64, color: Colors.white.withValues(alpha: 0.05)),
           const SizedBox(height: 16),
           Text(
             'Search by name, amount, or reason',
-            style:
-                TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+            style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.2), fontSize: 14),
           ),
         ],
       ),
@@ -191,7 +184,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.search_off_rounded,
-                size: 64, color: Colors.white.withOpacity(0.05)),
+                size: 64, color: Colors.white.withValues(alpha: 0.05)),
             const SizedBox(height: 16),
             const Text(
               'No transactions found',

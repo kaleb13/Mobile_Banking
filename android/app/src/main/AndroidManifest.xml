@@ -55,7 +55,7 @@
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="dataSync"
-            android:icon="@drawable/ic_notification" />
+            android:icon="@mipmap/ic_launcher" />
 
         <receiver android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
             android:permission="android.permission.BROADCAST_SMS" android:exported="true">

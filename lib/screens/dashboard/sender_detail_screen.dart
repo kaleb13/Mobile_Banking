@@ -199,7 +199,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32),
               border: Border.all(
-                  color: cardGradient.first.withOpacity(0.5), width: 1.5),
+                  color: cardGradient.first.withValues(alpha: 0.5), width: 1.5),
             ),
             child: Container(
               margin: const EdgeInsets.all(2),
@@ -253,7 +253,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                                 Text(
                                   subTitle,
                                   style: TextStyle(
-                                    color: textColor.withOpacity(0.6),
+                                    color: textColor.withValues(alpha: 0.6),
                                     fontSize: 14,
                                     fontWeight: FontWeight.w400,
                                   ),
@@ -266,7 +266,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                               Text(
                                 'Your balance',
                                 style: TextStyle(
-                                  color: textColor.withOpacity(0.7),
+                                  color: textColor.withValues(alpha: 0.7),
                                   fontSize: 12,
                                 ),
                               ),
@@ -298,7 +298,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                                   Text(
                                     '30D PNL  ',
                                     style: TextStyle(
-                                      color: textColor.withOpacity(0.7),
+                                      color: textColor.withValues(alpha: 0.7),
                                       fontSize: 9,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 0.5,
@@ -395,10 +395,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2A2A34).withOpacity(0.25),
+                          color:
+                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -440,10 +441,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withOpacity(0.85),
+                          color: AppColors.primaryBlue.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -473,10 +474,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2A2A34).withOpacity(0.25),
+                          color:
+                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             width: 1,
                           ),
                         ),
@@ -533,8 +535,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     List<Color> lineColors = [AppColors.accentBlue, AppColors.accentBlue];
 
     List<Color> fillColors = [
-      AppColors.accentBlue.withOpacity(0.28),
-      AppColors.accentBlue.withOpacity(0.0),
+      AppColors.accentBlue.withValues(alpha: 0.28),
+      AppColors.accentBlue.withValues(alpha: 0.0),
     ];
 
     if (_touchedX != null && spots.isNotEmpty) {
@@ -545,12 +547,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         lineColors = [
           AppColors.accentBlue,
           AppColors.accentBlue,
-          AppColors.accentBlue.withOpacity(0.08),
-          AppColors.accentBlue.withOpacity(0.08),
+          AppColors.accentBlue.withValues(alpha: 0.08),
+          AppColors.accentBlue.withValues(alpha: 0.08),
         ];
         fillColors = [
-          AppColors.accentBlue.withOpacity(0.07),
-          AppColors.accentBlue.withOpacity(0.0),
+          AppColors.accentBlue.withValues(alpha: 0.07),
+          AppColors.accentBlue.withValues(alpha: 0.0),
         ];
       }
     }
@@ -583,7 +585,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               return spotIndexes.map((index) {
                 return TouchedSpotIndicatorData(
                   FlLine(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     strokeWidth: 1,
                     dashArray: [4, 4],
                   ),
@@ -613,7 +615,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       TextSpan(
                         text: 'ETB ',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
+                          color: Colors.white.withValues(alpha: 0.6),
                           fontSize: 9,
                           fontWeight: FontWeight.w400,
                         ),
@@ -672,7 +674,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? Colors.white.withOpacity(0.08)
+                    ? Colors.white.withValues(alpha: 0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.transparent),
@@ -702,9 +704,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2A34).withOpacity(0.45),
+              color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: TextField(
               controller: _searchController,
@@ -731,7 +733,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? Colors.white.withOpacity(0.08)
+                        ? Colors.white.withValues(alpha: 0.08)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(

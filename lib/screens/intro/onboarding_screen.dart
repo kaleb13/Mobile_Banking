@@ -118,10 +118,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.03),
+              color: Colors.white.withValues(alpha: 0.03),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 72, color: Colors.white.withOpacity(0.9)),
+            child: Icon(icon,
+                size: 72, color: Colors.white.withValues(alpha: 0.9)),
           ),
           const SizedBox(height: 48),
           Text(
@@ -138,7 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Text(
             description,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.45),
+              color: Colors.white.withValues(alpha: 0.45),
               fontSize: 16,
               height: 1.6,
               letterSpacing: 0.2,
@@ -192,7 +193,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               borderRadius: BorderRadius.circular(4),
               color: isActive
                   ? AppColors.primaryBlue
-                  : Colors.white.withOpacity(0.1),
+                  : Colors.white.withValues(alpha: 0.1),
             ),
           );
         }),
@@ -204,7 +205,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.alertRed.withOpacity(0.9),
+        backgroundColor: AppColors.alertRed.withValues(alpha: 0.9),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(20),
