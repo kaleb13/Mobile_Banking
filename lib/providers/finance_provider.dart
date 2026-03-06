@@ -939,21 +939,24 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     // Cash Wallet Balance Calculation
     double cashInflows = 0;
+    double manualInflows = 0;
+    double cashOutflows = 0;
+
     // 1. Sum from SMS bank txns where reason == 'Cash'
     for (var tx in _transactions) {
       if (tx.reason?.toLowerCase() == 'cash' ||
           tx.customReasonText?.toLowerCase() == 'cash' ||
           tx.resolvedReason?.toLowerCase() == 'cash') {
-        // If it's income to a bank, that means cash logically decreased maybe?
-        // Wait, 'Cash' reason usually means ATM withdrawal (bank expense, but cash income).
-        // We will count any bank transaction tagged 'Cash' as an inflow to the Cash Wallet,
-        // strictly assuming the absolute amount was converted to cash.
-        cashInflows += tx.amount.abs();
+        // ATM withdrawal (bank expense) is a CASH INFLOW to the wallet.
+        // Cash deposit (bank income) is a CASH OUTFLOW from the wallet.
+        if (tx.type == 'expense') {
+          cashInflows += tx.amount.abs();
+        } else {
+          cashOutflows += tx.amount.abs();
+        }
       }
     }
     // 2. Add manual additions and minus deductions
-    double manualInflows = 0;
-    double cashOutflows = 0;
     for (var ctx in _cashTransactions) {
       if (ctx.type == 'addition') {
         manualInflows += ctx.amount;

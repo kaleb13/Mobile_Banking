@@ -13,6 +13,7 @@ import 'notifications_screen.dart';
 import 'cash_wallet_detail_screen.dart';
 import 'transaction_search_screen.dart';
 import '../../models/transaction.dart';
+import '../../models/cash_transaction.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -725,63 +726,137 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     DateTime now = DateTime.now();
-
-    // ── Direct totalBalance approach (same as bank detail page chart) ───────
-    // Instead of reconstructing balances from net flows (fragile, breaks with
-    // cash wallet additions), we use the ACTUAL totalBalance that each bank
-    // SMS reports. For each day, we track the latest known balance per bank,
-    // sum them, and plot that sum. This is always accurate because banks
-    // report the real balance after every transaction.
+    // Normalize "now" to midnight today to prevent data jitter based on the current time.
+    final DateTime todayMidnight = DateTime(now.year, now.month, now.day);
 
     // Clip daysLimit to actual data range so the chart fills its width.
-    if (provider.transactions.isNotEmpty) {
-      final firstTxDate = provider.transactions
-          .map((t) => t.date)
-          .reduce((a, b) => a.isBefore(b) ? a : b);
-      final daysSinceFirst = now.difference(firstTxDate).inDays + 1;
-      daysLimit = daysSinceFirst.clamp(2, daysLimit);
+    if (provider.transactions.isNotEmpty ||
+        provider.cashTransactions.isNotEmpty) {
+      DateTime? firstTx;
+      if (provider.transactions.isNotEmpty) {
+        firstTx = provider.transactions
+            .map((t) => t.date)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
+      }
+      if (provider.cashTransactions.isNotEmpty) {
+        final firstCash = provider.cashTransactions
+            .map((t) => t.date)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
+        if (firstTx == null || firstCash.isBefore(firstTx)) {
+          firstTx = firstCash;
+        }
+      }
+      if (firstTx != null) {
+        // Difference from midnight of the first transaction day
+        final firstDateMidnight =
+            DateTime(firstTx.year, firstTx.month, firstTx.day);
+        final daysSinceFirst =
+            todayMidnight.difference(firstDateMidnight).inDays + 1;
+        daysLimit = daysSinceFirst.clamp(2, daysLimit);
+      }
     }
+
+    // Re-calculate chartStart based on the potentially clipped daysLimit
+    final DateTime actualChartStart =
+        todayMidnight.subtract(Duration(days: daysLimit - 1));
 
     // Sort all transactions oldest-first
     final sortedTxs = List.from(provider.transactions)
       ..sort((a, b) => a.date.compareTo(b.date));
+    final sortedCashTxs = List.from(provider.cashTransactions)
+      ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Walk day by day. For each day, carry forward each bank's last known
-    // balance, overriding when we hit a transaction for that bank on that day.
-    final DateTime chartStart = now.subtract(Duration(days: daysLimit - 1));
+    // Walk day by day.
     final Map<String, double> lastKnownBalance = {};
+    double currentCashBalance = 0;
 
-    // Pre-seed with balances from transactions BEFORE the chart window
+    // A helper to detect if a bank transaction is a cash transfer
+    bool isCashTransfer(AppTransaction tx) {
+      return tx.reason?.toLowerCase() == 'cash' ||
+          tx.customReasonText?.toLowerCase() == 'cash' ||
+          tx.resolvedReason?.toLowerCase() == 'cash';
+    }
+
+    // Pre-seed with balances from transactions strictly BEFORE the chart window
     for (final tx in sortedTxs) {
-      if (tx.date.isBefore(chartStart) && tx.totalBalance > 0) {
-        lastKnownBalance[tx.name] = tx.totalBalance;
+      if (tx.date.isBefore(actualChartStart)) {
+        if (tx.totalBalance > 0) {
+          lastKnownBalance[tx.name] = tx.totalBalance;
+        }
+        if (isCashTransfer(tx)) {
+          if (tx.type == 'expense') {
+            currentCashBalance += tx.amount.abs();
+          } else {
+            currentCashBalance -= tx.amount.abs();
+          }
+        }
+      }
+    }
+    for (final ctx in sortedCashTxs) {
+      if (ctx.date.isBefore(actualChartStart)) {
+        if (ctx.type == 'addition') {
+          currentCashBalance += ctx.amount;
+        } else {
+          currentCashBalance -= ctx.amount;
+        }
       }
     }
 
-    // Build a list of transactions grouped by their day key for fast lookup
-    final Map<String, List<dynamic>> txsByDay = {};
+    // Build lists of transactions grouped by their day key for fast lookup
+    final Map<String, List<AppTransaction>> txsByDay = {};
     for (final tx in sortedTxs) {
-      final key = '${tx.date.year}-${tx.date.month}-${tx.date.day}';
-      txsByDay.putIfAbsent(key, () => []);
-      txsByDay[key]!.add(tx);
+      if (!tx.date.isBefore(actualChartStart)) {
+        final key = '${tx.date.year}-${tx.date.month}-${tx.date.day}';
+        txsByDay.putIfAbsent(key, () => []);
+        txsByDay[key]!.add(tx);
+      }
+    }
+    final Map<String, List<CashTransaction>> cashTxsByDay = {};
+    for (final ctx in sortedCashTxs) {
+      if (!ctx.date.isBefore(actualChartStart)) {
+        final key = '${ctx.date.year}-${ctx.date.month}-${ctx.date.day}';
+        cashTxsByDay.putIfAbsent(key, () => []);
+        cashTxsByDay[key]!.add(ctx);
+      }
     }
 
     for (int i = 0; i < daysLimit; i++) {
-      final d = chartStart.add(Duration(days: i));
+      final d = actualChartStart.add(Duration(days: i));
       final key = '${d.year}-${d.month}-${d.day}';
 
-      // Update balances with any transactions on this day
+      // Update bank balances with any transactions on this day
       final dayTxs = txsByDay[key];
       if (dayTxs != null) {
         for (final tx in dayTxs) {
           if (tx.totalBalance > 0) {
             lastKnownBalance[tx.name] = tx.totalBalance;
           }
+          if (isCashTransfer(tx)) {
+            if (tx.type == 'expense') {
+              currentCashBalance += tx.amount.abs();
+            } else {
+              currentCashBalance -= tx.amount.abs();
+            }
+          }
         }
       }
 
-      // Sum all banks' latest known balances
-      final totalBal = lastKnownBalance.values.fold(0.0, (sum, v) => sum + v);
+      // Update cash balance with manual transactions on this day
+      final dayCashTxs = cashTxsByDay[key];
+      if (dayCashTxs != null) {
+        for (final ctx in dayCashTxs) {
+          if (ctx.type == 'addition') {
+            currentCashBalance += ctx.amount;
+          } else {
+            currentCashBalance -= ctx.amount;
+          }
+        }
+      }
+
+      // Sum all banks' latest known balances + cash balance
+      final bankTotal = lastKnownBalance.values.fold(0.0, (sum, v) => sum + v);
+      final totalBal =
+          bankTotal + (currentCashBalance > 0 ? currentCashBalance : 0);
       spots.add(FlSpot(i.toDouble(), totalBal));
     }
 
