@@ -11,6 +11,7 @@ class ExpenseDefinition {
   final int timesPerDay;
   final bool isActive;
   final DateTime? lastAppliedDate;
+  final int? reasonId;
 
   ExpenseDefinition({
     this.id,
@@ -24,6 +25,7 @@ class ExpenseDefinition {
     this.timesPerDay = 1,
     this.isActive = true,
     this.lastAppliedDate,
+    this.reasonId,
   });
 
   Map<String, dynamic> toMap() {
@@ -39,6 +41,7 @@ class ExpenseDefinition {
       'timesPerDay': timesPerDay,
       'isActive': isActive ? 1 : 0,
       'lastAppliedDate': lastAppliedDate?.toIso8601String(),
+      'reasonId': reasonId,
     };
   }
 
@@ -57,6 +60,7 @@ class ExpenseDefinition {
       lastAppliedDate: map['lastAppliedDate'] != null
           ? DateTime.parse(map['lastAppliedDate'] as String)
           : null,
+      reasonId: map['reasonId'] as int?,
     );
   }
 
@@ -72,6 +76,7 @@ class ExpenseDefinition {
     int? timesPerDay,
     bool? isActive,
     DateTime? lastAppliedDate,
+    int? reasonId,
   }) {
     return ExpenseDefinition(
       id: id ?? this.id,
@@ -85,6 +90,7 @@ class ExpenseDefinition {
       timesPerDay: timesPerDay ?? this.timesPerDay,
       isActive: isActive ?? this.isActive,
       lastAppliedDate: lastAppliedDate ?? this.lastAppliedDate,
+      reasonId: reasonId ?? this.reasonId,
     );
   }
 }

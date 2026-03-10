@@ -134,22 +134,37 @@ class _WalletsScreenState extends State<WalletsScreen> {
                               color: AppColors.labelGray, fontSize: 12),
                         ),
                         const SizedBox(height: 6),
-                        _splitBalance(fmt.format(grandBalance), 36, 22),
+                        const SizedBox(height: 6),
+                        _splitBalance(
+                            provider.isBalanceVisible
+                                ? fmt.format(grandBalance)
+                                : '****.**',
+                            36,
+                            22),
                         const SizedBox(height: 16),
                         Row(
                           children: [
                             _miniStatChip(
                                 'Income',
-                                fmt.format(grandIncome),
+                                provider.isBalanceVisible
+                                    ? fmt.format(grandIncome)
+                                    : '****',
                                 AppColors.mintGreen,
                                 Icons.arrow_downward_rounded),
                             const SizedBox(width: 10),
-                            _miniStatChip('Expense', fmt.format(grandExpense),
-                                AppColors.alertRed, Icons.arrow_upward_rounded),
+                            _miniStatChip(
+                                'Expense',
+                                provider.isBalanceVisible
+                                    ? fmt.format(grandExpense)
+                                    : '****',
+                                AppColors.alertRed,
+                                Icons.arrow_upward_rounded),
                             const SizedBox(width: 10),
                             _miniStatChip(
                               'Net',
-                              '${grandNet >= 0 ? '+' : ''}${fmt.format(grandNet)}',
+                              provider.isBalanceVisible
+                                  ? '${grandNet >= 0 ? '+' : ''}${fmt.format(grandNet)}'
+                                  : '****',
                               grandNet >= 0
                                   ? AppColors.mintGreen
                                   : AppColors.alertRed,
@@ -262,6 +277,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                               monthIncome: monthIncome,
                               monthExpense: monthExpense,
                               txCount: senderTxs.length,
+                              isBalanceVisible: provider.isBalanceVisible,
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -327,6 +343,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
       monthIncome: monthIncome,
       monthExpense: monthExpense,
       txCount: txCount,
+      isBalanceVisible: provider.isBalanceVisible,
       onTap: () {
         Navigator.push(context,
             MaterialPageRoute(builder: (_) => const CashWalletDetailScreen()));
@@ -415,6 +432,7 @@ class _WalletCard extends StatelessWidget {
   final double monthIncome;
   final double monthExpense;
   final int txCount;
+  final bool isBalanceVisible;
   final VoidCallback onTap;
 
   const _WalletCard({
@@ -426,6 +444,7 @@ class _WalletCard extends StatelessWidget {
     required this.monthIncome,
     required this.monthExpense,
     required this.txCount,
+    required this.isBalanceVisible,
     required this.onTap,
   });
 
@@ -526,7 +545,7 @@ class _WalletCard extends StatelessWidget {
     final fmt = NumberFormat('#,##0.00');
     final fmtShort = NumberFormat('#,##0');
     final isPositiveNet = net >= 0;
-    final balStr = fmt.format(balance);
+    final balStr = isBalanceVisible ? fmt.format(balance) : '****.**';
     final parts = balStr.split('.');
 
     // Income/expense ratio for progress bar
@@ -637,7 +656,9 @@ class _WalletCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          fmtShort.format(net.abs()),
+                          isBalanceVisible
+                              ? fmtShort.format(net.abs())
+                              : '****',
                           style: TextStyle(
                             color: isPositiveNet
                                 ? AppColors.mintGreen
@@ -707,10 +728,18 @@ class _WalletCard extends StatelessWidget {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      _statPill('In', fmtShort.format(monthIncome),
+                      _statPill(
+                          'In',
+                          isBalanceVisible
+                              ? fmtShort.format(monthIncome)
+                              : '****',
                           AppColors.mintGreen),
                       const SizedBox(width: 8),
-                      _statPill('Out', fmtShort.format(monthExpense),
+                      _statPill(
+                          'Out',
+                          isBalanceVisible
+                              ? fmtShort.format(monthExpense)
+                              : '****',
                           AppColors.alertRed),
                       const Spacer(),
                       const Icon(Icons.arrow_forward_ios_rounded,

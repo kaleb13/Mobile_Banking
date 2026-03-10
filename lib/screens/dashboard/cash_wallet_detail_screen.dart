@@ -6,9 +6,11 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/expense_definition.dart';
+import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
 import '../settings/expense_definitions_screen.dart';
 import 'transaction_detail_screen.dart';
+import 'reason_selection_sheet.dart';
 
 class CashWalletDetailScreen extends StatefulWidget {
   const CashWalletDetailScreen({super.key});
@@ -109,29 +111,20 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               _showAddCashModal(context, provider);
                             },
                           ),
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 32),
                           _actionButton(
                             context,
                             icon: Icons.money_off,
-                            label: 'One-Time',
+                            label: 'Deduct',
                             onTap: () {
-                              _showOneTimeExpenseModal(context, provider);
+                              _showUnifiedDeductModal(context, provider);
                             },
                           ),
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 32),
                           _actionButton(
                             context,
-                            icon: Icons.receipt_long,
-                            label: 'Template',
-                            onTap: () {
-                              _showDeductExpenseModal(context, provider);
-                            },
-                          ),
-                          const SizedBox(width: 24),
-                          _actionButton(
-                            context,
-                            icon: Icons.settings,
-                            label: 'Manage',
+                            icon: Icons.settings_rounded,
+                            label: 'Templates',
                             onTap: () {
                               Navigator.push(
                                   context,
@@ -198,12 +191,21 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     }
 
     for (var ctx in provider.cashTransactions) {
+      String sub = ctx.description ?? '';
+      if (ctx.reasonName != null && ctx.reasonName!.isNotEmpty) {
+        sub = ctx.reasonName!;
+        if (ctx.description != null && ctx.description!.isNotEmpty) {
+          sub += ' (${ctx.description})';
+        }
+      }
+
       allTxs.add({
         'id': ctx.id,
         'date': ctx.date,
-        'title':
-            ctx.type == 'addition' ? 'Manual Addition' : 'Expense Deducted',
-        'subtitle': ctx.description ?? '',
+        'title': ctx.type == 'addition'
+            ? 'Manual Addition'
+            : (ctx.reasonName ?? 'Cash Expense'),
+        'subtitle': sub,
         'amount': ctx.amount,
         'isPositive': ctx.type == 'addition',
         'isCashTx': true,
@@ -294,7 +296,9 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                                 color: AppColors.labelGray, fontSize: 10)),
                       ])),
                   Text(
-                    '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])} ETB',
+                    provider.isBalanceVisible
+                        ? '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])} ETB'
+                        : '****',
                     style: TextStyle(
                         color: isPositive ? AppColors.mintGreen : Colors.white,
                         fontSize: 14,
@@ -305,15 +309,333 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
         });
   }
 
+  void _showUnifiedDeductModal(BuildContext context, FinanceProvider provider) {
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
+    AppReason? selectedReason;
+    ExpenseDefinition? selectedTemplate;
+    bool isRecurring = false;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1C1F24),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+              top: 24,
+              left: 24,
+              right: 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Deduct Cash Expense',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon:
+                            const Icon(Icons.close, color: AppColors.labelGray),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Template Quick Selector
+                  if (provider.expenseDefinitions.isNotEmpty) ...[
+                    const Text('Saved Templates',
+                        style: TextStyle(
+                            color: AppColors.labelGray, fontSize: 13)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 44,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: provider.expenseDefinitions.length,
+                        itemBuilder: (context, index) {
+                          final def = provider.expenseDefinitions[index];
+                          final isSelected = selectedTemplate?.id == def.id;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: FilterChip(
+                              label: Text(def.name),
+                              selected: isSelected,
+                              onSelected: (val) {
+                                setModalState(() {
+                                  if (val) {
+                                    selectedTemplate = def;
+                                    amountController.text =
+                                        def.defaultAmount.toStringAsFixed(0);
+                                    if (def.reasonId != null) {
+                                      selectedReason =
+                                          provider.reasons.firstWhere(
+                                        (r) => r.id == def.reasonId,
+                                        orElse: () => provider.reasons.first,
+                                      );
+                                    }
+                                  } else {
+                                    selectedTemplate = null;
+                                  }
+                                });
+                              },
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.05),
+                              selectedColor:
+                                  AppColors.primaryBlue.withValues(alpha: 0.2),
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? AppColors.primaryBlue
+                                    : Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Amount Field
+                  TextField(
+                    controller: amountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      hintStyle:
+                          TextStyle(color: Colors.white.withValues(alpha: 0.1)),
+                      suffixText: 'ETB',
+                      suffixStyle: const TextStyle(
+                          color: AppColors.labelGray, fontSize: 16),
+                      enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.1))),
+                      focusedBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(
+                              color: AppColors.primaryBlue, width: 2)),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Reason Selector
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              isScrollControlled: true,
+                              builder: (_) => ReasonSelectionSheet(
+                                initialReason: selectedReason,
+                                onReasonSelected: (r) {
+                                  setModalState(() => selectedReason = r);
+                                },
+                              ),
+                            );
+                          },
+                          child: Container(
+                            height: 52,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.category_rounded,
+                                    color: AppColors.primaryBlue, size: 20),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    selectedReason?.name ?? 'Select Reason',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const Icon(Icons.keyboard_arrow_right,
+                                    color: AppColors.labelGray, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Quick Add Reason Button
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color:
+                                  AppColors.primaryBlue.withValues(alpha: 0.3)),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.add,
+                              color: AppColors.primaryBlue, size: 24),
+                          onPressed: () {
+                            _showQuickAddReasonDialog(context, (newReason) {
+                              setModalState(() {
+                                selectedReason = newReason;
+                              });
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Note Field
+                  TextField(
+                    controller: noteController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Short Note (Optional)',
+                      labelStyle: const TextStyle(color: AppColors.labelGray),
+                      prefixIcon:
+                          const Icon(Icons.notes, color: AppColors.labelGray),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.05),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Recurring Toggle
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Save as Template',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600)),
+                            SizedBox(height: 4),
+                            Text('Easily reuse this amount and reason later',
+                                style: TextStyle(
+                                    color: AppColors.labelGray, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      AppSwitch(
+                        value: isRecurring,
+                        onChanged: (val) {
+                          setModalState(() => isRecurring = val);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Action Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        final amtStr = amountController.text.trim();
+                        final amt = double.tryParse(amtStr);
+                        if (amt == null || amt <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Invalid amount')));
+                          return;
+                        }
+
+                        // Create the transaction
+                        final tx = CashTransaction(
+                          type: 'expense',
+                          amount: amt,
+                          date: DateTime.now(),
+                          description: noteController.text.trim(),
+                          reasonId: selectedReason?.id,
+                          reasonName: selectedReason?.name,
+                          expenseDefinitionId: selectedTemplate?.id,
+                        );
+
+                        await provider.addCashTransaction(tx);
+
+                        // If "Save as Template" is on, and no template selected, create it
+                        if (isRecurring && selectedTemplate == null) {
+                          final newDef = ExpenseDefinition(
+                            name: selectedReason?.name ??
+                                (noteController.text.trim().isNotEmpty
+                                    ? noteController.text.trim()
+                                    : 'New Template'),
+                            defaultAmount: amt,
+                            isRecurring:
+                                false, // Start as one-time template unless user edits it in Manage
+                            reasonId: selectedReason?.id,
+                          );
+                          await provider.addExpenseDefinition(newDef);
+                        }
+
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Deduct Cash',
+                          style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
   void _showAddCashModal(BuildContext context, FinanceProvider provider) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F1417),
+      backgroundColor: const Color(0xFF1C1F24),
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       isScrollControlled: true,
       builder: (context) {
         return Padding(
@@ -327,56 +649,76 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Add Cash',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Add Cash',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppColors.labelGray),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               TextField(
                 controller: amountController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
                 decoration: InputDecoration(
-                  labelText: 'Amount (ETB)',
-                  labelStyle: const TextStyle(color: AppColors.textGray),
-                  enabledBorder: OutlineInputBorder(
+                  hintText: '0.00',
+                  hintStyle:
+                      TextStyle(color: Colors.white.withValues(alpha: 0.1)),
+                  suffixText: 'ETB',
+                  suffixStyle:
+                      const TextStyle(color: AppColors.labelGray, fontSize: 16),
+                  enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(
                           color: Colors.white.withValues(alpha: 0.1))),
-                  focusedBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primaryBlue)),
+                  focusedBorder: const UnderlineInputBorder(
+                      borderSide:
+                          BorderSide(color: AppColors.primaryBlue, width: 2)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               TextField(
                 controller: noteController,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  labelText: 'Note (Optional)',
-                  labelStyle: const TextStyle(color: AppColors.textGray),
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1))),
-                  focusedBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primaryBlue)),
+                  labelText: 'Source / Note (Optional)',
+                  labelStyle: const TextStyle(color: AppColors.labelGray),
+                  prefixIcon:
+                      const Icon(Icons.notes, color: AppColors.labelGray),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.mintGreen,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: () {
-                    final amountstr = amountController.text.trim();
-                    if (amountstr.isNotEmpty &&
-                        double.tryParse(amountstr) != null) {
-                      final amt = double.parse(amountstr);
+                    final amtStr = amountController.text.trim();
+                    final amt = double.tryParse(amtStr);
+                    if (amt != null && amt > 0) {
                       provider.addCashTransaction(CashTransaction(
                         type: 'addition',
                         amount: amt,
@@ -388,7 +730,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                       Navigator.pop(context);
                     }
                   },
-                  child: const Text('Add Cash',
+                  child: const Text('Add to Balance',
                       style: TextStyle(
                           color: Colors.black,
                           fontSize: 16,
@@ -403,224 +745,41 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     );
   }
 
-  void _showOneTimeExpenseModal(
-      BuildContext context, FinanceProvider provider) {
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-
-    showModalBottomSheet(
+  void _showOverrideAmountDialog(BuildContext context, FinanceProvider provider,
+      int id, double oldAmount) {
+    final controller =
+        TextEditingController(text: oldAmount.toStringAsFixed(0));
+    showDialog(
       context: context,
-      backgroundColor: const Color(0xFF0F1417),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      isScrollControlled: true,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            top: 24,
-            left: 24,
-            right: 24,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1F24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Edit Amount', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'New Amount',
+            labelStyle: TextStyle(color: AppColors.labelGray),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Add One-Time Expense',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Amount (ETB)',
-                  labelStyle: const TextStyle(color: AppColors.textGray),
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1))),
-                  focusedBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primaryBlue)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: noteController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Expense Name / Note',
-                  labelStyle: const TextStyle(color: AppColors.textGray),
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.1))),
-                  focusedBorder: const OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primaryBlue)),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.alertRed,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {
-                    final amountstr = amountController.text.trim();
-                    if (amountstr.isNotEmpty &&
-                        double.tryParse(amountstr) != null) {
-                      final amt = double.parse(amountstr);
-                      provider.addCashTransaction(CashTransaction(
-                        type: 'expense',
-                        amount: amt,
-                        date: DateTime.now(),
-                        description: noteController.text.trim().isEmpty
-                            ? 'One-Time Expense'
-                            : noteController.text.trim(),
-                      ));
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text('Deduct Expense',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final amt = double.tryParse(controller.text);
+              if (amt != null) {
+                provider.updateCashTransactionAmount(id, amt);
+                Navigator.pop(c);
+              }
+            },
+            child: const Text('Update',
+                style: TextStyle(color: AppColors.primaryBlue)),
           ),
-        );
-      },
-    );
-  }
-
-  void _showDeductExpenseModal(BuildContext context, FinanceProvider provider) {
-    if (provider.expenseDefinitions.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No Expense Templates defined! Create one first.')));
-      return;
-    }
-
-    ExpenseDefinition? selectedDef;
-    final amountController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF0F1417),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-              top: 24,
-              left: 24,
-              right: 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Deduct Expense',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<ExpenseDefinition>(
-                  decoration: InputDecoration(
-                    labelText: 'Select Template',
-                    labelStyle: const TextStyle(color: AppColors.textGray),
-                    enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.1))),
-                    focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.primaryBlue)),
-                  ),
-                  dropdownColor: const Color(0xFF1E272C),
-                  initialValue: selectedDef,
-                  items: provider.expenseDefinitions
-                      .map((def) => DropdownMenuItem(
-                            value: def,
-                            child: Text(def.name,
-                                style: const TextStyle(color: Colors.white)),
-                          ))
-                      .toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      selectedDef = val;
-                      if (val != null) {
-                        amountController.text =
-                            val.defaultAmount.toStringAsFixed(2);
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Amount (ETB)',
-                    labelStyle: const TextStyle(color: AppColors.textGray),
-                    enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.1))),
-                    focusedBorder: const OutlineInputBorder(
-                        borderSide: BorderSide(color: AppColors.primaryBlue)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.alertRed,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () {
-                      final amountstr = amountController.text.trim();
-                      if (selectedDef != null &&
-                          amountstr.isNotEmpty &&
-                          double.tryParse(amountstr) != null) {
-                        final amt = double.parse(amountstr);
-                        provider.addCashTransaction(CashTransaction(
-                          type: 'expense',
-                          amount: amt,
-                          date: DateTime.now(),
-                          description: 'Used template: ${selectedDef!.name}',
-                          expenseDefinitionId: selectedDef!.id,
-                        ));
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: const Text('Deduct Expense',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        });
-      },
+        ],
+      ),
     );
   }
 
@@ -628,84 +787,73 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
       {required IconData icon,
       required String label,
       required VoidCallback onTap}) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
       child: Column(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
-            child: Icon(icon, color: Colors.white, size: 20),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(label,
-              style: const TextStyle(color: AppColors.textWhite, fontSize: 11)),
+              style: const TextStyle(
+                  color: AppColors.labelGray,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  void _showOverrideAmountDialog(BuildContext context, FinanceProvider provider,
-      int id, double currentAmount) {
-    final amountController =
-        TextEditingController(text: currentAmount.toStringAsFixed(2));
-
+  void _showQuickAddReasonDialog(
+      BuildContext context, Function(AppReason) onCreated) {
+    final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1C1F24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Override Amount',
-            style: TextStyle(color: Colors.white, fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Enter the correct amount for this transaction:',
-                style: TextStyle(color: AppColors.textGray, fontSize: 14)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: amountController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
-          ],
+        title: const Text('New Reason', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'e.g., Snacks, Taxi...',
+            hintStyle: const TextStyle(color: AppColors.labelGray),
+            enabledBorder: UnderlineInputBorder(
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.primaryBlue)),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textGray)),
+                style: TextStyle(color: AppColors.labelGray)),
           ),
           TextButton(
-            onPressed: () {
-              final newAmount = double.tryParse(amountController.text.trim());
-              if (newAmount != null) {
-                provider.updateCashTransactionAmount(id, newAmount);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Amount updated successfully')),
-                );
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                final provider =
+                    Provider.of<FinanceProvider>(context, listen: false);
+                final newReason = await provider.addReason(name);
+                onCreated(newReason);
+                if (context.mounted) Navigator.pop(context);
               }
             },
-            child: const Text('Update',
-                style: TextStyle(
-                    color: AppColors.mintGreen, fontWeight: FontWeight.bold)),
+            child: const Text('Add',
+                style: TextStyle(color: AppColors.primaryBlue)),
           ),
         ],
       ),

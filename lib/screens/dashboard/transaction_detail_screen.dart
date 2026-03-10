@@ -9,6 +9,7 @@ import '../../models/loan_record.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../loans/loan_management_screen.dart';
+import 'internal_transfer_picker_sheet.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
@@ -38,18 +39,28 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   void _showReasonPicker(BuildContext context, FinanceProvider provider) {
+    AppReason? initial = _selectedReason;
+    if (initial == null && widget.transaction.resolvedReason != null) {
+      initial = provider.reasons
+          .where((r) =>
+              r.name.toLowerCase() ==
+              widget.transaction.resolvedReason!.toLowerCase())
+          .firstOrNull;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) {
+      builder: (BottomSheetContext) {
         return _ReasonPickerSheet(
-          reasons: provider.reasons,
-          selectedReason: _selectedReason,
-          onSelected: (reason) {
+          provider: provider,
+          initialReason: initial,
+          onSave: (reason) {
             setState(() {
               _selectedReason = reason;
             });
+            _save(provider);
           },
         );
       },
@@ -57,37 +68,58 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Future<void> _save(FinanceProvider provider) async {
-    if (widget.transaction.id == null) return;
+    print('DEBUG: _save called for transaction ${widget.transaction.id}');
+    if (widget.transaction.id == null) {
+      print('DEBUG: transaction ID is null, aborting _save');
+      return;
+    }
 
     final noteText = _noteController.text.trim();
+    // Use the potentially new _selectedReason if available
+    final currentResolvedReason =
+        _selectedReason?.name ?? widget.transaction.resolvedReason ?? '';
+
+    print('DEBUG: currentResolvedReason is "$currentResolvedReason"');
+
+    bool changesMade = false;
 
     if (_selectedReason != null) {
+      print(
+          'DEBUG: updating reason to ${_selectedReason!.name} (ID: ${_selectedReason!.id})');
+      // Re-save even if same reason to ensure new notes take effect
       await provider.updateTransactionReason(
         widget.transaction.id!,
         reasonId: _selectedReason!.id,
         customReasonText: noteText.isNotEmpty ? noteText : null,
       );
-    } else if (noteText.isNotEmpty) {
+      changesMade = true;
+    } else if (noteText != (widget.transaction.customReasonText ?? '')) {
+      print('DEBUG: updating notes only ($noteText)');
       await provider.updateTransactionReason(
         widget.transaction.id!,
-        customReasonText: noteText,
+        customReasonText: noteText.isNotEmpty ? noteText : null,
       );
+      changesMade = true;
     } else {
-      return;
+      print('DEBUG: no changes made');
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Reason saved ✓'),
-          backgroundColor: AppColors.primaryBlue,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      print('DEBUG: showing snackbar, mounted');
+      if (changesMade) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reason saved ✓'),
+            backgroundColor: AppColors.primaryBlue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
 
-      // If the selected reason is "Loan", offer to create a loan record
-      final reasonName = _selectedReason?.name ?? '';
-      if (reasonName.toLowerCase() == 'loan' && mounted) {
+      print('DEBUG: checking reason "$currentResolvedReason" for modals');
+      // Check the new reason name to trigger modals
+      if (currentResolvedReason.toLowerCase() == 'loan' && mounted) {
+        print('DEBUG: showing loan modal');
         await Future.delayed(const Duration(milliseconds: 400));
         if (!mounted) return;
         final shouldCreate = await showDialog<bool>(
@@ -140,6 +172,33 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
           );
         }
+      } else if (currentResolvedReason.toLowerCase() == 'internal transfer' &&
+          mounted) {
+        print('DEBUG: condition met for internal transfer modal');
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted) {
+          print('DEBUG: unmounted before showing IT modal');
+          return;
+        }
+        if (widget.transaction.linkedTransactionId == null) {
+          print('DEBUG: linkedTransactionId is null, showing modal');
+          // Show the picker
+          await showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => InternalTransferPickerSheet(
+              sourceTransaction: widget.transaction,
+              provider: provider,
+            ),
+          );
+        } else {
+          print(
+              'DEBUG: linkedTransactionId is NOT null! (${widget.transaction.linkedTransactionId})');
+        }
+      } else {
+        print(
+            'DEBUG: reason "$currentResolvedReason" did not match internal transfer, or not mounted');
       }
     }
   }
@@ -340,6 +399,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         if (linkedLoan != null) ...[
                           const SizedBox(height: 24),
                           _buildLoanTrackingCard(context, linkedLoan, provider),
+                        ] else if (widget.transaction.linkedTransactionId !=
+                            null) ...[
+                          const SizedBox(height: 24),
+                          _buildInternalTransferCard(context, provider),
                         ],
                       ],
                     ),
@@ -531,26 +594,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               ),
                             ),
                             onChanged: (_) => setState(() {}),
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () => _save(provider),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primaryBlue,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
-                                elevation: 0,
-                              ),
-                              child: const Text('Save Changes',
-                                  style: TextStyle(
-                                      color: Color(0xFF1F1F25),
-                                      fontWeight: FontWeight.bold)),
-                            ),
+                            onEditingComplete: () {
+                              FocusScope.of(context).unfocus();
+                              _save(provider);
+                            },
                           ),
                         ],
                       ),
@@ -813,122 +860,445 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       ),
     );
   }
+
+  Widget _buildInternalTransferCard(
+      BuildContext context, FinanceProvider provider) {
+    AppTransaction? linkedTx;
+    try {
+      linkedTx = provider.transactions
+          .firstWhere((t) => t.id == widget.transaction.linkedTransactionId);
+    } catch (_) {}
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.sync_alt,
+                    color: AppColors.primaryBlue, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Internal Transfer',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      linkedTx != null
+                          ? 'Linked to ${linkedTx.sender}'
+                          : 'Linked to another transaction',
+                      style: const TextStyle(
+                        color: AppColors.primaryBlue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (linkedTx != null) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Opposite Amount:',
+                  style: TextStyle(color: AppColors.labelGray, fontSize: 11),
+                ),
+                Text(
+                  '${NumberFormat('#,##0.00').format(linkedTx.amount)} ETB (${linkedTx.type == 'income' ? '+' : '-'})',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ]
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────
 //  Reason picker bottom sheet
 // ─────────────────────────────────────────────────────────
-class _ReasonPickerSheet extends StatelessWidget {
-  final List<AppReason> reasons;
-  final AppReason? selectedReason;
-  final ValueChanged<AppReason> onSelected;
+class _ReasonPickerSheet extends StatefulWidget {
+  final FinanceProvider provider;
+  final AppReason? initialReason;
+  final ValueChanged<AppReason> onSave;
 
   const _ReasonPickerSheet({
-    required this.reasons,
-    required this.selectedReason,
-    required this.onSelected,
+    required this.provider,
+    required this.initialReason,
+    required this.onSave,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final systemReasons = reasons.where((r) => r.isSystem).toList();
-    final userReasons = reasons.where((r) => !r.isSystem).toList();
+  State<_ReasonPickerSheet> createState() => _ReasonPickerSheetState();
+}
 
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            margin: const EdgeInsets.only(top: 12, bottom: 4),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.textGray.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(2),
+class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
+  AppReason? _selectedReason;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedReason = widget.initialReason;
+  }
+
+  void _showAddReasonDialog() {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('New Reason',
+            style: TextStyle(color: AppColors.textWhite)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.textWhite),
+          decoration: InputDecoration(
+            hintText: 'Reason name…',
+            hintStyle:
+                TextStyle(color: AppColors.textGray.withValues(alpha: 0.6)),
+            filled: true,
+            fillColor: AppColors.surfaceLight.withValues(alpha: 0.1),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Text('Select Reason',
-                    style: TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold)),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Icon(Icons.close,
-                      color: AppColors.textGray, size: 20),
-                ),
-              ],
-            ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textGray)),
           ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (systemReasons.isNotEmpty) ...[
-                    _sectionLabel('System Reasons'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: systemReasons
-                          .map((r) => _ReasonChip(
-                                reason: r,
-                                isSelected: selectedReason?.id == r.id,
-                                onTap: () {
-                                  onSelected(r);
-                                  Navigator.pop(context);
-                                },
-                              ))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (userReasons.isNotEmpty) ...[
-                    _sectionLabel('My Reasons'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: userReasons
-                          .map((r) => _ReasonChip(
-                                reason: r,
-                                isSelected: selectedReason?.id == r.id,
-                                onTap: () {
-                                  onSelected(r);
-                                  Navigator.pop(context);
-                                },
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                  if (userReasons.isEmpty && systemReasons.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('No reasons yet.',
-                          style: TextStyle(color: AppColors.textGray)),
-                    ),
-                ],
-              ),
-            ),
+          TextButton(
+            onPressed: () async {
+              final name = ctrl.text.trim();
+              if (name.isNotEmpty) {
+                await widget.provider.addReason(name);
+                if (mounted) {
+                  final newReason = widget.provider.reasons
+                      .where((r) => r.name.toLowerCase() == name.toLowerCase())
+                      .firstOrNull;
+                  if (newReason != null) {
+                    setState(() {
+                      _selectedReason = newReason;
+                    });
+                  }
+                }
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Add',
+                style: TextStyle(color: AppColors.primaryBlue)),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildSpecialTile(AppReason reason) {
+    bool isSelected = _selectedReason?.id == reason.id;
+    String desc = '';
+    final lower = reason.name.toLowerCase();
+    if (lower == 'bounce') {
+      desc = 'Excludes this transaction from income/expense calculations';
+    } else if (lower == 'internal transfer') {
+      desc = 'Links to another transaction to balance them out';
+    } else if (lower == 'cash') {
+      desc = 'Used for ATM withdrawals and physical cash deposits';
+    }
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedReason = reason;
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primaryBlue.withValues(alpha: 0.15)
+              : AppColors.surfaceLight.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primaryBlue
+                : AppColors.surfaceLight.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.primaryBlue.withValues(alpha: 0.2)
+                    : AppColors.surfaceLight.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.star_border,
+                  color:
+                      isSelected ? AppColors.primaryBlue : AppColors.textGray,
+                  size: 16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(reason.name,
+                      style: TextStyle(
+                          color: isSelected
+                              ? AppColors.primaryBlue
+                              : AppColors.textWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold)),
+                  if (desc.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(desc,
+                        style: const TextStyle(
+                            color: AppColors.textGray, fontSize: 11)),
+                  ],
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check_circle,
+                  color: AppColors.primaryBlue, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<FinanceProvider>(builder: (ctx, provider, _) {
+      final systemReasons = provider.reasons.where((r) => r.isSystem).toList();
+      final userReasons = provider.reasons.where((r) => !r.isSystem).toList();
+
+      final specialNames = ['bounce', 'internal transfer', 'cash'];
+      final normalSystem = systemReasons
+          .where((r) => !specialNames.contains(r.name.toLowerCase()))
+          .toList();
+      final specialSystem = systemReasons
+          .where((r) => specialNames.contains(r.name.toLowerCase()))
+          .toList();
+
+      return Container(
+        margin: const EdgeInsets.all(16),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 4),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textGray.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Text('Select Reason',
+                      style: TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.close,
+                        color: AppColors.textGray, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (normalSystem.isNotEmpty) ...[
+                      _sectionLabel('System Categories'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: normalSystem
+                            .map((r) => _ReasonChip(
+                                  reason: r,
+                                  isSelected: _selectedReason?.id == r.id,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedReason = r;
+                                    });
+                                  },
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (specialSystem.isNotEmpty) ...[
+                      _sectionLabel('Special Reasons'),
+                      const SizedBox(height: 4),
+                      ...specialSystem
+                          .map((r) => _buildSpecialTile(r))
+                          ,
+                      const SizedBox(height: 12),
+                    ],
+                    // My Reasons
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _sectionLabel('My Reasons'),
+                        const Spacer(),
+                        GestureDetector(
+                            onTap: _showAddReasonDialog,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryBlue
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.add,
+                                  size: 16, color: AppColors.primaryBlue),
+                            )),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (userReasons.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: userReasons
+                            .map((r) => _ReasonChip(
+                                  reason: r,
+                                  isSelected: _selectedReason?.id == r.id,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedReason = r;
+                                    });
+                                  },
+                                ))
+                            .toList(),
+                      )
+                    else
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No custom reasons yet.',
+                            style: TextStyle(
+                                color: AppColors.textGray, fontSize: 12)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            // Save button
+            Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: AppColors.surfaceDark,
+                    borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(24)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, -5),
+                      )
+                    ]),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _selectedReason == null
+                        ? null
+                        : () {
+                            print(
+                                'DEBUG: Button clicked with reason ${_selectedReason!.name}');
+                            Navigator.of(context).pop();
+                            widget.onSave(_selectedReason!);
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      disabledBackgroundColor:
+                          AppColors.primaryBlue.withValues(alpha: 0.3),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
+                    ),
+                    child: Text('Save Changes',
+                        style: TextStyle(
+                            color: _selectedReason == null
+                                ? AppColors.textWhite.withValues(alpha: 0.5)
+                                : const Color(0xFF1F1F25),
+                            fontWeight: FontWeight.bold)),
+                  ),
+                )),
+          ],
+        ),
+      );
+    });
+  }
+
   Widget _sectionLabel(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 2),
         child: Text(label,
             style: const TextStyle(
                 color: AppColors.textGray,

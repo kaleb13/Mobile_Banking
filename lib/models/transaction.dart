@@ -14,6 +14,8 @@ class AppTransaction {
   final int? reasonId; // points to reasons table (reusable)
   final String? customReasonText; // one-time text, stored only on transaction
   final String? reason; // legacy / convenience resolved name
+  final String?
+      linkedTransactionId; // points to another transaction for internal transfers
 
   AppTransaction({
     this.id,
@@ -29,6 +31,7 @@ class AppTransaction {
     this.reasonId,
     this.customReasonText,
     this.reason,
+    this.linkedTransactionId,
   });
 
   /// Resolved display label: prefer reason name from `reason` field (pre-resolved),
@@ -51,6 +54,7 @@ class AppTransaction {
       'customReasonText': customReasonText,
       // Keep legacy 'reason' column in sync for backward compat
       'reason': reason ?? customReasonText,
+      'linkedTransactionId': linkedTransactionId,
     };
   }
 
@@ -69,6 +73,7 @@ class AppTransaction {
       reasonId: map['reasonId'] as int?,
       customReasonText: map['customReasonText'] as String?,
       reason: map['reason'] as String?,
+      linkedTransactionId: map['linkedTransactionId'] as String?,
     );
   }
 
@@ -79,6 +84,8 @@ class AppTransaction {
     bool clearCustomReason = false,
     String? reason,
     bool clearReason = false,
+    String? linkedTransactionId,
+    bool clearLinkedTransactionId = false,
   }) {
     return AppTransaction(
       id: id,
@@ -96,6 +103,9 @@ class AppTransaction {
           ? null
           : (customReasonText ?? this.customReasonText),
       reason: clearReason ? null : (reason ?? this.reason),
+      linkedTransactionId: clearLinkedTransactionId
+          ? null
+          : (linkedTransactionId ?? this.linkedTransactionId),
     );
   }
 }

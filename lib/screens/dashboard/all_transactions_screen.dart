@@ -663,7 +663,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildAmountText(tx),
+                    _buildAmountText(tx, provider),
                     const SizedBox(height: 6),
                     Text(
                       DateFormat('MMM d, HH:mm').format(tx.date),
@@ -714,7 +714,18 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildAmountText(AppTransaction tx) {
+  Widget _buildAmountText(AppTransaction tx, FinanceProvider provider) {
+    if (!provider.isBalanceVisible) {
+      return const Text(
+        '****',
+        style: TextStyle(
+          color: AppColors.textWhite,
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+
     final String amountStr = NumberFormat('#,##0.00').format(tx.amount);
     final amountParts = amountStr.split('.');
 

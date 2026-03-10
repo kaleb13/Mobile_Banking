@@ -194,4 +194,14 @@ class CbeParser {
       totalBalance: totalBalance,
     );
   }
+
+  static String? extractOwnerName(String message) {
+    if (message.startsWith("Dear ")) {
+      final commaIdx = message.indexOf(',');
+      if (commaIdx != -1 && commaIdx > 5) {
+        return message.substring(5, commaIdx).trim();
+      }
+    }
+    return null;
+  }
 }

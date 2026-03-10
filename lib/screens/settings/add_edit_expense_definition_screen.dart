@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/expense_definition.dart';
+import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../shell/custom_bottom_nav_bar.dart';
 import '../../theme/app_theme.dart';
+import '../dashboard/reason_selection_sheet.dart';
 
 class AddEditExpenseDefinitionScreen extends StatefulWidget {
   final ExpenseDefinition? expenseDefinition;
@@ -28,6 +30,7 @@ class _AddEditExpenseDefinitionScreenState
   String _recurringType =
       'daily'; // 'daily', 'interval', 'specific_day', 'days_of_week'
   List<int> _selectedDays = [];
+  AppReason? _selectedReason;
 
   @override
   void initState() {
@@ -52,6 +55,19 @@ class _AddEditExpenseDefinitionScreenState
           .map((e) => int.tryParse(e) ?? 1)
           .toList();
     }
+
+    if (def?.reasonId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final provider = Provider.of<FinanceProvider>(context, listen: false);
+        final reason =
+            provider.reasons.where((r) => r.id == def!.reasonId).firstOrNull;
+        if (reason != null && mounted) {
+          setState(() {
+            _selectedReason = reason;
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -65,9 +81,16 @@ class _AddEditExpenseDefinitionScreenState
   }
 
   void _saveDefinition() {
-    if (!_formKey.currentState!.validate()) return;
+    if (_selectedReason == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Please select a reason (category) first.')));
+      return;
+    }
 
-    final name = _nameController.text.trim();
+    final reasonName = _selectedReason!.name;
+    final description = _nameController.text.trim();
+    final templateName = description.isNotEmpty ? description : reasonName;
+
     final amount = double.parse(_amountController.text.trim());
     int? intervalDays;
     int? specificDay;
@@ -107,7 +130,7 @@ class _AddEditExpenseDefinitionScreenState
 
     final newDef = ExpenseDefinition(
       id: widget.expenseDefinition?.id,
-      name: name,
+      name: templateName,
       defaultAmount: amount,
       isRecurring: _isRecurring,
       recurringType: _isRecurring ? _recurringType : null,
@@ -120,6 +143,7 @@ class _AddEditExpenseDefinitionScreenState
           : null,
       timesPerDay: _isRecurring ? timesPerDay : 1,
       lastAppliedDate: widget.expenseDefinition?.lastAppliedDate,
+      reasonId: _selectedReason?.id,
     );
 
     final provider = Provider.of<FinanceProvider>(context, listen: false);
@@ -174,12 +198,92 @@ class _AddEditExpenseDefinitionScreenState
                       fontWeight: FontWeight.w600,
                       fontSize: 16)),
               const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => ReasonSelectionSheet(
+                            initialReason: _selectedReason,
+                            onReasonSelected: (reason) {
+                              setState(() {
+                                _selectedReason = reason;
+                              });
+                            },
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.03),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.1)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _selectedReason != null
+                                  ? Icons.category
+                                  : Icons.category_outlined,
+                              color: _selectedReason != null
+                                  ? AppColors.primaryBlue
+                                  : AppColors.labelGray,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _selectedReason?.name ??
+                                    'Select Reason / Category',
+                                style: TextStyle(
+                                  color: _selectedReason != null
+                                      ? Colors.white
+                                      : AppColors.labelGray,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.labelGray, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Quick Add Reason Button
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.add,
+                          color: AppColors.primaryBlue, size: 24),
+                      onPressed: () {
+                        _showQuickAddReasonDialog(context);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
               _buildTextField(
                 controller: _nameController,
-                label: 'Expense Name (e.g., Lunch, Coffee)',
-                validator: (val) => val == null || val.trim().isEmpty
-                    ? 'Please enter a name'
-                    : null,
+                label: 'Description',
+                maxLines: 3,
+                minLines: 2,
               ),
               const SizedBox(height: 16),
               _buildTextField(
@@ -308,16 +412,21 @@ class _AddEditExpenseDefinitionScreenState
     String? hintText,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    int maxLines = 1,
+    int? minLines,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       style: const TextStyle(color: Colors.white),
+      maxLines: maxLines,
+      minLines: minLines,
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
         labelStyle: const TextStyle(color: Color(0xFF9CA3AF)),
         hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+        alignLabelWithHint: maxLines > 1,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
@@ -384,6 +493,57 @@ class _AddEditExpenseDefinitionScreenState
           }).toList(),
         ),
       ],
+    );
+  }
+
+  void _showQuickAddReasonDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1F24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('New Reason', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'e.g., Internet Bill',
+            hintStyle: const TextStyle(color: AppColors.labelGray),
+            enabledBorder: UnderlineInputBorder(
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.primaryBlue)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.labelGray)),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                final provider =
+                    Provider.of<FinanceProvider>(context, listen: false);
+                final newReason = await provider.addReason(name);
+                if (mounted) {
+                  setState(() {
+                    _selectedReason = newReason;
+                  });
+                  Navigator.pop(context);
+                }
+              }
+            },
+            child: const Text('Add',
+                style: TextStyle(color: AppColors.primaryBlue)),
+          ),
+        ],
+      ),
     );
   }
 }

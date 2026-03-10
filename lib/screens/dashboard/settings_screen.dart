@@ -57,7 +57,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Helper for grouped cards
   Widget _buildCardBase(List<Widget> children) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      decoration: BoxDecoration(
+        color:
+            Colors.white.withValues(alpha: 0.035), // Subtle section background
+        borderRadius: BorderRadius.circular(14),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: children,
       ),
@@ -241,8 +247,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         iconColor: const Color(0xFFFFB74D),
                         label: 'Status Bar Notification',
                         subtitle: _showPersistentNotification
-                            ? 'Shown in status bar while active'
-                            : 'Hidden — service still runs in background',
+                            ? 'Shown in status bar'
+                            : 'Hidden while active',
                         value: _showPersistentNotification,
                         onChanged: _setNotificationPref,
                       ),
@@ -330,14 +336,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _sectionLabel(String label) {
     return Padding(
-      padding: const EdgeInsets.only(left: 32, bottom: 8, top: 8),
+      padding: const EdgeInsets.only(left: 32, bottom: 8, top: 24),
       child: Text(
-        label.toUpperCase(),
-        style: const TextStyle(
-          color: AppColors.labelGray,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
+        label,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.4),
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          letterSpacing: -0.1,
         ),
       ),
     );
@@ -357,26 +363,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          splashColor: Colors.white.withValues(alpha: 0.04),
+          splashColor: Colors.white.withValues(alpha: 0.02),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.35),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 trailing ??
-                    const Icon(
+                    Icon(
                       Icons.arrow_forward_ios_rounded,
-                      color: AppColors.labelGray,
+                      color: Colors.white.withValues(alpha: 0.2),
                       size: 14,
                     ),
               ],
@@ -386,8 +406,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (showDivider)
           Container(
             height: 1,
-            margin: const EdgeInsets.only(left: 16, right: 16),
-            color: Colors.white.withValues(alpha: 0.04),
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            color: Colors.white.withValues(alpha: 0.05),
           ),
       ],
     );
@@ -402,7 +422,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
           Expanded(
@@ -413,15 +433,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   label,
                   style: const TextStyle(
                     color: AppColors.textWhite,
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: AppColors.labelGray,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
                     fontSize: 12,
                   ),
                 ),

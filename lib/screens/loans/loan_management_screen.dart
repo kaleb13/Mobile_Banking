@@ -2344,6 +2344,7 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
                 onPressed: _saving ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: accentColor,
+                  foregroundColor: Colors.black,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
@@ -2353,7 +2354,7 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
+                            color: Colors.black, strokeWidth: 2))
                     : const Text('Confirm Payment',
                         style: TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w600)),

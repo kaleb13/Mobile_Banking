@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Shibre uses this service to automate your mobile banking USSD requests for a better experience.</string>
+</resources>

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -52,15 +53,20 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   bool _hasPermission = false;
   bool _isOnboardingComplete;
-  bool _isBalanceVisible = true;
+  bool _isBalanceVisible = false;
   bool _isShowingAll = false;
   bool _isMenuOpen = false;
   int _currentScreenIndex = 0;
+  String? _userName;
+  Timer? _refreshTimer;
+  DateTime? _lastPollTime;
 
   /// [initialOnboardingComplete] should be read from SharedPreferences in
   /// main() BEFORE runApp() so the first frame is always correct.
   FinanceProvider({bool initialOnboardingComplete = false})
       : _isOnboardingComplete = initialOnboardingComplete;
+
+  String? get userName => _userName;
 
   List<AppSender> get senders => _senders;
 
@@ -212,7 +218,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           tx.date.month == now.month &&
           tx.date.day == now.day) {
         final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-        if (!isCash) {
+        final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+            tx.resolvedReason?.toLowerCase() == 'internal transfer';
+        if (!isCash && !isBounce) {
           if (tx.type == 'income') income += tx.amount;
           if (tx.type == 'expense') expense += tx.amount;
         }
@@ -237,7 +245,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     for (final tx in _transactions) {
       if (!isDateInMonthOf(tx.date, now)) continue;
       final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-      if (!isCash) {
+      final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+          tx.resolvedReason?.toLowerCase() == 'internal transfer';
+      if (!isCash && !isBounce) {
         if (tx.type == 'income') income += tx.amount;
         if (tx.type == 'expense') expense += tx.amount;
       }
@@ -289,7 +299,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             tx.type == 'expense' &&
             tx.date.year == now.year &&
             tx.date.month == now.month &&
-            tx.date.day == now.day)
+            tx.date.day == now.day &&
+            tx.resolvedReason?.toLowerCase() != 'bounce' &&
+            tx.resolvedReason?.toLowerCase() != 'internal transfer')
         .toList();
 
     if (todayExpenses.isEmpty) return null;
@@ -315,7 +327,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   Map<String, dynamic>? get mostExpenseThisMonth {
     final now = DateTime.now();
     final monthExpenses = _transactions
-        .where((tx) => tx.type == 'expense' && isDateInMonthOf(tx.date, now))
+        .where((tx) =>
+            tx.type == 'expense' &&
+            isDateInMonthOf(tx.date, now) &&
+            tx.resolvedReason?.toLowerCase() != 'bounce' &&
+            tx.resolvedReason?.toLowerCase() != 'internal transfer')
         .toList();
 
     if (monthExpenses.isEmpty) return null;
@@ -341,7 +357,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   Map<String, dynamic>? get topExpenseHighlight {
     if (_transactions.isEmpty) return null;
 
-    final expenses = _transactions.where((t) => t.type == 'expense').toList();
+    final expenses = _transactions
+        .where((t) =>
+            t.type == 'expense' &&
+            t.resolvedReason?.toLowerCase() != 'bounce' &&
+            t.resolvedReason?.toLowerCase() != 'internal transfer')
+        .toList();
     if (expenses.isEmpty) return null;
 
     Map<String, double> totals = {};
@@ -491,6 +512,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // Load onboarding state first.
     final prefs = await SharedPreferences.getInstance();
     _isOnboardingComplete = prefs.getBool('is_onboarding_complete_v1') ?? false;
+    _userName = prefs.getString('user_name_v1');
 
     if (!_isOnboardingComplete) {
       _isLoading = false;
@@ -506,21 +528,21 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       return;
     }
 
-    // Hardcode parsed providers here
-    _senders = [
-      AppSender(
-        id: '1',
-        senderName: 'Telebirr',
-      ),
-      AppSender(
-        id: '2',
-        senderName: 'CBE',
-      ),
-      AppSender(
-        id: '3',
-        senderName: 'CBE Birr',
-      ),
-    ];
+    // Load senders from DB or seed defaults
+    final dbSenders = await DatabaseService.instance.getSenders();
+    if (dbSenders.isNotEmpty) {
+      _senders = dbSenders;
+    } else {
+      _senders = [
+        AppSender(id: '1', senderName: 'Telebirr'),
+        AppSender(id: '2', senderName: 'CBE'),
+        AppSender(id: '3', senderName: 'CBE Birr'),
+      ];
+      // Seed them into DB for future persistent updates
+      for (var s in _senders) {
+        await DatabaseService.instance.insertSender(s);
+      }
+    }
 
     _transactions = await DatabaseService.instance.getTransactions();
     _reasons = await DatabaseService.instance.getReasons();
@@ -599,6 +621,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           } else if ((upSender.contains('CBE') ||
                   upBody.contains('BANKING WITH CBE')) &&
               !processedSenders.contains('CBE')) {
+            // Try to extract name from ANY CBE message during first scan
+            if (_userName == null) {
+              final name = CbeParser.extractOwnerName(msg.body!);
+              if (name != null) {
+                _userName = name;
+                await prefs.setString('user_name_v1', name);
+              }
+            }
             AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
@@ -643,13 +673,74 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     _calculateStats();
     _isLoading = false;
+
+    // Initialize _lastPollTime for periodic refresh
+    // We take the latest transaction date or the install anchor as starting point
+    _lastPollTime = lastTxDate ??
+        DateTime.tryParse(prefs.getString('install_anchor_date') ?? '');
+    _lastPollTime ??= DateTime.now().subtract(const Duration(days: 30));
+
+    _startPeriodicRefresh();
+
     notifyListeners();
+  }
+
+  void _startPeriodicRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      await _pollForNewMessages();
+    });
+  }
+
+  Future<void> _pollForNewMessages() async {
+    if (!_hasPermission || _lastPollTime == null) return;
+
+    final newMessages = await SmsService().getAllMessages(since: _lastPollTime);
+    if (newMessages.isEmpty) {
+      // Just update poll time to now to keep the window narrow
+      _lastPollTime = DateTime.now();
+      return;
+    }
+
+    // Sort oldest first to maintain sequence if multiple messages arrived
+    newMessages.sort((a, b) =>
+        (a.date ?? DateTime.now()).compareTo(b.date ?? DateTime.now()));
+
+    bool foundNew = false;
+    for (var msg in newMessages) {
+      if (msg.address != null && msg.body != null) {
+        final date = msg.date ?? DateTime.now();
+        await processNewSms(msg.address!, msg.body!, date);
+        foundNew = true;
+        if (date.isAfter(_lastPollTime!)) {
+          _lastPollTime = date;
+        }
+      }
+    }
+
+    if (foundNew) {
+      _transactions = await DatabaseService.instance.getTransactions();
+      await _loadNotifications();
+      _calculateStats();
+      notifyListeners();
+    } else {
+      _lastPollTime = DateTime.now();
+    }
   }
 
   Future<void> loadSenders() async {
     final fromDb = await DatabaseService.instance.getSenders();
     if (fromDb.isNotEmpty) {
       _senders = fromDb;
+    }
+    notifyListeners();
+  }
+
+  Future<void> updateSender(AppSender sender) async {
+    await DatabaseService.instance.updateSender(sender);
+    final index = _senders.indexWhere((s) => s.id == sender.id);
+    if (index != -1) {
+      _senders[index] = sender;
     }
     notifyListeners();
   }
@@ -693,6 +784,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -962,6 +1054,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         manualInflows += ctx.amount;
         // Manual additions to cash (not from bank) increase wealth
         _netOverall += ctx.amount;
+        if (isDateInMonthOf(ctx.date, now)) {
+          _incomeThisMonth += ctx.amount;
+        }
         if (_isShowingAll ||
             (ctx.date.year == _selectedDate.year &&
                 ctx.date.month == _selectedDate.month &&
@@ -972,6 +1067,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         cashOutflows += ctx.amount;
         // Manual cash expenses decrease wealth
         _netOverall -= ctx.amount;
+        if (isDateInMonthOf(ctx.date, now)) {
+          _expenseThisMonth += ctx.amount;
+        }
         if (_isShowingAll ||
             (ctx.date.year == _selectedDate.year &&
                 ctx.date.month == _selectedDate.month &&
@@ -995,13 +1093,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         _todayTransactionCount++;
       }
 
+      bool isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+          tx.resolvedReason?.toLowerCase() == 'internal transfer';
+      if (isBounce) continue;
+
       bool isCashTransfer = tx.reason?.toLowerCase() == 'cash' ||
           tx.customReasonText?.toLowerCase() == 'cash' ||
           tx.resolvedReason?.toLowerCase() == 'cash';
 
       if (tx.type == 'income') {
         if (isDateInMonthOf(tx.date, now)) {
-          _incomeThisMonth += tx.amount;
+          if (!isCashTransfer) {
+            _incomeThisMonth += tx.amount;
+          }
         }
         if (_isShowingAll ||
             (tx.date.year == _selectedDate.year &&
@@ -1016,7 +1120,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         }
       } else if (tx.type == 'expense') {
         if (isDateInMonthOf(tx.date, now)) {
-          _expenseThisMonth += tx.amount;
+          if (!isCashTransfer) {
+            _expenseThisMonth += tx.amount;
+          }
         }
         if (_isShowingAll ||
             (tx.date.year == _selectedDate.year &&
@@ -1119,9 +1225,49 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
               ? customReasonText
               : null,
       reason: resolvedName,
+      linkedTransactionId: oldTx.linkedTransactionId,
     );
     await DatabaseService.instance.updateTransaction(newTx);
     _transactions[index] = newTx;
+    notifyListeners();
+  }
+
+  Future<void> linkAsInternalTransfer(String txId1, String txId2) async {
+    final idx1 = _transactions.indexWhere((t) => t.id == txId1);
+    final idx2 = _transactions.indexWhere((t) => t.id == txId2);
+
+    if (idx1 == -1 || idx2 == -1) return;
+
+    final tx1 = _transactions[idx1];
+    final tx2 = _transactions[idx2];
+
+    final internalTransferReason = _reasons.cast<AppReason?>().firstWhere(
+          (r) => r?.name.toLowerCase() == 'internal transfer',
+          orElse: () => null,
+        );
+
+    final reasonId = internalTransferReason?.id;
+    final reasonName = internalTransferReason?.name ?? 'Internal Transfer';
+
+    final newTx1 = tx1.copyWith(
+      reasonId: reasonId,
+      reason: reasonName,
+      linkedTransactionId: tx2.id,
+    );
+
+    final newTx2 = tx2.copyWith(
+      reasonId: reasonId,
+      reason: reasonName,
+      linkedTransactionId: tx1.id,
+    );
+
+    await DatabaseService.instance.updateTransaction(newTx1);
+    await DatabaseService.instance.updateTransaction(newTx2);
+
+    _transactions[idx1] = newTx1;
+    _transactions[idx2] = newTx2;
+
+    _calculateStats();
     notifyListeners();
   }
 
@@ -1132,11 +1278,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> addReason(String name) async {
+  Future<AppReason> addReason(String name) async {
     final id = await DatabaseService.instance
         .insertReason(AppReason(name: name, isSystem: false));
-    _reasons.add(AppReason(id: id, name: name, isSystem: false));
+    final newReason = AppReason(id: id, name: name, isSystem: false);
+    _reasons.add(newReason);
     notifyListeners();
+    return newReason;
   }
 
   Future<void> editReason(AppReason reason, String newName) async {
@@ -1648,6 +1796,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     String message,
     DateTime date,
   ) async {
+    // If name is not yet captured, try to get it from CBE message
+    if (_userName == null && sender.toUpperCase().contains('CBE')) {
+      final name = CbeParser.extractOwnerName(message);
+      if (name != null) {
+        _userName = name;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_name_v1', name);
+        notifyListeners();
+      }
+    }
+
     // 0. Use modular parsers for specific senders
     if (sender == TelebirrParser.senderNumber ||
         sender.toLowerCase() == TelebirrParser.senderName.toLowerCase()) {
@@ -1874,6 +2033,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             date: dateWithHour,
             description: 'Auto-recurring: ${def.name}',
             expenseDefinitionId: def.id,
+            reasonId: def.reasonId,
+            reasonName: def.reasonId != null
+                ? _reasons.where((r) => r.id == def.reasonId).firstOrNull?.name
+                : null,
           );
           final txId = await DatabaseService.instance.insertCashTransaction(tx);
           final mapped = tx.toMap();

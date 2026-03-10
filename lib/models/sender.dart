@@ -5,12 +5,16 @@ class AppSender {
   final String senderName;
   final List<String> depositKeywords;
   final List<String> expenseKeywords;
+  final String? accountNumber;
+  final String? pin;
 
   AppSender({
     this.id,
     required this.senderName,
     this.depositKeywords = const [],
     this.expenseKeywords = const [],
+    this.accountNumber,
+    this.pin,
   });
 
   Map<String, dynamic> toMap() {
@@ -19,6 +23,8 @@ class AppSender {
       'senderName': senderName,
       'depositKeywords': jsonEncode(depositKeywords),
       'expenseKeywords': jsonEncode(expenseKeywords),
+      'accountNumber': accountNumber,
+      'pin': pin,
     };
   }
 
@@ -32,6 +38,8 @@ class AppSender {
       expenseKeywords: List<String>.from(
         jsonDecode(map['expenseKeywords'] ?? '[]'),
       ),
+      accountNumber: map['accountNumber'],
+      pin: map['pin'],
     );
   }
 }

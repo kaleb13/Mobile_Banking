@@ -11,6 +11,7 @@ import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import 'transaction_detail_screen.dart';
+import 'manage_bank_screen.dart';
 
 class SenderDetailScreen extends StatefulWidget {
   final AppSender sender;
@@ -26,6 +27,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _searchQuery = '';
   String _typeFilter = 'All'; // All, Income, Expense
   final TextEditingController _searchController = TextEditingController();
+  bool _isChartVisible = false;
   double? _touchedX;
 
   @override
@@ -34,9 +36,105 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     super.dispose();
   }
 
+  void _showPNLInfo(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1F1F25),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black54,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  "30D PNL (${widget.sender.senderName})",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  "This 30-Day Profit or Loss calculation for this specific account = (Deposits) - (Expenditures) over the last 30 days.\n\nIt reflects the recent net performance of this wallet or account.",
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF0B90B),
+                    foregroundColor: const Color(0xFF1F1F25),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    "OK",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
+    // Get latest sender info from provider to reflect linked status
+    final currentSender = provider.senders.firstWhere(
+      (s) => s.id == widget.sender.id,
+      orElse: () => widget.sender,
+    );
+    final isLinked =
+        currentSender.accountNumber != null && currentSender.pin != null;
+
     final allTxForSender = provider.transactions
         .where((tx) => tx.name == widget.sender.senderName)
         .toList();
@@ -126,9 +224,15 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         children: [
                           _buildBankCard(
                               currentBalance, monthChange, monthPercent),
-                          const SizedBox(height: 24),
-                          _buildChartSection(allTxForSender),
-                          _buildChartFilters(),
+                          if (isLinked)
+                            _buildDynamicButtons(context, currentSender)
+                          else
+                            _buildAddAccountButton(context),
+                          if (_isChartVisible) ...[
+                            const SizedBox(height: 16),
+                            _buildChartSection(allTxForSender),
+                            _buildChartFilters(),
+                          ],
                           const SizedBox(height: 32),
                           _buildActivityFilterSection(),
                           _buildTransactionList(filteredTransactions),
@@ -340,12 +444,17 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'Your balance',
-                                style: TextStyle(
-                                  color: textColor.withValues(alpha: 0.7),
-                                  fontSize: 12,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Your balance',
+                                    style: TextStyle(
+                                      color: textColor.withValues(alpha: 0.7),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Consumer<FinanceProvider>(
@@ -370,52 +479,87 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                                 },
                               ),
                               const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Text(
-                                    '30D PNL  ',
-                                    style: TextStyle(
-                                      color: textColor.withValues(alpha: 0.7),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.5,
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _isChartVisible = !_isChartVisible;
+                                  });
+                                },
+                                behavior: HitTestBehavior.opaque,
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _showPNLInfo(context),
+                                      behavior: HitTestBehavior.opaque,
+                                      child: IntrinsicWidth(
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              '30D PNL  ',
+                                              style: TextStyle(
+                                                color: textColor.withValues(
+                                                    alpha: 0.7),
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 1),
+                                            CustomPaint(
+                                              size: const Size(
+                                                  double.infinity, 1),
+                                              painter: DashedUnderlinePainter(
+                                                  color: textColor.withValues(
+                                                      alpha: 0.4)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())}',
-                                    style: TextStyle(
+                                    Text(
+                                      '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())}',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '(',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Icon(
+                                      isPositive
+                                          ? Icons.trending_up
+                                          : Icons.trending_down,
                                       color: textColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
+                                      size: 12,
                                     ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '(',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${percent.abs().toStringAsFixed(2)}%)',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Icon(
-                                    isPositive
-                                        ? Icons.trending_up
-                                        : Icons.trending_down,
-                                    color: textColor,
-                                    size: 12,
-                                  ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    '${percent.abs().toStringAsFixed(2)}%)',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      _isChartVisible
+                                          ? Icons.keyboard_arrow_up
+                                          : Icons.keyboard_arrow_down,
+                                      color: textColor.withValues(alpha: 0.54),
+                                      size: 16,
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -438,6 +582,95 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         color: Color(0xFF1F1F25),
       ),
     );
+  }
+
+  Widget _buildDynamicButtons(BuildContext context, AppSender sender) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  label: "View Bank",
+                  icon: Icons.account_balance_rounded,
+                  color: const Color(0xFF2A2A34),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => ManageBankScreen(sender: sender)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  label: "Transfer",
+                  icon: Icons.swap_horiz_rounded,
+                  color: const Color(0xFFF0B90B),
+                  textColor: Colors.black,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Transfer feature coming soon!')),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required Color color,
+    Color textColor = Colors.white,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: textColor.withValues(alpha: 0.8), size: 24),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddAccountButton(BuildContext context) {
+    return const SizedBox.shrink();
   }
 
   /// Variant bottom nav — same sizing/geometry as the home CustomBottomNavBar,
@@ -908,7 +1141,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isIncome ? '+' : '-'}${NumberFormat('#,##0.0').format(tx.amount)}',
+                  Provider.of<FinanceProvider>(context, listen: false)
+                          .isBalanceVisible
+                      ? '${isIncome ? '+' : '-'}${NumberFormat('#,##0.0').format(tx.amount)}'
+                      : '****',
                   style: TextStyle(
                     color: isIncome ? AppColors.mintGreen : Colors.white,
                     fontSize: 15,
@@ -928,4 +1164,28 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       ),
     );
   }
+}
+
+class DashedUnderlinePainter extends CustomPainter {
+  final Color color;
+  DashedUnderlinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    const dashWidth = 1.5;
+    const dashSpace = 1.0;
+    double startX = 0;
+    while (startX < size.width) {
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

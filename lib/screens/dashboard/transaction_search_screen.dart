@@ -410,7 +410,9 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${isIncome ? '+' : '-'}$amountStr',
+                      provider.isBalanceVisible
+                          ? '${isIncome ? '+' : '-'}$amountStr'
+                          : '****',
                       style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,

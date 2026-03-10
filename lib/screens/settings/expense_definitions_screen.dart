@@ -128,9 +128,11 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Icon(
-                                    def.isRecurring
-                                        ? Icons.autorenew
-                                        : Icons.receipt_long,
+                                    def.reasonId != null
+                                        ? Icons.category
+                                        : (def.isRecurring
+                                            ? Icons.autorenew
+                                            : Icons.receipt_long),
                                     color: (def.isRecurring && def.isActive)
                                         ? AppColors.primaryBlue
                                         : AppColors.labelGray,
@@ -156,11 +158,35 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
-                                        '${def.defaultAmount.toStringAsFixed(2)} ETB',
-                                        style: const TextStyle(
-                                            color: AppColors.labelGray,
-                                            fontSize: 12),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            '${def.defaultAmount.toStringAsFixed(2)} ETB',
+                                            style: const TextStyle(
+                                                color: AppColors.labelGray,
+                                                fontSize: 12),
+                                          ),
+                                          if (def.reasonId != null) ...[
+                                            const SizedBox(width: 8),
+                                            const Text('•',
+                                                style: TextStyle(
+                                                    color: AppColors.textGray,
+                                                    fontSize: 12)),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              provider.reasons
+                                                      .where((r) =>
+                                                          r.id == def.reasonId)
+                                                      .firstOrNull
+                                                      ?.name ??
+                                                  'Categorized',
+                                              style: const TextStyle(
+                                                  color: AppColors.primaryBlue,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       Wrap(
                                         crossAxisAlignment:

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
+import '../../models/cash_transaction.dart';
 import '../../theme/app_theme.dart';
 
 // ─── Period Enum ──────────────────────────────────────────────────────────────
@@ -45,7 +46,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Filtered transactions ──────────────────────────────────────────────────
-  List<AppTransaction> _filtered(List<AppTransaction> all) {
+  ({List<AppTransaction> txs, List<CashTransaction> cashTxs}) _filtered(
+      List<AppTransaction> allTxs, List<CashTransaction> allCashTxs) {
     final now = DateTime.now();
     DateTime cutoff;
     switch (_period) {
@@ -65,37 +67,48 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         cutoff = now.subtract(const Duration(days: 360));
         break;
     }
-    return all.where((t) => t.date.isAfter(cutoff)).toList();
+
+    final filteredTxs = allTxs
+        .where((t) =>
+            t.date.isAfter(cutoff) &&
+            t.resolvedReason?.toLowerCase() != 'bounce' &&
+            t.resolvedReason?.toLowerCase() != 'internal transfer')
+        .toList();
+
+    final filteredCashTxs =
+        allCashTxs.where((t) => t.date.isAfter(cutoff)).toList();
+
+    return (txs: filteredTxs, cashTxs: filteredCashTxs);
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    final txs = _filtered(provider.transactions);
+    final filtered =
+        _filtered(provider.transactions, provider.cashTransactions);
+    final txs = filtered.txs;
+    final cashTxs = filtered.cashTxs;
 
-    // Separate regular transactions and cash transactions
-    final regularTxs =
-        txs.where((t) => t.reason?.toLowerCase() != 'cash').toList();
-    final cashWithdrawals =
-        txs.where((t) => t.reason?.toLowerCase() == 'cash').toList();
+    // Separate regular transactions and cash transfers
+    final regularTxs = txs
+        .where((t) =>
+            t.reason?.toLowerCase() != 'cash' &&
+            t.customReasonText?.toLowerCase() != 'cash' &&
+            t.resolvedReason?.toLowerCase() != 'cash')
+        .toList();
 
-    // Sum real expenses: Regular expenses + Cash spendings
+    // Sum real expenses: Regular bank expenses + Cash wallet expenses
     double totalExpense = regularTxs
         .where((t) => t.type == 'expense')
         .fold<double>(0, (s, t) => s + t.amount);
 
-    // Add spendings from all cash withdrawals in the period
-    final List<dynamic> allSpendingsInPeriod = [];
-    for (final tx in cashWithdrawals) {
-      final spendings = provider.spendingsForTransaction(tx.id!);
-      for (final s in spendings) {
-        totalExpense += s.amount;
-        allSpendingsInPeriod.add(s);
-      }
-    }
+    totalExpense += cashTxs
+        .where((t) => t.type == 'expense')
+        .fold<double>(0, (s, t) => s + t.amount);
 
-    final incomes = txs.where((t) => t.type == 'income').toList();
-    final totalIncome = incomes.fold<double>(0, (s, t) => s + t.amount);
+    final totalIncome = regularTxs
+        .where((t) => t.type == 'income')
+        .fold<double>(0, (s, t) => s + t.amount);
     final net = totalIncome - totalExpense;
 
     // Smart P/L values from provider
@@ -145,21 +158,29 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                           Expanded(
                               child: _buildSumCard(
                                   'In',
-                                  NumberFormat('#,##0.00').format(totalIncome),
+                                  provider.isBalanceVisible
+                                      ? NumberFormat('#,##0.00')
+                                          .format(totalIncome)
+                                      : '****',
                                   const Color(0xFF3EB489),
                                   Icons.arrow_downward_rounded)),
                           const SizedBox(width: 8),
                           Expanded(
                               child: _buildSumCard(
                                   'Out',
-                                  NumberFormat('#,##0.00').format(totalExpense),
+                                  provider.isBalanceVisible
+                                      ? NumberFormat('#,##0.00')
+                                          .format(totalExpense)
+                                      : '****',
                                   const Color(0xFFEF4444),
                                   Icons.arrow_upward_rounded)),
                           const SizedBox(width: 8),
                           Expanded(
                               child: _buildSumCard(
                                   'P/L',
-                                  NumberFormat('#,##0.00').format(net),
+                                  provider.isBalanceVisible
+                                      ? NumberFormat('#,##0.00').format(net)
+                                      : '****',
                                   const Color(0xFFF0B90B),
                                   Icons.auto_graph_rounded)),
                         ],
@@ -169,16 +190,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       const SizedBox(height: 28),
                       _buildSectionLabel('Profit & Loss'),
                       const SizedBox(height: 14),
-                      _buildPnlSection(
-                          dailyPnl, monthlyPnl, overallPnl, borrowedLiability),
+                      _buildPnlSection(dailyPnl, monthlyPnl, overallPnl,
+                          borrowedLiability, provider.isBalanceVisible),
                       const SizedBox(height: 28),
                       _buildSectionLabel('Cash Flow'),
                       const SizedBox(height: 14),
-                      _buildBarChart(txs),
+                      _buildBarChart(txs, cashTxs),
                       const SizedBox(height: 28),
                       _buildSectionLabel('Spending by Category'),
                       const SizedBox(height: 14),
-                      _buildRadarSection(txs, provider),
+                      _buildRadarSection(txs, cashTxs, provider),
                       const SizedBox(height: 28),
                       _buildSectionLabel('Bank Performance'),
                       const SizedBox(height: 14),
@@ -186,7 +207,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       const SizedBox(height: 28),
                       _buildSectionLabel('Top Spending Reasons'),
                       const SizedBox(height: 14),
-                      _buildReasonBreakdown(txs, provider),
+                      _buildReasonBreakdown(txs, cashTxs, provider),
                       const SizedBox(height: 120),
                     ],
                   ),
@@ -314,8 +335,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Profit & Loss Section ──────────────────────────────────────────────────
-  Widget _buildPnlSection(
-      double daily, double monthly, double overall, double borrowedLiability) {
+  Widget _buildPnlSection(double daily, double monthly, double overall,
+      double borrowedLiability, bool isBalanceVisible) {
     final fmt = NumberFormat('#,##0.00');
     final hasBorrowedDebt = borrowedLiability > 0;
 
@@ -331,6 +352,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 fmt: fmt,
                 tooltip: 'Can go negative if expenses exceed income today',
                 canBeNegative: true,
+                isBalanceVisible: isBalanceVisible,
               ),
             ),
             const SizedBox(width: 8),
@@ -343,6 +365,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     ? 'Your borrowed loan balance reduces monthly profit'
                     : 'Floors at 0 unless borrowed debt exceeds income',
                 canBeNegative: hasBorrowedDebt,
+                isBalanceVisible: isBalanceVisible,
               ),
             ),
             const SizedBox(width: 8),
@@ -355,6 +378,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     ? 'Borrowed debt deducted from overall growth'
                     : 'Growth since first measurement',
                 canBeNegative: hasBorrowedDebt,
+                isBalanceVisible: isBalanceVisible,
               ),
             ),
           ],
@@ -454,6 +478,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     required NumberFormat fmt,
     required String tooltip,
     bool canBeNegative = false,
+    required bool isBalanceVisible,
   }) {
     final isNeg = value < 0;
     final isZero = value == 0;
@@ -495,7 +520,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            '${isNeg ? '-' : ''}${fmt.format(value.abs())}',
+            isBalanceVisible
+                ? '${isNeg ? '-' : ''}${fmt.format(value.abs())}'
+                : '****.**',
             style: TextStyle(
               color: color,
               fontSize: 13,
@@ -534,9 +561,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Bar Chart: Cash Flow ───────────────────────────────────────────────────
-  Widget _buildBarChart(List<AppTransaction> txs) {
+  Widget _buildBarChart(
+      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
     // Build time-bucketed data
-    final groups = _buildBarGroups(txs);
+    final groups = _buildBarGroups(txs, cashTxs);
 
     if (groups.isEmpty || txs.isEmpty) {
       return _buildEmptyState('No transactions in this period');
@@ -659,17 +687,18 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     }
   }
 
-  List<BarChartGroupData> _buildBarGroups(List<AppTransaction> txs) {
+  List<BarChartGroupData> _buildBarGroups(
+      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
     switch (_period) {
       case AnalysisPeriod.d1:
-        return _groupByHour(txs);
+        return _groupByHour(txs, cashTxs);
       case AnalysisPeriod.d7:
-        return _groupByWeekday(txs);
+        return _groupByWeekday(txs, cashTxs);
       case AnalysisPeriod.d30:
-        return _groupByDayOfMonth(txs);
+        return _groupByDayOfMonth(txs, cashTxs);
       case AnalysisPeriod.d180:
       case AnalysisPeriod.d360:
-        return _groupByMonth(txs);
+        return _groupByMonth(txs, cashTxs);
     }
   }
 
@@ -700,12 +729,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  List<BarChartGroupData> _groupByHour(List<AppTransaction> txs) {
+  List<BarChartGroupData> _groupByHour(
+      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
     Map<int, List<double>> map = {
       for (int i = 0; i < 24; i++) i: [0, 0]
     };
     for (var t in txs) {
+      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
+          t.customReasonText?.toLowerCase() == 'cash' ||
+          t.resolvedReason?.toLowerCase() == 'cash';
+      if (isCashTransfer) continue;
+
       if (t.type == 'income') map[t.date.hour]![0] += t.amount;
+      if (t.type == 'expense') map[t.date.hour]![1] += t.amount;
+    }
+    for (var t in cashTxs) {
+      if (t.type == 'addition') map[t.date.hour]![0] += t.amount;
       if (t.type == 'expense') map[t.date.hour]![1] += t.amount;
     }
     return map.entries
@@ -713,13 +752,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         .toList();
   }
 
-  List<BarChartGroupData> _groupByWeekday(List<AppTransaction> txs) {
+  List<BarChartGroupData> _groupByWeekday(
+      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
     Map<int, List<double>> map = {
       for (int i = 0; i < 7; i++) i: [0, 0]
     };
     for (var t in txs) {
-      final dow = (t.date.weekday - 1) % 7; // Mon=0
+      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
+          t.customReasonText?.toLowerCase() == 'cash' ||
+          t.resolvedReason?.toLowerCase() == 'cash';
+      if (isCashTransfer) continue;
+
+      final dow = (t.date.weekday - 1) % 7;
       if (t.type == 'income') map[dow]![0] += t.amount;
+      if (t.type == 'expense') map[dow]![1] += t.amount;
+    }
+    for (var t in cashTxs) {
+      final dow = (t.date.weekday - 1) % 7;
+      if (t.type == 'addition') map[dow]![0] += t.amount;
       if (t.type == 'expense') map[dow]![1] += t.amount;
     }
     return map.entries
@@ -727,14 +777,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         .toList();
   }
 
-  List<BarChartGroupData> _groupByDayOfMonth(List<AppTransaction> txs) {
+  List<BarChartGroupData> _groupByDayOfMonth(
+      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
     final now = DateTime.now();
     final days = DateTime(now.year, now.month + 1, 0).day;
     Map<int, List<double>> map = {
       for (int i = 1; i <= days; i++) i: [0, 0]
     };
     for (var t in txs) {
+      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
+          t.customReasonText?.toLowerCase() == 'cash' ||
+          t.resolvedReason?.toLowerCase() == 'cash';
+      if (isCashTransfer) continue;
+
       if (t.type == 'income') map[t.date.day]![0] += t.amount;
+      if (t.type == 'expense') map[t.date.day]![1] += t.amount;
+    }
+    for (var t in cashTxs) {
+      if (t.type == 'addition') map[t.date.day]![0] += t.amount;
       if (t.type == 'expense') map[t.date.day]![1] += t.amount;
     }
     return map.entries
@@ -742,12 +802,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         .toList();
   }
 
-  List<BarChartGroupData> _groupByMonth(List<AppTransaction> txs) {
+  List<BarChartGroupData> _groupByMonth(
+      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
     Map<String, List<double>> map = {};
     for (var t in txs) {
+      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
+          t.customReasonText?.toLowerCase() == 'cash' ||
+          t.resolvedReason?.toLowerCase() == 'cash';
+      if (isCashTransfer) continue;
+
       final key = '${t.date.year}-${t.date.month.toString().padLeft(2, '0')}';
       map.putIfAbsent(key, () => [0, 0]);
       if (t.type == 'income') map[key]![0] += t.amount;
+      if (t.type == 'expense') map[key]![1] += t.amount;
+    }
+    for (var t in cashTxs) {
+      final key = '${t.date.year}-${t.date.month.toString().padLeft(2, '0')}';
+      map.putIfAbsent(key, () => [0, 0]);
+      if (t.type == 'addition') map[key]![0] += t.amount;
       if (t.type == 'expense') map[key]![1] += t.amount;
     }
     final sorted = map.keys.toList()..sort();
@@ -759,24 +831,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Radar Chart: Category Spending ─────────────────────────────────────────
-  Widget _buildRadarSection(
-      List<AppTransaction> allTxs, FinanceProvider provider) {
+  Widget _buildRadarSection(List<AppTransaction> txs,
+      List<CashTransaction> cashTxs, FinanceProvider provider) {
     final categoryTotals = <String, double>{};
-    // Regular expenses
-    for (var t in allTxs.where(
-        (t) => t.type == 'expense' && t.reason?.toLowerCase() != 'cash')) {
+    // Regular expenses (Neutralize Cash transfers)
+    for (var t in txs.where((t) =>
+        t.type == 'expense' &&
+        t.reason?.toLowerCase() != 'cash' &&
+        t.customReasonText?.toLowerCase() != 'cash' &&
+        t.resolvedReason?.toLowerCase() != 'cash')) {
       final cat = (t.resolvedReason?.isNotEmpty == true)
           ? t.resolvedReason!
           : t.category;
       categoryTotals[cat] = (categoryTotals[cat] ?? 0) + t.amount;
     }
-    // Cash spendings
-    for (var tx in allTxs.where((t) => t.reason?.toLowerCase() == 'cash')) {
-      final spendings = provider.spendingsForTransaction(tx.id!);
-      for (final s in spendings) {
-        final cat = s.expenseName;
-        categoryTotals[cat] = (categoryTotals[cat] ?? 0) + s.amount;
-      }
+    // Cash wallet expenses (Now unified with Reason system)
+    for (var ctx in cashTxs.where((t) => t.type == 'expense')) {
+      final cat = ctx.reasonName ?? 'Other Cash';
+      categoryTotals[cat] = (categoryTotals[cat] ?? 0) + ctx.amount;
     }
 
     if (categoryTotals.isEmpty) {
@@ -1193,25 +1265,24 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ─── Reason Breakdown ────────────────────────────────────────────────────────
-  Widget _buildReasonBreakdown(
-      List<AppTransaction> allTxs, FinanceProvider provider) {
+  Widget _buildReasonBreakdown(List<AppTransaction> txs,
+      List<CashTransaction> cashTxs, FinanceProvider provider) {
     final Map<String, double> reasonTotals = {};
     // Regular
-    for (var t in allTxs.where(
-        (t) => t.type == 'expense' && t.reason?.toLowerCase() != 'cash')) {
+    for (var t in txs.where((t) =>
+        t.type == 'expense' &&
+        t.reason?.toLowerCase() != 'cash' &&
+        t.customReasonText?.toLowerCase() != 'cash' &&
+        t.resolvedReason?.toLowerCase() != 'cash')) {
       final label = (t.resolvedReason?.isNotEmpty == true)
           ? t.resolvedReason!
           : 'Uncategorized';
       reasonTotals[label] = (reasonTotals[label] ?? 0) + t.amount;
     }
     // Cash
-    for (var tx in allTxs.where((t) => t.reason?.toLowerCase() == 'cash')) {
-      final spendings = provider.spendingsForTransaction(tx.id!);
-      for (final s in spendings) {
-        final label = s.expenseName;
-        reasonTotals[label] = (reasonTotals[label] ?? 0) + s.amount;
-      }
+    for (var ctx in cashTxs.where((t) => t.type == 'expense')) {
+      final label = ctx.reasonName ?? 'Other Cash';
+      reasonTotals[label] = (reasonTotals[label] ?? 0) + ctx.amount;
     }
 
     if (reasonTotals.isEmpty) {

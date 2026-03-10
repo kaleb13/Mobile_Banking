@@ -296,10 +296,10 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                       borderRadius: BorderRadius.circular(16)),
                 ),
                 child: _isSaving
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const CircularProgressIndicator(color: Colors.black)
                     : const Text('Save Transaction',
                         style: TextStyle(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontSize: 16,
                             fontWeight: FontWeight.bold)),
               ),

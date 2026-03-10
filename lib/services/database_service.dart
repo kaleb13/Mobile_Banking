@@ -26,7 +26,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 12, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 17, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -38,7 +38,9 @@ CREATE TABLE senders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   senderName TEXT NOT NULL,
   depositKeywords TEXT NOT NULL,
-  expenseKeywords TEXT NOT NULL
+  expenseKeywords TEXT NOT NULL,
+  accountNumber TEXT,
+  pin TEXT
 )
 ''');
 
@@ -56,7 +58,8 @@ CREATE TABLE transactions (
   totalBalance REAL NOT NULL,
   reason TEXT,
   reasonId INTEGER,
-  customReasonText TEXT
+  customReasonText TEXT,
+  linkedTransactionId TEXT
 )
 ''');
 
@@ -118,7 +121,8 @@ CREATE TABLE IF NOT EXISTS expense_definitions (
   selectedDaysOfWeek TEXT,
   timesPerDay INTEGER NOT NULL DEFAULT 1,
   isActive INTEGER NOT NULL DEFAULT 1,
-  lastAppliedDate TEXT
+  lastAppliedDate TEXT,
+  reasonId INTEGER
 )
 ''');
 
@@ -130,6 +134,8 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   date TEXT NOT NULL,
   description TEXT,
   expenseDefinitionId INTEGER,
+  reasonId INTEGER,
+  reasonName TEXT,
   FOREIGN KEY(expenseDefinitionId) REFERENCES expense_definitions(id) ON DELETE SET NULL
 )
 ''');
@@ -282,6 +288,45 @@ CREATE TABLE IF NOT EXISTS app_settings (
 )
 ''');
     }
+    if (oldVersion < 13) {
+      try {
+        await db.execute('ALTER TABLE senders ADD COLUMN accountNumber TEXT;');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE senders ADD COLUMN pin TEXT;');
+      } catch (_) {}
+    }
+    if (oldVersion < 14) {
+      await _addNewSystemReasons2(db);
+    }
+    if (oldVersion < 16) {
+      try {
+        await db.execute(
+            'ALTER TABLE transactions ADD COLUMN linkedTransactionId TEXT;');
+      } catch (_) {}
+    }
+    if (oldVersion < 17) {
+      try {
+        await db.execute(
+            'ALTER TABLE cash_transactions ADD COLUMN reasonId INTEGER;');
+      } catch (_) {}
+      try {
+        await db.execute(
+            'ALTER TABLE cash_transactions ADD COLUMN reasonName TEXT;');
+      } catch (_) {}
+      try {
+        await db.execute(
+            'ALTER TABLE expense_definitions ADD COLUMN reasonId INTEGER;');
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _addNewSystemReasons2(Database db) async {
+    const newReasons = ['Bounce'];
+    for (final name in newReasons) {
+      await db.insert('reasons', {'name': name, 'isSystem': 1},
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
   }
 
   Future<void> _seedSystemReasons(Database db) async {
@@ -302,6 +347,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
       'Investment',
       'Airtime',
       'Cash',
+      'Bounce',
+      'Internal Transfer',
     ];
     for (final name in systemReasons) {
       await db.insert('reasons', {'name': name, 'isSystem': 1},
@@ -310,7 +357,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
   }
 
   Future<void> _addNewSystemReasons(Database db) async {
-    const newReasons = ['Airtime', 'Cash'];
+    const newReasons = ['Airtime', 'Cash', 'Bounce'];
     for (final name in newReasons) {
       await db.insert('reasons', {'name': name, 'isSystem': 1},
           conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -445,7 +492,24 @@ CREATE TABLE IF NOT EXISTS app_settings (
   Future<List<AppReason>> getReasons() async {
     final db = await instance.database;
     final maps = await db.query('reasons', orderBy: 'isSystem DESC, name ASC');
-    return maps.map((m) => AppReason.fromMap(m)).toList();
+    var list = maps.map((m) => AppReason.fromMap(m)).toList();
+
+    // Auto-inject missing system reasons
+    bool injected = false;
+    for (final name in ['Bounce', 'Internal Transfer']) {
+      if (!list.any((r) => r.name.toLowerCase() == name.toLowerCase())) {
+        await insertReason(AppReason(name: name, isSystem: true));
+        injected = true;
+      }
+    }
+
+    if (injected) {
+      final newMaps =
+          await db.query('reasons', orderBy: 'isSystem DESC, name ASC');
+      list = newMaps.map((m) => AppReason.fromMap(m)).toList();
+    }
+
+    return list;
   }
 
   Future<AppReason?> getReasonById(int id) async {

@@ -5,6 +5,8 @@ class CashTransaction {
   final DateTime date;
   final String? description;
   final int? expenseDefinitionId;
+  final int? reasonId;
+  final String? reasonName;
 
   CashTransaction({
     this.id,
@@ -13,6 +15,8 @@ class CashTransaction {
     required this.date,
     this.description,
     this.expenseDefinitionId,
+    this.reasonId,
+    this.reasonName,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +27,8 @@ class CashTransaction {
       'date': date.toIso8601String(),
       'description': description,
       'expenseDefinitionId': expenseDefinitionId,
+      'reasonId': reasonId,
+      'reasonName': reasonName,
     };
   }
 
@@ -34,6 +40,8 @@ class CashTransaction {
       date: DateTime.parse(map['date'] as String),
       description: map['description'] as String?,
       expenseDefinitionId: map['expenseDefinitionId'] as int?,
+      reasonId: map['reasonId'] as int?,
+      reasonName: map['reasonName'] as String?,
     );
   }
 
@@ -43,6 +51,8 @@ class CashTransaction {
     DateTime? date,
     String? description,
     int? expenseDefinitionId,
+    int? reasonId,
+    String? reasonName,
   }) {
     return CashTransaction(
       id: id,
@@ -51,6 +61,8 @@ class CashTransaction {
       date: date ?? this.date,
       description: description ?? this.description,
       expenseDefinitionId: expenseDefinitionId ?? this.expenseDefinitionId,
+      reasonId: reasonId ?? this.reasonId,
+      reasonName: reasonName ?? this.reasonName,
     );
   }
 }

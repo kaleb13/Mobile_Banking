@@ -59,9 +59,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _getSearchHint(FinanceProvider provider) {
     if (_searchLabelIndex == 0) {
       final hour = DateTime.now().hour;
-      if (hour < 12) return 'Good Morning ☀️';
-      if (hour < 17) return 'Good Afternoon 🌤️';
-      return 'Good Evening 🌙';
+      String greeting;
+      if (hour < 12) {
+        greeting = 'Good Morning ☀️';
+      } else if (hour < 17) {
+        greeting = 'Good Afternoon 🌤️';
+      } else {
+        greeting = 'Good Evening 🌙';
+      }
+
+      if (provider.userName != null) {
+        greeting = '$greeting Dear ${provider.userName}';
+      }
+      return greeting;
     } else if (_searchLabelIndex == 1) {
       return 'Search all Transactions';
     } else {
@@ -516,9 +526,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Your total balance',
-                style: TextStyle(color: AppColors.labelGray, fontSize: 13),
+              GestureDetector(
+                onTap: provider.toggleBalanceVisibility,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  children: [
+                    const Text(
+                      'Total balance',
+                      style:
+                          TextStyle(color: AppColors.labelGray, fontSize: 13),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      provider.isBalanceVisible
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      color: AppColors.labelGray,
+                      size: 14,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 4),
               GestureDetector(
@@ -1191,10 +1218,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               double totalNet = 0;
               for (var tx in relevantTxs) {
                 if (tx.name == sender.senderName) {
-                  if (tx.type == 'income') {
-                    totalNet += tx.amount;
-                  } else if (tx.type == 'expense') {
-                    totalNet -= tx.amount;
+                  bool isBounce = tx.resolvedReason?.toLowerCase() ==
+                          'bounce' ||
+                      tx.resolvedReason?.toLowerCase() == 'internal transfer';
+                  if (!isBounce) {
+                    if (tx.type == 'income') {
+                      totalNet += tx.amount;
+                    } else if (tx.type == 'expense') {
+                      totalNet -= tx.amount;
+                    }
                   }
                 }
               }
@@ -1634,7 +1666,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildTransactionItem(BuildContext context, AppTransaction tx,
       double impactPercent, bool isLatest) {
     final bool isIncome = tx.type == 'income';
-    final String amountStr = NumberFormat('#,##0.0').format(tx.amount);
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final String amountStr = provider.isBalanceVisible
+        ? NumberFormat('#,##0.0').format(tx.amount)
+        : '****';
     final String label = isIncome ? 'Deposit' : 'Transferred';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'For ${tx.sender}';
 
