@@ -243,8 +243,9 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 : null,
             onLongPress: tx['isCashTx'] == true
                 ? () {
-                    _showOverrideAmountDialog(
-                        context, provider, tx['id'], tx['amount']);
+                    _showTransactionActions(
+                        context, provider, tx['id'], tx['amount'],
+                        tx['title'] as String);
                   }
                 : null,
             borderRadius: BorderRadius.circular(16),
@@ -745,7 +746,141 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     );
   }
 
-  void _showOverrideAmountDialog(BuildContext context, FinanceProvider provider,
+  // ── Long-press action sheet ─────────────────────────────────────────────
+
+  void _showTransactionActions(BuildContext context, FinanceProvider provider,
+      int id, double amount, String title) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1C1F24),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Title
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'ETB ${NumberFormat("#,##0.00").format(amount)}',
+                  style: const TextStyle(
+                      color: AppColors.labelGray, fontSize: 13),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Edit Amount
+              _actionTile(
+                icon: Icons.edit_rounded,
+                iconColor: AppColors.primaryBlue,
+                label: 'Edit Amount',
+                sublabel: 'Change the recorded amount',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEditAmountDialog(context, provider, id, amount);
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Delete Transaction
+              _actionTile(
+                icon: Icons.delete_rounded,
+                iconColor: AppColors.alertRed,
+                label: 'Delete Transaction',
+                sublabel: 'Permanently remove this entry',
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDelete(context, provider, id, title);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _actionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String sublabel,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(sublabel,
+                      style: const TextStyle(
+                          color: AppColors.labelGray, fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                color: AppColors.labelGray, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditAmountDialog(BuildContext context, FinanceProvider provider,
       int id, double oldAmount) {
     final controller =
         TextEditingController(text: oldAmount.toStringAsFixed(0));
@@ -757,26 +892,75 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
         title: const Text('Edit Amount', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            labelText: 'New Amount',
-            labelStyle: TextStyle(color: AppColors.labelGray),
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(color: Colors.white, fontSize: 20),
+          autofocus: true,
+          textAlign: TextAlign.center,
+          decoration: InputDecoration(
+            hintText: '0.00',
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.2)),
+            suffixText: 'ETB',
+            suffixStyle:
+                const TextStyle(color: AppColors.labelGray, fontSize: 14),
+            enabledBorder: UnderlineInputBorder(
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.15))),
+            focusedBorder: const UnderlineInputBorder(
+                borderSide:
+                    BorderSide(color: AppColors.primaryBlue, width: 2)),
           ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(c),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.labelGray))),
           TextButton(
             onPressed: () {
-              final amt = double.tryParse(controller.text);
-              if (amt != null) {
+              final amt = double.tryParse(controller.text.trim());
+              if (amt != null && amt > 0) {
                 provider.updateCashTransactionAmount(id, amt);
                 Navigator.pop(c);
               }
             },
-            child: const Text('Update',
-                style: TextStyle(color: AppColors.primaryBlue)),
+            child: const Text('Save',
+                style: TextStyle(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(
+      BuildContext context, FinanceProvider provider, int id, String title) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1C1F24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Delete Transaction',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Remove "$title" permanently? This cannot be undone.',
+          style:
+              const TextStyle(color: AppColors.labelGray, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.labelGray))),
+          TextButton(
+            onPressed: () {
+              provider.deleteCashTransaction(id);
+              Navigator.pop(c);
+            },
+            child: const Text('Delete',
+                style: TextStyle(
+                    color: AppColors.alertRed, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

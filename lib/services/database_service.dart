@@ -428,6 +428,15 @@ CREATE TABLE IF NOT EXISTS app_settings (
     return null;
   }
 
+  /// Quick count query — almost zero CPU cost.
+  /// Used by the lightweight DB sync to detect new background insertions.
+  Future<int> getTransactionCount() async {
+    final db = await instance.database;
+    final result =
+        await db.rawQuery('SELECT COUNT(*) as count FROM transactions');
+    return (result.first['count'] as int?) ?? 0;
+  }
+
   /// Wipes every row from the transactions table.
   Future<void> deleteAllTransactions() async {
     final db = await instance.database;

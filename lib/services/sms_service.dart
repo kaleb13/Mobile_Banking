@@ -26,7 +26,7 @@ class SmsService {
 
     List<SmsMessage> messages = await query.querySms(
       kinds: [SmsQueryKind.inbox],
-      count: 1000,
+      count: 200, // Reduced from 1000 — significantly less CPU and memory
     );
 
     // Filter out messages that arrived before 'since' if provided

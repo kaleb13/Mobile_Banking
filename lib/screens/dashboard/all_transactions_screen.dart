@@ -11,7 +11,9 @@ import 'transaction_detail_screen.dart';
 import 'dart:math';
 
 class AllTransactionsScreen extends StatefulWidget {
-  const AllTransactionsScreen({super.key});
+  final String? initialSearchQuery;
+
+  const AllTransactionsScreen({super.key, this.initialSearchQuery});
 
   @override
   State<AllTransactionsScreen> createState() => _AllTransactionsScreenState();
@@ -28,6 +30,9 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialSearchQuery != null) {
+      _searchQuery = widget.initialSearchQuery!;
+    }
     _startSearchLabelRotation();
   }
 
@@ -75,14 +80,19 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
     // Filter logic
     final filteredTransactions = allTransactions.where((tx) {
-      final matchesSearch =
-          tx.sender.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              (tx.reason?.toLowerCase().contains(_searchQuery.toLowerCase()) ??
-                  false) ||
-              (tx.customReasonText
-                      ?.toLowerCase()
-                      .contains(_searchQuery.toLowerCase()) ??
-                  false);
+      bool matchesSearch = false;
+      if (_searchQuery.toLowerCase() == 'uncategorized') {
+        matchesSearch = tx.resolvedReason == null || tx.resolvedReason!.isEmpty;
+      } else if (_searchQuery.isEmpty) {
+        matchesSearch = true;
+      } else {
+        final query = _searchQuery.toLowerCase();
+        matchesSearch =
+            tx.sender.toLowerCase().contains(query) ||
+            (tx.reason?.toLowerCase().contains(query) ?? false) ||
+            (tx.customReasonText?.toLowerCase().contains(query) ?? false) ||
+            (tx.resolvedReason?.toLowerCase().contains(query) ?? false);
+      }
 
       final matchesSender =
           _selectedSender == 'All' || tx.name == _selectedSender;
@@ -241,6 +251,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                           ),
                         ),
                       TextField(
+                        controller: TextEditingController(text: _searchQuery)..selection = TextSelection.collapsed(offset: _searchQuery.length),
                         style:
                             const TextStyle(color: Colors.white, fontSize: 12),
                         onChanged: (value) =>

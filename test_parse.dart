@@ -1,5 +1,35 @@
-import '../models/transaction.dart';
 import 'package:intl/intl.dart';
+
+class AppTransaction {
+  String? id;
+  String? name;
+  double amount;
+  String type;
+  DateTime date;
+  String sender;
+  String category;
+  String rawMessage;
+  bool isAutoDetected;
+  double totalBalance;
+
+  AppTransaction({
+    this.id,
+    this.name,
+    required this.amount,
+    required this.type,
+    required this.date,
+    required this.sender,
+    required this.category,
+    required this.rawMessage,
+    required this.isAutoDetected,
+    required this.totalBalance,
+  });
+
+  @override
+  String toString() {
+    return 'AppTransaction(id: $id, amount: $amount, type: $type, date: $date, sender: $sender, category: $category, totalBalance: $totalBalance)';
+  }
+}
 
 class CbeParser {
   static const String senderName = "CBE";
@@ -28,27 +58,17 @@ class CbeParser {
       return 0.0;
     }
 
-    if (lowerMsg.contains('transfer')) {
+    if (lowerMsg.contains('transfered')) {
       type = 'expense';
       category = 'Transferred';
       amount = extractAmount(
           RegExp(r'transferr?ed\s+ETB\s+([0-9,.]+)', caseSensitive: false));
 
-      // Pattern 1: "to <Name> on DD/MM/YYYY" (older format)
-      final toMatchWithDate =
+      // Extract recipient: "to Miss Bethelihem on"
+      final toMatch =
           RegExp(r'to\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
-      if (toMatchWithDate != null) {
-        senderOrRecipient = toMatchWithDate.group(1)?.trim() ?? '';
-      }
-
-      // Pattern 2: "to account 1****1234 (Recipient Name)" (newer format)
-      if (senderOrRecipient.isEmpty) {
-        final toMatchParens =
-            RegExp(r'to\s+account\s+[\d*]+\s+\(([^)]+)\)', caseSensitive: false)
-                .firstMatch(message);
-        if (toMatchParens != null) {
-          senderOrRecipient = toMatchParens.group(1)?.trim() ?? '';
-        }
+      if (toMatch != null) {
+        senderOrRecipient = toMatch.group(1)?.trim() ?? '';
       }
     } else if (lowerMsg.contains('debited')) {
       type = 'expense';
@@ -141,22 +161,38 @@ class CbeParser {
     // Extract Balance
     double totalBalance = 0.0;
     String singleLineMsg = message.replaceAll('\n', ' ').replaceAll('\r', ' ');
-
-    // Covers both:
-    //   "Your Current Balance is ETB 5,784.66"  (space after ETB, capital C)
-    //   "Your current balance is ETB5,784.66"   (no space after ETB, lowercase c)
-    final balanceMatch = RegExp(
-            r'[Cc]urrent\s+[Bb]alance\s+is\s+ETB\s*([0-9,]+\.?\d*)',
-            caseSensitive: false)
-        .firstMatch(singleLineMsg);
-    if (balanceMatch != null) {
-      String strippedBalance =
-          balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
-      if (strippedBalance.endsWith('.')) {
-        strippedBalance =
-            strippedBalance.substring(0, strippedBalance.length - 1);
+    final balStartStr = 'Your Current Balance is ETB ';
+    final balIdx = singleLineMsg.indexOf(balStartStr);
+    if (balIdx != -1) {
+      final valStart = balIdx + balStartStr.length;
+      final valEnd = singleLineMsg.indexOf(' Thank', valStart);
+      if (valEnd != -1) {
+        String balStr = singleLineMsg
+            .substring(valStart, valEnd)
+            .replaceAll(',', '')
+            .trim();
+        // Remove trailing period if it exists right before 'Thank'
+        if (balStr.endsWith('.')) {
+          balStr = balStr.substring(0, balStr.length - 1);
+        }
+        totalBalance = double.tryParse(balStr) ?? 0.0;
       }
-      totalBalance = double.tryParse(strippedBalance) ?? 0.0;
+    }
+
+    // RegEx fallback for balance
+    if (totalBalance <= 0) {
+      final balanceMatch =
+          RegExp(r'Current Balance is\s+ETB\s+([0-9.,]+)', caseSensitive: false)
+              .firstMatch(singleLineMsg);
+      if (balanceMatch != null) {
+        String strippedBalance =
+            balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
+        if (strippedBalance.endsWith('.')) {
+          strippedBalance =
+              strippedBalance.substring(0, strippedBalance.length - 1);
+        }
+        totalBalance = double.tryParse(strippedBalance) ?? 0.0;
+      }
     }
 
     // Extract Date
@@ -188,14 +224,10 @@ class CbeParser {
       totalBalance: totalBalance,
     );
   }
+}
 
-  static String? extractOwnerName(String message) {
-    if (message.startsWith("Dear ")) {
-      final commaIdx = message.indexOf(',');
-      if (commaIdx != -1 && commaIdx > 5) {
-        return message.substring(5, commaIdx).trim();
-      }
-    }
-    return null;
-  }
+void main() {
+  final msg = "Dear Kaleb your Account 1*********2757 has been Credited with ETB 207.50 from Kaleab Afesha, on 24/04/2026 at 13:44:16 with Ref No FT26114Y5F42 Your Current Balance is ETB 556.87. Thank you for Banking with CBE! https://apps.cbe.com.et:100/?id=FT26114Y5F4217182757";
+  final result = CbeParser.parse(msg, DateTime.now());
+  print(result);
 }

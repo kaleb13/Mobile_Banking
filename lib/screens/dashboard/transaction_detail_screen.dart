@@ -165,7 +165,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               provider: provider,
               linkedTransactionId: widget.transaction.id,
               prefilledAmount: widget.transaction.amount,
-              prefilledName: widget.transaction.name,
+              prefilledName: widget.transaction.sender,
               prefilledTrackedSender: widget.transaction.sender,
               prefilledType:
                   widget.transaction.type == 'expense' ? 'lent' : 'borrowed',

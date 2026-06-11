@@ -8,6 +8,7 @@ import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../theme/app_theme.dart';
+import 'all_transactions_screen.dart';
 
 // ─── Period Enum ──────────────────────────────────────────────────────────────
 enum AnalysisPeriod { d1, d7, d30, d180, d360 }
@@ -668,10 +669,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       case AnalysisPeriod.d7:
         return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       case AnalysisPeriod.d30:
-        final daysInMonth =
-            DateTime(DateTime.now().year, DateTime.now().month + 1, 0).day;
-        return List.generate(
-            daysInMonth, (i) => (i + 1) % 5 == 0 ? '${i + 1}' : '');
+        return List.generate(31, (i) => (i + 1) % 5 == 0 ? '${i + 1}' : '');
       case AnalysisPeriod.d180:
       case AnalysisPeriod.d360:
         final months = txs
@@ -779,10 +777,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   List<BarChartGroupData> _groupByDayOfMonth(
       List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    final now = DateTime.now();
-    final days = DateTime(now.year, now.month + 1, 0).day;
     Map<int, List<double>> map = {
-      for (int i = 1; i <= days; i++) i: [0, 0]
+      for (int i = 1; i <= 31; i++) i: [0, 0]
     };
     for (var t in txs) {
       bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
@@ -833,8 +829,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // ─── Radar Chart: Category Spending ─────────────────────────────────────────
   Widget _buildRadarSection(List<AppTransaction> txs,
       List<CashTransaction> cashTxs, FinanceProvider provider) {
-    final categoryTotals = <String, double>{};
-    // Regular expenses (Neutralize Cash transfers)
+    // ── Step 1: Accumulate gross expense AND same-reason income per category ──
+    final Map<String, double> grossExpense = {};
+    final Map<String, double> sameReasonIncome = {};
+
+    // Bank transactions — expenses
     for (var t in txs.where((t) =>
         t.type == 'expense' &&
         t.reason?.toLowerCase() != 'cash' &&
@@ -843,12 +842,34 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       final cat = (t.resolvedReason?.isNotEmpty == true)
           ? t.resolvedReason!
           : t.category;
-      categoryTotals[cat] = (categoryTotals[cat] ?? 0) + t.amount;
+      grossExpense[cat] = (grossExpense[cat] ?? 0) + t.amount;
     }
-    // Cash wallet expenses (Now unified with Reason system)
+
+    // Bank transactions — incomes with a known reason (offset same-reason spending)
+    for (var t in txs.where((t) =>
+        t.type == 'income' &&
+        t.reason?.toLowerCase() != 'cash' &&
+        t.customReasonText?.toLowerCase() != 'cash' &&
+        t.resolvedReason?.toLowerCase() != 'cash')) {
+      final cat =
+          (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : null;
+      if (cat != null && grossExpense.containsKey(cat)) {
+        // Only offset if this reason also has expenses
+        sameReasonIncome[cat] = (sameReasonIncome[cat] ?? 0) + t.amount;
+      }
+    }
+
+    // Cash wallet expenses
     for (var ctx in cashTxs.where((t) => t.type == 'expense')) {
       final cat = ctx.reasonName ?? 'Other Cash';
-      categoryTotals[cat] = (categoryTotals[cat] ?? 0) + ctx.amount;
+      grossExpense[cat] = (grossExpense[cat] ?? 0) + ctx.amount;
+    }
+
+    // ── Step 2: Compute net spending per category ─────────────────────────────
+    final Map<String, double> categoryTotals = {};
+    for (final cat in grossExpense.keys) {
+      final netSpend = (grossExpense[cat] ?? 0) - (sameReasonIncome[cat] ?? 0);
+      if (netSpend > 0) categoryTotals[cat] = netSpend;
     }
 
     if (categoryTotals.isEmpty) {
@@ -857,7 +878,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     final sorted = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final top = sorted.take(6).toList(); // radar works best with 5-7 axes
+    final top = sorted.take(6).toList(); // radar works best with 5–7 axes
     final maxVal = top.isEmpty ? 0.0 : top.first.value;
     final totalExpense = top.fold<double>(0, (s, e) => s + e.value);
 
@@ -865,6 +886,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       return _buildEmptyState(
           'Add at least 3 expense categories to see the spending chart.');
     }
+
+    // Check if any offsets were applied so we can show the note
+    final hasOffsets = sameReasonIncome.isNotEmpty;
 
     return Column(
       children: [
@@ -921,6 +945,36 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
         const SizedBox(height: 24),
 
+        // Offset notice
+        if (hasOffsets) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0B90B).withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFFF0B90B).withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: Color(0xFFF0B90B), size: 13),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Net spending shown — same-reason income has been subtracted.',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 10,
+                        height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -929,8 +983,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 ? (entry.value.value / totalExpense * 100).toStringAsFixed(1)
                 : '0';
             final color = _categoryColor(entry.key);
+            final offset = sameReasonIncome[entry.value.key] ?? 0;
 
-            // 3 cards per row: (screenWidth - 32 horizontal padding - 16 gaps of 8) / 3
+            // 3 cards per row
             final cardWidth = (MediaQuery.of(context).size.width - 32 - 16) / 3;
 
             return Container(
@@ -980,7 +1035,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  // Amount
+                  // Net amount
                   Text(
                     NumberFormat('#,##0').format(entry.value.value),
                     style: TextStyle(
@@ -989,6 +1044,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       fontWeight: FontWeight.w400,
                     ),
                   ),
+                  // Offset label if applicable
+                  if (offset > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '-${NumberFormat('#,##0').format(offset)} in',
+                      style: TextStyle(
+                        color: AppColors.mintGreen.withValues(alpha: 0.7),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -1267,8 +1333,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   Widget _buildReasonBreakdown(List<AppTransaction> txs,
       List<CashTransaction> cashTxs, FinanceProvider provider) {
-    final Map<String, double> reasonTotals = {};
-    // Regular
+    // ── Step 1: Accumulate gross expense AND same-reason income ───────────────
+    final Map<String, double> grossExpense = {};
+    final Map<String, double> sameReasonIncome = {};
+
+    // Bank expenses
     for (var t in txs.where((t) =>
         t.type == 'expense' &&
         t.reason?.toLowerCase() != 'cash' &&
@@ -1277,12 +1346,34 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       final label = (t.resolvedReason?.isNotEmpty == true)
           ? t.resolvedReason!
           : 'Uncategorized';
-      reasonTotals[label] = (reasonTotals[label] ?? 0) + t.amount;
+      grossExpense[label] = (grossExpense[label] ?? 0) + t.amount;
     }
-    // Cash
+
+    // Bank incomes that share a reason name with an expense category
+    for (var t in txs.where((t) =>
+        t.type == 'income' &&
+        t.reason?.toLowerCase() != 'cash' &&
+        t.customReasonText?.toLowerCase() != 'cash' &&
+        t.resolvedReason?.toLowerCase() != 'cash')) {
+      final label =
+          (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : null;
+      if (label != null && grossExpense.containsKey(label)) {
+        sameReasonIncome[label] = (sameReasonIncome[label] ?? 0) + t.amount;
+      }
+    }
+
+    // Cash wallet expenses
     for (var ctx in cashTxs.where((t) => t.type == 'expense')) {
       final label = ctx.reasonName ?? 'Other Cash';
-      reasonTotals[label] = (reasonTotals[label] ?? 0) + ctx.amount;
+      grossExpense[label] = (grossExpense[label] ?? 0) + ctx.amount;
+    }
+
+    // ── Step 2: Compute net spending = gross expense − same-reason income ─────
+    final Map<String, double> reasonTotals = {};
+    for (final label in grossExpense.keys) {
+      final netSpend =
+          (grossExpense[label] ?? 0) - (sameReasonIncome[label] ?? 0);
+      if (netSpend > 0) reasonTotals[label] = netSpend;
     }
 
     if (reasonTotals.isEmpty) {
@@ -1293,83 +1384,179 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       ..sort((a, b) => b.value.compareTo(a.value));
     final total = sorted.fold<double>(0, (s, e) => s + e.value);
     final fmt = NumberFormat('#,##0.00');
+    final hasOffsets = sameReasonIncome.isNotEmpty;
 
     return Column(
-      children: sorted.asMap().entries.take(8).map((entry) {
-        final i = entry.key;
-        final e = entry.value;
-        final pct = total > 0 ? e.value / total : 0.0;
-        final color = _categoryColor(i);
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      children: [
+        // Offset notice
+        if (hasOffsets) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0B90B).withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFFF0B90B).withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: Color(0xFFF0B90B), size: 13),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Net spending shown — income tagged with the same reason has been subtracted.',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 10,
+                        height: 1.4),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Row(
-            children: [
-              // Rank circle
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: color.withValues(alpha: 0.3), width: 1),
+        ],
+
+        ...sorted.asMap().entries.take(8).map((entry) {
+          final i = entry.key;
+          final e = entry.value;
+          final pct = total > 0 ? e.value / total : 0.0;
+          final color = _categoryColor(i);
+          final gross = grossExpense[e.key] ?? e.value;
+          final offset = sameReasonIncome[e.key] ?? 0;
+
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AllTransactionsScreen(
+                    initialSearchQuery: e.key,
+                  ),
                 ),
-                child: Center(
-                  child: Text('${i + 1}',
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Row(
+                children: [
+                  // Rank circle
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: color.withValues(alpha: 0.3), width: 1),
+                    ),
+                    child: Center(
+                      child: Text('${i + 1}',
+                          style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(e.key,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(e.key,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500)),
+                            // Net amount in the reason's color
+                            Text(fmt.format(e.value),
+                                style: TextStyle(
+                                    color: color,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        // Breakdown row: gross − offset = net
+                        if (offset > 0) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Text(
+                                '${fmt.format(gross)} out',
+                                style: TextStyle(
+                                    color: AppColors.alertRed
+                                        .withValues(alpha: 0.7),
+                                    fontSize: 10),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text('−',
+                                    style: TextStyle(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.3),
+                                        fontSize: 10)),
+                              ),
+                              Text(
+                                '${fmt.format(offset)} in',
+                                style: TextStyle(
+                                    color: AppColors.mintGreen
+                                        .withValues(alpha: 0.8),
+                                    fontSize: 10),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text('=',
+                                    style: TextStyle(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.3),
+                                        fontSize: 10)),
+                              ),
+                              Text(
+                                'net ${fmt.format(e.value)}',
+                                style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: pct.clamp(0.0, 1.0),
+                            minHeight: 4,
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.06),
+                            valueColor: AlwaysStoppedAnimation<Color>(color),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                            '${(pct * 100).toStringAsFixed(1)}% of net expenses',
                             style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500)),
-                        Text(fmt.format(e.value),
-                            style: TextStyle(
-                                color: color,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600)),
+                                color: AppColors.textGray, fontSize: 10)),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: pct.clamp(0.0, 1.0),
-                        minHeight: 4,
-                        backgroundColor: Colors.white.withValues(alpha: 0.06),
-                        valueColor: AlwaysStoppedAnimation<Color>(color),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('${(pct * 100).toStringAsFixed(1)}% of total expenses',
-                        style: const TextStyle(
-                            color: AppColors.textGray, fontSize: 10)),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      }).toList(),
+            ),
+          );
+        }),
+      ],
     );
   }
 

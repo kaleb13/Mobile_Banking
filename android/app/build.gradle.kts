@@ -33,9 +33,18 @@ android {
 
     buildTypes {
         release {
+            // Enable code shrinking, obfuscation, and optimization for release builds.
+            isMinifyEnabled = true
+            // Enable resource shrinking, which is performed by the Android Gradle plugin.
+            isShrinkResources = true
+            
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

@@ -14,11 +14,9 @@ import '../services/database_service.dart';
 import '../services/sms_service.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as sms_inbox;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:telephony/telephony.dart';
 import '../services/telebirr_parser.dart';
 import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
-import '../services/background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
@@ -58,8 +56,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isMenuOpen = false;
   int _currentScreenIndex = 0;
   String? _userName;
-  Timer? _refreshTimer;
-  DateTime? _lastPollTime;
+  Timer? _dbSyncTimer;
+  int _lastKnownTxCount = 0;
+  bool _isBatchProcessing = false;
 
   /// [initialOnboardingComplete] should be read from SharedPreferences in
   /// main() BEFORE runApp() so the first frame is always correct.
@@ -594,6 +593,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       });
 
       Set<String> processedSenders = {};
+      _isBatchProcessing = true;
       for (var msg in allMessages) {
         if (msg.sender != null && msg.body != null && msg.date != null) {
           final msgDate = msg.date!;
@@ -642,6 +642,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           break;
         }
       }
+      _isBatchProcessing = false;
       await prefs.setBool('is_first_boot_v5', false);
     }
     // On subsequent opens we do NOT rescan SMS — the background service
@@ -651,80 +652,46 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _transactions = await DatabaseService.instance.getTransactions();
     await _loadNotifications();
 
-    // Real-time SMS listener (foreground)
-    final Telephony telephony = Telephony.instance;
-    telephony.listenIncomingSms(
-      onNewMessage: (SmsMessage msg) async {
-        if (msg.address != null && msg.body != null) {
-          final date = msg.date != null
-              ? DateTime.fromMillisecondsSinceEpoch(msg.date!)
-              : DateTime.now();
-          await processNewSms(msg.address!, msg.body!, date);
-          // Refresh transactions & stats
-          _transactions = await DatabaseService.instance.getTransactions();
-          await _loadNotifications();
-          _calculateStats();
-          notifyListeners();
-        }
-      },
-      onBackgroundMessage: backgroundMessageHandler,
-      listenInBackground: true,
-    );
+    // NOTE: We do NOT set up a duplicate SMS listener here.
+    // The background service (background_service.dart) already listens for
+    // incoming SMS via Telephony and writes new transactions to the DB.
+    // Running a second listener would cause double processing, double CPU,
+    // and double battery drain.
 
     _calculateStats();
     _isLoading = false;
 
-    // Initialize _lastPollTime for periodic refresh
-    // We take the latest transaction date or the install anchor as starting point
-    _lastPollTime = lastTxDate ??
-        DateTime.tryParse(prefs.getString('install_anchor_date') ?? '');
-    _lastPollTime ??= DateTime.now().subtract(const Duration(days: 30));
+    // Track current transaction count for lightweight DB sync
+    _lastKnownTxCount = _transactions.length;
 
-    _startPeriodicRefresh();
+    // Start a lightweight DB sync that checks for new rows periodically.
+    // This catches transactions inserted by the background service isolate.
+    _startLightweightDbSync();
 
     notifyListeners();
   }
 
-  void _startPeriodicRefresh() {
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      await _pollForNewMessages();
+  /// Lightweight periodic DB sync.
+  /// Instead of polling the entire SMS inbox (which reads 1000+ messages
+  /// and drains battery), we just ask the DB if new transactions were
+  /// inserted by the background service isolate.
+  void _startLightweightDbSync() {
+    _dbSyncTimer?.cancel();
+    _dbSyncTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
+      await _checkDbForNewTransactions();
     });
   }
 
-  Future<void> _pollForNewMessages() async {
-    if (!_hasPermission || _lastPollTime == null) return;
+  Future<void> _checkDbForNewTransactions() async {
+    if (!_hasPermission) return;
 
-    final newMessages = await SmsService().getAllMessages(since: _lastPollTime);
-    if (newMessages.isEmpty) {
-      // Just update poll time to now to keep the window narrow
-      _lastPollTime = DateTime.now();
-      return;
-    }
+    // Quick count query — almost zero CPU cost
+    final currentCount = await DatabaseService.instance.getTransactionCount();
 
-    // Sort oldest first to maintain sequence if multiple messages arrived
-    newMessages.sort((a, b) =>
-        (a.date ?? DateTime.now()).compareTo(b.date ?? DateTime.now()));
-
-    bool foundNew = false;
-    for (var msg in newMessages) {
-      if (msg.address != null && msg.body != null) {
-        final date = msg.date ?? DateTime.now();
-        await processNewSms(msg.address!, msg.body!, date);
-        foundNew = true;
-        if (date.isAfter(_lastPollTime!)) {
-          _lastPollTime = date;
-        }
-      }
-    }
-
-    if (foundNew) {
-      _transactions = await DatabaseService.instance.getTransactions();
-      await _loadNotifications();
-      _calculateStats();
-      notifyListeners();
-    } else {
-      _lastPollTime = DateTime.now();
+    if (currentCount != _lastKnownTxCount) {
+      // Background service inserted new transactions — reload
+      _lastKnownTxCount = currentCount;
+      await _reloadFromDatabase();
     }
   }
 
@@ -784,7 +751,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _dbSyncTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -835,11 +802,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       return a.date!.compareTo(b.date!);
     });
 
+    // Enable batch mode to prevent addTransaction from calling
+    // _calculateStats() + notifyListeners() for each individual message.
+    // We'll do it once at the end.
+    _isBatchProcessing = true;
     for (var msg in messages) {
       if (msg.sender != null && msg.body != null && msg.date != null) {
         await processNewSms(msg.sender!, msg.body!, msg.date!);
       }
     }
+    _isBatchProcessing = false;
 
     _transactions = await DatabaseService.instance.getTransactions();
     _expenseDefinitions =
@@ -1013,32 +985,43 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _todayTransactionCount = 0;
 
     DateTime now = DateTime.now();
-
-    // The bank already pre-calculates the total current balance.
-    // We sum the precise balance from the single newest transaction per bank!
     Map<String, double> latestBalances = {};
+    double cashInflows = 0;
+    double cashOutflows = 0;
+
+    // Single pass through transactions to collect all necessary data
     for (var tx in _transactions) {
+      // 1. Balance Tracking (Newest per bank)
       if (!latestBalances.containsKey(tx.name)) {
         if (tx.totalBalance > 0) {
           latestBalances[tx.name] = tx.totalBalance;
         }
       }
-    }
 
-    for (var value in latestBalances.values) {
-      _totalBalance += value;
-    }
+      // 2. Date checks
+      bool isToday = tx.date.year == now.year &&
+          tx.date.month == now.month &&
+          tx.date.day == now.day;
+      if (isToday) {
+        _todayTransactionCount++;
+      }
 
-    // Cash Wallet Balance Calculation
-    double cashInflows = 0;
-    double manualInflows = 0;
-    double cashOutflows = 0;
+      bool isSelectedDay = _isShowingAll ||
+          (tx.date.year == _selectedDate.year &&
+              tx.date.month == _selectedDate.month &&
+              tx.date.day == _selectedDate.day);
 
-    // 1. Sum from SMS bank txns where reason == 'Cash'
-    for (var tx in _transactions) {
-      if (tx.reason?.toLowerCase() == 'cash' ||
+      bool isThisMonth = isDateInMonthOf(tx.date, now);
+
+      // 3. Category & Cash Logic
+      bool isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+          tx.resolvedReason?.toLowerCase() == 'internal transfer';
+
+      bool isCashTransfer = tx.reason?.toLowerCase() == 'cash' ||
           tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash') {
+          tx.resolvedReason?.toLowerCase() == 'cash';
+
+      if (isCashTransfer) {
         // ATM withdrawal (bank expense) is a CASH INFLOW to the wallet.
         // Cash deposit (bank income) is a CASH OUTFLOW from the wallet.
         if (tx.type == 'expense') {
@@ -1047,90 +1030,26 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           cashOutflows += tx.amount.abs();
         }
       }
-    }
-    // 2. Add manual additions and minus deductions
-    for (var ctx in _cashTransactions) {
-      if (ctx.type == 'addition') {
-        manualInflows += ctx.amount;
-        // Manual additions to cash (not from bank) increase wealth
-        _netOverall += ctx.amount;
-        if (isDateInMonthOf(ctx.date, now)) {
-          _incomeThisMonth += ctx.amount;
-        }
-        if (_isShowingAll ||
-            (ctx.date.year == _selectedDate.year &&
-                ctx.date.month == _selectedDate.month &&
-                ctx.date.day == _selectedDate.day)) {
-          _incomeForSelectedDate += ctx.amount;
-        }
-      } else if (ctx.type == 'expense') {
-        cashOutflows += ctx.amount;
-        // Manual cash expenses decrease wealth
-        _netOverall -= ctx.amount;
-        if (isDateInMonthOf(ctx.date, now)) {
-          _expenseThisMonth += ctx.amount;
-        }
-        if (_isShowingAll ||
-            (ctx.date.year == _selectedDate.year &&
-                ctx.date.month == _selectedDate.month &&
-                ctx.date.day == _selectedDate.day)) {
-          _expenseForSelectedDate += ctx.amount;
-        }
-      }
-    }
 
-    _cashBalance = cashInflows + manualInflows - cashOutflows;
-
-    // Add cash balance to the grand total balance
-    if (_cashBalance > 0) {
-      _totalBalance += _cashBalance;
-    }
-
-    for (var tx in _transactions) {
-      if (tx.date.year == now.year &&
-          tx.date.month == now.month &&
-          tx.date.day == now.day) {
-        _todayTransactionCount++;
-      }
-
-      bool isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
-          tx.resolvedReason?.toLowerCase() == 'internal transfer';
       if (isBounce) continue;
 
-      bool isCashTransfer = tx.reason?.toLowerCase() == 'cash' ||
-          tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash';
-
+      // 4. Summaries (exclude cash transfers from net wealth change as they are internal)
       if (tx.type == 'income') {
-        if (isDateInMonthOf(tx.date, now)) {
-          if (!isCashTransfer) {
-            _incomeThisMonth += tx.amount;
-          }
+        if (isThisMonth && !isCashTransfer) {
+          _incomeThisMonth += tx.amount;
         }
-        if (_isShowingAll ||
-            (tx.date.year == _selectedDate.year &&
-                tx.date.month == _selectedDate.month &&
-                tx.date.day == _selectedDate.day)) {
-          if (!isCashTransfer) {
-            _incomeForSelectedDate += tx.amount;
-          }
+        if (isSelectedDay && !isCashTransfer) {
+          _incomeForSelectedDate += tx.amount;
         }
         if (!isCashTransfer) {
           _netOverall += tx.amount;
         }
       } else if (tx.type == 'expense') {
-        if (isDateInMonthOf(tx.date, now)) {
-          if (!isCashTransfer) {
-            _expenseThisMonth += tx.amount;
-          }
+        if (isThisMonth && !isCashTransfer) {
+          _expenseThisMonth += tx.amount;
         }
-        if (_isShowingAll ||
-            (tx.date.year == _selectedDate.year &&
-                tx.date.month == _selectedDate.month &&
-                tx.date.day == _selectedDate.day)) {
-          if (!isCashTransfer) {
-            _expenseForSelectedDate += tx.amount;
-          }
+        if (isSelectedDay && !isCashTransfer) {
+          _expenseForSelectedDate += tx.amount;
         }
         if (!isCashTransfer) {
           _netOverall -= tx.amount;
@@ -1138,18 +1057,46 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
 
+    // Process latest bank balances
+    for (var value in latestBalances.values) {
+      _totalBalance += value;
+    }
+
+    // Process Cash Transactions (Manual additions/deductions)
+    for (var ctx in _cashTransactions) {
+      bool isThisMonth = isDateInMonthOf(ctx.date, now);
+      bool isSelectedDay = _isShowingAll ||
+          (ctx.date.year == _selectedDate.year &&
+              ctx.date.month == _selectedDate.month &&
+              ctx.date.day == _selectedDate.day);
+
+      if (ctx.type == 'addition') {
+        cashInflows += ctx.amount; // manual injections are inflows
+        _netOverall += ctx.amount;
+        if (isThisMonth) _incomeThisMonth += ctx.amount;
+        if (isSelectedDay) _incomeForSelectedDate += ctx.amount;
+      } else if (ctx.type == 'expense') {
+        cashOutflows += ctx.amount;
+        _netOverall -= ctx.amount;
+        if (isThisMonth) _expenseThisMonth += ctx.amount;
+        if (isSelectedDay) _expenseForSelectedDate += ctx.amount;
+      }
+    }
+
+    _cashBalance = cashInflows - cashOutflows;
+    if (_cashBalance > 0) {
+      _totalBalance += _cashBalance;
+    }
+
     _netForSelectedDate = _incomeForSelectedDate - _expenseForSelectedDate;
 
-    // Percentage for summary card (Today or Selected Date)
+    // Percentage for summary card
     if (_totalBalance > 0) {
       _incomePercentageChange = (_netForSelectedDate / _totalBalance) * 100;
       _incomePercentageChange = _incomePercentageChange.clamp(-100.0, 100.0);
 
       _percentageChangeOverall = (_netOverall / _totalBalance) * 100;
       _percentageChangeOverall = _percentageChangeOverall.clamp(-100.0, 100.0);
-    } else {
-      _incomePercentageChange = 0;
-      _percentageChangeOverall = 0;
     }
   }
 
@@ -1185,8 +1132,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       await _checkAndApplyLoanRepayment(txToInsert);
     }
 
-    _calculateStats();
-    notifyListeners();
+    // Skip stats recalculation during batch processing (e.g. refreshData)
+    // to avoid N expensive recalculations — the caller will do it once at the end.
+    if (!_isBatchProcessing) {
+      _calculateStats();
+      notifyListeners();
+    }
   }
 
   /// Update a transaction with a reusable reason [reasonId] OR a one-time [customReasonText].

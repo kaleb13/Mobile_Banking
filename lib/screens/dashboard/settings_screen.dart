@@ -59,8 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       decoration: BoxDecoration(
-        color:
-            Colors.white.withValues(alpha: 0.035), // Subtle section background
+        color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(14),
       ),
       clipBehavior: Clip.antiAlias,
@@ -219,7 +218,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     const SizedBox(height: 16),
 
-                    // ── Section: Cache & Data ──────────────────────────
+                    // ── Section: Maintenance ───────────────────────────
                     _sectionLabel('Maintenance'),
                     _buildCardBase([
                       _settingsTile(

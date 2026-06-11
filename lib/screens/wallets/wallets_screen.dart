@@ -47,7 +47,6 @@ class _WalletsScreenState extends State<WalletsScreen> {
         grandExpense += ctx.amount;
       }
     }
-    // Add bank transactions labeled "Cash" to grand income since it's an inflow to the wallet but an outflow from the bank. Wait, actually if it's an withdrawal, it's counted as an expense from the bank, which is already in `grandExpense`. So net worth isn't affected. Let's just keep grandIncome/grandExpense as-is for Cash Wallet additions.
 
     final grandNet = grandIncome - grandExpense;
 
@@ -64,14 +63,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
           width: double.infinity,
           height: double.infinity,
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              colors: [
-                Color(0xFF1F1F25),
-                Color(0xFF1B1B21),
-              ],
-            ),
+            gradient: AppColors.screenBackgroundGradient,
           ),
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
@@ -85,7 +77,6 @@ class _WalletsScreenState extends State<WalletsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title Section
                         const Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -133,7 +124,6 @@ class _WalletsScreenState extends State<WalletsScreen> {
                           style: TextStyle(
                               color: AppColors.labelGray, fontSize: 12),
                         ),
-                        const SizedBox(height: 6),
                         const SizedBox(height: 6),
                         _splitBalance(
                             provider.isBalanceVisible
@@ -306,7 +296,6 @@ class _WalletsScreenState extends State<WalletsScreen> {
     double monthExpense = 0;
     final now = DateTime.now();
 
-    // Combine SMS "Cash" withdrawals and manual additions
     for (var tx in provider.transactions) {
       if (tx.reason?.toLowerCase() == 'cash' ||
           tx.customReasonText?.toLowerCase() == 'cash' ||
@@ -630,6 +619,8 @@ class _WalletCard extends StatelessWidget {
                   Container(
                     margin:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: (isPositiveNet
                               ? AppColors.mintGreen
@@ -690,10 +681,10 @@ class _WalletCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
+                      const Text(
                         'This month',
-                        style: const TextStyle(
-                            color: AppColors.labelGray, fontSize: 11),
+                        style:
+                            TextStyle(color: AppColors.labelGray, fontSize: 11),
                       ),
                       Text(
                         '$txCount transactions total',
