@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/telebirr_parser.dart';
 import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
+import '../services/bank_senders.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
@@ -597,30 +598,25 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       for (var msg in allMessages) {
         if (msg.sender != null && msg.body != null && msg.date != null) {
           final msgDate = msg.date!;
-          final upSender = msg.sender!.toUpperCase();
-          final upBody = msg.body!.toUpperCase();
 
           if (!_isEnglishBankingMessage(msg.body!)) continue;
 
-          if ((upSender.contains('TELEBIRR') ||
-                  msg.sender == TelebirrParser.senderNumber) &&
-              !processedSenders.contains('Telebirr')) {
+          final bank = BankSenders.match(msg.sender);
+
+          if (bank == 'Telebirr' && !processedSenders.contains('Telebirr')) {
             AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
               processedSenders.add('Telebirr');
             }
-          } else if (upSender.contains('CBE') &&
-              upSender.contains('BIRR') &&
+          } else if (bank == 'CBE Birr' &&
               !processedSenders.contains('CBE Birr')) {
             AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
               processedSenders.add('CBE Birr');
             }
-          } else if ((upSender.contains('CBE') ||
-                  upBody.contains('BANKING WITH CBE')) &&
-              !processedSenders.contains('CBE')) {
+          } else if (bank == 'CBE' && !processedSenders.contains('CBE')) {
             // Try to extract name from ANY CBE message during first scan
             if (_userName == null) {
               final name = CbeParser.extractOwnerName(msg.body!);
@@ -776,7 +772,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> refreshData() async {
+  /// Re-scans SMS and ingests any new transactions.
+  ///
+  /// [lastDays] limits the scan to the most recent N days (e.g. 7 or 30).
+  /// When null, scans the full range since the install anchor. The cutoff is
+  /// never earlier than the install anchor, so pre-install messages stay
+  /// excluded regardless of the chosen window.
+  Future<void> refreshData({int? lastDays}) async {
     final prefs = await SharedPreferences.getInstance();
 
     // Use the install anchor date so we scan the FULL range since install,
@@ -790,9 +792,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       return;
     }
 
-    // Fetch every SMS from known senders since the install anchor
+    // Narrow to the requested window when provided, but never scan earlier
+    // than the install anchor.
+    DateTime cutoff = anchorDate;
+    if (lastDays != null) {
+      final windowStart = DateTime.now().subtract(Duration(days: lastDays));
+      if (windowStart.isAfter(anchorDate)) cutoff = windowStart;
+    }
+
+    // Fetch every SMS from known senders since the cutoff
     // (subtract 1 min buffer to be safe at boundaries)
-    final cutoff = anchorDate.subtract(const Duration(minutes: 1));
+    cutoff = cutoff.subtract(const Duration(minutes: 1));
     List<sms_inbox.SmsMessage> messages =
         await SmsService().getAllMessages(since: cutoff);
 
@@ -865,12 +875,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
-  /// Returns true if [msg] is primarily English and doesn't contain Ethiopic script.
+  /// Returns true if [msg] looks like a banking message (contains an English
+  /// banking keyword). Bilingual messages that mix Amharic with English
+  /// transaction text (e.g. CBE Birr) are kept \u2014 only messages with no English
+  /// banking keyword at all are dropped.
   static bool _isEnglishBankingMessage(String msg) {
-    // Reject messages with any Ethiopic/Amharic characters immediately
-    final hasEthiopic = RegExp(r'[\u1200-\u137F\uAB01-\uAB2F]').hasMatch(msg);
-    if (hasEthiopic) return false;
-
     const keywords = [
       'received',
       'sent',
@@ -1758,9 +1767,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
 
-    // 0. Use modular parsers for specific senders
-    if (sender == TelebirrParser.senderNumber ||
-        sender.toLowerCase() == TelebirrParser.senderName.toLowerCase()) {
+    // 0. Use modular parsers for trusted bank sender IDs only.
+    final bank = BankSenders.match(sender);
+    if (bank == 'Telebirr') {
       AppTransaction? telebirrTx = TelebirrParser.parse(message, date);
       if (telebirrTx != null) {
         await addTransaction(telebirrTx);
@@ -1770,7 +1779,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             sender: sender, body: message, date: date);
       }
       return;
-    } else if (sender.toUpperCase() == CbeParser.senderName) {
+    } else if (bank == 'CBE') {
       AppTransaction? cbeTx = CbeParser.parse(message, date);
       if (cbeTx != null) {
         await addTransaction(cbeTx);
@@ -1779,7 +1788,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             sender: sender, body: message, date: date);
       }
       return;
-    } else if (sender.toUpperCase() == CbeBirrParser.senderName.toUpperCase()) {
+    } else if (bank == 'CBE Birr') {
       AppTransaction? cbeBirrTx = CbeBirrParser.parse(message, date);
       if (cbeBirrTx != null) {
         await addTransaction(cbeBirrTx);
@@ -2111,18 +2120,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       // Skip non-English/Amharic messages entirely during rescan
       if (!_isEnglishBankingMessage(body)) continue;
 
-      final upSender = sender.toUpperCase();
-      final upBody = body.toUpperCase();
-
-      // Parse the SMS with the appropriate parser
+      // Parse the SMS with the appropriate parser (trusted senders only)
+      final bank = BankSenders.match(sender);
       AppTransaction? parsed;
-      if (upSender.contains('TELEBIRR') ||
-          sender == TelebirrParser.senderNumber) {
+      if (bank == 'Telebirr') {
         parsed = TelebirrParser.parse(body, msgDate);
-      } else if (upSender.contains('CBE') && upSender.contains('BIRR')) {
+      } else if (bank == 'CBE Birr') {
         parsed = CbeBirrParser.parse(body, msgDate);
-      } else if (upSender.contains('CBE') ||
-          upBody.contains('BANKING WITH CBE')) {
+      } else if (bank == 'CBE') {
         parsed = CbeParser.parse(body, msgDate);
       }
 

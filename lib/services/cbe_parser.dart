@@ -102,6 +102,20 @@ class CbeParser {
       if (fromMatch != null) {
         senderOrRecipient = fromMatch.group(1)?.trim() ?? '';
       }
+    } else if (lowerMsg.contains('received')) {
+      // "You have received ETB 5,000.00 from account 1****4239 (Name) to your account ..."
+      type = 'income';
+      category = 'Deposit';
+      amount = extractAmount(
+          RegExp(r'received\s+ETB\s*([0-9,.]+)', caseSensitive: false));
+
+      // Sender: "from account 1****4239 (Nathnael Tesfaye T/mariam)"
+      final fromMatchParens =
+          RegExp(r'from\s+account\s+[\d*]+\s+\(([^)]+)\)', caseSensitive: false)
+              .firstMatch(message);
+      if (fromMatchParens != null) {
+        senderOrRecipient = fromMatchParens.group(1)?.trim() ?? '';
+      }
     } else {
       return null;
     }

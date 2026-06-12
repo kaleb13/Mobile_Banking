@@ -14,6 +14,7 @@ import 'cash_wallet_detail_screen.dart';
 import 'transaction_search_screen.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
+import '../../widgets/hold_to_refresh.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -266,9 +267,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMainDashboardLayout(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
+    return HoldToRefresh(
+      onRefresh: () => provider.refreshData(lastDays: 7),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SafeArea(
@@ -294,6 +299,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildTransactionsList(context, _searchQuery),
           const SizedBox(height: 100),
         ],
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import 'database_service.dart';
 import 'telebirr_parser.dart';
 import 'cbe_parser.dart';
 import 'cbe_birr_parser.dart';
+import 'bank_senders.dart';
 
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
@@ -142,12 +143,11 @@ Future<void> backgroundMessageHandler(SmsMessage message) async {
   await processBackgroundSms(message);
 }
 
-/// Returns true if [msg] is primarily English and doesn't contain Ethiopic script.
+/// Returns true if [msg] looks like a banking message (contains an English
+/// banking keyword). Bilingual messages that mix Amharic with English
+/// transaction text (e.g. CBE Birr) are kept \u2014 only messages with no English
+/// banking keyword at all are dropped.
 bool _isEnglishBankingMessage(String msg) {
-  // Reject messages with any Ethiopic/Amharic characters immediately
-  final hasEthiopic = RegExp(r'[\u1200-\u137F\uAB01-\uAB2F]').hasMatch(msg);
-  if (hasEthiopic) return false;
-
   const keywords = [
     'received',
     'sent',
@@ -209,15 +209,13 @@ Future<void> processBackgroundSms(SmsMessage message) async {
 
   AppTransaction? tx;
 
-  final upSender = senderAddress.toUpperCase();
-  final upBody = body.toUpperCase();
+  final bank = BankSenders.match(senderAddress);
 
-  if (upSender.contains('TELEBIRR') ||
-      senderAddress == TelebirrParser.senderNumber) {
+  if (bank == 'Telebirr') {
     tx = TelebirrParser.parse(body, date);
-  } else if (upSender.contains('CBE') && upSender.contains('BIRR')) {
+  } else if (bank == 'CBE Birr') {
     tx = CbeBirrParser.parse(body, date);
-  } else if (upSender.contains('CBE') || upBody.contains('BANKING WITH CBE')) {
+  } else if (bank == 'CBE') {
     tx = CbeParser.parse(body, date);
   } else {
     // Custom Senders matching

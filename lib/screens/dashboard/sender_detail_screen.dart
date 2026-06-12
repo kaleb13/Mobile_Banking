@@ -673,6 +673,136 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     return const SizedBox.shrink();
   }
 
+  /// Lets the user pick how far back to re-scan SMS, then refreshes.
+  void _showRefreshChooser(BuildContext context, FinanceProvider provider) {
+    Future<void> runRefresh(int days) async {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Refreshing the last $days days…',
+              style: const TextStyle(color: Colors.white, fontSize: 13)),
+          backgroundColor: const Color(0xFF2A2A34),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      await provider.refreshData(lastDays: days);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Refreshed the last $days days',
+              style: const TextStyle(color: Colors.white, fontSize: 13)),
+          backgroundColor: const Color(0xFF2A2A34),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        Widget option({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required int days,
+        }) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              Navigator.pop(sheetCtx);
+              runRefresh(days);
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A34).withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                children: [
+                  Icon(icon, color: Colors.white, size: 22),
+                  const SizedBox(width: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text(subtitle,
+                          style: const TextStyle(
+                              color: AppColors.textGray, fontSize: 12)),
+                    ],
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.textGray, size: 20),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF17171C),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 18),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const Text('Refresh transactions',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  const Text('Choose how far back to re-scan your SMS.',
+                      style:
+                          TextStyle(color: AppColors.textGray, fontSize: 12.5)),
+                  const SizedBox(height: 18),
+                  option(
+                    icon: Icons.history_rounded,
+                    title: 'Past 7 days',
+                    subtitle: 'Quick — recent messages only',
+                    days: 7,
+                  ),
+                  option(
+                    icon: Icons.date_range_rounded,
+                    title: 'Last 30 days',
+                    subtitle: 'Thorough — wider catch-up',
+                    days: 30,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Variant bottom nav — same sizing/geometry as the home CustomBottomNavBar,
   /// with bank-specific content (refresh | logo+name pill | back).
   Widget _buildBottomNav(BuildContext context, FinanceProvider provider) {
@@ -698,7 +828,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 width: circleW,
                 height: 56,
                 child: GestureDetector(
-                  onTap: () => provider.refreshData(),
+                  onTap: () => _showRefreshChooser(context, provider),
                   behavior: HitTestBehavior.opaque,
                   child: ClipOval(
                     child: BackdropFilter(
