@@ -1784,6 +1784,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       if (cbeTx != null) {
         await addTransaction(cbeTx);
       } else {
+        // Some CBE Birr messages (e.g. ATM withdrawals) arrive with sender
+        // ID "CBE" instead of "CBEBirr". If the CBE parser can't read it
+        // and the body uses the "Br." CBE Birr currency marker, try the
+        // CBE Birr parser as a fallback before dropping the message.
+        final looksLikeCbeBirr = message.toLowerCase().contains('br.');
+        if (looksLikeCbeBirr) {
+          AppTransaction? cbeBirrFallbackTx =
+              CbeBirrParser.parse(message, date);
+          if (cbeBirrFallbackTx != null) {
+            await addTransaction(cbeBirrFallbackTx);
+            return;
+          }
+        }
         await addUnrecognizedNotification(
             sender: sender, body: message, date: date);
       }

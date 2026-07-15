@@ -217,6 +217,10 @@ Future<void> processBackgroundSms(SmsMessage message) async {
     tx = CbeBirrParser.parse(body, date);
   } else if (bank == 'CBE') {
     tx = CbeParser.parse(body, date);
+    // Fallback: some CBE Birr ATM messages arrive with sender ID "CBE"
+    if (tx == null && body.toLowerCase().contains('br.')) {
+      tx = CbeBirrParser.parse(body, date);
+    }
   } else {
     // Custom Senders matching
     final senders = await DatabaseService.instance.getSenders();
