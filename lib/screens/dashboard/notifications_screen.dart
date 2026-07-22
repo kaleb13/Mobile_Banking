@@ -25,7 +25,7 @@ class NotificationsScreen extends StatelessWidget {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1F1F25),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -70,13 +70,13 @@ class NotificationsScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.15),
+                          color: AppColors.gold.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text(
                           'Clear',
                           style: TextStyle(
-                            color: AppColors.primaryBlue,
+                            color: AppColors.gold,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -119,7 +119,7 @@ class NotificationsScreen extends StatelessWidget {
                                       provider.deleteNotification(notif.id),
                                   icon: Icons.delete_rounded,
                                   label: 'Delete',
-                                  color: AppColors.alertRed,
+                                  color: AppColors.negative,
                                   isFirst: true,
                                   isLast: isSystem,
                                 ),
@@ -129,14 +129,14 @@ class NotificationsScreen extends StatelessWidget {
                                         context, provider, notif),
                                     icon: Icons.add_circle_outline_rounded,
                                     label: 'Insert',
-                                    color: AppColors.primaryBlue,
+                                    color: AppColors.gold,
                                   ),
                                   _buildSlidableAction(
                                     onPressed: (context) =>
                                         _informDeveloper(context, notif.body),
                                     icon: Icons.telegram_rounded,
                                     label: 'Inform',
-                                    color: AppColors.labelGray
+                                    color: AppColors.textSoft
                                         .withValues(alpha: 0.7),
                                     isLast: true,
                                   ),
@@ -149,7 +149,7 @@ class NotificationsScreen extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceLight
+                                  color: AppColors.surfaceCard
                                       .withValues(alpha: 0.5),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
@@ -163,14 +163,14 @@ class NotificationsScreen extends StatelessWidget {
                                       width: 44,
                                       height: 44,
                                       decoration: BoxDecoration(
-                                        color: AppColors.primaryBlue
+                                        color: AppColors.gold
                                             .withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: SvgPicture.asset(
-                                        'assets/images/Notification.svg',
+                                        'assets/images/Notifications.svg',
                                         colorFilter: const ColorFilter.mode(
-                                            AppColors.primaryBlue,
+                                            AppColors.gold,
                                             BlendMode.srcIn),
                                         width: 20,
                                         height: 20,
@@ -210,8 +210,7 @@ class NotificationsScreen extends StatelessWidget {
                                                                 vertical: 2),
                                                         decoration:
                                                             BoxDecoration(
-                                                          color: AppColors
-                                                              .primaryBlue
+                                                          color: AppColors.gold
                                                               .withValues(
                                                                   alpha: 0.15),
                                                           borderRadius:
@@ -221,8 +220,7 @@ class NotificationsScreen extends StatelessWidget {
                                                         child: const Text(
                                                           'System Message',
                                                           style: TextStyle(
-                                                            color: AppColors
-                                                                .primaryBlue,
+                                                            color: AppColors.gold,
                                                             fontSize: 10,
                                                             fontWeight:
                                                                 FontWeight.w600,
@@ -238,8 +236,7 @@ class NotificationsScreen extends StatelessWidget {
                                                                 vertical: 2),
                                                         decoration:
                                                             BoxDecoration(
-                                                          color: AppColors
-                                                              .labelGray
+                                                          color: AppColors.textSoft
                                                               .withValues(
                                                                   alpha: 0.12),
                                                           borderRadius:
@@ -249,8 +246,7 @@ class NotificationsScreen extends StatelessWidget {
                                                         child: const Text(
                                                           'Unregistered',
                                                           style: TextStyle(
-                                                            color: AppColors
-                                                                .labelGray,
+                                                            color: AppColors.textSoft,
                                                             fontSize: 10,
                                                             fontWeight:
                                                                 FontWeight.w500,
@@ -265,7 +261,7 @@ class NotificationsScreen extends StatelessWidget {
                                                 DateFormat('MMM d, HH:mm')
                                                     .format(notif.date),
                                                 style: const TextStyle(
-                                                  color: AppColors.labelGray,
+                                                  color: AppColors.textSoft,
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w500,
                                                 ),
@@ -276,7 +272,7 @@ class NotificationsScreen extends StatelessWidget {
                                           Text(
                                             notif.body,
                                             style: const TextStyle(
-                                              color: AppColors.labelGray,
+                                              color: AppColors.textSoft,
                                               fontSize: 13,
                                               height: 1.5,
                                             ),
@@ -307,9 +303,9 @@ class NotificationsScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           SvgPicture.asset(
-            'assets/images/Notification.svg',
+            'assets/images/Notifications.svg',
             colorFilter:
-                const ColorFilter.mode(AppColors.primaryBlue, BlendMode.srcIn),
+                const ColorFilter.mode(AppColors.gold, BlendMode.srcIn),
             width: 48,
             height: 48,
           ),
@@ -317,7 +313,7 @@ class NotificationsScreen extends StatelessWidget {
           const Text(
             'No Notifications',
             style: TextStyle(
-              color: AppColors.textWhite,
+              color: AppColors.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -327,7 +323,7 @@ class NotificationsScreen extends StatelessWidget {
             'Unrecognized messages from\nregistered senders will appear here',
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: AppColors.labelGray, fontSize: 14, height: 1.6),
+                color: AppColors.textSoft, fontSize: 14, height: 1.6),
           ),
         ],
       ),
@@ -358,7 +354,7 @@ class NotificationsScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Message copied! Please paste it in the chat.'),
-          backgroundColor: Color(0xFF3EB489),
+          backgroundColor: AppColors.positive,
           duration: Duration(seconds: 2),
         ),
       );
@@ -392,7 +388,7 @@ class NotificationsScreen extends StatelessWidget {
       builder: (ctx) => Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         decoration: BoxDecoration(
-          color: AppColors.surfaceDark,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -420,7 +416,7 @@ class NotificationsScreen extends StatelessWidget {
               _buildModalItem(
                 icon: Icons.add_circle_outline_rounded,
                 label: 'Insert Transaction Manually',
-                color: AppColors.primaryBlue,
+                color: AppColors.gold,
                 onTap: () {
                   Navigator.pop(ctx);
                   _showManualInsert(context, provider, notif);
@@ -429,7 +425,7 @@ class NotificationsScreen extends StatelessWidget {
               _buildModalItem(
                 icon: Icons.telegram_rounded,
                 label: 'Inform Developer',
-                color: AppColors.labelGray.withValues(alpha: 0.7),
+                color: AppColors.textSoft.withValues(alpha: 0.7),
                 onTap: () {
                   Navigator.pop(ctx);
                   _informDeveloper(context, notif.body);
@@ -439,7 +435,7 @@ class NotificationsScreen extends StatelessWidget {
             _buildModalItem(
               icon: Icons.delete_rounded,
               label: 'Delete Message',
-              color: AppColors.alertRed,
+              color: AppColors.negative,
               onTap: () {
                 Navigator.pop(ctx);
                 provider.deleteNotification(notif.id);
@@ -448,7 +444,7 @@ class NotificationsScreen extends StatelessWidget {
             _buildModalItem(
               icon: Icons.block_rounded,
               label: 'Ignore Permanently',
-              color: AppColors.labelGray,
+              color: AppColors.textSoft,
               onTap: () {
                 Navigator.pop(ctx);
                 provider.ignoreNotification(notif.id);
@@ -493,18 +489,18 @@ class NotificationsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
+        backgroundColor: AppColors.surface,
         title: const Text('Clear All',
-            style: TextStyle(color: AppColors.textWhite)),
+            style: TextStyle(color: AppColors.textPrimary)),
         content: const Text(
           'Remove all notifications?',
-          style: TextStyle(color: AppColors.labelGray),
+          style: TextStyle(color: AppColors.textSoft),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel',
-                style: TextStyle(color: AppColors.labelGray)),
+                style: TextStyle(color: AppColors.textSoft)),
           ),
           TextButton(
             onPressed: () async {
@@ -515,7 +511,7 @@ class NotificationsScreen extends StatelessWidget {
               }
             },
             child: const Text('Clear',
-                style: TextStyle(color: AppColors.alertRed)),
+                style: TextStyle(color: AppColors.negative)),
           ),
         ],
       ),

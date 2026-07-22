@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
@@ -40,7 +40,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
       height:
           MediaQuery.of(context).size.height * 0.85, // Provide bounded height
       decoration: const BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
@@ -51,7 +51,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.textGray.withValues(alpha: 0.4),
+              color: AppColors.textSecondary.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -59,7 +59,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.sync_alt, color: AppColors.primaryBlue),
+                const Icon(Icons.sync_alt, color: AppColors.gold),
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
@@ -72,7 +72,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textGray),
+                  icon: const Icon(Icons.close, color: AppColors.textSecondary),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -82,7 +82,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Text(
               'Select the matching $targetType for this internal transfer. Only unlinked transactions within 3 days are shown.',
-              style: const TextStyle(color: AppColors.labelGray, fontSize: 13),
+              style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
             ),
           ),
           const Divider(color: Colors.white10),
@@ -91,7 +91,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
                 ? const Center(
                     child: Text(
                       'No matching transactions found.',
-                      style: TextStyle(color: AppColors.textGray),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                   )
                 : ListView.builder(
@@ -111,7 +111,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Internal transfer linked!'),
-                                backgroundColor: AppColors.primaryBlue,
+                                backgroundColor: AppColors.gold,
                               ),
                             );
                             Navigator.pop(context); // close detail screen
@@ -119,15 +119,15 @@ class InternalTransferPickerSheet extends StatelessWidget {
                         },
                         leading: CircleAvatar(
                           backgroundColor: tx.type == 'income'
-                              ? AppColors.mintGreen.withValues(alpha: 0.1)
-                              : AppColors.alertRed.withValues(alpha: 0.1),
+                              ? AppColors.positive.withValues(alpha: 0.1)
+                              : AppColors.negative.withValues(alpha: 0.1),
                           child: Icon(
                             tx.type == 'income'
                                 ? Icons.arrow_downward
                                 : Icons.arrow_upward,
                             color: tx.type == 'income'
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             size: 16,
                           ),
                         ),
@@ -139,7 +139,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
                         subtitle: Text(
                           DateFormat('MMM dd, HH:mm').format(tx.date),
                           style: const TextStyle(
-                              color: AppColors.labelGray, fontSize: 12),
+                              color: AppColors.textSoft, fontSize: 12),
                         ),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -149,8 +149,8 @@ class InternalTransferPickerSheet extends StatelessWidget {
                               '${NumberFormat('#,##0.00').format(tx.amount)} ETB',
                               style: TextStyle(
                                 color: tx.type == 'income'
-                                    ? AppColors.mintGreen
-                                    : AppColors.alertRed,
+                                    ? AppColors.positive
+                                    : AppColors.negative,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -160,14 +160,14 @@ class InternalTransferPickerSheet extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryBlue
+                                  color: AppColors.gold
                                       .withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: const Text(
                                   'EXACT AMOUNT',
                                   style: TextStyle(
-                                    color: AppColors.primaryBlue,
+                                    color: AppColors.gold,
                                     fontSize: 8,
                                     fontWeight: FontWeight.bold,
                                   ),

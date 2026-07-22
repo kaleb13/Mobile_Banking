@@ -118,7 +118,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
+        backgroundColor: AppColors.background,
         body: Column(
           children: [
             _buildHeader(context),
@@ -141,7 +141,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         right: 20,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF111315),
+        color: AppColors.surface,
       ),
       child: Row(
         children: [
@@ -166,7 +166,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           const Text(
             'All Transactions',
             style: TextStyle(
-              color: AppColors.textWhite,
+              color: AppColors.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -181,7 +181,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF111315),
+        color: AppColors.surface,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
@@ -199,7 +199,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                const Icon(Icons.search, color: AppColors.textGray, size: 16),
+                const Icon(Icons.search, color: AppColors.textSecondary, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Stack(
@@ -246,7 +246,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                               _getSearchHint(provider),
                               key: ValueKey(_searchLabelIndex),
                               style: const TextStyle(
-                                  color: AppColors.textGray, fontSize: 12),
+                                  color: AppColors.textSecondary, fontSize: 12),
                             ),
                           ),
                         ),
@@ -315,11 +315,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.alertRed.withValues(alpha: 0.1),
+                          color: AppColors.negative.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.close,
-                            color: AppColors.alertRed, size: 16),
+                            color: AppColors.negative, size: 16),
                       ),
                     ),
                   ),
@@ -358,13 +358,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             Icon(
               icon,
               size: 14,
-              color: isSelected ? Colors.white : AppColors.textGray,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textWhite,
+                color: isSelected ? Colors.white : AppColors.textPrimary,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
               ),
@@ -373,7 +373,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
-              color: isSelected ? Colors.white : AppColors.textGray,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
             ),
           ],
         ),
@@ -384,7 +384,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Future<void> _pickDateRange() async {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1D21),
+      backgroundColor: AppColors.bgMid,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -453,13 +453,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                           return Theme(
                             data: ThemeData.dark().copyWith(
                               colorScheme: const ColorScheme.dark(
-                                primary: AppColors.primaryBlue,
+                                primary: AppColors.gold,
                                 onPrimary: Colors.white,
-                                surface: Color(0xFF1A1D21),
+                                surface: AppColors.bgMid,
                                 onSurface: Colors.white,
                               ),
                               dialogTheme: DialogThemeData(
-                                  backgroundColor: const Color(0xFF0A0B0D)),
+                                  backgroundColor: AppColors.bgDeep),
                             ),
                             child: child!,
                           );
@@ -480,7 +480,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       child: Row(
                         children: [
                           const Icon(Icons.date_range_rounded,
-                              color: AppColors.primaryBlue),
+                              color: AppColors.gold),
                           const SizedBox(width: 12),
                           const Text(
                             'Custom Range...',
@@ -488,7 +488,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                           ),
                           const Spacer(),
                           const Icon(Icons.arrow_forward_ios_rounded,
-                              color: AppColors.textGray, size: 14),
+                              color: AppColors.textSecondary, size: 14),
                         ],
                       ),
                     ),
@@ -516,7 +516,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     return ListTile(
       title: Text(title, style: const TextStyle(color: Colors.white)),
       trailing: isSelected
-          ? const Icon(Icons.check, color: AppColors.primaryBlue)
+          ? const Icon(Icons.check, color: AppColors.gold)
           : null,
       onTap: () {
         setState(() => _selectedDateRange = range);
@@ -528,7 +528,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   void _showSenderPicker(List<String> senderNames) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1D21),
+      backgroundColor: AppColors.bgMid,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -550,7 +550,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     title:
                         Text(name, style: const TextStyle(color: Colors.white)),
                     trailing: _selectedSender == name
-                        ? const Icon(Icons.check, color: AppColors.primaryBlue)
+                        ? const Icon(Icons.check, color: AppColors.gold)
                         : null,
                     onTap: () {
                       setState(() => _selectedSender = name);
@@ -567,7 +567,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   void _showTypePicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1D21),
+      backgroundColor: AppColors.bgMid,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -589,7 +589,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     title:
                         Text(type, style: const TextStyle(color: Colors.white)),
                     trailing: _selectedType == type
-                        ? const Icon(Icons.check, color: AppColors.primaryBlue)
+                        ? const Icon(Icons.check, color: AppColors.gold)
                         : null,
                     onTap: () {
                       setState(() => _selectedType = type);
@@ -615,7 +615,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             const SizedBox(height: 16),
             const Text(
               'No transactions found',
-              style: TextStyle(color: AppColors.textGray, fontSize: 16),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
             ),
           ],
         ),
@@ -641,7 +641,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFC7C7C7).withValues(alpha: 0.06),
+              color: AppColors.textDisabled.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
@@ -655,7 +655,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       Text(
                         tx.type == 'income' ? 'Deposit' : 'Transferred',
                         style: const TextStyle(
-                          color: AppColors.textWhite,
+                          color: AppColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -664,7 +664,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       Text(
                         '${tx.type == 'income' ? 'From' : 'For'} ${tx.sender}',
                         style: const TextStyle(
-                            color: AppColors.textGray, fontSize: 11),
+                            color: AppColors.textSecondary, fontSize: 11),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -679,7 +679,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     Text(
                       DateFormat('MMM d, HH:mm').format(tx.date),
                       style: const TextStyle(
-                          color: AppColors.textGray, fontSize: 10),
+                          color: AppColors.textSecondary, fontSize: 10),
                     ),
                   ],
                 ),
@@ -700,6 +700,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       assetPath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       assetPath = 'assets/images/CBEBirr Logo.png';
+    } else if (nameUp.contains('AHADU')) {
+      assetPath = 'assets/images/Ahadu_Logo.png';
     }
 
     if (assetPath != null) {
@@ -719,7 +721,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       child: Center(
         child: Text(
           tx.name.substring(0, min(3, tx.name.length)).toUpperCase(),
-          style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
       ),
     );
@@ -730,7 +732,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       return const Text(
         '****',
         style: TextStyle(
-          color: AppColors.textWhite,
+          color: AppColors.textPrimary,
           fontSize: 15,
           fontWeight: FontWeight.w600,
         ),
@@ -746,7 +748,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           TextSpan(
             text: '${tx.type == 'income' ? '+' : '-'}${amountParts[0]}',
             style: const TextStyle(
-              color: AppColors.textWhite,
+              color: AppColors.textPrimary,
               fontSize: 15,
               fontWeight: FontWeight.w600,
             ),

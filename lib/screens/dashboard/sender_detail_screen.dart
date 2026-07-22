@@ -44,7 +44,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       builder: (context) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF1F1F25),
+            color: AppColors.background,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
             boxShadow: [
               BoxShadow(
@@ -100,8 +100,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF0B90B),
-                    foregroundColor: const Color(0xFF1F1F25),
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: AppColors.background,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -202,7 +202,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
+        backgroundColor: AppColors.background,
         extendBody: true,
         extendBodyBehindAppBar: true,
         // ── Floating bottom pill nav bar ──
@@ -260,14 +260,14 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34),
+                color: AppColors.overlay,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
                 children: [
                   const SizedBox(width: 16),
                   const Icon(Icons.search_rounded,
-                      color: AppColors.labelGray, size: 16),
+                      color: AppColors.textSoft, size: 16),
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
@@ -276,7 +276,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       decoration: InputDecoration(
                         hintText: 'Search in ${widget.sender.senderName}...',
                         hintStyle: const TextStyle(
-                          color: AppColors.labelGray,
+                          color: AppColors.textSoft,
                           fontSize: 12,
                         ),
                         border: InputBorder.none,
@@ -325,46 +325,54 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     String subTitle = '';
     String imagePath = 'assets/images/CBE logo 1.png';
 
-    if (nameUp.contains('CBE')) {
+    if (nameUp.contains('CBE') && !nameUp.contains('BIRR')) {
       subTitle = 'Bank';
-    }
-    if (nameUp.contains('TELEBIRR')) {
+    } else if (nameUp.contains('TELEBIRR')) {
       subTitle = 'E-money';
       imagePath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR')) {
       subTitle = 'Wallet';
       imagePath = 'assets/images/CBEBirr Logo.png';
+    } else if (nameUp.contains('AHADU')) {
+      subTitle = 'Bank';
+      imagePath = 'assets/images/Ahadu_Logo.png';
     }
 
     List<Color> cardGradient;
     if (nameUp == 'CBE') {
       cardGradient = [
-        const Color(0xFF3D1B0F),
-        const Color(0xFF6E482F),
-        const Color(0xFF3D1B0F)
+        AppColors.cardBrownDark,
+        AppColors.cardBrownMid,
+        AppColors.cardBrownDark
       ];
     } else if (nameUp.contains('TELEBIRR')) {
       cardGradient = [
-        const Color(0xFF0BA751),
-        const Color(0xFF88BF47),
-        const Color(0xFF0BA751)
+        AppColors.success,
+        AppColors.cardLime,
+        AppColors.success
       ];
     } else if (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR')) {
       cardGradient = [
-        const Color(0xFFAFAFB3),
-        const Color(0xFFFFFFFF),
-        const Color(0xFFAFAFB3)
+        AppColors.cardSilver,
+        AppColors.textPrimary,
+        AppColors.cardSilver
+      ];
+    } else if (nameUp.contains('AHADU')) {
+      cardGradient = [
+        AppColors.cardAhaduPink,
+        AppColors.cardAhaduWhite,
+        AppColors.cardAhaduPink
       ];
     } else {
       cardGradient = [
-        const Color(0xFF1E1E26),
-        const Color(0xFF3E3E4A),
-        const Color(0xFF1E1E26)
+        AppColors.bgMid,
+        AppColors.cardGrayLight,
+        AppColors.bgMid
       ];
     }
 
     final textColor =
-        (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR'))
+        (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR') || nameUp.contains('AHADU'))
             ? Colors.black
             : Colors.white;
     final isPositive = change >= 0;
@@ -419,7 +427,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.sender.senderName,
+                                nameUp.contains('AHADU')
+                                    ? 'Ahadu'
+                                    : widget.sender.senderName,
                                 style: TextStyle(
                                   color: textColor,
                                   fontSize: 22,
@@ -579,7 +589,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   Widget _buildBackground() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1F1F25),
+        color: AppColors.background,
       ),
     );
   }
@@ -596,7 +606,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   context,
                   label: "View Bank",
                   icon: Icons.account_balance_rounded,
-                  color: const Color(0xFF2A2A34),
+                  color: AppColors.overlay,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -610,7 +620,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   context,
                   label: "Transfer",
                   icon: Icons.swap_horiz_rounded,
-                  color: const Color(0xFFF0B90B),
+                  color: AppColors.gold,
                   textColor: Colors.black,
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -680,7 +690,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         SnackBar(
           content: Text('Refreshing the last $days days…',
               style: const TextStyle(color: Colors.white, fontSize: 13)),
-          backgroundColor: const Color(0xFF2A2A34),
+          backgroundColor: AppColors.overlay,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 1),
         ),
@@ -691,7 +701,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         SnackBar(
           content: Text('Refreshed the last $days days',
               style: const TextStyle(color: Colors.white, fontSize: 13)),
-          backgroundColor: const Color(0xFF2A2A34),
+          backgroundColor: AppColors.overlay,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -718,7 +728,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34).withValues(alpha: 0.5),
+                color: AppColors.overlay.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
@@ -737,12 +747,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       const SizedBox(height: 2),
                       Text(subtitle,
                           style: const TextStyle(
-                              color: AppColors.textGray, fontSize: 12)),
+                              color: AppColors.textSecondary, fontSize: 12)),
                     ],
                   ),
                   const Spacer(),
                   const Icon(Icons.chevron_right_rounded,
-                      color: AppColors.textGray, size: 20),
+                      color: AppColors.textSecondary, size: 20),
                 ],
               ),
             ),
@@ -751,7 +761,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF17171C),
+            color: AppColors.bgMid,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
@@ -780,7 +790,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   const SizedBox(height: 4),
                   const Text('Choose how far back to re-scan your SMS.',
                       style:
-                          TextStyle(color: AppColors.textGray, fontSize: 12.5)),
+                          TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
                   const SizedBox(height: 18),
                   option(
                     icon: Icons.history_rounded,
@@ -836,7 +846,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           color:
-                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                              AppColors.overlay.withValues(alpha: 0.25),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.1),
@@ -881,7 +891,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.85),
+                          color: AppColors.gold.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.1),
@@ -891,7 +901,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         alignment: Alignment.center,
                         child: const Icon(
                           Icons.add_rounded,
-                          color: Color(0xFF301900),
+                          color: AppColors.brownDark,
                           size: 28,
                         ),
                       ),
@@ -915,7 +925,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           color:
-                              const Color(0xFF2A2A34).withValues(alpha: 0.25),
+                              AppColors.overlay.withValues(alpha: 0.25),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.1),
@@ -972,11 +982,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
     // Gradient configuration
     List<double> lineStops = [0.0, 1.0];
-    List<Color> lineColors = [AppColors.accentBlue, AppColors.accentBlue];
+    List<Color> lineColors = [AppColors.gold, AppColors.gold];
 
     List<Color> fillColors = [
-      AppColors.accentBlue.withValues(alpha: 0.28),
-      AppColors.accentBlue.withValues(alpha: 0.0),
+      AppColors.gold.withValues(alpha: 0.28),
+      AppColors.gold.withValues(alpha: 0.0),
     ];
 
     if (_touchedX != null && spots.isNotEmpty) {
@@ -985,14 +995,14 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         double ratio = (_touchedX! / maxX).clamp(0.0, 1.0);
         lineStops = [0.0, ratio, ratio, 1.0];
         lineColors = [
-          AppColors.accentBlue,
-          AppColors.accentBlue,
-          AppColors.accentBlue.withValues(alpha: 0.08),
-          AppColors.accentBlue.withValues(alpha: 0.08),
+          AppColors.gold,
+          AppColors.gold,
+          AppColors.gold.withValues(alpha: 0.08),
+          AppColors.gold.withValues(alpha: 0.08),
         ];
         fillColors = [
-          AppColors.accentBlue.withValues(alpha: 0.07),
-          AppColors.accentBlue.withValues(alpha: 0.0),
+          AppColors.gold.withValues(alpha: 0.07),
+          AppColors.gold.withValues(alpha: 0.0),
         ];
       }
     }
@@ -1034,7 +1044,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     getDotPainter: (spot, percent, barData, index) =>
                         FlDotCirclePainter(
                       radius: 3,
-                      color: AppColors.accentBlue,
+                      color: AppColors.gold,
                       strokeWidth: 0,
                       strokeColor: Colors.transparent,
                     ),
@@ -1122,7 +1132,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               child: Text(
                 f,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.labelGray,
+                  color: isSelected ? Colors.white : AppColors.textSoft,
                   fontSize: 10,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 ),
@@ -1164,7 +1174,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   child: Text(
                     t,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.labelGray,
+                      color: isSelected ? Colors.white : AppColors.textSoft,
                       fontSize: 12,
                       fontWeight:
                           isSelected ? FontWeight.w600 : FontWeight.w400,
@@ -1178,7 +1188,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           const Text(
             'ACTIVITY',
             style: TextStyle(
-              color: AppColors.labelGray,
+              color: AppColors.textSoft,
               fontSize: 11,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
@@ -1196,7 +1206,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
           child: Text('No matching transactions.',
-              style: TextStyle(color: AppColors.labelGray)),
+              style: TextStyle(color: AppColors.textSoft)),
         ),
       );
     }
@@ -1225,7 +1235,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+          color: AppColors.overlay.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -1237,13 +1247,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isIncome
-                    ? AppColors.mintGreen.withValues(alpha: 0.10)
-                    : AppColors.alertRed.withValues(alpha: 0.10),
+                    ? AppColors.positive.withValues(alpha: 0.10)
+                    : AppColors.negative.withValues(alpha: 0.10),
               ),
               child: Icon(
                 isIncome ? Icons.south_west : Icons.north_east,
                 size: 18,
-                color: isIncome ? AppColors.mintGreen : AppColors.alertRed,
+                color: isIncome ? AppColors.positive : AppColors.negative,
               ),
             ),
             const SizedBox(width: 16),
@@ -1262,7 +1272,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   Text(
                     DateFormat('MMM dd, yyyy').format(tx.date),
                     style: const TextStyle(
-                        color: AppColors.labelGray, fontSize: 11),
+                        color: AppColors.textSoft, fontSize: 11),
                   ),
                 ],
               ),
@@ -1276,7 +1286,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       ? '${isIncome ? '+' : '-'}${NumberFormat('#,##0.0').format(tx.amount)}'
                       : '****',
                   style: TextStyle(
-                    color: isIncome ? AppColors.mintGreen : Colors.white,
+                    color: isIncome ? AppColors.positive : Colors.white,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -1285,7 +1295,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 Text(
                   'ETB',
                   style:
-                      const TextStyle(color: AppColors.labelGray, fontSize: 10),
+                      const TextStyle(color: AppColors.textSoft, fontSize: 10),
                 ),
               ],
             ),

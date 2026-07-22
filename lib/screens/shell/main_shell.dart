@@ -8,6 +8,7 @@ import '../dashboard/settings_screen.dart';
 import '../wallets/wallets_screen.dart';
 import '../loans/loan_management_screen.dart';
 import '../../providers/finance_provider.dart';
+import '../../theme/app_theme.dart';
 import 'custom_bottom_nav_bar.dart';
 
 class MainShell extends StatefulWidget {
@@ -17,36 +18,55 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell>
-    with SingleTickerProviderStateMixin {
-  // Tracks when the user last pressed back on the home tab (double-tap exit guard)
+class _MainShellState extends State<MainShell> {
   DateTime? _lastBackPressTime;
+  late final PageController _pageController;
 
-  // Pages kept alive via IndexedStack
-  List<Widget> get _pages => const [
-        DashboardScreen(),
-        AnalysisScreen(),
-        WalletsScreen(),
-        LoanManagementScreen(),
-        SettingsScreen(),
-      ];
+  // Page order: Home | Wallet | Analysis | Loans | Settings
+  static const _pageCount = 5; // nav-visible pages
 
-  void _onTap(int index, FinanceProvider provider) {
-    provider.setScreenIndex(index);
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
   }
 
-  /// Called when the Android hardware/gesture back button is pressed.
-  /// Returns true if the pop should be allowed (i.e. app exit), false to block.
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onNavTap(int index, FinanceProvider provider) {
+    if (index == provider.currentScreenIndex) return;
+    provider.setScreenIndex(index);
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  void _onPageChanged(int index, FinanceProvider provider) {
+    // Clamp to visible nav pages (0-4)
+    if (index < _pageCount) {
+      provider.setScreenIndex(index);
+    }
+  }
+
   Future<bool> _onWillPop(FinanceProvider provider) async {
     final currentIndex = provider.currentScreenIndex;
 
-    // If NOT on the home tab → navigate back to home, block the pop
     if (currentIndex != 0) {
       provider.setScreenIndex(0);
-      return false; // prevent exiting
+      _pageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
+      );
+      return false;
     }
 
-    // On the home tab: double-tap guard before exit
     final now = DateTime.now();
     final isFirstPress = _lastBackPressTime == null ||
         now.difference(_lastBackPressTime!) > const Duration(seconds: 2);
@@ -60,7 +80,7 @@ class _MainShellState extends State<MainShell>
               'Press back again to exit',
               style: TextStyle(color: Colors.white, fontSize: 13),
             ),
-            backgroundColor: const Color(0xFF2A2A34),
+            backgroundColor: AppColors.overlay,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(24, 0, 24, 100),
             shape:
@@ -69,10 +89,9 @@ class _MainShellState extends State<MainShell>
           ),
         );
       }
-      return false; // block exit on first press
+      return false;
     }
 
-    // Second press within 2 s → allow exit
     return true;
   }
 
@@ -88,34 +107,44 @@ class _MainShellState extends State<MainShell>
       child: Consumer<FinanceProvider>(
         builder: (context, provider, child) {
           final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+          final currentIndex = provider.currentScreenIndex;
 
           return PopScope(
-            // canPop: false means we always intercept first
             canPop: false,
             onPopInvokedWithResult: (didPop, _) async {
-              if (didPop) return; // already handled
+              if (didPop) return;
               final shouldExit = await _onWillPop(provider);
               if (shouldExit && context.mounted) {
-                // Allow exit by popping the root route
                 SystemNavigator.pop();
               }
             },
             child: Scaffold(
-              backgroundColor: const Color(0xFF0A0B0D),
+              backgroundColor: AppColors.background,
               extendBody: true,
-              body: IndexedStack(
-                index: provider.currentScreenIndex,
-                children: _pages,
+              // PageView gives us free horizontal swipe + clean slide transition
+              body: PageView(
+                controller: _pageController,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: (index) => _onPageChanged(index, provider),
+                children: const [
+                  // Order: Home | Wallet | Analysis | Loans | Settings
+                  DashboardScreen(),
+                  WalletsScreen(),
+                  AnalysisScreen(),
+                  LoanManagementScreen(),
+                  SettingsScreen(),
+                ],
               ),
               bottomNavigationBar: (provider.isMenuOpen || isKeyboardOpen)
                   ? const SizedBox.shrink()
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (provider.currentScreenIndex == 3)
+                        // "New Loan" action bar — shown only on the Loans tab (index 3)
+                        if (currentIndex == 3)
                           Padding(
                             padding: const EdgeInsets.only(
-                                left: 24, right: 24, bottom: 8),
+                                left: 20, right: 20, bottom: 8),
                             child: GestureDetector(
                               onTap: () {
                                 showModalBottomSheet(
@@ -130,18 +159,18 @@ class _MainShellState extends State<MainShell>
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(22),
                                 child: BackdropFilter(
-                                  filter:
-                                      ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  filter: ImageFilter.blur(
+                                      sigmaX: 10, sigmaY: 10),
                                   child: Container(
                                     width: double.infinity,
                                     height: 44,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFF0B90B)
-                                          .withValues(alpha: 0.7),
+                                      color:
+                                          AppColors.gold.withValues(alpha: 0.7),
                                       borderRadius: BorderRadius.circular(22),
                                       border: Border.all(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.1),
+                                        color: AppColors.textPrimary
+                                            .withValues(alpha: 0.1),
                                         width: 1,
                                       ),
                                     ),
@@ -150,12 +179,13 @@ class _MainShellState extends State<MainShell>
                                           MainAxisAlignment.center,
                                       children: [
                                         Icon(Icons.add,
-                                            color: Color(0xFF301900), size: 18),
+                                            color: AppColors.brownDark,
+                                            size: 18),
                                         SizedBox(width: 8),
                                         Text(
                                           'New Loan',
                                           style: TextStyle(
-                                              color: Color(0xFF301900),
+                                              color: AppColors.brownDark,
                                               fontSize: 14,
                                               fontWeight: FontWeight.w700),
                                         ),
@@ -166,10 +196,12 @@ class _MainShellState extends State<MainShell>
                               ),
                             ),
                           ),
-                        DynamicNavBarWrapper(
-                          currentIndex: provider.currentScreenIndex,
-                          onTap: (index) => _onTap(index, provider),
-                          isDynamic: false,
+
+                        // Bottom navigation pill
+                        CustomBottomNavBar(
+                          currentIndex: currentIndex,
+                          pageController: _pageController,
+                          onTap: (index) => _onNavTap(index, provider),
                         ),
                       ],
                     ),

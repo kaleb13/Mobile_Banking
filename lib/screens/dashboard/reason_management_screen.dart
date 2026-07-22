@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../shell/custom_bottom_nav_bar.dart';
 
 class ReasonManagementScreen extends StatefulWidget {
   const ReasonManagementScreen({super.key});
@@ -32,11 +31,11 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
         String? errorMsg;
         return StatefulBuilder(builder: (ctx, setInner) {
           return AlertDialog(
-            backgroundColor: AppColors.surfaceDark,
+            backgroundColor: AppColors.surface,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(existing == null ? 'New Reason' : 'Edit Reason',
-                style: const TextStyle(color: AppColors.textWhite)),
+                style: const TextStyle(color: AppColors.textPrimary)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,37 +43,37 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                 TextField(
                   controller: ctrl,
                   autofocus: true,
-                  style: const TextStyle(color: AppColors.textWhite),
+                  style: const TextStyle(color: AppColors.textPrimary),
                   onChanged: (_) {
                     if (errorMsg != null) setInner(() => errorMsg = null);
                   },
                   decoration: InputDecoration(
                     hintText: 'Reason name…',
                     hintStyle: TextStyle(
-                        color: AppColors.textGray.withValues(alpha: 0.6)),
+                        color: AppColors.textSecondary.withValues(alpha: 0.6)),
                     filled: true,
-                    fillColor: AppColors.surfaceLight.withValues(alpha: 0.1),
+                    fillColor: AppColors.surfaceCard.withValues(alpha: 0.1),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: errorMsg != null
                           ? BorderSide(
-                              color: AppColors.alertRed.withValues(alpha: 0.7))
+                              color: AppColors.negative.withValues(alpha: 0.7))
                           : BorderSide.none,
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: errorMsg != null
                           ? BorderSide(
-                              color: AppColors.alertRed.withValues(alpha: 0.7))
+                              color: AppColors.negative.withValues(alpha: 0.7))
                           : BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: errorMsg != null
-                          ? const BorderSide(color: AppColors.alertRed)
+                          ? const BorderSide(color: AppColors.negative)
                           : BorderSide(
                               color:
-                                  AppColors.textWhite.withValues(alpha: 0.5)),
+                                  AppColors.textPrimary.withValues(alpha: 0.5)),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
@@ -85,13 +84,13 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                   Row(
                     children: [
                       const Icon(Icons.error_outline,
-                          color: AppColors.alertRed, size: 14),
+                          color: AppColors.negative, size: 14),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           errorMsg!,
                           style: const TextStyle(
-                              color: AppColors.alertRed, fontSize: 12),
+                              color: AppColors.negative, fontSize: 12),
                         ),
                       ),
                     ],
@@ -103,7 +102,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Cancel',
-                    style: TextStyle(color: AppColors.textGray)),
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
               TextButton(
                 onPressed: () async {
@@ -140,7 +139,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                   if (ctx.mounted) Navigator.pop(ctx);
                 },
                 child: Text(existing == null ? 'Add' : 'Save',
-                    style: const TextStyle(color: AppColors.primaryBlue)),
+                    style: const TextStyle(color: AppColors.gold)),
               ),
             ],
           );
@@ -162,7 +161,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
           final existingLinks = provider.linksForReason(reason.id!);
           return Dialog(
             alignment: Alignment.topCenter,
-            backgroundColor: AppColors.surfaceDark,
+            backgroundColor: AppColors.surface,
             insetPadding:
                 const EdgeInsets.only(top: 80, left: 16, right: 16, bottom: 16),
             shape: RoundedRectangleBorder(
@@ -180,14 +179,14 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                       Expanded(
                         child: Text('Links for "${reason.name}"',
                             style: const TextStyle(
-                                color: AppColors.textWhite,
+                                color: AppColors.textPrimary,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold)),
                       ),
                       GestureDetector(
                         onTap: () => Navigator.pop(ctx),
                         child: const Icon(Icons.close,
-                            color: AppColors.textGray, size: 20),
+                            color: AppColors.textSecondary, size: 20),
                       ),
                     ],
                   ),
@@ -197,7 +196,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                   if (existingLinks.isNotEmpty) ...[
                     const Text('Current links',
                         style: TextStyle(
-                            color: AppColors.textGray,
+                            color: AppColors.textSecondary,
                             fontSize: 11,
                             fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -210,7 +209,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                                     ? Icons.upload_outlined
                                     : Icons.download_outlined,
                                 color:
-                                    AppColors.textWhite.withValues(alpha: 0.5),
+                                    AppColors.textPrimary.withValues(alpha: 0.5),
                                 size: 16,
                               ),
                               const SizedBox(width: 8),
@@ -220,7 +219,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                      color: AppColors.textWhite, fontSize: 13),
+                                      color: AppColors.textPrimary, fontSize: 13),
                                 ),
                               ),
                               GestureDetector(
@@ -229,7 +228,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                                   setInner(() {});
                                 },
                                 child: const Icon(Icons.close,
-                                    color: AppColors.alertRed, size: 18),
+                                    color: AppColors.negative, size: 18),
                               ),
                             ],
                           ),
@@ -240,7 +239,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                   // Add new link
                   const Text('Add new link',
                       style: TextStyle(
-                          color: AppColors.textGray,
+                          color: AppColors.textSecondary,
                           fontSize: 11,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
@@ -256,17 +255,17 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AppColors.textWhite.withValues(alpha: 0.05),
+                            color: AppColors.textPrimary.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                                 color:
-                                    AppColors.textWhite.withValues(alpha: 0.1)),
+                                    AppColors.textPrimary.withValues(alpha: 0.1)),
                           ),
                           child: Text(
                             linkType == 'sender' ? '↑ Sender' : '↓ Receiver',
                             style: TextStyle(
                                 color:
-                                    AppColors.textWhite.withValues(alpha: 0.8),
+                                    AppColors.textPrimary.withValues(alpha: 0.8),
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold),
                           ),
@@ -302,10 +301,10 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                                   constraints:
                                       const BoxConstraints(maxHeight: 200),
                                   decoration: BoxDecoration(
-                                    color: AppColors.surfaceLight,
+                                    color: AppColors.surfaceCard,
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
-                                        color: AppColors.surfaceLight
+                                        color: AppColors.surfaceCard
                                             .withValues(alpha: 0.3)),
                                   ),
                                   child: ListView.builder(
@@ -321,7 +320,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                                               horizontal: 16, vertical: 12),
                                           child: Text(option,
                                               style: const TextStyle(
-                                                  color: AppColors.textWhite,
+                                                  color: AppColors.textPrimary,
                                                   fontSize: 14)),
                                         ),
                                       );
@@ -341,15 +340,15 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                               controller: controller,
                               focusNode: focusNode,
                               style: const TextStyle(
-                                  color: AppColors.textWhite, fontSize: 14),
+                                  color: AppColors.textPrimary, fontSize: 14),
                               decoration: InputDecoration(
                                 hintText: 'Search or type name…',
                                 hintStyle: TextStyle(
-                                    color: AppColors.textGray
+                                    color: AppColors.textSecondary
                                         .withValues(alpha: 0.6),
                                     fontSize: 13),
                                 filled: true,
-                                fillColor: AppColors.surfaceLight
+                                fillColor: AppColors.surfaceCard
                                     .withValues(alpha: 0.1),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
@@ -358,7 +357,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide(
-                                      color: AppColors.textWhite
+                                      color: AppColors.textPrimary
                                           .withValues(alpha: 0.5)),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(
@@ -385,11 +384,11 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: AppColors.textWhite.withValues(alpha: 0.1),
+                            color: AppColors.textPrimary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(Icons.add,
-                              color: AppColors.textWhite.withValues(alpha: 0.9),
+                              color: AppColors.textPrimary.withValues(alpha: 0.9),
                               size: 20),
                         ),
                       ),
@@ -418,17 +417,60 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
+        backgroundColor: AppColors.background,
         extendBody: true,
-        bottomNavigationBar: DynamicNavBarWrapper(
-          currentIndex: 4, // Assuming it's opened from Settings (index 4)
-          onTap: (_) {},
-          isDynamic: true,
-          heroTag: 'navbar_reason_management',
-          dynamicActionLabel: 'Add Reason',
-          dynamicActionIcon: Icons.add,
-          onDynamicAdd: () => _showAddEditDialog(context, provider),
-          onDynamicBack: () => Navigator.pop(context),
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.overlay,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                        color: AppColors.textPrimary.withValues(alpha: 0.08)),
+                  ),
+                  child: const Icon(Icons.arrow_back_rounded,
+                      color: AppColors.textPrimary, size: 22),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showAddEditDialog(context, provider),
+                  child: Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                          color: AppColors.gold.withValues(alpha: 0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_rounded,
+                            color: AppColors.gold, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Add Reason',
+                          style: TextStyle(
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         body: SafeArea(
           bottom: false,
@@ -451,7 +493,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                     Text(
                       'Manage transaction reasons and bank links',
                       style:
-                          TextStyle(color: AppColors.labelGray, fontSize: 12),
+                          TextStyle(color: AppColors.textSoft, fontSize: 12),
                     ),
                   ],
                 ),
@@ -459,7 +501,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
 
               // ── System Reasons ───────────────────────────────────
               _sectionHeader('System Reasons', Icons.verified_outlined,
-                  AppColors.textWhite),
+                  AppColors.textPrimary),
               const SizedBox(height: 10),
               ...systemReasons.map((r) => _ReasonTile(
                     reason: r,
@@ -471,14 +513,14 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
 
               // ── User Reasons ─────────────────────────────────────
               _sectionHeader(
-                  'My Reasons', Icons.person_outline, AppColors.textWhite),
+                  'My Reasons', Icons.person_outline, AppColors.textPrimary),
               const SizedBox(height: 10),
               if (userReasons.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8, bottom: 16),
                   child: Text('No custom reasons yet. Tap + to add one.',
                       style: TextStyle(
-                          color: AppColors.textGray.withValues(alpha: 0.7),
+                          color: AppColors.textSecondary.withValues(alpha: 0.7),
                           fontSize: 13)),
                 ),
               ...userReasons.map((r) => _ReasonTile(
@@ -491,25 +533,25 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          backgroundColor: AppColors.surfaceDark,
+                          backgroundColor: AppColors.surface,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20)),
                           title: const Text('Delete Reason?',
-                              style: TextStyle(color: AppColors.textWhite)),
+                              style: TextStyle(color: AppColors.textPrimary)),
                           content: Text(
                               'Delete "${r.name}"? Any links will also be removed.',
                               style:
-                                  const TextStyle(color: AppColors.textGray)),
+                                  const TextStyle(color: AppColors.textSecondary)),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, false),
                               child: const Text('Cancel',
-                                  style: TextStyle(color: AppColors.textGray)),
+                                  style: TextStyle(color: AppColors.textSecondary)),
                             ),
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, true),
                               child: const Text('Delete',
-                                  style: TextStyle(color: AppColors.alertRed)),
+                                  style: TextStyle(color: AppColors.negative)),
                             ),
                           ],
                         ),
@@ -577,12 +619,12 @@ class _ReasonTile extends StatelessWidget {
               if (reason.isSystem)
                 Icon(Icons.verified_outlined,
                     size: 14,
-                    color: AppColors.textWhite.withValues(alpha: 0.7)),
+                    color: AppColors.textPrimary.withValues(alpha: 0.7)),
               if (reason.isSystem) const SizedBox(width: 6),
               Expanded(
                 child: Text(reason.name,
                     style: const TextStyle(
-                        color: AppColors.textWhite,
+                        color: AppColors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w600)),
               ),
@@ -592,11 +634,11 @@ class _ReasonTile extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.textWhite.withValues(alpha: 0.05),
+                    color: AppColors.textPrimary.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(Icons.link,
-                      color: AppColors.textWhite.withValues(alpha: 0.9),
+                      color: AppColors.textPrimary.withValues(alpha: 0.9),
                       size: 16),
                 ),
               ),
@@ -611,21 +653,21 @@ class _ReasonTile extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF3EB489).withValues(alpha: 0.15),
+                      color: AppColors.positive.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                           color:
-                              const Color(0xFF3EB489).withValues(alpha: 0.3)),
+                              AppColors.positive.withValues(alpha: 0.3)),
                     ),
                     child: const Row(
                       children: [
                         Icon(Icons.handshake_outlined,
-                            color: Color(0xFF3EB489), size: 14),
+                            color: AppColors.positive, size: 14),
                         SizedBox(width: 4),
                         Text(
                           'Manage',
                           style: TextStyle(
-                            color: Color(0xFF3EB489),
+                            color: AppColors.positive,
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                           ),
@@ -642,11 +684,11 @@ class _ReasonTile extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceLight.withValues(alpha: 0.15),
+                      color: AppColors.surfaceCard.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.edit_outlined,
-                        color: AppColors.textGray, size: 16),
+                        color: AppColors.textSecondary, size: 16),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -655,11 +697,11 @@ class _ReasonTile extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.alertRed.withValues(alpha: 0.1),
+                      color: AppColors.negative.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.delete_outline,
-                        color: AppColors.alertRed, size: 16),
+                        color: AppColors.negative, size: 16),
                   ),
                 ),
               ],
@@ -675,10 +717,10 @@ class _ReasonTile extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.textWhite.withValues(alpha: 0.05),
+                    color: AppColors.textPrimary.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: AppColors.textWhite.withValues(alpha: 0.1)),
+                        color: AppColors.textPrimary.withValues(alpha: 0.1)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -688,7 +730,7 @@ class _ReasonTile extends StatelessWidget {
                             ? Icons.upload_outlined
                             : Icons.download_outlined,
                         size: 11,
-                        color: AppColors.textWhite.withValues(alpha: 0.5),
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 4),
                       Flexible(
@@ -697,7 +739,7 @@ class _ReasonTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              color: AppColors.textWhite.withValues(alpha: 0.8),
+                              color: AppColors.textPrimary.withValues(alpha: 0.8),
                               fontSize: 11),
                         ),
                       ),

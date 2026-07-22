@@ -8,7 +8,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1F1F25),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -37,7 +37,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34),
+                color: AppColors.overlay,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
@@ -49,11 +49,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                          color: AppColors.gold.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.lock_outline_rounded,
-                            color: AppColors.primaryBlue, size: 20),
+                            color: AppColors.gold, size: 20),
                       ),
                       const SizedBox(width: 14),
                       const Expanded(
@@ -72,7 +72,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                             Text(
                               'Last updated: March 2025',
                               style: TextStyle(
-                                color: AppColors.labelGray,
+                                color: AppColors.textSoft,
                                 fontSize: 11,
                               ),
                             ),
@@ -97,7 +97,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.sms_outlined,
-              iconColor: const Color(0xFF64B5F6),
+              iconColor: AppColors.info,
               title: 'SMS Data',
               body:
                   'Shibre reads incoming SMS messages exclusively from your registered banks (CBE, Telebirr, CBE Birr). These messages are processed locally on your device only to extract transaction details such as amount, date, and sender. The raw message content is stored in the app\'s private local database and is never transmitted, uploaded, or shared with any server or third party.',
@@ -105,7 +105,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.storage_outlined,
-              iconColor: const Color(0xFFA5D6A7),
+              iconColor: AppColors.successLight,
               title: 'Local Storage',
               body:
                   'All your transaction records, reasons, categories, and financial summaries are stored entirely on your device in a local SQLite database. This data exists solely on your phone and is only accessible by the Shibre application.',
@@ -113,7 +113,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.wifi_off_outlined,
-              iconColor: const Color(0xFFCE93D8),
+              iconColor: AppColors.chartPurple,
               title: 'No Internet Required',
               body:
                   'Shibre operates fully offline. We do not collect, transmit, or analyze any personal data. There are no user accounts, no cloud sync, and no remote servers. Your data belongs entirely to you.',
@@ -121,7 +121,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.backup_outlined,
-              iconColor: const Color(0xFFF0B90B),
+              iconColor: AppColors.gold,
               title: 'Backups',
               body:
                   'When you create a backup, it is saved as a local file directly on your device storage at a location you choose. The backup file is not uploaded anywhere. You are solely responsible for safeguarding any backup files you export.',
@@ -129,13 +129,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               customIcon: SvgPicture.asset(
-                'assets/images/Notification.svg',
+                'assets/images/Notifications.svg',
                 width: 16,
                 height: 16,
                 colorFilter:
-                    const ColorFilter.mode(Color(0xFFFF8A65), BlendMode.srcIn),
+                    const ColorFilter.mode(AppColors.coral, BlendMode.srcIn),
               ),
-              iconColor: const Color(0xFFFF8A65),
+              iconColor: AppColors.coral,
               title: 'Notifications',
               body:
                   'Shibre uses local notifications to alert you of detected transactions and overdue loans. These notifications are generated entirely on-device and do not involve any external notification service or server.',
@@ -143,7 +143,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.shield_outlined,
-              iconColor: const Color(0xFF4FC3F7),
+              iconColor: AppColors.infoLight,
               title: 'Permissions',
               body:
                   'The app requests SMS read permission to detect bank messages, and storage permission to enable local backup exports. These permissions are used strictly for their stated purposes and are never used to access unrelated data.',
@@ -151,7 +151,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.child_care_outlined,
-              iconColor: AppColors.labelGray,
+              iconColor: AppColors.textSoft,
               title: "Children's Privacy",
               body:
                   'Shibre is not intended for individuals under the age of 13. We do not knowingly collect any data from children.',
@@ -159,7 +159,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection(
               icon: Icons.edit_outlined,
-              iconColor: const Color(0xFFA5D6A7),
+              iconColor: AppColors.successLight,
               title: 'Changes to This Policy',
               body:
                   'We may update this Privacy Policy from time to time. Any changes will be reflected within the app itself. Continued use of Shibre after changes are published constitutes your acceptance of the updated policy.',
@@ -170,10 +170,10 @@ class PrivacyPolicyScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                color: AppColors.gold.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.2),
+                    color: AppColors.gold.withValues(alpha: 0.2),
                     width: 1),
               ),
               child: Text(
@@ -204,7 +204,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFF2A2A34),
+          color: AppColors.overlay,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
         ),

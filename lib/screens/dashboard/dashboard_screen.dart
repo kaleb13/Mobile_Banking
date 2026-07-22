@@ -114,7 +114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF1F1F25),
+            color: AppColors.background,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
             boxShadow: [
               BoxShadow(
@@ -172,8 +172,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF0B90B),
-                    foregroundColor: const Color(0xFF1F1F25),
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: AppColors.background,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -250,8 +250,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
               colors: [
-                Color(0xFF1F1F25),
-                Color(0xFF1B1B21),
+                AppColors.background,
+                AppColors.bgMid,
               ],
             ),
           ),
@@ -319,10 +319,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.alertRed.withValues(alpha: 0.15),
+          color: AppColors.negative.withValues(alpha: 0.15),
           border: Border(
             bottom:
-                BorderSide(color: AppColors.alertRed.withValues(alpha: 0.3)),
+                BorderSide(color: AppColors.negative.withValues(alpha: 0.3)),
           ),
         ),
         child: Row(
@@ -330,7 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.alertRed,
+                color: AppColors.negative,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -349,7 +349,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
                     : '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB',
                 style: const TextStyle(
-                  color: AppColors.alertRed,
+                  color: AppColors.negative,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,
@@ -359,7 +359,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const Icon(Icons.chevron_right,
-                color: AppColors.alertRed, size: 18),
+                color: AppColors.negative, size: 18),
           ],
         ),
       ),
@@ -385,14 +385,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Container(
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A34),
+                  color: AppColors.overlay,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
                   children: [
                     const SizedBox(width: 16),
                     const Icon(Icons.search,
-                        color: AppColors.labelGray, size: 16),
+                        color: AppColors.textSoft, size: 16),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Stack(
@@ -439,7 +439,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   _getSearchHint(provider),
                                   key: ValueKey(_searchLabelIndex),
                                   style: const TextStyle(
-                                      color: AppColors.labelGray, fontSize: 12),
+                                      color: AppColors.textSoft, fontSize: 12),
                                 ),
                               ),
                             ),
@@ -473,7 +473,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                SvgPicture.asset('assets/images/Notification.svg',
+                SvgPicture.asset('assets/images/Notifications.svg',
                     colorFilter:
                         const ColorFilter.mode(Colors.white, BlendMode.srcIn),
                     width: 20,
@@ -485,7 +485,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: const BoxDecoration(
-                        color: AppColors.primaryBlue,
+                        color: AppColors.gold,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(
@@ -498,7 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ? '9+'
                               : provider.unreadNotificationCount.toString(),
                           style: const TextStyle(
-                            color: Color(0xFF1F1F25),
+                            color: AppColors.background,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
@@ -540,14 +540,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const Text(
                       'Total balance',
                       style:
-                          TextStyle(color: AppColors.labelGray, fontSize: 13),
+                          TextStyle(color: AppColors.textSoft, fontSize: 13),
                     ),
                     const SizedBox(width: 6),
                     Icon(
                       provider.isBalanceVisible
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: AppColors.labelGray,
+                      color: AppColors.textSoft,
                       size: 14,
                     ),
                   ],
@@ -566,7 +566,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const Text(
                           '\$',
                           style: TextStyle(
-                            color: AppColors.textWhite,
+                            color: AppColors.textPrimary,
                             fontSize: 22,
                             fontWeight: FontWeight.w500,
                           ),
@@ -575,7 +575,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Text(
                           fullyFormatted,
                           style: const TextStyle(
-                            color: AppColors.textWhite,
+                            color: AppColors.textPrimary,
                             fontSize: 34,
                             fontWeight: FontWeight.w600,
                             height: 1.0,
@@ -586,7 +586,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Text(
                       '.$decimals',
                       style: const TextStyle(
-                        color: AppColors.labelGray,
+                        color: AppColors.textSoft,
                         fontSize: 20,
                         fontWeight: FontWeight.w400,
                         height: 1.0,
@@ -608,7 +608,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
                             style: const TextStyle(
-                              color: AppColors.labelGray,
+                              color: AppColors.textSoft,
                               fontSize: 9, // Reduced
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
@@ -620,7 +620,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             size: const Size(double.infinity, 1),
                             painter: DashedUnderlinePainter(
                                 color:
-                                    AppColors.labelGray.withValues(alpha: 0.4)),
+                                    AppColors.textSoft.withValues(alpha: 0.4)),
                           ),
                         ],
                       ),
@@ -643,8 +643,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         ? provider.netForSelectedDate
                                         : provider.netOverall) >=
                                     0
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             fontSize: 10, // Reduced
                             fontWeight: FontWeight.w600,
                           ),
@@ -657,8 +657,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         ? provider.incomePercentageChange
                                         : provider.percentageChangeOverall) >=
                                     0
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             fontSize: 10, // Reduced
                             fontWeight: FontWeight.w600,
                           ),
@@ -675,8 +675,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ? provider.incomePercentageChange
                                       : provider.percentageChangeOverall) >=
                                   0
-                              ? AppColors.mintGreen
-                              : AppColors.alertRed,
+                              ? AppColors.positive
+                              : AppColors.negative,
                           size: 12, // Reduced from 14
                         ),
                         const SizedBox(width: 2),
@@ -687,8 +687,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         ? provider.incomePercentageChange
                                         : provider.percentageChangeOverall) >=
                                     0
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             fontSize: 10, // Reduced
                             fontWeight: FontWeight.w600,
                           ),
@@ -715,18 +715,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0B90B),
+                color: AppColors.gold,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(
                 children: [
                   Icon(Icons.keyboard_double_arrow_right,
-                      color: Color(0xFF1F1F25), size: 18),
+                      color: AppColors.background, size: 18),
                   SizedBox(width: 6),
                   Text(
                     'Overview',
                     style: TextStyle(
-                      color: Color(0xFF1F1F25),
+                      color: AppColors.background,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -899,12 +899,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     //         When touched we simply dim the entire fill uniformly; the clear
     //         left/right distinction is shown by the line gradient + indicator.
     List<double> lineStops = [0.0, 1.0];
-    List<Color> lineColors = [AppColors.accentBlue, AppColors.accentBlue];
+    List<Color> lineColors = [AppColors.gold, AppColors.gold];
 
     // Fill: top strong → bottom fully transparent (always top→bottom)
     List<Color> fillColors = [
-      AppColors.accentBlue.withValues(alpha: 0.28),
-      AppColors.accentBlue.withValues(alpha: 0.0),
+      AppColors.gold.withValues(alpha: 0.28),
+      AppColors.gold.withValues(alpha: 0.0),
     ];
 
     if (_touchedX != null && spots.isNotEmpty) {
@@ -914,15 +914,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         lineStops = [0.0, ratio, ratio, 1.0];
         // Line: full left of indicator, nearly invisible right of it
         lineColors = [
-          AppColors.accentBlue,
-          AppColors.accentBlue,
-          AppColors.accentBlue.withValues(alpha: 0.08),
-          AppColors.accentBlue.withValues(alpha: 0.08),
+          AppColors.gold,
+          AppColors.gold,
+          AppColors.gold.withValues(alpha: 0.08),
+          AppColors.gold.withValues(alpha: 0.08),
         ];
         // Fill: dim the whole fill uniformly when touching
         fillColors = [
-          AppColors.accentBlue.withValues(alpha: 0.07),
-          AppColors.accentBlue.withValues(alpha: 0.0),
+          AppColors.gold.withValues(alpha: 0.07),
+          AppColors.gold.withValues(alpha: 0.0),
         ];
       }
     }
@@ -967,7 +967,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         getDotPainter: (spot, percent, barData, index) =>
                             FlDotCirclePainter(
                           radius: 3,
-                          color: AppColors.accentBlue,
+                          color: AppColors.gold,
                           strokeWidth: 0,
                           strokeColor: Colors.transparent,
                         ),
@@ -1054,7 +1054,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Text(
                     f,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.labelGray,
+                      color: isSelected ? Colors.white : AppColors.textSoft,
                       fontSize: 10,
                       fontWeight:
                           isSelected ? FontWeight.bold : FontWeight.w600,
@@ -1120,9 +1120,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     center: Alignment.center,
                     transform: GradientRotation(pi / 4),
                     colors: [
-                      Color(0xFF2F2F39),
-                      Color(0xFF4F4F59),
-                      Color(0xFF2F2F39)
+                      AppColors.cardGrayDark,
+                      AppColors.cardGrayMid,
+                      AppColors.cardGrayDark
                     ],
                   ),
                 ),
@@ -1174,7 +1174,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF363640),
+                  color: AppColors.surfaceElevated,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -1245,37 +1245,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 subTitle = 'E-money';
               } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
                 subTitle = 'Wallet';
+              } else if (nameUp.contains('AHADU')) {
+                subTitle = 'Bank';
               }
 
               Widget logoWidget = _getBankIconSmall(sender.senderName);
               List<Color> cardGradient;
               if (nameUp == 'CBE') {
                 cardGradient = [
-                  const Color(0xFF3D1B0F),
-                  const Color(0xFF6E482F),
-                  const Color(0xFF3D1B0F)
+                  AppColors.cardBrownDark,
+                  AppColors.cardBrownMid,
+                  AppColors.cardBrownDark
                 ];
               } else if (nameUp == 'TELEBIRR') {
                 cardGradient = [
-                  const Color(0xFF0BA751),
-                  const Color(0xFF88BF47),
-                  const Color(0xFF0BA751)
+                  AppColors.success,
+                  AppColors.cardLime,
+                  AppColors.success
                 ];
               } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
                 cardGradient = [
-                  const Color(0xFFAFAFB3),
-                  const Color(0xFFFFFFFF),
-                  const Color(0xFFAFAFB3)
+                  AppColors.cardSilver,
+                  AppColors.textPrimary,
+                  AppColors.cardSilver
+                ];
+              } else if (nameUp.contains('AHADU')) {
+                cardGradient = [
+                  AppColors.cardAhaduPink,
+                  AppColors.cardAhaduWhite,
+                  AppColors.cardAhaduPink
                 ];
               } else {
                 cardGradient = [
-                  const Color(0xFF1E1E26),
-                  const Color(0xFF3E3E4A),
-                  const Color(0xFF1E1E26)
+                  AppColors.bgMid,
+                  AppColors.cardGrayLight,
+                  AppColors.bgMid
                 ];
               }
 
-              final textColor = (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR')
+              final textColor = (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR' || nameUp.contains('AHADU'))
                   ? Colors.black
                   : Colors.white;
 
@@ -1368,7 +1376,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 3),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF363640),
+                            color: AppColors.surfaceElevated,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -1407,7 +1415,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? mostExpenseToday['reason']
             : 'Keep Savings!',
         'icon': Icon(_getReasonIcon(mostExpenseToday?['reason']),
-            color: const Color(0xFFF0B90B), size: 32)
+            color: AppColors.gold, size: 32)
       },
       {
         'title': 'THE MOST EXPENSE THIS MONTH',
@@ -1415,7 +1423,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? mostExpenseMonth['reason']
             : 'No Transactions',
         'icon': Icon(_getReasonIcon(mostExpenseMonth?['reason']),
-            color: const Color(0xFFF0B90B), size: 32)
+            color: AppColors.gold, size: 32)
       },
       {
         'title': 'THE MOST AFFECTED ACCOUNT',
@@ -1527,7 +1535,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       key: key,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: const BoxDecoration(
-        color: Color(0xFF202029),
+        color: AppColors.background,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1540,7 +1548,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: AppColors.labelGray,
+                    color: AppColors.textSoft,
                     fontSize: 8.5,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.0,
@@ -1595,7 +1603,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF202029),
+        color: AppColors.background,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -1624,7 +1632,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: EdgeInsets.symmetric(vertical: 40.0),
               child: Center(
                 child: Text('No transactions found',
-                    style: TextStyle(color: AppColors.labelGray)),
+                    style: TextStyle(color: AppColors.textSoft)),
               ),
             )
           else
@@ -1659,7 +1667,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(
             label,
             style: TextStyle(
-              color: active ? Colors.white : AppColors.labelGray,
+              color: active ? Colors.white : AppColors.textSoft,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -1709,7 +1717,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                              color: const Color(0xFFE11D48),
+                              color: AppColors.negative,
                               borderRadius: BorderRadius.circular(4)),
                           child: const Text('NEW',
                               style: TextStyle(
@@ -1728,11 +1736,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                                color: const Color(0xFFF0B90B),
+                                color: AppColors.gold,
                                 borderRadius: BorderRadius.circular(4)),
                             child: const Text('REASON?',
                                 style: TextStyle(
-                                    color: Color(0xFF1F1F25),
+                                    color: AppColors.background,
                                     fontSize: 8,
                                     fontWeight: FontWeight.bold)),
                           ),
@@ -1742,7 +1750,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 2),
                   Text(subLabel,
                       style: const TextStyle(
-                          color: AppColors.labelGray, fontSize: 10)),
+                          color: AppColors.textSoft, fontSize: 10)),
                 ],
               ),
             ),
@@ -1759,15 +1767,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Icon(isIncome ? Icons.trending_up : Icons.trending_down,
                         color: isIncome
-                            ? const Color(0xFF3EB489)
-                            : const Color(0xFFE11D48),
+                            ? AppColors.positive
+                            : AppColors.negative,
                         size: 10),
                     const SizedBox(width: 4),
                     Text('${impactPercent.abs().toStringAsFixed(0)}%',
                         style: TextStyle(
                             color: isIncome
-                                ? const Color(0xFF3EB489)
-                                : const Color(0xFFE11D48),
+                                ? AppColors.positive
+                                : AppColors.negative,
                             fontSize: 9,
                             fontWeight: FontWeight.w500)),
                   ],
@@ -1791,6 +1799,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       img =
           Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
+    } else if (nameUp.contains('AHADU')) {
+      img =
+          Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
     } else {
       img = Text(bankName.substring(0, min(1, bankName.length)).toUpperCase(),
           style: const TextStyle(color: Colors.white, fontSize: 10));
@@ -1817,6 +1828,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           width: size, height: size, fit: BoxFit.contain);
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       return Image.asset('assets/images/CBEBirr Logo.png',
+          width: size, height: size, fit: BoxFit.contain);
+    } else if (nameUp.contains('AHADU')) {
+      return Image.asset('assets/images/Ahadu_Logo.png',
           width: size, height: size, fit: BoxFit.contain);
     }
     return Icon(Icons.account_balance, color: Colors.white, size: size);

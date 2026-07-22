@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
@@ -110,7 +110,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Reason saved ✓'),
-            backgroundColor: AppColors.primaryBlue,
+            backgroundColor: AppColors.gold,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -125,13 +125,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         final shouldCreate = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: AppColors.surfaceDark,
+            backgroundColor: AppColors.surface,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Row(
               children: [
                 Icon(Icons.handshake_outlined,
-                    color: Color(0xFF3EB489), size: 20),
+                    color: AppColors.positive, size: 20),
                 SizedBox(width: 8),
                 Text('Create Loan Record?',
                     style: TextStyle(color: Colors.white, fontSize: 16)),
@@ -140,18 +140,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             content: Text(
               'This transaction (${NumberFormat("#,##0.00").format(widget.transaction.amount)} ETB) '
               'was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?',
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Skip',
-                    style: TextStyle(color: AppColors.textGray)),
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Create Loan',
-                    style: TextStyle(color: Color(0xFF3EB489))),
+                    style: TextStyle(color: AppColors.positive)),
               ),
             ],
           ),
@@ -208,7 +208,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final provider = Provider.of<FinanceProvider>(context);
     final bool isIncome = widget.transaction.type == 'income';
     final sign = isIncome ? '+' : '-';
-    final amountColor = isIncome ? AppColors.mintGreen : AppColors.alertRed;
+    final amountColor = isIncome ? AppColors.positive : AppColors.negative;
 
     // Resolved current label to show in the chip
     final String? currentLabel =
@@ -244,7 +244,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
+        backgroundColor: AppColors.background,
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           centerTitle: true,
@@ -297,12 +297,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isIncome
-                                  ? AppColors.mintGreen.withValues(alpha: 0.1)
-                                  : AppColors.alertRed.withValues(alpha: 0.1),
+                                  ? AppColors.positive.withValues(alpha: 0.1)
+                                  : AppColors.negative.withValues(alpha: 0.1),
                               border: Border.all(
                                 color: (isIncome
-                                        ? AppColors.mintGreen
-                                        : AppColors.alertRed)
+                                        ? AppColors.positive
+                                        : AppColors.negative)
                                     .withValues(alpha: 0.2),
                                 width: 1,
                               ),
@@ -311,8 +311,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               isIncome ? Icons.south_west : Icons.north_east,
                               size: 32,
                               color: isIncome
-                                  ? AppColors.mintGreen
-                                  : AppColors.alertRed,
+                                  ? AppColors.positive
+                                  : AppColors.negative,
                             ),
                           ),
                         ),
@@ -344,7 +344,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             Text(
                               '.${(widget.transaction.amount % 1).toStringAsFixed(2).split('.')[1]}',
                               style: const TextStyle(
-                                color: AppColors.labelGray,
+                                color: AppColors.textSoft,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w400,
                               ),
@@ -355,7 +355,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         Text(
                           'ETB',
                           style: const TextStyle(
-                            color: AppColors.labelGray,
+                            color: AppColors.textSoft,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
@@ -380,7 +380,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 height: 6,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: AppColors.mintGreen,
+                                  color: AppColors.positive,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -433,7 +433,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               const Text(
                                 'ASSIGNED REASON',
                                 style: TextStyle(
-                                  color: AppColors.textGray,
+                                  color: AppColors.textSecondary,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1.2,
@@ -459,9 +459,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                         horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
                                       color: activeLink != null
-                                          ? AppColors.alertRed
+                                          ? AppColors.negative
                                               .withValues(alpha: 0.1)
-                                          : AppColors.primaryBlue
+                                          : AppColors.gold
                                               .withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -472,8 +472,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                               ? Icons.link_off
                                               : Icons.add_link,
                                           color: activeLink != null
-                                              ? AppColors.alertRed
-                                              : AppColors.primaryBlue,
+                                              ? AppColors.negative
+                                              : AppColors.gold,
                                           size: 14,
                                         ),
                                         const SizedBox(width: 4),
@@ -483,8 +483,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                               : 'Link User',
                                           style: TextStyle(
                                             color: activeLink != null
-                                                ? AppColors.alertRed
-                                                : AppColors.primaryBlue,
+                                                ? AppColors.negative
+                                                : AppColors.gold,
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -512,12 +512,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: AppColors.primaryBlue
+                                      color: AppColors.gold
                                           .withValues(alpha: 0.1),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(Icons.tag,
-                                        color: AppColors.primaryBlue, size: 20),
+                                        color: AppColors.gold, size: 20),
                                   ),
                                   const SizedBox(width: 16),
                                   Expanded(
@@ -539,7 +539,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                               ? 'Tap to change reason'
                                               : 'Assign a reason for tracking',
                                           style: const TextStyle(
-                                            color: AppColors.labelGray,
+                                            color: AppColors.textSoft,
                                             fontSize: 12,
                                           ),
                                         ),
@@ -547,7 +547,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                     ),
                                   ),
                                   const Icon(Icons.chevron_right,
-                                      color: AppColors.textGray),
+                                      color: AppColors.textSecondary),
                                 ],
                               ),
                             ),
@@ -556,7 +556,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           const Text(
                             'PERSONAL NOTE',
                             style: TextStyle(
-                              color: AppColors.textGray,
+                              color: AppColors.textSecondary,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.2,
@@ -590,7 +590,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(16),
                                 borderSide: const BorderSide(
-                                    color: AppColors.primaryBlue),
+                                    color: AppColors.gold),
                               ),
                             ),
                             onChanged: (_) => setState(() {}),
@@ -606,7 +606,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     const Text(
                       'TRANSACTION INFO',
                       style: TextStyle(
-                        color: AppColors.textGray,
+                        color: AppColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
@@ -633,7 +633,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     const Text(
                       'RAW MESSAGE SOURCE',
                       style: TextStyle(
-                        color: AppColors.textGray,
+                        color: AppColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
@@ -652,7 +652,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       child: Text(
                         widget.transaction.rawMessage,
                         style: const TextStyle(
-                          color: AppColors.labelGray,
+                          color: AppColors.textSoft,
                           height: 1.6,
                           fontSize: 12,
                           fontFamily: 'monospace',
@@ -678,8 +678,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
             colors: [
-              Color(0xFF1F1F25),
-              Color(0xFF1B1B21),
+              AppColors.background,
+              AppColors.bgMid,
             ],
           ),
         ),
@@ -711,7 +711,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               color: Colors.white.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: AppColors.textGray, size: 18),
+            child: Icon(icon, color: AppColors.textSecondary, size: 18),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -721,7 +721,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 Text(
                   label,
                   style: const TextStyle(
-                    color: AppColors.labelGray,
+                    color: AppColors.textSoft,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -747,7 +747,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       BuildContext context, LoanRecord loan, FinanceProvider provider) {
     final isLent = loan.loanType == 'lent';
     final accentColor =
-        isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
+        isLent ? AppColors.positive : AppColors.warning;
     final fmt = NumberFormat('#,##0.00');
 
     return Container(
@@ -797,7 +797,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     Text(
                       loan.isPaid ? 'Fully Settled ✓' : 'In Progress',
                       style: TextStyle(
-                        color: loan.isPaid ? AppColors.mintGreen : accentColor,
+                        color: loan.isPaid ? AppColors.positive : accentColor,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -835,7 +835,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Text(
                 'Repaid: ${fmt.format(loan.paidAmount)} ETB',
                 style:
-                    const TextStyle(color: AppColors.labelGray, fontSize: 11),
+                    const TextStyle(color: AppColors.textSoft, fontSize: 11),
               ),
               Text(
                 'Remaining: ${fmt.format(loan.remainingAmount)} ETB',
@@ -875,10 +875,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.1),
+            color: AppColors.gold.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -892,11 +892,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                  color: AppColors.gold.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.sync_alt,
-                    color: AppColors.primaryBlue, size: 18),
+                    color: AppColors.gold, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -916,7 +916,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           ? 'Linked to ${linkedTx.sender}'
                           : 'Linked to another transaction',
                       style: const TextStyle(
-                        color: AppColors.primaryBlue,
+                        color: AppColors.gold,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -933,7 +933,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               children: [
                 const Text(
                   'Opposite Amount:',
-                  style: TextStyle(color: AppColors.labelGray, fontSize: 11),
+                  style: TextStyle(color: AppColors.textSoft, fontSize: 11),
                 ),
                 Text(
                   '${NumberFormat('#,##0.00').format(linkedTx.amount)} ETB (${linkedTx.type == 'income' ? '+' : '-'})',
@@ -983,20 +983,20 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('New Reason',
-            style: TextStyle(color: AppColors.textWhite)),
+            style: TextStyle(color: AppColors.textPrimary)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          style: const TextStyle(color: AppColors.textWhite),
+          style: const TextStyle(color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: 'Reason name…',
             hintStyle:
-                TextStyle(color: AppColors.textGray.withValues(alpha: 0.6)),
+                TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.6)),
             filled: true,
-            fillColor: AppColors.surfaceLight.withValues(alpha: 0.1),
+            fillColor: AppColors.surfaceCard.withValues(alpha: 0.1),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -1007,7 +1007,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textGray)),
+                style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () async {
@@ -1028,7 +1028,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Add',
-                style: TextStyle(color: AppColors.primaryBlue)),
+                style: TextStyle(color: AppColors.gold)),
           ),
         ],
       ),
@@ -1058,13 +1058,13 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primaryBlue.withValues(alpha: 0.15)
-              : AppColors.surfaceLight.withValues(alpha: 0.05),
+              ? AppColors.gold.withValues(alpha: 0.15)
+              : AppColors.surfaceCard.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
-                ? AppColors.primaryBlue
-                : AppColors.surfaceLight.withValues(alpha: 0.05),
+                ? AppColors.gold
+                : AppColors.surfaceCard.withValues(alpha: 0.05),
           ),
         ),
         child: Row(
@@ -1073,13 +1073,13 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? AppColors.primaryBlue.withValues(alpha: 0.2)
-                    : AppColors.surfaceLight.withValues(alpha: 0.2),
+                    ? AppColors.gold.withValues(alpha: 0.2)
+                    : AppColors.surfaceCard.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.star_border,
                   color:
-                      isSelected ? AppColors.primaryBlue : AppColors.textGray,
+                      isSelected ? AppColors.gold : AppColors.textSecondary,
                   size: 16),
             ),
             const SizedBox(width: 12),
@@ -1090,22 +1090,22 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                   Text(reason.name,
                       style: TextStyle(
                           color: isSelected
-                              ? AppColors.primaryBlue
-                              : AppColors.textWhite,
+                              ? AppColors.gold
+                              : AppColors.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.bold)),
                   if (desc.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(desc,
                         style: const TextStyle(
-                            color: AppColors.textGray, fontSize: 11)),
+                            color: AppColors.textSecondary, fontSize: 11)),
                   ],
                 ],
               ),
             ),
             if (isSelected)
               const Icon(Icons.check_circle,
-                  color: AppColors.primaryBlue, size: 20),
+                  color: AppColors.gold, size: 20),
           ],
         ),
       ),
@@ -1134,7 +1134,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
         decoration: BoxDecoration(
-          color: AppColors.surfaceDark,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -1146,7 +1146,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textGray.withValues(alpha: 0.4),
+                color: AppColors.textSecondary.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1156,14 +1156,14 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                 children: [
                   const Text('Select Reason',
                       style: TextStyle(
-                          color: AppColors.textWhite,
+                          color: AppColors.textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.bold)),
                   const Spacer(),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: const Icon(Icons.close,
-                        color: AppColors.textGray, size: 20),
+                        color: AppColors.textSecondary, size: 20),
                   ),
                 ],
               ),
@@ -1212,12 +1212,12 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                             child: Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: AppColors.primaryBlue
+                                color: AppColors.gold
                                     .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(Icons.add,
-                                  size: 16, color: AppColors.primaryBlue),
+                                  size: 16, color: AppColors.gold),
                             )),
                       ],
                     ),
@@ -1243,7 +1243,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: Text('No custom reasons yet.',
                             style: TextStyle(
-                                color: AppColors.textGray, fontSize: 12)),
+                                color: AppColors.textSecondary, fontSize: 12)),
                       ),
                   ],
                 ),
@@ -1253,7 +1253,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
             Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: AppColors.surfaceDark,
+                    color: AppColors.surface,
                     borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(24)),
                     boxShadow: [
@@ -1275,9 +1275,9 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                             widget.onSave(_selectedReason!);
                           },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
+                      backgroundColor: AppColors.gold,
                       disabledBackgroundColor:
-                          AppColors.primaryBlue.withValues(alpha: 0.3),
+                          AppColors.gold.withValues(alpha: 0.3),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
@@ -1286,8 +1286,8 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                     child: Text('Save Changes',
                         style: TextStyle(
                             color: _selectedReason == null
-                                ? AppColors.textWhite.withValues(alpha: 0.5)
-                                : const Color(0xFF1F1F25),
+                                ? AppColors.textPrimary.withValues(alpha: 0.5)
+                                : AppColors.background,
                             fontWeight: FontWeight.bold)),
                   ),
                 )),
@@ -1301,7 +1301,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
         padding: const EdgeInsets.only(bottom: 2),
         child: Text(label,
             style: const TextStyle(
-                color: AppColors.textGray,
+                color: AppColors.textSecondary,
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5)),
@@ -1328,13 +1328,13 @@ class _ReasonChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primaryBlue.withValues(alpha: 0.2)
-              : AppColors.surfaceLight.withValues(alpha: 0.15),
+              ? AppColors.gold.withValues(alpha: 0.2)
+              : AppColors.surfaceCard.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
-                ? AppColors.primaryBlue
-                : AppColors.surfaceLight.withValues(alpha: 0.3),
+                ? AppColors.gold
+                : AppColors.surfaceCard.withValues(alpha: 0.3),
           ),
         ),
         child: Row(
@@ -1342,13 +1342,13 @@ class _ReasonChip extends StatelessWidget {
           children: [
             if (reason.isSystem)
               const Icon(Icons.verified_outlined,
-                  size: 13, color: AppColors.primaryBlue),
+                  size: 13, color: AppColors.gold),
             if (reason.isSystem) const SizedBox(width: 4),
             Text(reason.name,
                 style: TextStyle(
                     color: isSelected
-                        ? AppColors.primaryBlue
-                        : AppColors.textWhite,
+                        ? AppColors.gold
+                        : AppColors.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w500)),
           ],

@@ -1,400 +1,261 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../theme/app_theme.dart';
 
-class DynamicNavBarWrapper extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// CustomBottomNavBar
+//
+// Listens directly to the PageController's fractional `.page` value so the
+// nav bar tracks swipe progress in real time:
+//
+//   page = 0.5  →  item 0 at 50% activation, item 1 at 50% activation
+//   page = 1.0  →  item 0 at 0%, item 1 at 100%
+//
+// Each item's activationT = clamp(1 − |page − itemIndex|, 0, 1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CustomBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int>? onTap;
-  final bool isDynamic;
-  final VoidCallback? onDynamicAdd;
-  final VoidCallback? onDynamicBack;
-  final String? dynamicActionLabel;
-  final IconData? dynamicActionIcon;
 
-  const DynamicNavBarWrapper({
+  /// The PageController from the parent PageView.
+  /// We listen to it to drive the per-item activation fractions.
+  final PageController pageController;
+
+  const CustomBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.isDynamic = false,
-    this.onDynamicAdd,
-    this.onDynamicBack,
-    this.dynamicActionLabel,
-    this.dynamicActionIcon,
-    this.heroTag = 'dynamic_navbar_hero',
+    required this.pageController,
   });
 
-  final String heroTag;
+  // Helper: compute 0→1 activation fraction for item at [index]
+  // given the current fractional page position [page].
+  static double _activationT(double page, int index) {
+    return (1.0 - (page - index).abs()).clamp(0.0, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Hero(
-      tag: heroTag,
-      transitionOnUserGestures: true,
-      flightShuttleBuilder: (
-        flightContext,
-        animation,
-        flightDirection,
-        fromHeroContext,
-        toHeroContext,
-      ) {
-        final Hero fromHero = fromHeroContext.widget as Hero;
-        final CustomBottomNavBar fromWidget = (fromHero.child is Material)
-            ? (fromHero.child as Material).child as CustomBottomNavBar
-            : fromHero.child as CustomBottomNavBar;
-
-        final Hero toHero = toHeroContext.widget as Hero;
-        final CustomBottomNavBar toWidget = (toHero.child is Material)
-            ? (toHero.child as Material).child as CustomBottomNavBar
-            : toHero.child as CustomBottomNavBar;
-
-        final startMorph = fromWidget.isDynamic ? 1.0 : 0.0;
-        final endMorph = toWidget.isDynamic ? 1.0 : 0.0;
-
-        return AnimatedBuilder(
-          animation: animation,
-          builder: (context, _) {
-            final t = animation.value;
-            final currentMorph = startMorph + (endMorph - startMorph) * t;
-
-            return Material(
-              type: MaterialType.transparency,
-              child: CustomBottomNavBar(
-                currentIndex: toWidget.currentIndex,
-                onTap: toWidget.onTap,
-                isDynamic: toWidget.isDynamic,
-                onDynamicAdd: toWidget.onDynamicAdd,
-                onDynamicBack: toWidget.onDynamicBack,
-                dynamicActionLabel: toWidget.dynamicActionLabel,
-                dynamicActionIcon: toWidget.dynamicActionIcon,
-                morphProgress: currentMorph,
+    return Container(
+      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
+      height: 64,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.overlay,
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: AppColors.textPrimary.withValues(alpha: 0.08),
+                width: 1,
               ),
-            );
-          },
-        );
-      },
-      child: Material(
-        type: MaterialType.transparency,
-        child: CustomBottomNavBar(
-          currentIndex: currentIndex,
-          onTap: onTap,
-          isDynamic: isDynamic,
-          onDynamicAdd: onDynamicAdd,
-          onDynamicBack: onDynamicBack,
-          dynamicActionLabel: dynamicActionLabel,
-          dynamicActionIcon: dynamicActionIcon,
+            ),
+            // AnimatedBuilder rebuilds the row on every PageController tick —
+            // this is how swipe progress maps to nav bar animation in real time.
+            child: AnimatedBuilder(
+              animation: pageController,
+              builder: (context, _) {
+                // Fractional page position. Falls back to currentIndex when
+                // the controller has no clients yet (first frame).
+                final page = (pageController.hasClients &&
+                        pageController.page != null)
+                    ? pageController.page!
+                    : currentIndex.toDouble();
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final total = constraints.maxWidth;
+                    // 46% for the active pill — fits all 2-word labels comfortably.
+                    // The remaining 54% is split evenly across the 4 inactive icon slots.
+                    final activeW = total * 0.46;
+                    final inactiveW = (total - activeW) / 4;
+
+                    return Row(
+                      children: [
+                        _NavItem(
+                          label: 'Shibre Home',
+                          assetPath: 'assets/images/Shibre Icon.png',
+                          activationT: _activationT(page, 0),
+                          activeWidth: activeW,
+                          inactiveWidth: inactiveW,
+                          onTap: () => onTap?.call(0),
+                        ),
+                        _NavItem(
+                          label: 'Wallet Manager',
+                          svgPath: 'assets/images/Wallet Icon.svg',
+                          activationT: _activationT(page, 1),
+                          activeWidth: activeW,
+                          inactiveWidth: inactiveW,
+                          onTap: () => onTap?.call(1),
+                        ),
+                        _NavItem(
+                          label: 'Spending Charts',
+                          svgPath: 'assets/images/Analysis Icon.svg',
+                          activationT: _activationT(page, 2),
+                          activeWidth: activeW,
+                          inactiveWidth: inactiveW,
+                          onTap: () => onTap?.call(2),
+                        ),
+                        _NavItem(
+                          label: 'Loan Tracker',
+                          svgPath: 'assets/images/Loan Icon.svg',
+                          activationT: _activationT(page, 3),
+                          activeWidth: activeW,
+                          inactiveWidth: inactiveW,
+                          onTap: () => onTap?.call(3),
+                        ),
+                        _NavItem(
+                          label: 'App Settings',
+                          svgPath: 'assets/images/Settings_icon.svg',
+                          activationT: _activationT(page, 4),
+                          activeWidth: activeW,
+                          inactiveWidth: inactiveW,
+                          onTap: () => onTap?.call(4),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class CustomBottomNavBar extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int>? onTap;
-  final bool isDynamic;
-  final VoidCallback? onDynamicAdd;
-  final VoidCallback? onDynamicBack;
-  final double morphProgress;
-  final String? dynamicActionLabel;
-  final IconData? dynamicActionIcon;
+// ─────────────────────────────────────────────────────────────────────────────
+// _NavItem  (StatelessWidget — all animation driven by activationT from parent)
+//
+// activationT = 0.0  → fully inactive (container = inactiveWidth, icon gray)
+// activationT = 0.5  → mid-transition (container half-expanded, icon half-white)
+// activationT = 1.0  → fully active   (container = activeWidth, icon white)
+//
+// The text is always laid out at full size inside an OverflowBox.
+// ClipRect masks it. As activationT rises the container expands and reveals
+// the text from left to right — no opacity tricks.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const CustomBottomNavBar({
-    super.key,
-    required this.currentIndex,
+class _NavItem extends StatelessWidget {
+  final String label;
+
+  /// 0.0 → fully inactive, 1.0 → fully active.
+  /// Driven directly by pageController.page — updates on every scroll frame.
+  final double activationT;
+
+  final double activeWidth;
+  final double inactiveWidth;
+  final VoidCallback onTap;
+  final String? assetPath;
+  final String? svgPath;
+
+  const _NavItem({
+    required this.label,
+    required this.activationT,
+    required this.activeWidth,
+    required this.inactiveWidth,
     required this.onTap,
-    this.isDynamic = false,
-    this.onDynamicAdd,
-    this.onDynamicBack,
-    this.morphProgress = -1.0,
-    this.dynamicActionLabel,
-    this.dynamicActionIcon,
+    this.assetPath,
+    this.svgPath,
   });
+
+  Widget _buildIcon(Color color) {
+    if (svgPath != null) {
+      return SvgPicture.asset(
+        svgPath!,
+        width: 22,
+        height: 22,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
+    if (assetPath != null) {
+      return Image.asset(assetPath!, width: 20, height: 20, color: color);
+    }
+    return const SizedBox.shrink();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // If morphProgress is not provided (-1.0), derive it from isDynamic.
-    final t = morphProgress >= 0 ? morphProgress : (isDynamic ? 1.0 : 0.0);
+    // Softer curve than easeInOutCubic — the animation spends more time in the
+    // mid-range (40%–60%) so the 50/50 state between two items is visible.
+    final curved = Curves.easeInOut.transform(activationT);
 
-    return Container(
-      margin: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
-      height: 56,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final totalWidth = constraints.maxWidth;
+    // Container width: inactiveWidth → activeWidth
+    final containerWidth = lerpDouble(inactiveWidth, activeWidth, curved)!;
 
-          // Width/Position interpolations
-          final homeWidth = 56.0 * (1 - t);
-          final middleLeft = 64.0 * (1 - t);
-          final middleWidth = (totalWidth - 128) + (64.0 * t);
-          final backLeft = totalWidth - 56.0;
+    // Icon color: gray (inactive) → white (active)
+    final iconColor = Color.lerp(
+      AppColors.textSecondary,
+      AppColors.textPrimary,
+      curved,
+    )!;
 
-          // Color interpolations (Main bar is more transparent, Dynamic bar is more solid)
-          final middleColor = Color.lerp(
-            const Color(0xFF2A2A34).withValues(alpha: 0.25),
-            const Color(0xFFF0B90B).withValues(alpha: 0.85),
-            t,
-          )!;
-          final homeColor = const Color(0xFF2A2A34).withValues(alpha: 0.25);
-          final backColor = const Color(0xFF2A2A34).withValues(alpha: 0.25);
+    // Icon scale: 0.88 (inactive) → 1.0 (active)
+    final iconScale = lerpDouble(0.88, 1.0, curved)!;
 
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // HOME ICON (Disappearing to the left)
-              Positioned(
-                left: -40 * t, // Slides out
-                top: 0,
-                width: homeWidth,
-                height: 56,
-                child: Opacity(
-                  opacity: (1 - t).clamp(0.0, 1.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: GestureDetector(
-                        onTap: () => onTap?.call(0),
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: homeColor,
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              width: 1,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Image.asset(
-                            'assets/images/Shibre Icon.png',
-                            width: 20,
-                            height: 20,
-                            color: currentIndex == 0
-                                ? Colors.white
-                                : AppColors.labelGray,
-                          ),
-                        ),
+    return SizedBox(
+      width: containerWidth,
+      height: 64,
+      child: ClipRect(
+        child: OverflowBox(
+          maxWidth: activeWidth,
+          alignment: Alignment.centerLeft,
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: activeWidth,
+              height: 64,
+              child: Row(
+                // mainAxisSize.max → Row fills exactly activeWidth.
+                // This hard-constrains children so nothing can push beyond it.
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // ── Icon slot ───────────────────────────────────────────
+                  SizedBox(
+                    width: inactiveWidth,
+                    child: Center(
+                      child: Transform.scale(
+                        scale: iconScale,
+                        child: _buildIcon(iconColor),
                       ),
                     ),
                   ),
-                ),
-              ),
 
-              // MIDDLE PILL (Main Dynamic Section)
-              Positioned(
-                left: middleLeft,
-                top: 0,
-                width: middleWidth,
-                height: 56,
-                child: GestureDetector(
-                  onTap: () {
-                    if (t > 0.5) {
-                      onDynamicAdd?.call();
-                    }
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    clipBehavior: Clip.antiAlias,
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: middleColor,
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
+                  // ── Label ───────────────────────────────────────────────
+                  // Expanded takes exactly (activeWidth - inactiveWidth) px.
+                  // Text can never cause the Row to overflow — ClipRect
+                  // handles the visual masking as the container expands.
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.3,
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // Navigation Icons (Fade out)
-                            Opacity(
-                              opacity: (1 - t).clamp(0.0, 1.0),
-                              child: SingleChildScrollView(
-                                physics: const NeverScrollableScrollPhysics(),
-                                scrollDirection: Axis.horizontal,
-                                child: SizedBox(
-                                  width: totalWidth - 128,
-                                  height: 56,
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceEvenly,
-                                    children: [
-                                      _buildMiddleItem(
-                                        isActive: currentIndex == 1,
-                                        iconData: Icons.insert_chart_outlined,
-                                        label: 'Analysis',
-                                        onTap: () => onTap?.call(1),
-                                      ),
-                                      _buildMiddleItem(
-                                        isActive: currentIndex == 2,
-                                        iconData: Icons
-                                            .account_balance_wallet_outlined,
-                                        label: 'Wallet',
-                                        onTap: () => onTap?.call(2),
-                                      ),
-                                      _buildMiddleItem(
-                                        isActive: currentIndex == 3,
-                                        iconData: Icons.payments_outlined,
-                                        label: 'Loan',
-                                        onTap: () => onTap?.call(3),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // Action Icons/Label (Fade in)
-                            Opacity(
-                              opacity: t.clamp(0.0, 1.0),
-                              child: Transform.scale(
-                                scale: 0.5 + (t * 0.5),
-                                child: dynamicActionLabel != null
-                                    ? Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 20),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (dynamicActionIcon != null) ...[
-                                              Icon(dynamicActionIcon,
-                                                  color:
-                                                      const Color(0xFF301900),
-                                                  size: 18),
-                                              const SizedBox(width: 6),
-                                            ],
-                                            Text(
-                                              dynamicActionLabel!,
-                                              style: const TextStyle(
-                                                color: Color(0xFF301900),
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    : Icon(
-                                        dynamicActionIcon ?? Icons.add,
-                                        color: const Color(0xFF301900),
-                                        size: 22,
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.clip,
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-
-              // SETTINGS / BACK (Right Circle)
-              Positioned(
-                left: backLeft,
-                top: 0,
-                width: 56,
-                height: 56,
-                child: GestureDetector(
-                  onTap: () {
-                    // Back logic triggers if dynamic or if specifically requested
-                    if (t > 0.5 ||
-                        (isDynamic == false && onDynamicBack != null)) {
-                      onDynamicBack?.call();
-                    } else {
-                      onTap?.call(4);
-                    }
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: ClipOval(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: backColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // Normal Settings Icon
-                            Opacity(
-                              opacity: (1 - t).clamp(0.0, 1.0),
-                              child: Icon(
-                                Icons.settings_outlined,
-                                color: currentIndex == 4
-                                    ? Colors.white
-                                    : AppColors.labelGray,
-                                size: 24,
-                              ),
-                            ),
-                            // Dynamic Back Icon
-                            Opacity(
-                              opacity: t.clamp(0.0, 1.0),
-                              child: SvgPicture.asset(
-                                'assets/images/BackForNav.svg',
-                                colorFilter: const ColorFilter.mode(
-                                    Colors.white, BlendMode.srcIn),
-                                width: 20,
-                                height: 20,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildMiddleItem({
-    required bool isActive,
-    required IconData iconData,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          color: Colors.transparent, // Ensures the entire box is clickable
-          height: 56, // Stretches fully top-to-bottom inside the row
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                iconData,
-                color: isActive ? Colors.white : AppColors.labelGray,
-                size: 20,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? Colors.white : AppColors.labelGray,
-                  fontSize: 9,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

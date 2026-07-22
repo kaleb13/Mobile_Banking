@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
@@ -11,7 +11,7 @@ class IntroScreen extends StatelessWidget {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0B0D),
+      backgroundColor: AppColors.bgDeep,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -19,12 +19,12 @@ class IntroScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(Icons.message_outlined,
-                  size: 80, color: AppColors.primaryBlue),
+                  size: 80, color: AppColors.gold),
               const SizedBox(height: 32),
               const Text(
                 'Welcome to Smart Banking',
                 style: TextStyle(
-                  color: AppColors.textWhite,
+                  color: AppColors.textPrimary,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
@@ -34,7 +34,7 @@ class IntroScreen extends StatelessWidget {
               const Text(
                 'To automatically track your transactions accurately, this app requests permission to read your incoming SMS messages.\n\nWithout SMS permissions, the app will not open or process transactions. Please grant this permission to continue.',
                 style: TextStyle(
-                  color: AppColors.textGray,
+                  color: AppColors.textSecondary,
                   fontSize: 16,
                   height: 1.5,
                 ),
@@ -58,7 +58,7 @@ class IntroScreen extends StatelessWidget {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
+                    backgroundColor: AppColors.gold,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -66,7 +66,7 @@ class IntroScreen extends StatelessWidget {
                   child: const Text(
                     'Grant SMS Permission',
                     style: TextStyle(
-                      color: AppColors.textWhite,
+                      color: AppColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),

@@ -1,11 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/expense_definition.dart';
 import '../../theme/app_theme.dart';
 import 'add_edit_expense_definition_screen.dart';
-import '../shell/custom_bottom_nav_bar.dart';
 
 class ExpenseDefinitionsScreen extends StatelessWidget {
   const ExpenseDefinitionsScreen({super.key});
@@ -50,7 +49,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
         statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
+        backgroundColor: AppColors.background,
         extendBody: true,
         body: SafeArea(
           bottom: false,
@@ -90,7 +89,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                             'No Expense Templates Defined.\n\nCreate templates for manual or recurring cash expenses.',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                                color: AppColors.labelGray,
+                                color: AppColors.textSoft,
                                 fontSize: 15,
                                 height: 1.5),
                           ),
@@ -122,7 +121,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                   height: 44,
                                   decoration: BoxDecoration(
                                     color: (def.isRecurring && def.isActive)
-                                        ? AppColors.primaryBlue
+                                        ? AppColors.gold
                                             .withValues(alpha: 0.12)
                                         : Colors.white.withValues(alpha: 0.05),
                                     borderRadius: BorderRadius.circular(12),
@@ -134,8 +133,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                             ? Icons.autorenew
                                             : Icons.receipt_long),
                                     color: (def.isRecurring && def.isActive)
-                                        ? AppColors.primaryBlue
-                                        : AppColors.labelGray,
+                                        ? AppColors.gold
+                                        : AppColors.textSoft,
                                     size: 20,
                                   ),
                                 ),
@@ -151,7 +150,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                         style: TextStyle(
                                             color: def.isActive
                                                 ? Colors.white
-                                                : AppColors.labelGray,
+                                                : AppColors.textSoft,
                                             fontWeight: FontWeight.w600,
                                             fontSize: 16),
                                         maxLines: 1,
@@ -163,14 +162,14 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                           Text(
                                             '${def.defaultAmount.toStringAsFixed(2)} ETB',
                                             style: const TextStyle(
-                                                color: AppColors.labelGray,
+                                                color: AppColors.textSoft,
                                                 fontSize: 12),
                                           ),
                                           if (def.reasonId != null) ...[
                                             const SizedBox(width: 8),
                                             const Text('•',
                                                 style: TextStyle(
-                                                    color: AppColors.textGray,
+                                                    color: AppColors.textSecondary,
                                                     fontSize: 12)),
                                             const SizedBox(width: 8),
                                             Text(
@@ -181,7 +180,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                       ?.name ??
                                                   'Categorized',
                                               style: const TextStyle(
-                                                  color: AppColors.primaryBlue,
+                                                  color: AppColors.gold,
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500),
                                             ),
@@ -199,8 +198,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                             style: TextStyle(
                                                 color: (def.isRecurring &&
                                                         def.isActive)
-                                                    ? AppColors.mintGreen
-                                                    : AppColors.labelGray,
+                                                    ? AppColors.positive
+                                                    : AppColors.textSoft,
                                                 fontSize: 12,
                                                 fontWeight: def.isRecurring
                                                     ? FontWeight.w500
@@ -209,7 +208,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                           if (def.isRecurring) ...[
                                             const Text('•',
                                                 style: TextStyle(
-                                                    color: AppColors.textGray,
+                                                    color: AppColors.textSecondary,
                                                     fontSize: 12)),
                                             Text(
                                               def.isActive
@@ -217,8 +216,8 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                   : 'Inactive',
                                               style: TextStyle(
                                                   color: def.isActive
-                                                      ? AppColors.mintGreen
-                                                      : AppColors.alertRed
+                                                      ? AppColors.positive
+                                                      : AppColors.negative
                                                           .withValues(
                                                               alpha: 0.5),
                                                   fontSize: 11,
@@ -256,7 +255,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                           constraints: const BoxConstraints(),
                                           padding: const EdgeInsets.all(8),
                                           icon: const Icon(Icons.edit_outlined,
-                                              color: AppColors.textGray,
+                                              color: AppColors.textSecondary,
                                               size: 18),
                                           onPressed: () {
                                             Navigator.push(
@@ -274,7 +273,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                           padding: const EdgeInsets.all(8),
                                           icon: const Icon(
                                               Icons.delete_outline_rounded,
-                                              color: AppColors.alertRed,
+                                              color: AppColors.negative,
                                               size: 18),
                                           onPressed: () {
                                             showDialog(
@@ -297,8 +296,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                       content: Text(
                                                           'Are you sure you want to delete "${def.name}"?',
                                                           style: const TextStyle(
-                                                              color: AppColors
-                                                                  .textGray)),
+                                                              color: AppColors.textSecondary)),
                                                       actions: [
                                                         TextButton(
                                                             onPressed: () =>
@@ -307,8 +305,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                             child: const Text(
                                                                 'Cancel',
                                                                 style: TextStyle(
-                                                                    color: AppColors
-                                                                        .textGray))),
+                                                                    color: AppColors.textSecondary))),
                                                         TextButton(
                                                             onPressed: () {
                                                               provider
@@ -316,11 +313,10 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                                       def.id!);
                                                               Navigator.pop(c);
                                                             },
-                                                            child: const Text(
+                                                             child: const Text(
                                                                 'Delete',
                                                                 style: TextStyle(
-                                                                    color: AppColors
-                                                                        .alertRed))),
+                                                                    color: AppColors.negative))),
                                                       ],
                                                     ));
                                           },
@@ -341,21 +337,64 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
             ],
           ),
         ),
-        bottomNavigationBar: DynamicNavBarWrapper(
-          currentIndex:
-              4, // Settings is typically active here, but hidden by dynamic state
-          onTap: (_) {},
-          isDynamic: true,
-          heroTag: 'navbar_expense_definitions',
-          onDynamicAdd: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AddEditExpenseDefinitionScreen(),
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.overlay,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                        color: AppColors.textPrimary.withValues(alpha: 0.08)),
+                  ),
+                  child: const Icon(Icons.arrow_back_rounded,
+                      color: AppColors.textPrimary, size: 22),
+                ),
               ),
-            );
-          },
-          onDynamicBack: () => Navigator.pop(context),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          const AddEditExpenseDefinitionScreen(),
+                    ),
+                  ),
+                  child: Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                          color: AppColors.gold.withValues(alpha: 0.35)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_rounded,
+                            color: AppColors.gold, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Add Definition',
+                          style: TextStyle(
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

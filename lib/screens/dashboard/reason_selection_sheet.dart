@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
@@ -33,7 +33,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
       height: MediaQuery.of(context).size.height * 0.7,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFF1C1F24),
+        color: AppColors.surfaceCard,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Column(
@@ -51,7 +51,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: AppColors.labelGray),
+                icon: const Icon(Icons.close, color: AppColors.textSoft),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
@@ -63,8 +63,8 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Search for a reason...',
-              hintStyle: const TextStyle(color: AppColors.labelGray),
-              prefixIcon: const Icon(Icons.search, color: AppColors.labelGray),
+              hintStyle: const TextStyle(color: AppColors.textSoft),
+              prefixIcon: const Icon(Icons.search, color: AppColors.textSoft),
               filled: true,
               fillColor: Colors.white.withValues(alpha: 0.05),
               border: OutlineInputBorder(
@@ -82,7 +82,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                       children: [
                         const Text(
                           'No reasons found.',
-                          style: TextStyle(color: AppColors.labelGray),
+                          style: TextStyle(color: AppColors.textSoft),
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
@@ -97,7 +97,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                           icon: const Icon(Icons.add),
                           label: Text('Create "$_searchQuery"'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryBlue,
+                            backgroundColor: AppColors.gold,
                             foregroundColor: Colors.black,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -118,12 +118,12 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                            color: AppColors.gold.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
                             Icons.category_outlined,
-                            color: AppColors.primaryBlue,
+                            color: AppColors.gold,
                             size: 20,
                           ),
                         ),
@@ -131,7 +131,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                           reason.name,
                           style: TextStyle(
                             color: isSelected
-                                ? AppColors.primaryBlue
+                                ? AppColors.gold
                                 : Colors.white,
                             fontWeight: isSelected
                                 ? FontWeight.bold
@@ -140,7 +140,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                         ),
                         trailing: isSelected
                             ? const Icon(Icons.check_circle,
-                                color: AppColors.primaryBlue)
+                                color: AppColors.gold)
                             : null,
                         onTap: () {
                           widget.onReasonSelected(reason);

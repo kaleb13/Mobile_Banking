@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../shell/custom_bottom_nav_bar.dart';
 
 class DataMaintenanceScreen extends StatefulWidget {
   const DataMaintenanceScreen({super.key});
@@ -40,7 +39,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Smart Refresh complete ✓'),
-            backgroundColor: Color(0xFF3EB489),
+            backgroundColor: AppColors.positive,
             duration: Duration(seconds: 2),
           ),
         );
@@ -58,7 +57,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Full reset complete ✓'),
-            backgroundColor: Color(0xFF3EB489),
+            backgroundColor: AppColors.positive,
             duration: Duration(seconds: 2),
           ),
         );
@@ -87,8 +86,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
               colors: [
-                Color(0xFF1F1F25),
-                Color(0xFF1B1B21),
+                AppColors.background,
+                AppColors.bgMid,
               ],
             ),
           ),
@@ -117,39 +116,100 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
             ],
           ),
         ),
-        bottomNavigationBar: DynamicNavBarWrapper(
-          currentIndex: 4,
-          onTap: (_) {},
-          isDynamic: true,
-          heroTag: 'navbar_data_maintenance',
-          dynamicActionLabel:
-              _tabController.index == 0 ? 'Start Refresh' : 'Reset All',
-          dynamicActionIcon: _tabController.index == 0
-              ? Icons.refresh_rounded
-              : Icons.delete_sweep_rounded,
-          onDynamicAdd: () {
-            if (_tabController.index == 0) {
-              _showConfirmDialog(
-                title: 'Smart Refresh',
-                content:
-                    'This will rescan your messages while keeping your reason tags. Proceed?',
-                onConfirm: _handleSmartRefresh,
-                confirmText: 'Refresh',
-                confirmColor: const Color(0xFF4FC3F7),
-              );
-            } else {
-              _showConfirmDialog(
-                title: 'Full Reset',
-                content:
-                    'This will PERMANENTLY erase all data and rescan everything. This cannot be undone!',
-                onConfirm: _handleFullReset,
-                confirmText: 'Reset Everything',
-                confirmColor: AppColors.alertRed,
-              );
-            }
-          },
-          onDynamicBack: () => Navigator.pop(context),
-        ),
+        bottomNavigationBar: _buildActionBar(),
+      ),
+    );
+  }
+
+  Widget _buildActionBar() {
+    final isRefreshTab = _tabController.index == 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+      child: Row(
+        children: [
+          // Back button
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.overlay,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                    color: AppColors.textPrimary.withValues(alpha: 0.08)),
+              ),
+              child: const Icon(Icons.arrow_back_rounded,
+                  color: AppColors.textPrimary, size: 22),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Action button
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (isRefreshTab) {
+                  _showConfirmDialog(
+                    title: 'Smart Refresh',
+                    content:
+                        'This will rescan your messages while keeping your reason tags. Proceed?',
+                    onConfirm: _handleSmartRefresh,
+                    confirmText: 'Refresh',
+                    confirmColor: AppColors.infoLight,
+                  );
+                } else {
+                  _showConfirmDialog(
+                    title: 'Full Reset',
+                    content:
+                        'This will PERMANENTLY erase all data and rescan everything. This cannot be undone!',
+                    onConfirm: _handleFullReset,
+                    confirmText: 'Reset Everything',
+                    confirmColor: AppColors.negative,
+                  );
+                }
+              },
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: isRefreshTab
+                      ? AppColors.infoLight.withValues(alpha: 0.15)
+                      : AppColors.negative.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: isRefreshTab
+                        ? AppColors.infoLight.withValues(alpha: 0.3)
+                        : AppColors.negative.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isRefreshTab
+                          ? Icons.refresh_rounded
+                          : Icons.delete_sweep_rounded,
+                      color: isRefreshTab
+                          ? AppColors.infoLight
+                          : AppColors.negative,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isRefreshTab ? 'Start Refresh' : 'Reset All',
+                      style: TextStyle(
+                        color: isRefreshTab
+                            ? AppColors.infoLight
+                            : AppColors.negative,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -171,7 +231,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
           ),
           Text(
             'Keep your financial data accurate and clean',
-            style: TextStyle(color: AppColors.labelGray, fontSize: 13),
+            style: TextStyle(color: AppColors.textSoft, fontSize: 13),
           ),
         ],
       ),
@@ -183,7 +243,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
+        color: AppColors.overlay.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -196,7 +256,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
-        unselectedLabelColor: AppColors.labelGray,
+        unselectedLabelColor: AppColors.textSoft,
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         unselectedLabelStyle:
@@ -218,7 +278,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         children: [
           _infoCard(
             icon: Icons.auto_awesome_rounded,
-            color: const Color(0xFF4FC3F7),
+            color: AppColors.infoLight,
             title: 'How Smart Refresh Works',
             body:
                 'Smart Refresh scans your SMS inbox for new or missing data while strictly preserving any manual work you\'ve done.\n\n'
@@ -245,7 +305,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         children: [
           _infoCard(
             icon: Icons.warning_amber_rounded,
-            color: AppColors.alertRed,
+            color: AppColors.negative,
             title: 'Critical Warning',
             body:
                 'A Full Reset is a destructive action that clears your local database entirely. Use this only if you want to start from scratch or if the data is corrupted.\n\n'
@@ -292,7 +352,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
           const SizedBox(height: 16),
           Text(body,
               style: const TextStyle(
-                  color: AppColors.labelGray, fontSize: 14, height: 1.6)),
+                  color: AppColors.textSoft, fontSize: 14, height: 1.6)),
         ],
       ),
     );
@@ -321,7 +381,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
                       fontWeight: FontWeight.w600)),
               Text(subtitle,
                   style: const TextStyle(
-                      color: AppColors.labelGray, fontSize: 12)),
+                      color: AppColors.textSoft, fontSize: 12)),
             ],
           ),
         ],
@@ -336,7 +396,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: AppColors.primaryBlue),
+            CircularProgressIndicator(color: AppColors.gold),
             SizedBox(height: 20),
             Text('Processing Data...',
                 style: TextStyle(
@@ -357,16 +417,16 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF2A2A34),
+        backgroundColor: AppColors.overlay,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(title, style: const TextStyle(color: Colors.white)),
         content:
-            Text(content, style: const TextStyle(color: AppColors.labelGray)),
+            Text(content, style: const TextStyle(color: AppColors.textSoft)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel',
-                  style: TextStyle(color: AppColors.labelGray))),
+                  style: TextStyle(color: AppColors.textSoft))),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);

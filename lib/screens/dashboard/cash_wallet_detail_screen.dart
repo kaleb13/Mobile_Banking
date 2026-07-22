@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -47,8 +47,8 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
               colors: [
-                Color(0xFF1F1F25),
-                Color(0xFF1B1B21),
+                AppColors.background,
+                AppColors.bgMid,
               ],
             ),
           ),
@@ -88,7 +88,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                       const Text(
                         'Available Cash',
                         style:
-                            TextStyle(color: AppColors.labelGray, fontSize: 14),
+                            TextStyle(color: AppColors.textSoft, fontSize: 14),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -215,7 +215,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     if (allTxs.isEmpty) {
       return const Center(
           child: Text('No cash transactions yet.',
-              style: TextStyle(color: AppColors.labelGray)));
+              style: TextStyle(color: AppColors.textSoft)));
     }
 
     allTxs.sort(
@@ -253,7 +253,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+                    color: AppColors.overlay.withValues(alpha: 0.45),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                         color: Colors.white.withValues(alpha: 0.08))),
@@ -263,14 +263,14 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                     height: 40,
                     decoration: BoxDecoration(
                       color: isPositive
-                          ? AppColors.mintGreen.withValues(alpha: 0.1)
-                          : AppColors.alertRed.withValues(alpha: 0.1),
+                          ? AppColors.positive.withValues(alpha: 0.1)
+                          : AppColors.negative.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       isPositive ? Icons.arrow_downward : Icons.arrow_upward,
                       color:
-                          isPositive ? AppColors.mintGreen : AppColors.alertRed,
+                          isPositive ? AppColors.positive : AppColors.negative,
                       size: 18,
                     ),
                   ),
@@ -289,19 +289,19 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               padding: const EdgeInsets.only(top: 4.0),
                               child: Text(tx['subtitle'] as String,
                                   style: const TextStyle(
-                                      color: AppColors.labelGray,
+                                      color: AppColors.textSoft,
                                       fontSize: 12))),
                         const SizedBox(height: 4),
                         Text(DateFormat('MMM d, yyyy · hm a').format(date),
                             style: const TextStyle(
-                                color: AppColors.labelGray, fontSize: 10)),
+                                color: AppColors.textSoft, fontSize: 10)),
                       ])),
                   Text(
                     provider.isBalanceVisible
                         ? '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])} ETB'
                         : '****',
                     style: TextStyle(
-                        color: isPositive ? AppColors.mintGreen : Colors.white,
+                        color: isPositive ? AppColors.positive : Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.bold),
                   ),
@@ -319,7 +319,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1C1F24),
+      backgroundColor: AppColors.surfaceCard,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       isScrollControlled: true,
@@ -347,7 +347,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               fontWeight: FontWeight.bold)),
                       IconButton(
                         icon:
-                            const Icon(Icons.close, color: AppColors.labelGray),
+                            const Icon(Icons.close, color: AppColors.textSoft),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
@@ -358,7 +358,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                   if (provider.expenseDefinitions.isNotEmpty) ...[
                     const Text('Saved Templates',
                         style: TextStyle(
-                            color: AppColors.labelGray, fontSize: 13)),
+                            color: AppColors.textSoft, fontSize: 13)),
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 44,
@@ -394,10 +394,10 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               backgroundColor:
                                   Colors.white.withValues(alpha: 0.05),
                               selectedColor:
-                                  AppColors.primaryBlue.withValues(alpha: 0.2),
+                                  AppColors.gold.withValues(alpha: 0.2),
                               labelStyle: TextStyle(
                                 color: isSelected
-                                    ? AppColors.primaryBlue
+                                    ? AppColors.gold
                                     : Colors.white,
                                 fontSize: 12,
                               ),
@@ -425,13 +425,13 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                           TextStyle(color: Colors.white.withValues(alpha: 0.1)),
                       suffixText: 'ETB',
                       suffixStyle: const TextStyle(
-                          color: AppColors.labelGray, fontSize: 16),
+                          color: AppColors.textSoft, fontSize: 16),
                       enabledBorder: UnderlineInputBorder(
                           borderSide: BorderSide(
                               color: Colors.white.withValues(alpha: 0.1))),
                       focusedBorder: const UnderlineInputBorder(
                           borderSide: BorderSide(
-                              color: AppColors.primaryBlue, width: 2)),
+                              color: AppColors.gold, width: 2)),
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -466,7 +466,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                             child: Row(
                               children: [
                                 const Icon(Icons.category_rounded,
-                                    color: AppColors.primaryBlue, size: 20),
+                                    color: AppColors.gold, size: 20),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
@@ -480,7 +480,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                                   ),
                                 ),
                                 const Icon(Icons.keyboard_arrow_right,
-                                    color: AppColors.labelGray, size: 18),
+                                    color: AppColors.textSoft, size: 18),
                               ],
                             ),
                           ),
@@ -492,15 +492,15 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          color: AppColors.gold.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                               color:
-                                  AppColors.primaryBlue.withValues(alpha: 0.3)),
+                                  AppColors.gold.withValues(alpha: 0.3)),
                         ),
                         child: IconButton(
                           icon: const Icon(Icons.add,
-                              color: AppColors.primaryBlue, size: 24),
+                              color: AppColors.gold, size: 24),
                           onPressed: () {
                             _showQuickAddReasonDialog(context, (newReason) {
                               setModalState(() {
@@ -520,9 +520,9 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Short Note (Optional)',
-                      labelStyle: const TextStyle(color: AppColors.labelGray),
+                      labelStyle: const TextStyle(color: AppColors.textSoft),
                       prefixIcon:
-                          const Icon(Icons.notes, color: AppColors.labelGray),
+                          const Icon(Icons.notes, color: AppColors.textSoft),
                       filled: true,
                       fillColor: Colors.white.withValues(alpha: 0.05),
                       border: OutlineInputBorder(
@@ -547,7 +547,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                             SizedBox(height: 4),
                             Text('Easily reuse this amount and reason later',
                                 style: TextStyle(
-                                    color: AppColors.labelGray, fontSize: 11)),
+                                    color: AppColors.textSoft, fontSize: 11)),
                           ],
                         ),
                       ),
@@ -566,7 +566,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
+                        backgroundColor: AppColors.gold,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16)),
@@ -634,7 +634,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1C1F24),
+      backgroundColor: AppColors.surfaceCard,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       isScrollControlled: true,
@@ -659,7 +659,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                           fontSize: 20,
                           fontWeight: FontWeight.bold)),
                   IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.labelGray),
+                    icon: const Icon(Icons.close, color: AppColors.textSoft),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -680,13 +680,13 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                       TextStyle(color: Colors.white.withValues(alpha: 0.1)),
                   suffixText: 'ETB',
                   suffixStyle:
-                      const TextStyle(color: AppColors.labelGray, fontSize: 16),
+                      const TextStyle(color: AppColors.textSoft, fontSize: 16),
                   enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(
                           color: Colors.white.withValues(alpha: 0.1))),
                   focusedBorder: const UnderlineInputBorder(
                       borderSide:
-                          BorderSide(color: AppColors.primaryBlue, width: 2)),
+                          BorderSide(color: AppColors.gold, width: 2)),
                 ),
               ),
               const SizedBox(height: 24),
@@ -695,9 +695,9 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   labelText: 'Source / Note (Optional)',
-                  labelStyle: const TextStyle(color: AppColors.labelGray),
+                  labelStyle: const TextStyle(color: AppColors.textSoft),
                   prefixIcon:
-                      const Icon(Icons.notes, color: AppColors.labelGray),
+                      const Icon(Icons.notes, color: AppColors.textSoft),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.05),
                   border: OutlineInputBorder(
@@ -711,7 +711,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.mintGreen,
+                    backgroundColor: AppColors.positive,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
@@ -756,7 +756,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
       builder: (_) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF1C1F24),
+            color: AppColors.surfaceCard,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
@@ -790,7 +790,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 child: Text(
                   'ETB ${NumberFormat("#,##0.00").format(amount)}',
                   style: const TextStyle(
-                      color: AppColors.labelGray, fontSize: 13),
+                      color: AppColors.textSoft, fontSize: 13),
                 ),
               ),
               const SizedBox(height: 24),
@@ -798,7 +798,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
               // Edit Amount
               _actionTile(
                 icon: Icons.edit_rounded,
-                iconColor: AppColors.primaryBlue,
+                iconColor: AppColors.gold,
                 label: 'Edit Amount',
                 sublabel: 'Change the recorded amount',
                 onTap: () {
@@ -811,7 +811,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
               // Delete Transaction
               _actionTile(
                 icon: Icons.delete_rounded,
-                iconColor: AppColors.alertRed,
+                iconColor: AppColors.negative,
                 label: 'Delete Transaction',
                 sublabel: 'Permanently remove this entry',
                 onTap: () {
@@ -868,12 +868,12 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                   const SizedBox(height: 2),
                   Text(sublabel,
                       style: const TextStyle(
-                          color: AppColors.labelGray, fontSize: 12)),
+                          color: AppColors.textSoft, fontSize: 12)),
                 ],
               ),
             ),
             const Icon(Icons.chevron_right,
-                color: AppColors.labelGray, size: 18),
+                color: AppColors.textSoft, size: 18),
           ],
         ),
       ),
@@ -887,7 +887,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1F24),
+        backgroundColor: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Edit Amount', style: TextStyle(color: Colors.white)),
         content: TextField(
@@ -902,20 +902,20 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.2)),
             suffixText: 'ETB',
             suffixStyle:
-                const TextStyle(color: AppColors.labelGray, fontSize: 14),
+                const TextStyle(color: AppColors.textSoft, fontSize: 14),
             enabledBorder: UnderlineInputBorder(
                 borderSide:
                     BorderSide(color: Colors.white.withValues(alpha: 0.15))),
             focusedBorder: const UnderlineInputBorder(
                 borderSide:
-                    BorderSide(color: AppColors.primaryBlue, width: 2)),
+                    BorderSide(color: AppColors.gold, width: 2)),
           ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c),
               child: const Text('Cancel',
-                  style: TextStyle(color: AppColors.labelGray))),
+                  style: TextStyle(color: AppColors.textSoft))),
           TextButton(
             onPressed: () {
               final amt = double.tryParse(controller.text.trim());
@@ -926,7 +926,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
             },
             child: const Text('Save',
                 style: TextStyle(
-                    color: AppColors.primaryBlue,
+                    color: AppColors.gold,
                     fontWeight: FontWeight.bold)),
           ),
         ],
@@ -939,20 +939,20 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1F24),
+        backgroundColor: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Delete Transaction',
             style: TextStyle(color: Colors.white)),
         content: Text(
           'Remove "$title" permanently? This cannot be undone.',
           style:
-              const TextStyle(color: AppColors.labelGray, fontSize: 14, height: 1.5),
+              const TextStyle(color: AppColors.textSoft, fontSize: 14, height: 1.5),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(c),
               child: const Text('Cancel',
-                  style: TextStyle(color: AppColors.labelGray))),
+                  style: TextStyle(color: AppColors.textSoft))),
           TextButton(
             onPressed: () {
               provider.deleteCashTransaction(id);
@@ -960,7 +960,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
             },
             child: const Text('Delete',
                 style: TextStyle(
-                    color: AppColors.alertRed, fontWeight: FontWeight.bold)),
+                    color: AppColors.negative, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -988,7 +988,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           const SizedBox(height: 8),
           Text(label,
               style: const TextStyle(
-                  color: AppColors.labelGray,
+                  color: AppColors.textSoft,
                   fontSize: 11,
                   fontWeight: FontWeight.w500)),
         ],
@@ -1002,7 +1002,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1F24),
+        backgroundColor: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('New Reason', style: TextStyle(color: Colors.white)),
         content: TextField(
@@ -1011,19 +1011,19 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: 'e.g., Snacks, Taxi...',
-            hintStyle: const TextStyle(color: AppColors.labelGray),
+            hintStyle: const TextStyle(color: AppColors.textSoft),
             enabledBorder: UnderlineInputBorder(
                 borderSide:
                     BorderSide(color: Colors.white.withValues(alpha: 0.1))),
             focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: AppColors.primaryBlue)),
+                borderSide: BorderSide(color: AppColors.gold)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel',
-                style: TextStyle(color: AppColors.labelGray)),
+                style: TextStyle(color: AppColors.textSoft)),
           ),
           TextButton(
             onPressed: () async {
@@ -1037,7 +1037,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
               }
             },
             child: const Text('Add',
-                style: TextStyle(color: AppColors.primaryBlue)),
+                style: TextStyle(color: AppColors.gold)),
           ),
         ],
       ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 
@@ -8,7 +8,7 @@ class AboutAppScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1F1F25),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -49,7 +49,7 @@ class AboutAppScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34),
+        color: AppColors.overlay,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -59,7 +59,7 @@ class AboutAppScreen extends StatelessWidget {
             padding: const EdgeInsets.all(2.5),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFF0B90B), width: 2),
+              border: Border.all(color: AppColors.gold, width: 2),
             ),
             child: const CircleAvatar(
               radius: 30,
@@ -96,19 +96,19 @@ class AboutAppScreen extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF64B5F6).withValues(alpha: 0.12),
+                      color: AppColors.info.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.send_rounded,
-                            color: Color(0xFF64B5F6), size: 12),
+                            color: AppColors.info, size: 12),
                         SizedBox(width: 6),
                         Text(
                           '@Shibre_Plus',
                           style: TextStyle(
-                            color: Color(0xFF64B5F6),
+                            color: AppColors.info,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
@@ -131,7 +131,7 @@ class AboutAppScreen extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: AppColors.labelGray,
+          color: AppColors.textSoft,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.2,
@@ -145,7 +145,7 @@ class AboutAppScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34),
+        color: AppColors.overlay,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -158,7 +158,7 @@ class AboutAppScreen extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.person_outline_rounded,
-                color: AppColors.labelGray, size: 20),
+                color: AppColors.textSoft, size: 20),
           ),
           const SizedBox(width: 16),
           Text(
@@ -179,7 +179,7 @@ class AboutAppScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34),
+        color: AppColors.overlay,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),

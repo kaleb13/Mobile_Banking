@@ -23,6 +23,7 @@ class AnalysisScreen extends StatefulWidget {
 class _AnalysisScreenState extends State<AnalysisScreen>
     with TickerProviderStateMixin {
   AnalysisPeriod _period = AnalysisPeriod.d30;
+  int _touchedCategoryIndex = -1;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
@@ -43,7 +44,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   void _changePeriod(AnalysisPeriod p) {
     if (_period == p) return;
-    setState(() => _period = p);
+    setState(() {
+      _period = p;
+      _touchedCategoryIndex = -1;
+    });
   }
 
   // ─── Filtered transactions ──────────────────────────────────────────────────
@@ -135,8 +139,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
               colors: [
-                Color(0xFF1F1F25),
-                Color(0xFF1B1B21),
+                AppColors.background,
+                AppColors.bgMid,
               ],
             ),
           ),
@@ -163,7 +167,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                       ? NumberFormat('#,##0.00')
                                           .format(totalIncome)
                                       : '****',
-                                  const Color(0xFF3EB489),
+                                  AppColors.positive,
                                   Icons.arrow_downward_rounded)),
                           const SizedBox(width: 8),
                           Expanded(
@@ -173,7 +177,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                       ? NumberFormat('#,##0.00')
                                           .format(totalExpense)
                                       : '****',
-                                  const Color(0xFFEF4444),
+                                  AppColors.error,
                                   Icons.arrow_upward_rounded)),
                           const SizedBox(width: 8),
                           Expanded(
@@ -182,7 +186,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                   provider.isBalanceVisible
                                       ? NumberFormat('#,##0.00').format(net)
                                       : '****',
-                                  const Color(0xFFF0B90B),
+                                  AppColors.gold,
                                   Icons.auto_graph_rounded)),
                         ],
                       ),
@@ -200,7 +204,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       const SizedBox(height: 28),
                       _buildSectionLabel('Spending by Category'),
                       const SizedBox(height: 14),
-                      _buildRadarSection(txs, cashTxs, provider),
+                      _buildCategorySpendingSection(txs, cashTxs, provider),
                       const SizedBox(height: 28),
                       _buildSectionLabel('Bank Performance'),
                       const SizedBox(height: 14),
@@ -234,7 +238,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             )),
         Text(
           'Spend with awareness',
-          style: TextStyle(color: AppColors.labelGray, fontSize: 12),
+          style: TextStyle(color: AppColors.textSoft, fontSize: 12),
         ),
       ],
     );
@@ -244,7 +248,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -257,7 +261,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               const SizedBox(width: 6),
               Text(label,
                   style: const TextStyle(
-                      color: AppColors.labelGray,
+                      color: AppColors.textSoft,
                       fontSize: 10,
                       fontWeight: FontWeight.w500)),
             ],
@@ -287,7 +291,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     ];
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
+        color: AppColors.overlay.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
@@ -321,7 +325,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   child: Text(
                     item.$2,
                     style: TextStyle(
-                      color: isActive ? Colors.white : AppColors.labelGray,
+                      color: isActive ? Colors.white : AppColors.textSoft,
                       fontSize: 10,
                       fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -391,10 +395,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFE11D48).withValues(alpha: 0.08),
+              color: AppColors.negative.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: const Color(0xFFE11D48).withValues(alpha: 0.15)),
+                  color: AppColors.negative.withValues(alpha: 0.15)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,12 +406,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+                    color: AppColors.negative.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.account_balance_wallet_outlined,
-                    color: Color(0xFFE11D48),
+                    color: AppColors.negative,
                     size: 16,
                   ),
                 ),
@@ -448,7 +452,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A34).withValues(alpha: 0.4),
+            color: AppColors.overlay.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -484,10 +488,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final isNeg = value < 0;
     final isZero = value == 0;
     final Color color = isNeg
-        ? const Color(0xFFE11D48)
+        ? AppColors.negative
         : isZero
-            ? AppColors.labelGray
-            : const Color(0xFF3EB489);
+            ? AppColors.textSoft
+            : AppColors.positive;
     final IconData icon = isNeg
         ? Icons.trending_down_rounded
         : isZero
@@ -497,7 +501,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.55),
+        color: AppColors.overlay.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: color.withValues(alpha: isNeg ? 0.2 : 0.1), width: 1),
@@ -512,7 +516,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               Text(
                 label,
                 style: TextStyle(
-                  color: AppColors.labelGray.withValues(alpha: 0.7),
+                  color: AppColors.textSoft.withValues(alpha: 0.7),
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
@@ -538,7 +542,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             Text(
               '⚠ Debt drag',
               style: TextStyle(
-                color: const Color(0xFFE11D48).withValues(alpha: 0.7),
+                color: AppColors.negative.withValues(alpha: 0.7),
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
               ),
@@ -579,7 +583,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       height: 220,
       padding: const EdgeInsets.fromLTRB(12, 20, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -588,14 +592,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           maxY: maxY + yInterval,
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (group) => const Color(0xFF1A2530),
+              getTooltipColor: (group) => AppColors.tealDark,
               tooltipBorderRadius: BorderRadius.circular(10),
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 final isIncome = rodIndex == 0;
                 return BarTooltipItem(
                   '${isIncome ? '▲ ' : '▼ '}${NumberFormat('#,##0').format(rod.toY)}',
                   TextStyle(
-                    color: isIncome ? AppColors.mintGreen : AppColors.alertRed,
+                    color: isIncome ? AppColors.positive : AppColors.negative,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -612,7 +616,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 getTitlesWidget: (value, meta) => Text(
                   _formatYAxis(value),
                   style:
-                      const TextStyle(color: AppColors.labelGray, fontSize: 9),
+                      const TextStyle(color: AppColors.textSoft, fontSize: 9),
                 ),
               ),
             ),
@@ -628,7 +632,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(labels[idx],
                         style: const TextStyle(
-                            color: AppColors.labelGray, fontSize: 9)),
+                            color: AppColors.textSoft, fontSize: 9)),
                   );
                 },
               ),
@@ -707,7 +711,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       barRods: [
         BarChartRodData(
           toY: income,
-          color: const Color(0xFFF0B90B),
+          color: AppColors.gold,
           width: 6,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
           backDrawRodData: BackgroundBarChartRodData(
@@ -718,7 +722,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
         BarChartRodData(
           toY: expense,
-          color: const Color(0xFFEF4444).withValues(alpha: 0.8),
+          color: AppColors.error.withValues(alpha: 0.8),
           width: 6,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
         ),
@@ -826,8 +830,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         .toList();
   }
 
-  // ─── Radar Chart: Category Spending ─────────────────────────────────────────
-  Widget _buildRadarSection(List<AppTransaction> txs,
+  // ─── Donut Chart & Flow: Category Spending ─────────────────────────────────
+  Widget _buildCategorySpendingSection(List<AppTransaction> txs,
       List<CashTransaction> cashTxs, FinanceProvider provider) {
     // ── Step 1: Accumulate gross expense AND same-reason income per category ──
     final Map<String, double> grossExpense = {};
@@ -854,7 +858,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       final cat =
           (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : null;
       if (cat != null && grossExpense.containsKey(cat)) {
-        // Only offset if this reason also has expenses
         sameReasonIncome[cat] = (sameReasonIncome[cat] ?? 0) + t.amount;
       }
     }
@@ -878,88 +881,170 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     final sorted = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final top = sorted.take(6).toList(); // radar works best with 5–7 axes
-    final maxVal = top.isEmpty ? 0.0 : top.first.value;
+    final top = sorted.take(6).toList();
     final totalExpense = top.fold<double>(0, (s, e) => s + e.value);
-
-    if (top.length < 3) {
-      return _buildEmptyState(
-          'Add at least 3 expense categories to see the spending chart.');
-    }
-
-    // Check if any offsets were applied so we can show the note
     final hasOffsets = sameReasonIncome.isNotEmpty;
+
+    final isTouched = _touchedCategoryIndex >= 0 &&
+        _touchedCategoryIndex < top.length;
+    final displayLabel =
+        isTouched ? top[_touchedCategoryIndex].key : 'Total Spent';
+    final displayAmount =
+        isTouched ? top[_touchedCategoryIndex].value : totalExpense;
+    final displayColor = isTouched
+        ? _categoryColor(_touchedCategoryIndex)
+        : AppColors.textPrimary;
 
     return Column(
       children: [
-        // ── Full Width Radar Chart ─────────────────
+        // ── Modern Interactive Donut Chart Container ─────────────────
         Container(
           width: double.infinity,
-          height: 300,
-          padding: const EdgeInsets.symmetric(vertical: 24),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+            color: AppColors.overlay.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
-          child: RadarChart(
-            RadarChartData(
-              radarShape: RadarShape.polygon,
-              tickCount: 4,
-              ticksTextStyle:
-                  const TextStyle(color: Colors.transparent, fontSize: 0),
-              gridBorderData: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.07), width: 1),
-              radarBorderData: BorderSide(
-                  color: Colors.white.withValues(alpha: 0.1), width: 1.5),
-              titlePositionPercentageOffset: 0.2,
-              titleTextStyle: const TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500),
-              getTitle: (index, angle) {
-                if (index >= top.length) return const RadarChartTitle(text: '');
-                final name = top[index].key;
-                return RadarChartTitle(
-                  text: name.length > 10 ? '${name.substring(0, 9)}…' : name,
-                  angle: angle,
-                );
-              },
-              dataSets: [
-                RadarDataSet(
-                  dataEntries: top
-                      .map((e) => RadarEntry(
-                          value: maxVal > 0 ? (e.value / maxVal) * 100 : 0))
-                      .toList(),
-                  fillColor: const Color(0xFFF0B90B).withValues(alpha: 0.15),
-                  borderColor: const Color(0xFFF0B90B),
-                  borderWidth: 2,
-                  entryRadius: 3,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 220,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    PieChart(
+                      PieChartData(
+                        pieTouchData: PieTouchData(
+                          touchCallback:
+                              (FlTouchEvent event, pieTouchResponse) {
+                            setState(() {
+                              if (!event.isInterestedForInteractions ||
+                                  pieTouchResponse == null ||
+                                  pieTouchResponse.touchedSection == null) {
+                                _touchedCategoryIndex = -1;
+                                return;
+                              }
+                              _touchedCategoryIndex = pieTouchResponse
+                                  .touchedSection!.touchedSectionIndex;
+                            });
+                          },
+                        ),
+                        borderData: FlBorderData(show: false),
+                        sectionsSpace: 4,
+                        centerSpaceRadius: 68,
+                        sections: top.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final data = entry.value;
+                          final isSelected = index == _touchedCategoryIndex;
+                          final radius = isSelected ? 26.0 : 20.0;
+                          final color = _categoryColor(index);
+
+                          return PieChartSectionData(
+                            color: color,
+                            value: data.value,
+                            title: '',
+                            radius: radius,
+                            badgeWidget: null,
+                          );
+                        }).toList(),
+                      ),
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOutCubic,
+                    ),
+
+                    // Center Content inside Donut
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          displayLabel,
+                          style: const TextStyle(
+                            color: AppColors.textSoft,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          provider.isBalanceVisible
+                              ? NumberFormat('#,##0').format(displayAmount)
+                              : '****',
+                          style: TextStyle(
+                            color: displayColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        if (isTouched && totalExpense > 0) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '${(top[_touchedCategoryIndex].value / totalExpense * 100).toStringAsFixed(1)}%',
+                            style: TextStyle(
+                              color: displayColor.withValues(alpha: 0.8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeOutQuart,
+              ),
+
+              const SizedBox(height: 18),
+
+              // Segmented Proportion Flow Bar (macOS / iOS style storage & flow bar)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  height: 8,
+                  width: double.infinity,
+                  color: Colors.white.withValues(alpha: 0.05),
+                  child: Row(
+                    children: top.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final data = entry.value;
+                      final flex = (totalExpense > 0)
+                          ? ((data.value / totalExpense) * 1000)
+                              .toInt()
+                              .clamp(1, 1000)
+                          : 1;
+                      return Expanded(
+                        flex: flex,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                          color: _categoryColor(index),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
 
-        // Offset notice
+        // Offset notice if applicable
         if (hasOffsets) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.only(bottom: 12),
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0B90B).withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: const Color(0xFFF0B90B).withValues(alpha: 0.15)),
+              color: AppColors.gold.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.gold.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
                 const Icon(Icons.info_outline_rounded,
-                    color: Color(0xFFF0B90B), size: 13),
+                    color: AppColors.gold, size: 13),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -975,87 +1060,105 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           ),
         ],
 
+        // Category Cards Grid (3 cards per row)
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: top.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
             final pct = totalExpense > 0
-                ? (entry.value.value / totalExpense * 100).toStringAsFixed(1)
+                ? (item.value / totalExpense * 100).toStringAsFixed(1)
                 : '0';
-            final color = _categoryColor(entry.key);
-            final offset = sameReasonIncome[entry.value.key] ?? 0;
+            final color = _categoryColor(index);
+            final offset = sameReasonIncome[item.key] ?? 0;
+            final isSelected = index == _touchedCategoryIndex;
 
-            // 3 cards per row
             final cardWidth = (MediaQuery.of(context).size.width - 32 - 16) / 3;
 
-            return Container(
-              width: cardWidth,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Color dot + category name
-                  Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          entry.value.key,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _touchedCategoryIndex = isSelected ? -1 : index;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: cardWidth,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? color.withValues(alpha: 0.15)
+                      : AppColors.overlay.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected
+                        ? color.withValues(alpha: 0.5)
+                        : Colors.white.withValues(alpha: 0.06),
+                    width: isSelected ? 1.5 : 1.0,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            item.key,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.9),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '$pct%',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      provider.isBalanceVisible
+                          ? NumberFormat('#,##0').format(item.value)
+                          : '****',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    if (offset > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '-${NumberFormat('#,##0').format(offset)} in',
+                        style: TextStyle(
+                          color: AppColors.positive.withValues(alpha: 0.7),
+                          fontSize: 9,
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  // Percentage
-                  Text(
-                    '$pct%',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  // Net amount
-                  Text(
-                    NumberFormat('#,##0').format(entry.value.value),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.65),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  // Offset label if applicable
-                  if (offset > 0) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '-${NumberFormat('#,##0').format(offset)} in',
-                      style: TextStyle(
-                        color: AppColors.mintGreen.withValues(alpha: 0.7),
-                        fontSize: 9,
-                      ),
-                    ),
                   ],
-                ],
+                ),
               ),
             );
           }).toList(),
@@ -1066,12 +1169,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   Color _categoryColor(int i) {
     const colors = [
-      Color(0xFFF0B90B), // Gold
-      Color(0xFF3EB489), // Mint
-      Color(0xFF64B5F6), // Blue
-      Color(0xFFCE93D8), // Purple
-      Color(0xFFF48FB1), // Pink
-      Color(0xFFEF4444), // Red
+      AppColors.gold, // Gold
+      AppColors.positive, // Mint
+      AppColors.info, // Blue
+      AppColors.chartPurple, // Purple
+      AppColors.chartPink, // Pink
+      AppColors.error, // Red
     ];
     return colors[i % colors.length];
   }
@@ -1128,7 +1231,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+            color: AppColors.overlay.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
@@ -1151,7 +1254,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 fontWeight: FontWeight.w500)),
                         Text('${s.txCount} transactions',
                             style: const TextStyle(
-                                color: AppColors.labelGray, fontSize: 11)),
+                                color: AppColors.textSoft, fontSize: 11)),
                       ],
                     ),
                   ),
@@ -1160,11 +1263,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2A2A34).withValues(alpha: 0.5),
+                      color: AppColors.overlay.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
                           color:
-                              const Color(0xFFF0B90B).withValues(alpha: 0.1)),
+                              AppColors.gold.withValues(alpha: 0.1)),
                     ),
                     child: Row(
                       children: [
@@ -1173,16 +1276,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 ? Icons.trending_up
                                 : Icons.trending_down,
                             color: isPositive
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             size: 12),
                         const SizedBox(width: 4),
                         Text(
                           '${isPositive ? '+' : ''}${fmt.format(s.net)}',
                           style: TextStyle(
                             color: isPositive
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1201,9 +1304,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   child: LinearProgressIndicator(
                     value: incomeShare.clamp(0.0, 1.0),
                     backgroundColor:
-                        const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        AppColors.error.withValues(alpha: 0.1),
                     valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.mintGreen),
+                        AppColors.positive),
                   ),
                 ),
               ),
@@ -1212,12 +1315,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _statChip(
-                      '▲ ${fmt.format(s.income)}', const Color(0xFF3EB489)),
+                      '▲ ${fmt.format(s.income)}', AppColors.positive),
                   _statChip(
-                      '▼ ${fmt.format(s.expense)}', const Color(0xFFEF4444)),
+                      '▼ ${fmt.format(s.expense)}', AppColors.error),
                   if (s.balance > 0)
                     _statChip('Bal: ${fmt.format(s.balance)}',
-                        const Color(0xFFF0B90B)),
+                        AppColors.gold),
                 ],
               ),
               // Share pill
@@ -1226,7 +1329,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 children: [
                   const Text('Activity share:',
                       style:
-                          TextStyle(color: AppColors.textGray, fontSize: 10)),
+                          TextStyle(color: AppColors.textSecondary, fontSize: 10)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: ClipRRect(
@@ -1236,7 +1339,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         minHeight: 4,
                         backgroundColor: Colors.white.withValues(alpha: 0.04),
                         valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFFF0B90B),
+                          AppColors.gold,
                         ),
                       ),
                     ),
@@ -1244,7 +1347,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   const SizedBox(width: 6),
                   Text('${(share * 100).toStringAsFixed(0)}%',
                       style: const TextStyle(
-                          color: AppColors.textGray, fontSize: 10)),
+                          color: AppColors.textSecondary, fontSize: 10)),
                 ],
               ),
             ],
@@ -1276,25 +1379,25 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       logoWidget = Image.asset('assets/images/CBE logo 1.png',
           width: 22, height: 22, fit: BoxFit.contain);
       cardGradient = [
-        const Color(0xFF3D1B0F),
-        const Color(0xFF6E482F),
-        const Color(0xFF3D1B0F)
+        AppColors.cardBrownDark,
+        AppColors.cardBrownMid,
+        AppColors.cardBrownDark
       ];
     } else if (nameUp == 'TELEBIRR') {
       logoWidget = Image.asset('assets/images/Telebirr Logo.png',
           width: 22, height: 22, fit: BoxFit.contain);
       cardGradient = [
-        const Color(0xFF0BA751),
-        const Color(0xFF88BF47),
-        const Color(0xFF0BA751)
+        AppColors.success,
+        AppColors.cardLime,
+        AppColors.success
       ];
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       logoWidget = Image.asset('assets/images/CBEBirr Logo.png',
           width: 22, height: 22, fit: BoxFit.contain);
       cardGradient = [
-        const Color(0xFFAFAFB3),
-        const Color(0xFFFFFFFF),
-        const Color(0xFFAFAFB3)
+        AppColors.cardSilver,
+        AppColors.textPrimary,
+        AppColors.cardSilver
       ];
     } else {
       logoWidget = Text(
@@ -1303,9 +1406,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
       );
       cardGradient = [
-        const Color(0xFF1E1E26),
-        const Color(0xFF3E3E4A),
-        const Color(0xFF1E1E26)
+        AppColors.bgMid,
+        AppColors.cardGrayLight,
+        AppColors.bgMid
       ];
     }
 
@@ -1394,15 +1497,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0B90B).withValues(alpha: 0.07),
+              color: AppColors.gold.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: const Color(0xFFF0B90B).withValues(alpha: 0.15)),
+                  color: AppColors.gold.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
                 const Icon(Icons.info_outline_rounded,
-                    color: Color(0xFFF0B90B), size: 13),
+                    color: AppColors.gold, size: 13),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1441,7 +1544,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+                color: AppColors.overlay.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
@@ -1494,7 +1597,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               Text(
                                 '${fmt.format(gross)} out',
                                 style: TextStyle(
-                                    color: AppColors.alertRed
+                                    color: AppColors.negative
                                         .withValues(alpha: 0.7),
                                     fontSize: 10),
                               ),
@@ -1510,7 +1613,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               Text(
                                 '${fmt.format(offset)} in',
                                 style: TextStyle(
-                                    color: AppColors.mintGreen
+                                    color: AppColors.positive
                                         .withValues(alpha: 0.8),
                                     fontSize: 10),
                               ),
@@ -1547,7 +1650,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         Text(
                             '${(pct * 100).toStringAsFixed(1)}% of net expenses',
                             style: const TextStyle(
-                                color: AppColors.textGray, fontSize: 10)),
+                                color: AppColors.textSecondary, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -1565,7 +1668,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       height: 120,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -1580,7 +1683,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.labelGray, fontSize: 12),
+              style: const TextStyle(color: AppColors.textSoft, fontSize: 12),
             ),
           ),
         ],

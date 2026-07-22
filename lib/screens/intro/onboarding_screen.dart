@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
@@ -33,7 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0B0D),
+      backgroundColor: AppColors.bgDeep,
       body: SafeArea(
         child: Column(
           children: [
@@ -153,8 +153,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: ElevatedButton(
               onPressed: onAction,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryBlue,
-                foregroundColor: const Color(0xFF0A0B0D),
+                backgroundColor: AppColors.gold,
+                foregroundColor: AppColors.bgDeep,
                 elevation: 0,
                 shadowColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
@@ -192,7 +192,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
               color: isActive
-                  ? AppColors.primaryBlue
+                  ? AppColors.gold
                   : Colors.white.withValues(alpha: 0.1),
             ),
           );
@@ -205,7 +205,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.alertRed.withValues(alpha: 0.9),
+        backgroundColor: AppColors.negative.withValues(alpha: 0.9),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(20),

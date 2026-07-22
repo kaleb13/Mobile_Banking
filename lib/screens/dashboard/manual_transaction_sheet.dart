@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/app_notification.dart';
 import '../../models/transaction.dart';
@@ -119,7 +119,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomPadding),
       decoration: const BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SingleChildScrollView(
@@ -132,7 +132,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.labelGray.withValues(alpha: 0.3),
+                  color: AppColors.textSoft.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -151,7 +151,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
               Text(
                 'From: ${widget.notification!.sender}',
                 style:
-                    const TextStyle(color: AppColors.labelGray, fontSize: 13),
+                    const TextStyle(color: AppColors.textSoft, fontSize: 13),
               ),
             ],
             const SizedBox(height: 20),
@@ -159,9 +159,9 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
             // Type Selector
             Row(
               children: [
-                _buildTypeButton('Expense', 'expense', AppColors.alertRed),
+                _buildTypeButton('Expense', 'expense', AppColors.negative),
                 const SizedBox(width: 12),
-                _buildTypeButton('Income', 'income', const Color(0xFF3EB489)),
+                _buildTypeButton('Income', 'income', AppColors.positive),
               ],
             ),
             const SizedBox(height: 20),
@@ -185,14 +185,14 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceLight.withValues(alpha: 0.1),
+                  color: AppColors.surfaceCard.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<AppSender>(
                     value: _selectedSender,
                     isExpanded: true,
-                    dropdownColor: AppColors.surfaceDark,
+                    dropdownColor: AppColors.surface,
                     items: widget.provider.senders
                         .map((s) => DropdownMenuItem(
                               value: s,
@@ -213,16 +213,16 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceLight.withValues(alpha: 0.1),
+                  color: AppColors.surfaceCard.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<AppReason>(
                     value: _selectedReason,
                     isExpanded: true,
-                    dropdownColor: AppColors.surfaceDark,
+                    dropdownColor: AppColors.surface,
                     hint: const Text('Select a reason…',
-                        style: TextStyle(color: AppColors.labelGray)),
+                        style: TextStyle(color: AppColors.textSoft)),
                     items: widget.provider.reasons
                         .map((r) => DropdownMenuItem(
                               value: r,
@@ -262,7 +262,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 child: Row(
                   children: [
                     const Icon(Icons.calendar_today_rounded,
-                        color: AppColors.primaryBlue, size: 18),
+                        color: AppColors.gold, size: 18),
                     const SizedBox(width: 12),
                     Text(
                       DateFormat('MMM d, yyyy').format(_selectedDate),
@@ -271,7 +271,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                     const Spacer(),
                     const Text('Change',
                         style: TextStyle(
-                            color: AppColors.primaryBlue, fontSize: 13)),
+                            color: AppColors.gold, fontSize: 13)),
                   ],
                 ),
               ),
@@ -289,9 +289,9 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                     ? null
                     : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
+                  backgroundColor: AppColors.gold,
                   disabledBackgroundColor:
-                      AppColors.primaryBlue.withValues(alpha: 0.3),
+                      AppColors.gold.withValues(alpha: 0.3),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
@@ -316,7 +316,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
       children: [
         Text(label,
             style: const TextStyle(
-                color: AppColors.labelGray,
+                color: AppColors.textSoft,
                 fontSize: 13,
                 fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
@@ -328,9 +328,9 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
   InputDecoration _fieldDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: AppColors.labelGray.withValues(alpha: 0.5)),
+      hintStyle: TextStyle(color: AppColors.textSoft.withValues(alpha: 0.5)),
       filled: true,
-      fillColor: AppColors.surfaceLight.withValues(alpha: 0.1),
+      fillColor: AppColors.surfaceCard.withValues(alpha: 0.1),
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -348,7 +348,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
           decoration: BoxDecoration(
             color: isActive
                 ? activeColor.withValues(alpha: 0.15)
-                : AppColors.surfaceLight.withValues(alpha: 0.05),
+                : AppColors.surfaceCard.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
                 color: isActive
@@ -358,7 +358,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
           child: Text(
             label,
             style: TextStyle(
-              color: isActive ? activeColor : AppColors.labelGray,
+              color: isActive ? activeColor : AppColors.textSoft,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -376,8 +376,8 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.dark(
-            primary: AppColors.primaryBlue,
-            surface: AppColors.surfaceDark,
+            primary: AppColors.gold,
+            surface: AppColors.surface,
           ),
         ),
         child: child!,

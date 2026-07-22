@@ -35,6 +35,7 @@ class BankSenders {
     }
     if (up.contains('CBE') && up.contains('BIRR')) return 'CBE Birr';
     if (up.contains('CBE')) return 'CBE';
+    if (up.contains('AHADU')) return 'Ahadu Bank';
     return null;
   }
 }

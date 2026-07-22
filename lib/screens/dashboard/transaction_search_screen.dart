@@ -121,7 +121,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         statusBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -149,7 +149,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       child: Container(
         height: 46,
         decoration: BoxDecoration(
-          color: const Color(0xFF2A2A34),
+          color: AppColors.overlay,
           borderRadius: BorderRadius.circular(23),
           border: Border.all(
             color: Colors.white.withValues(alpha: 0.05),
@@ -160,7 +160,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           children: [
             const SizedBox(width: 16),
             const Icon(Icons.search_rounded,
-                color: AppColors.labelGray, size: 20),
+                color: AppColors.textSoft, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: TextField(
@@ -170,7 +170,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                 decoration: InputDecoration(
                   hintText: 'Search by sender, bank, or reason...',
                   hintStyle: const TextStyle(
-                      color: AppColors.labelGray,
+                      color: AppColors.textSoft,
                       fontSize: 14,
                       fontWeight: FontWeight.w400),
                   border: InputBorder.none,
@@ -296,12 +296,12 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           icon: Padding(
             padding: const EdgeInsets.only(left: 4.0),
             child: Icon(Icons.keyboard_arrow_down_rounded,
-                color: isDefault ? AppColors.labelGray : Colors.white,
+                color: isDefault ? AppColors.textSoft : Colors.white,
                 size: 16),
           ),
-          dropdownColor: const Color(0xFF2A2A34),
+          dropdownColor: AppColors.overlay,
           style: TextStyle(
-            color: isDefault ? AppColors.labelGray : Colors.white,
+            color: isDefault ? AppColors.textSoft : Colors.white,
             fontSize: 12,
             fontWeight: isDefault ? FontWeight.w500 : FontWeight.w600,
           ),
@@ -350,7 +350,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
             const SizedBox(height: 16),
             const Text(
               'No transactions found',
-              style: TextStyle(color: AppColors.labelGray, fontSize: 14),
+              style: TextStyle(color: AppColors.textSoft, fontSize: 14),
             ),
           ],
         ),
@@ -377,7 +377,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2A34).withValues(alpha: 0.4),
+              color: AppColors.overlay.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -399,7 +399,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                       Text(
                         '${isIncome ? 'From' : 'For'} ${tx.sender}',
                         style: const TextStyle(
-                            color: AppColors.labelGray, fontSize: 11),
+                            color: AppColors.textSoft, fontSize: 11),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -422,7 +422,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                     Text(
                       DateFormat('MMM d, HH:mm').format(tx.date),
                       style: const TextStyle(
-                          color: AppColors.labelGray, fontSize: 10),
+                          color: AppColors.textSoft, fontSize: 10),
                     ),
                   ],
                 ),
@@ -445,6 +445,9 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       img =
           Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
+    } else if (nameUp.contains('AHADU')) {
+      img =
+          Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
     }
 
     return Container(

@@ -92,7 +92,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                             Text(
                               'Connected bank accounts',
                               style: TextStyle(
-                                  color: AppColors.textGray, fontSize: 12),
+                                  color: AppColors.textSecondary, fontSize: 12),
                             ),
                           ],
                         ),
@@ -111,7 +111,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+                      color: AppColors.overlay.withValues(alpha: 0.45),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
                           color: Colors.white.withValues(alpha: 0.08)),
@@ -122,7 +122,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                         const Text(
                           'Total Net Worth',
                           style: TextStyle(
-                              color: AppColors.labelGray, fontSize: 12),
+                              color: AppColors.textSoft, fontSize: 12),
                         ),
                         const SizedBox(height: 6),
                         _splitBalance(
@@ -139,7 +139,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                 provider.isBalanceVisible
                                     ? fmt.format(grandIncome)
                                     : '****',
-                                AppColors.mintGreen,
+                                AppColors.positive,
                                 Icons.arrow_downward_rounded),
                             const SizedBox(width: 10),
                             _miniStatChip(
@@ -147,7 +147,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                 provider.isBalanceVisible
                                     ? fmt.format(grandExpense)
                                     : '****',
-                                AppColors.alertRed,
+                                AppColors.negative,
                                 Icons.arrow_upward_rounded),
                             const SizedBox(width: 10),
                             _miniStatChip(
@@ -156,8 +156,8 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                   ? '${grandNet >= 0 ? '+' : ''}${fmt.format(grandNet)}'
                                   : '****',
                               grandNet >= 0
-                                  ? AppColors.mintGreen
-                                  : AppColors.alertRed,
+                                  ? AppColors.positive
+                                  : AppColors.negative,
                               grandNet >= 0
                                   ? Icons.trending_up
                                   : Icons.trending_down,
@@ -176,7 +176,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                   child: const Text(
                     'ACCOUNTS',
                     style: TextStyle(
-                      color: AppColors.textGray,
+                      color: AppColors.textSecondary,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 1.3,
@@ -195,13 +195,13 @@ class _WalletsScreenState extends State<WalletsScreen> {
                           children: [
                             Icon(Icons.account_balance_wallet_outlined,
                                 color:
-                                    AppColors.textGray.withValues(alpha: 0.4),
+                                    AppColors.textSecondary.withValues(alpha: 0.4),
                                 size: 56),
                             const SizedBox(height: 16),
                             const Text(
                               'No wallets connected yet',
                               style: TextStyle(
-                                color: AppColors.textGray,
+                                color: AppColors.textSecondary,
                                 fontSize: 15,
                               ),
                             ),
@@ -209,7 +209,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                             const Text(
                               'Set up senders in Settings to get started',
                               style: TextStyle(
-                                  color: AppColors.labelGray, fontSize: 12),
+                                  color: AppColors.textSoft, fontSize: 12),
                             ),
                           ],
                         ),
@@ -373,7 +373,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+          color: AppColors.overlay.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -444,36 +444,43 @@ class _WalletCard extends StatelessWidget {
 
     if (nameUp == 'CBE') {
       cardGradient = [
-        const Color(0xFF3D1B0F),
-        const Color(0xFF6E482F),
-        const Color(0xFF3D1B0F)
+        AppColors.cardBrownDark,
+        AppColors.cardBrownMid,
+        AppColors.cardBrownDark
       ];
       imagePath = 'assets/images/CBE logo 1.png';
     } else if (nameUp == 'TELEBIRR') {
       cardGradient = [
-        const Color(0xFF0BA751),
-        const Color(0xFF88BF47),
-        const Color(0xFF0BA751)
+        AppColors.success,
+        AppColors.cardLime,
+        AppColors.success
       ];
       imagePath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       cardGradient = [
-        const Color(0xFFAFAFB3),
-        const Color(0xFFFFFFFF),
-        const Color(0xFFAFAFB3)
+        AppColors.cardSilver,
+        AppColors.textPrimary,
+        AppColors.cardSilver
       ];
       imagePath = 'assets/images/CBEBirr Logo.png';
+    } else if (nameUp.contains('AHADU')) {
+      cardGradient = [
+        AppColors.cardAhaduPink,
+        AppColors.cardAhaduWhite,
+        AppColors.cardAhaduPink
+      ];
+      imagePath = 'assets/images/Ahadu_Logo.png';
     } else if (nameUp == 'CASH WALLET') {
       cardGradient = [
-        const Color(0xFF2F2F39),
-        const Color(0xFF4F4F59),
-        const Color(0xFF2F2F39)
+        AppColors.cardGrayDark,
+        AppColors.cardGrayMid,
+        AppColors.cardGrayDark
       ];
     } else {
       cardGradient = [
-        const Color(0xFF1E1E26),
-        const Color(0xFF3E3E4A),
-        const Color(0xFF1E1E26)
+        AppColors.bgMid,
+        AppColors.cardGrayLight,
+        AppColors.bgMid
       ];
     }
 
@@ -525,6 +532,7 @@ class _WalletCard extends StatelessWidget {
     if (n == 'CBE') return 'Commercial Bank of Ethiopia';
     if (n == 'TELEBIRR') return 'Ethio Telecom · E-money';
     if (n == 'CBE BIRR' || n == 'CBEBIRR') return 'CBE Birr · Mobile Wallet';
+    if (n.contains('AHADU')) return 'Bank';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     return 'Bank Account';
   }
@@ -546,7 +554,7 @@ class _WalletCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+          color: AppColors.overlay.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -565,7 +573,9 @@ class _WalletCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          senderName,
+                          senderName.toUpperCase().contains('AHADU')
+                              ? 'Ahadu'
+                              : senderName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -577,7 +587,7 @@ class _WalletCard extends StatelessWidget {
                         Text(
                           _subtitle(senderName),
                           style: const TextStyle(
-                              color: AppColors.labelGray, fontSize: 11),
+                              color: AppColors.textSoft, fontSize: 11),
                         ),
                         const SizedBox(height: 12),
                         // Balance
@@ -606,7 +616,7 @@ class _WalletCard extends StatelessWidget {
                             const Text(
                               'ETB',
                               style: TextStyle(
-                                  color: AppColors.labelGray,
+                                  color: AppColors.textSoft,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500),
                             ),
@@ -623,14 +633,14 @@ class _WalletCard extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: (isPositiveNet
-                              ? AppColors.mintGreen
-                              : AppColors.alertRed)
+                              ? AppColors.positive
+                              : AppColors.negative)
                           .withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                           color: (isPositiveNet
-                                  ? AppColors.mintGreen
-                                  : AppColors.alertRed)
+                                  ? AppColors.positive
+                                  : AppColors.negative)
                               .withValues(alpha: 0.3)),
                     ),
                     child: Row(
@@ -641,8 +651,8 @@ class _WalletCard extends StatelessWidget {
                               ? Icons.trending_up
                               : Icons.trending_down,
                           color: isPositiveNet
-                              ? AppColors.mintGreen
-                              : AppColors.alertRed,
+                              ? AppColors.positive
+                              : AppColors.negative,
                           size: 12,
                         ),
                         const SizedBox(width: 4),
@@ -652,8 +662,8 @@ class _WalletCard extends StatelessWidget {
                               : '****',
                           style: TextStyle(
                             color: isPositiveNet
-                                ? AppColors.mintGreen
-                                : AppColors.alertRed,
+                                ? AppColors.positive
+                                : AppColors.negative,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -684,12 +694,12 @@ class _WalletCard extends StatelessWidget {
                       const Text(
                         'This month',
                         style:
-                            TextStyle(color: AppColors.labelGray, fontSize: 11),
+                            TextStyle(color: AppColors.textSoft, fontSize: 11),
                       ),
                       Text(
                         '$txCount transactions total',
                         style: const TextStyle(
-                            color: AppColors.labelGray, fontSize: 11),
+                            color: AppColors.textSoft, fontSize: 11),
                       ),
                     ],
                   ),
@@ -703,14 +713,14 @@ class _WalletCard extends StatelessWidget {
                         children: [
                           Expanded(
                             flex: (incomeRatio * 100).round(),
-                            child: Container(color: AppColors.mintGreen),
+                            child: Container(color: AppColors.positive),
                           ),
                           Expanded(
                             flex:
                                 ((1 - incomeRatio) * 100).round().clamp(0, 100),
                             child: Container(
                                 color:
-                                    AppColors.alertRed.withValues(alpha: 0.8)),
+                                    AppColors.negative.withValues(alpha: 0.8)),
                           ),
                         ],
                       ),
@@ -724,17 +734,17 @@ class _WalletCard extends StatelessWidget {
                           isBalanceVisible
                               ? fmtShort.format(monthIncome)
                               : '****',
-                          AppColors.mintGreen),
+                          AppColors.positive),
                       const SizedBox(width: 8),
                       _statPill(
                           'Out',
                           isBalanceVisible
                               ? fmtShort.format(monthExpense)
                               : '****',
-                          AppColors.alertRed),
+                          AppColors.negative),
                       const Spacer(),
                       const Icon(Icons.arrow_forward_ios_rounded,
-                          color: AppColors.labelGray, size: 13),
+                          color: AppColors.textSoft, size: 13),
                     ],
                   ),
                 ],
@@ -750,7 +760,7 @@ class _WalletCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),

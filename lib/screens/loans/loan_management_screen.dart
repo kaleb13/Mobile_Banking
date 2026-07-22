@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -24,9 +24,9 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
   // 0 = Lent (I gave money), 1 = Borrowed (I owe), 2 = Paid
   static const _tabs = ['Lent Out', 'Borrowed', 'Settled'];
 
-  static const _lentColor = Color(0xFF3EB489); // green
-  static const _borrowColor = Color(0xFFE67E22); // amber
-  static const _paidColor = AppColors.labelGray; // 80% white (was muted blue)
+  static const _lentColor = AppColors.positive; // green
+  static const _borrowColor = AppColors.warning; // amber
+  static const _paidColor = AppColors.textSoft; // 80% white (was muted blue)
 
   @override
   void initState() {
@@ -77,8 +77,8 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
               colors: [
-                Color(0xFF1F1F25),
-                Color(0xFF1B1B21),
+                AppColors.background,
+                AppColors.bgMid,
               ],
             ),
           ),
@@ -103,7 +103,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A34).withValues(alpha: 0.6),
+                  color: AppColors.overlay.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
                   border:
                       Border.all(color: Colors.white.withValues(alpha: 0.08)),
@@ -119,7 +119,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                   ),
                   dividerColor: Colors.transparent,
                   labelColor: Colors.white,
-                  unselectedLabelColor: AppColors.labelGray,
+                  unselectedLabelColor: AppColors.textSoft,
                   labelStyle: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w600),
                   unselectedLabelStyle: const TextStyle(
@@ -196,7 +196,7 @@ class _LoanHeader extends StatelessWidget {
                       letterSpacing: -0.3)),
               Text(
                 'Track money owed and borrowed',
-                style: TextStyle(color: AppColors.labelGray, fontSize: 12),
+                style: TextStyle(color: AppColors.textSoft, fontSize: 12),
               ),
             ],
           ),
@@ -207,7 +207,7 @@ class _LoanHeader extends StatelessWidget {
                 child: _SummaryCard(
                   label: 'You are owed',
                   amount: fmt.format(totalLent),
-                  color: const Color(0xFF3EB489),
+                  color: AppColors.positive,
                   icon: Icons.arrow_circle_up_outlined,
                 ),
               ),
@@ -216,7 +216,7 @@ class _LoanHeader extends StatelessWidget {
                 child: _SummaryCard(
                   label: 'You owe',
                   amount: fmt.format(totalBorrowed),
-                  color: const Color(0xFFE67E22),
+                  color: AppColors.warning,
                   icon: Icons.arrow_circle_down_outlined,
                 ),
               ),
@@ -244,7 +244,7 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -270,7 +270,7 @@ class _SummaryCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis),
           const Text('ETB',
-              style: TextStyle(color: AppColors.labelGray, fontSize: 10)),
+              style: TextStyle(color: AppColors.textSoft, fontSize: 10)),
         ],
       ),
     );
@@ -303,17 +303,17 @@ class _LoanList extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.handshake_outlined,
-                color: AppColors.labelGray.withValues(alpha: 0.3), size: 52),
+                color: AppColors.textSoft.withValues(alpha: 0.3), size: 52),
             const SizedBox(height: 16),
             Text(emptyTitle,
                 style: const TextStyle(
-                    color: AppColors.labelGray,
+                    color: AppColors.textSoft,
                     fontSize: 15,
                     fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
             Text(emptySubtitle,
                 style:
-                    const TextStyle(color: AppColors.labelGray, fontSize: 12),
+                    const TextStyle(color: AppColors.textSoft, fontSize: 12),
                 textAlign: TextAlign.center),
           ],
         ),
@@ -399,11 +399,11 @@ class _LoanCard extends StatelessWidget {
   }
 
   Color _statusColor() {
-    if (loan.isPaid) return AppColors.labelGray;
-    if (loan.isOverdue) return AppColors.alertRed;
+    if (loan.isPaid) return AppColors.textSoft;
+    if (loan.isOverdue) return AppColors.negative;
     final d = loan.daysUntilDue;
-    if (d <= 3) return const Color(0xFFE67E22);
-    return const Color(0xFF3EB489);
+    if (d <= 3) return AppColors.warning;
+    return AppColors.positive;
   }
 
   @override
@@ -419,11 +419,11 @@ class _LoanCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+          color: AppColors.overlay.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: loan.isOverdue
-                ? AppColors.alertRed.withValues(alpha: 0.3)
+                ? AppColors.negative.withValues(alpha: 0.3)
                 : Colors.white.withValues(alpha: 0.08),
           ),
         ),
@@ -469,7 +469,7 @@ class _LoanCard extends StatelessWidget {
                                         ? 'Lent out'
                                         : 'Borrowed',
                                     style: const TextStyle(
-                                        color: AppColors.labelGray,
+                                        color: AppColors.textSoft,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w400),
                                     maxLines: 1,
@@ -480,13 +480,13 @@ class _LoanCard extends StatelessWidget {
                                     loan.note!.isNotEmpty) ...[
                                   const Text(' · ',
                                       style: TextStyle(
-                                          color: AppColors.labelGray,
+                                          color: AppColors.textSoft,
                                           fontSize: 11)),
                                   Flexible(
                                     child: Text(
                                       loan.note!,
                                       style: const TextStyle(
-                                          color: AppColors.labelGray,
+                                          color: AppColors.textSoft,
                                           fontSize: 11),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -531,7 +531,7 @@ class _LoanCard extends StatelessWidget {
                           children: [
                             const Text('Principal',
                                 style: TextStyle(
-                                    color: AppColors.labelGray, fontSize: 10)),
+                                    color: AppColors.textSoft, fontSize: 10)),
                             Text(
                               fmt.format(loan.principalAmount),
                               style: const TextStyle(
@@ -552,12 +552,12 @@ class _LoanCard extends StatelessWidget {
                           children: [
                             const Text('Remaining',
                                 style: TextStyle(
-                                    color: AppColors.labelGray, fontSize: 10)),
+                                    color: AppColors.textSoft, fontSize: 10)),
                             Text(
                               shortFmt.format(loan.remainingAmount),
                               style: TextStyle(
                                   color: loan.isPaid
-                                      ? const Color(0xFF3EB489)
+                                      ? AppColors.positive
                                       : Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
@@ -591,7 +591,7 @@ class _LoanCard extends StatelessWidget {
                         child: Text(
                           '${(pct * 100).toStringAsFixed(0)}% repaid',
                           style: const TextStyle(
-                              color: AppColors.labelGray, fontSize: 10),
+                              color: AppColors.textSoft, fontSize: 10),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -622,8 +622,8 @@ class _LoanCard extends StatelessWidget {
                               ? Icons.verified_rounded
                               : Icons.track_changes_rounded,
                           color: loan.isPaid
-                              ? AppColors.labelGray
-                              : AppColors.primaryBlue,
+                              ? AppColors.textSoft
+                              : AppColors.gold,
                           size: 12,
                         ),
                         const SizedBox(width: 5),
@@ -634,8 +634,8 @@ class _LoanCard extends StatelessWidget {
                                 : 'Watching: ${loan.trackedSenderName}',
                             style: TextStyle(
                                 color: loan.isPaid
-                                    ? AppColors.labelGray
-                                    : AppColors.primaryBlue,
+                                    ? AppColors.textSoft
+                                    : AppColors.gold,
                                 fontSize: 10),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -712,23 +712,23 @@ class _LoanCard extends StatelessWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title:
             const Text('Delete Loan?', style: TextStyle(color: Colors.white)),
         content: Text(
             'Are you sure you want to delete the loan for ${loan.personName}? All payment history will be lost.',
-            style: const TextStyle(color: AppColors.labelGray)),
+            style: const TextStyle(color: AppColors.textSoft)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel',
-                style: TextStyle(color: AppColors.labelGray)),
+                style: TextStyle(color: AppColors.textSoft)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete',
-                style: TextStyle(color: AppColors.alertRed)),
+                style: TextStyle(color: AppColors.negative)),
           ),
         ],
       ),
@@ -801,10 +801,10 @@ class LoanDetailScreen extends StatelessWidget {
     final fmt = NumberFormat('#,##0.00');
     final isLent = current.loanType == 'lent';
     final accentColor =
-        isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
+        isLent ? AppColors.positive : AppColors.warning;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1F1F25),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -829,8 +829,8 @@ class LoanDetailScreen extends StatelessWidget {
                   builder: (ctx, child) => Theme(
                     data: Theme.of(ctx).copyWith(
                       colorScheme: const ColorScheme.dark(
-                        primary: AppColors.primaryBlue,
-                        surface: Color(0xFF1C1F24),
+                        primary: AppColors.gold,
+                        surface: AppColors.surfaceCard,
                       ),
                     ),
                     child: child!,
@@ -912,7 +912,7 @@ class LoanDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+              color: AppColors.overlay.withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
@@ -948,7 +948,7 @@ class LoanDetailScreen extends StatelessWidget {
                           ),
                           const Text('repaid',
                               style: TextStyle(
-                                  color: AppColors.labelGray, fontSize: 10)),
+                                  color: AppColors.textSoft, fontSize: 10)),
                         ],
                       ),
                     ],
@@ -961,7 +961,7 @@ class LoanDetailScreen extends StatelessWidget {
                     _DetailStat('Principal',
                         fmt.format(current.principalAmount), Colors.white),
                     _DetailStat('Paid', fmt.format(current.paidAmount),
-                        const Color(0xFF3EB489)),
+                        AppColors.positive),
                     _DetailStat('Remaining',
                         fmt.format(current.remainingAmount), accentColor),
                   ],
@@ -975,7 +975,7 @@ class LoanDetailScreen extends StatelessWidget {
                     Text(
                       isLent ? '↑ Lent on' : '↓ Borrowed on',
                       style: const TextStyle(
-                          color: AppColors.labelGray, fontSize: 12),
+                          color: AppColors.textSoft, fontSize: 12),
                     ),
                     Text(DateFormat('MMM d, y').format(current.loanDate),
                         style:
@@ -992,14 +992,14 @@ class LoanDetailScreen extends StatelessWidget {
                           : '📅 Due on',
                       style: TextStyle(
                           color: current.isOverdue
-                              ? AppColors.alertRed
-                              : AppColors.labelGray,
+                              ? AppColors.negative
+                              : AppColors.textSoft,
                           fontSize: 11),
                     ),
                     Text(DateFormat('MMM d, y').format(current.dueDate),
                         style: TextStyle(
                             color: current.isOverdue
-                                ? AppColors.alertRed
+                                ? AppColors.negative
                                 : Colors.white,
                             fontSize: 11,
                             fontWeight: current.isOverdue
@@ -1014,7 +1014,7 @@ class LoanDetailScreen extends StatelessWidget {
                     children: [
                       const Text('🔍 Tracking sender',
                           style: TextStyle(
-                              color: AppColors.primaryBlue, fontSize: 11)),
+                              color: AppColors.gold, fontSize: 11)),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
@@ -1036,7 +1036,7 @@ class LoanDetailScreen extends StatelessWidget {
                     children: [
                       const Text('📝 Note',
                           style: TextStyle(
-                              color: AppColors.labelGray, fontSize: 11)),
+                              color: AppColors.textSoft, fontSize: 11)),
                       Flexible(
                         child: Text(current.note!,
                             style: const TextStyle(
@@ -1071,12 +1071,12 @@ class LoanDetailScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     Icon(Icons.receipt_long_outlined,
-                        color: AppColors.textGray.withValues(alpha: 0.3),
+                        color: AppColors.textSecondary.withValues(alpha: 0.3),
                         size: 40),
                     const SizedBox(height: 10),
                     const Text('No payments recorded yet',
                         style:
-                            TextStyle(color: AppColors.textGray, fontSize: 13)),
+                            TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                   ],
                 ),
               ),
@@ -1119,7 +1119,7 @@ class LoanDetailScreen extends StatelessWidget {
                 const Text(
                   'LINKED MESSAGES',
                   style: TextStyle(
-                    color: AppColors.textGray,
+                    color: AppColors.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.5,
@@ -1153,7 +1153,7 @@ class LoanDetailScreen extends StatelessWidget {
                       sublabel:
                           '${fmt.format(pair.payment.amount)} ETB on ${DateFormat('MMM d, y').format(pair.payment.paymentDate)}',
                       rawMessage: pair.tx.rawMessage as String,
-                      accentColor: const Color(0xFF3EB489),
+                      accentColor: AppColors.positive,
                       isPrimary: false,
                     ),
                   );
@@ -1182,7 +1182,7 @@ class _DetailStat extends StatelessWidget {
                 color: valueColor, fontSize: 14, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text(label,
-            style: const TextStyle(color: AppColors.labelGray, fontSize: 10)),
+            style: const TextStyle(color: AppColors.textSoft, fontSize: 10)),
       ],
     );
   }
@@ -1258,7 +1258,7 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
                         Text(
                           widget.sublabel,
                           style: const TextStyle(
-                            color: AppColors.textGray,
+                            color: AppColors.textSecondary,
                             fontSize: 10,
                           ),
                         ),
@@ -1283,14 +1283,14 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
               margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0D0E10),
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
               ),
               child: SelectableText(
                 widget.rawMessage,
                 style: const TextStyle(
-                  color: AppColors.labelGray,
+                  color: AppColors.textSoft,
                   fontFamily: 'monospace',
                   fontSize: 11,
                   height: 1.6,
@@ -1317,7 +1317,7 @@ class _PaymentTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A34).withValues(alpha: 0.45),
+        color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -1347,12 +1347,12 @@ class _PaymentTile extends StatelessWidget {
                 Text(
                   DateFormat('MMM d, y · hh:mm a').format(payment.paymentDate),
                   style:
-                      const TextStyle(color: AppColors.labelGray, fontSize: 10),
+                      const TextStyle(color: AppColors.textSoft, fontSize: 10),
                 ),
                 if (payment.note != null && payment.note!.isNotEmpty)
                   Text(payment.note!,
                       style: const TextStyle(
-                          color: AppColors.labelGray, fontSize: 10)),
+                          color: AppColors.textSoft, fontSize: 10)),
               ],
             ),
           ),
@@ -1361,7 +1361,7 @@ class _PaymentTile extends StatelessWidget {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  backgroundColor: AppColors.surfaceDark,
+                  backgroundColor: AppColors.surface,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                   title: const Text('Remove payment?',
@@ -1370,11 +1370,11 @@ class _PaymentTile extends StatelessWidget {
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
                         child: const Text('Cancel',
-                            style: TextStyle(color: AppColors.textGray))),
+                            style: TextStyle(color: AppColors.textSecondary))),
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, true),
                         child: const Text('Remove',
-                            style: TextStyle(color: AppColors.alertRed))),
+                            style: TextStyle(color: AppColors.negative))),
                   ],
                 ),
               );
@@ -1383,7 +1383,7 @@ class _PaymentTile extends StatelessWidget {
               }
             },
             child: const Icon(Icons.close_rounded,
-                color: AppColors.alertRed, size: 16),
+                color: AppColors.negative, size: 16),
           ),
         ],
       ),
@@ -1487,8 +1487,8 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
         return Theme(
             data: Theme.of(ctx).copyWith(
               colorScheme: const ColorScheme.dark(
-                primary: AppColors.primaryBlue,
-                surface: Color(0xFF1C1F24),
+                primary: AppColors.gold,
+                surface: AppColors.surfaceCard,
               ),
             ),
             child: child!);
@@ -1546,7 +1546,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
         child: Container(
           padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomPad),
           decoration: const BoxDecoration(
-            color: Color(0xFF141618),
+            color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: SingleChildScrollView(
@@ -1578,7 +1578,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                 if (widget.prefilledType == null) ...[
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1C1F24),
+                      color: AppColors.surfaceCard,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
@@ -1586,13 +1586,13 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                         _TypeToggle(
                           label: '↑ I Lent Money',
                           active: _loanType == 'lent',
-                          activeColor: const Color(0xFF3EB489),
+                          activeColor: AppColors.positive,
                           onTap: () => setState(() => _loanType = 'lent'),
                         ),
                         _TypeToggle(
                           label: '↓ I Borrowed',
                           active: _loanType == 'borrowed',
-                          activeColor: const Color(0xFFE67E22),
+                          activeColor: AppColors.warning,
                           onTap: () => setState(() => _loanType = 'borrowed'),
                         ),
                       ],
@@ -1607,7 +1607,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                   Text(
                     _loanType == 'lent' ? 'Borrower\'s Name' : 'Lender\'s Name',
                     style: const TextStyle(
-                        color: AppColors.textGray,
+                        color: AppColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w500),
                   ),
@@ -1633,14 +1633,14 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             height: 48,
                             decoration: BoxDecoration(
                               color:
-                                  AppColors.primaryBlue.withValues(alpha: 0.12),
+                                  AppColors.gold.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                  color: AppColors.primaryBlue
+                                  color: AppColors.gold
                                       .withValues(alpha: 0.3)),
                             ),
                             child: const Icon(Icons.people_outline_rounded,
-                                color: AppColors.primaryBlue, size: 20),
+                                color: AppColors.gold, size: 20),
                           ),
                         ),
                       ],
@@ -1652,7 +1652,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                       child: Text(
                         'Tap 👤 to pick from ${allPersonNames.length} tracked name${allPersonNames.length > 1 ? 's' : ''}',
                         style: TextStyle(
-                            color: AppColors.labelGray.withValues(alpha: 0.6),
+                            color: AppColors.textSoft.withValues(alpha: 0.6),
                             fontSize: 10),
                       ),
                     ),
@@ -1677,13 +1677,13 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1C1F24),
+                      color: AppColors.surfaceCard,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
                       children: [
                         const Icon(Icons.calendar_today_outlined,
-                            color: AppColors.textGray, size: 18),
+                            color: AppColors.textSecondary, size: 18),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -1693,7 +1693,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                           ),
                         ),
                         const Icon(Icons.chevron_right_rounded,
-                            color: AppColors.textGray, size: 18),
+                            color: AppColors.textSecondary, size: 18),
                       ],
                     ),
                   ),
@@ -1707,7 +1707,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1C1F24),
+                      color: AppColors.surfaceCard,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                           color: Colors.white.withValues(alpha: 0.06)),
@@ -1719,7 +1719,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                         Row(
                           children: [
                             const Icon(Icons.track_changes_rounded,
-                                color: AppColors.primaryBlue, size: 18),
+                                color: AppColors.gold, size: 18),
                             const SizedBox(width: 10),
                             const Expanded(
                               child: Column(
@@ -1736,7 +1736,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                                   Text(
                                     'Auto-detect when this loan is repaid via SMS',
                                     style: TextStyle(
-                                        color: AppColors.textGray,
+                                        color: AppColors.textSecondary,
                                         fontSize: 10),
                                   ),
                                 ],
@@ -1755,7 +1755,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                           const Text(
                             'Repayment sender name',
                             style: TextStyle(
-                                color: AppColors.textGray,
+                                color: AppColors.textSecondary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500),
                           ),
@@ -1789,16 +1789,16 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                                     width: 48,
                                     height: 48,
                                     decoration: BoxDecoration(
-                                      color: AppColors.primaryBlue
+                                      color: AppColors.gold
                                           .withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(14),
                                       border: Border.all(
-                                          color: AppColors.primaryBlue
+                                          color: AppColors.gold
                                               .withValues(alpha: 0.3)),
                                     ),
                                     child: const Icon(
                                         Icons.people_outline_rounded,
-                                        color: AppColors.primaryBlue,
+                                        color: AppColors.gold,
                                         size: 20),
                                   ),
                                 ),
@@ -1810,7 +1810,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             child: Text(
                               'Leave as-is to track the original sender, or enter a different name',
                               style: TextStyle(
-                                  color: AppColors.labelGray
+                                  color: AppColors.textSoft
                                       .withValues(alpha: 0.5),
                                   fontSize: 10),
                             ),
@@ -1821,7 +1821,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             'Repayment will NOT be auto-detected. You can record it manually later.',
                             style: TextStyle(
                                 color:
-                                    AppColors.labelGray.withValues(alpha: 0.55),
+                                    AppColors.textSoft.withValues(alpha: 0.55),
                                 fontSize: 10),
                           ),
                         ],
@@ -1842,7 +1842,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             Text(
                               'Repayment Source',
                               style: TextStyle(
-                                  color: AppColors.textGray,
+                                  color: AppColors.textSecondary,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500),
                             ),
@@ -1850,7 +1850,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             Text(
                               'Auto-detects repayments from selected banks',
                               style: TextStyle(
-                                  color: AppColors.labelGray, fontSize: 10),
+                                  color: AppColors.textSoft, fontSize: 10),
                             ),
                           ],
                         ),
@@ -1869,7 +1869,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                               ? 'Deselect All'
                               : 'Select All',
                           style: const TextStyle(
-                            color: AppColors.primaryBlue,
+                            color: AppColors.gold,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1898,12 +1898,12 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                               horizontal: 14, vertical: 9),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppColors.primaryBlue.withValues(alpha: 0.15)
-                                : const Color(0xFF1C1F24),
+                                ? AppColors.gold.withValues(alpha: 0.15)
+                                : AppColors.surfaceCard,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isSelected
-                                  ? AppColors.primaryBlue.withValues(alpha: 0.5)
+                                  ? AppColors.gold.withValues(alpha: 0.5)
                                   : Colors.white.withValues(alpha: 0.08),
                             ),
                           ),
@@ -1915,12 +1915,12 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                                 child: isSelected
                                     ? const Icon(Icons.check_circle_rounded,
                                         key: ValueKey('check'),
-                                        color: AppColors.primaryBlue,
+                                        color: AppColors.gold,
                                         size: 14)
                                     : const Icon(
                                         Icons.radio_button_unchecked_rounded,
                                         key: ValueKey('uncheck'),
-                                        color: AppColors.textGray,
+                                        color: AppColors.textSecondary,
                                         size: 14),
                               ),
                               const SizedBox(width: 7),
@@ -1928,8 +1928,8 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                                 bank,
                                 style: TextStyle(
                                   color: isSelected
-                                      ? AppColors.primaryBlue
-                                      : AppColors.textGray,
+                                      ? AppColors.gold
+                                      : AppColors.textSecondary,
                                   fontSize: 13,
                                   fontWeight: isSelected
                                       ? FontWeight.w700
@@ -1958,7 +1958,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                   child: ElevatedButton(
                     onPressed: _saving ? null : _save,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
+                      backgroundColor: AppColors.gold,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
@@ -1968,10 +1968,10 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
-                                color: Color(0xFF1F1F25), strokeWidth: 2))
+                                color: AppColors.background, strokeWidth: 2))
                         : const Text('Save Loan Record',
                             style: TextStyle(
-                                color: Color(0xFF1F1F25),
+                                color: AppColors.background,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600)),
                   ),
@@ -2032,7 +2032,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
       padding: EdgeInsets.fromLTRB(
           20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
-        color: Color(0xFF141618),
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -2066,12 +2066,12 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
             style: const TextStyle(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search_rounded,
-                  color: AppColors.textGray, size: 18),
+                  color: AppColors.textSecondary, size: 18),
               hintText: 'Search…',
               hintStyle:
-                  TextStyle(color: AppColors.textGray.withValues(alpha: 0.5)),
+                  TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.5)),
               filled: true,
-              fillColor: const Color(0xFF1C1F24),
+              fillColor: AppColors.surfaceCard,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none),
@@ -2090,14 +2090,14 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                 ? const Padding(
                     padding: EdgeInsets.all(24),
                     child: Text('No matching names found',
-                        style: TextStyle(color: AppColors.textGray)),
+                        style: TextStyle(color: AppColors.textSecondary)),
                   )
                 : ListView.separated(
                     shrinkWrap: true,
                     physics: const BouncingScrollPhysics(),
                     itemCount: _filtered.length,
                     separatorBuilder: (_, __) => const Divider(
-                        color: Color(0xFF2A2A34), height: 1, thickness: 1),
+                        color: AppColors.overlay, height: 1, thickness: 1),
                     itemBuilder: (_, i) {
                       final name = _filtered[i];
                       return InkWell(
@@ -2114,7 +2114,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                                 width: 34,
                                 height: 34,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primaryBlue
+                                  color: AppColors.gold
                                       .withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
@@ -2124,7 +2124,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                                         ? name[0].toUpperCase()
                                         : '?',
                                     style: const TextStyle(
-                                        color: AppColors.primaryBlue,
+                                        color: AppColors.gold,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14),
                                   ),
@@ -2137,7 +2137,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                                         color: Colors.white, fontSize: 14)),
                               ),
                               const Icon(Icons.chevron_right_rounded,
-                                  color: AppColors.textGray, size: 16),
+                                  color: AppColors.textSecondary, size: 16),
                             ],
                           ),
                         ),
@@ -2182,7 +2182,7 @@ class _TypeToggle extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: active ? activeColor : AppColors.textGray,
+                color: active ? activeColor : AppColors.textSecondary,
                 fontSize: 13,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w400,
               ),
@@ -2213,18 +2213,18 @@ class _SheetField extends StatelessWidget {
       keyboardType: keyboardType,
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: AppColors.textGray, size: 18),
+        prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 18),
         hintText: hint,
         hintStyle: TextStyle(
-            color: AppColors.textGray.withValues(alpha: 0.6), fontSize: 13),
+            color: AppColors.textSecondary.withValues(alpha: 0.6), fontSize: 13),
         filled: true,
-        fillColor: const Color(0xFF1C1F24),
+        fillColor: AppColors.surfaceCard,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryBlue),
+          borderSide: const BorderSide(color: AppColors.gold),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -2284,14 +2284,14 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
     final isLent = widget.loan.loanType == 'lent';
     final accentColor =
-        isLent ? const Color(0xFF3EB489) : const Color(0xFFE67E22);
+        isLent ? AppColors.positive : AppColors.warning;
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: Container(
         padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomPad),
         decoration: const BoxDecoration(
-          color: Color(0xFF141618),
+          color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
@@ -2394,10 +2394,10 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFE67E22).withValues(alpha: 0.08),
+        color: AppColors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(18),
         border:
-            Border.all(color: const Color(0xFFE67E22).withValues(alpha: 0.3)),
+            Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -2409,13 +2409,13 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
               child: Row(
                 children: [
                   const Icon(Icons.pending_actions_rounded,
-                      color: Color(0xFFE67E22), size: 16),
+                      color: AppColors.warning, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '${widget.requests.length} Pending Loan Approval${widget.requests.length > 1 ? 's' : ''}',
                       style: const TextStyle(
-                        color: Color(0xFFE67E22),
+                        color: AppColors.warning,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -2425,7 +2425,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                     _expanded
                         ? Icons.keyboard_arrow_up_rounded
                         : Icons.keyboard_arrow_down_rounded,
-                    color: const Color(0xFFE67E22),
+                    color: AppColors.warning,
                     size: 18,
                   ),
                 ],
@@ -2456,7 +2456,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                       margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E1E26),
+                        color: AppColors.bgMid,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                             color: Colors.white.withValues(alpha: 0.06)),
@@ -2471,12 +2471,12 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                 width: 36,
                                 height: 36,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE67E22)
+                                  color: AppColors.warning
                                       .withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(Icons.person_rounded,
-                                    color: Color(0xFFE67E22), size: 18),
+                                    color: AppColors.warning, size: 18),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -2496,7 +2496,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                     Text(
                                       'Sent ${fmt.format(req.amount)} ETB',
                                       style: const TextStyle(
-                                          color: Color(0xFF3EB489),
+                                          color: AppColors.positive,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600),
                                     ),
@@ -2520,14 +2520,14 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                             child: Row(
                               children: [
                                 const Icon(Icons.compare_arrows_rounded,
-                                    color: AppColors.textGray, size: 14),
+                                    color: AppColors.textSecondary, size: 14),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: RichText(
                                     text: TextSpan(
                                       style: const TextStyle(
                                           fontSize: 11,
-                                          color: AppColors.textGray),
+                                          color: AppColors.textSecondary),
                                       children: [
                                         const TextSpan(
                                             text: 'Possible match for '),
@@ -2565,7 +2565,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                         const SnackBar(
                                           content: Text(
                                               'Payment approved & applied ✓'),
-                                          backgroundColor: Color(0xFF3EB489),
+                                          backgroundColor: AppColors.positive,
                                           duration: Duration(seconds: 2),
                                         ),
                                       );
@@ -2574,11 +2574,11 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                   child: Container(
                                     height: 36,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF3EB489)
+                                      color: AppColors.positive
                                           .withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                          color: const Color(0xFF3EB489)
+                                          color: AppColors.positive
                                               .withValues(alpha: 0.4)),
                                     ),
                                     child: const Row(
@@ -2586,11 +2586,11 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Icon(Icons.check_rounded,
-                                            color: Color(0xFF3EB489), size: 14),
+                                            color: AppColors.positive, size: 14),
                                         SizedBox(width: 6),
                                         Text('Approve',
                                             style: TextStyle(
-                                                color: Color(0xFF3EB489),
+                                                color: AppColors.positive,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600)),
                                       ],
@@ -2611,7 +2611,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                         const SnackBar(
                                           content:
                                               Text('Payment request rejected'),
-                                          backgroundColor: AppColors.labelGray,
+                                          backgroundColor: AppColors.textSoft,
                                           duration: Duration(seconds: 2),
                                         ),
                                       );
@@ -2620,11 +2620,11 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                   child: Container(
                                     height: 36,
                                     decoration: BoxDecoration(
-                                      color: AppColors.alertRed
+                                      color: AppColors.negative
                                           .withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                          color: AppColors.alertRed
+                                          color: AppColors.negative
                                               .withValues(alpha: 0.35)),
                                     ),
                                     child: const Row(
@@ -2632,12 +2632,12 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                           MainAxisAlignment.center,
                                       children: [
                                         Icon(Icons.close_rounded,
-                                            color: AppColors.alertRed,
+                                            color: AppColors.negative,
                                             size: 14),
                                         SizedBox(width: 6),
                                         Text('Reject',
                                             style: TextStyle(
-                                                color: AppColors.alertRed,
+                                                color: AppColors.negative,
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600)),
                                       ],

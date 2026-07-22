@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/telebirr_parser.dart';
 import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
+import '../services/ahadu_parser.dart';
 import '../services/bank_senders.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -532,11 +533,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final dbSenders = await DatabaseService.instance.getSenders();
     if (dbSenders.isNotEmpty) {
       _senders = dbSenders;
+      if (!_senders.any((s) => s.senderName.toUpperCase().contains('AHADU'))) {
+        final ahadu = AppSender(id: '4', senderName: 'Ahadu Bank');
+        await DatabaseService.instance.insertSender(ahadu);
+        _senders.add(ahadu);
+      }
     } else {
       _senders = [
         AppSender(id: '1', senderName: 'Telebirr'),
         AppSender(id: '2', senderName: 'CBE'),
         AppSender(id: '3', senderName: 'CBE Birr'),
+        AppSender(id: '4', senderName: 'Ahadu Bank'),
       ];
       // Seed them into DB for future persistent updates
       for (var s in _senders) {
@@ -630,11 +637,26 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
               await addTransaction(tx);
               processedSenders.add('CBE');
             }
+          } else if (bank == 'Ahadu Bank' &&
+              !processedSenders.contains('Ahadu Bank')) {
+            if (_userName == null) {
+              final name = AhaduParser.extractOwnerName(msg.body!);
+              if (name != null) {
+                _userName = name;
+                await prefs.setString('user_name_v1', name);
+              }
+            }
+            AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
+            if (tx != null) {
+              await addTransaction(tx);
+              processedSenders.add('Ahadu Bank');
+            }
           }
         }
         if (processedSenders.contains('Telebirr') &&
             processedSenders.contains('CBE') &&
-            processedSenders.contains('CBE Birr')) {
+            processedSenders.contains('CBE Birr') &&
+            processedSenders.contains('Ahadu Bank')) {
           break;
         }
       }
@@ -922,6 +944,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       'mobile money',
       'telebirr',
       'cbe',
+      'ahadu',
     ];
 
     final lower = msg.toLowerCase();
@@ -1810,6 +1833,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             sender: sender, body: message, date: date);
       }
       return;
+    } else if (bank == 'Ahadu Bank') {
+      AppTransaction? ahaduTx = AhaduParser.parse(message, date);
+      if (ahaduTx != null) {
+        await addTransaction(ahaduTx);
+      } else {
+        await addUnrecognizedNotification(
+            sender: sender, body: message, date: date);
+      }
+      return;
     }
 
     // 1. Is sender selected?
@@ -2142,6 +2174,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         parsed = CbeBirrParser.parse(body, msgDate);
       } else if (bank == 'CBE') {
         parsed = CbeParser.parse(body, msgDate);
+      } else if (bank == 'Ahadu Bank') {
+        parsed = AhaduParser.parse(body, msgDate);
       }
 
       if (parsed == null || parsed.id == null) continue;

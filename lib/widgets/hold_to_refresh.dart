@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// A pull-to-refresh that requires a deliberate **hold**.
@@ -44,7 +44,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
   bool _armed = false; // hold timer is running
   bool _refreshing = false;
 
-  static const Color _accent = Color(0xFFF0B90B);
+  static const Color _accent = AppColors.gold;
 
   @override
   void dispose() {
@@ -172,7 +172,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
                               Text(
                                 label,
                                 style: const TextStyle(
-                                  color: AppColors.textGray,
+                                  color: AppColors.textSecondary,
                                   fontSize: 11,
                                 ),
                               ),

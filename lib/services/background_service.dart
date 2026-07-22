@@ -10,6 +10,7 @@ import 'database_service.dart';
 import 'telebirr_parser.dart';
 import 'cbe_parser.dart';
 import 'cbe_birr_parser.dart';
+import 'ahadu_parser.dart';
 import 'bank_senders.dart';
 
 Future<void> initializeBackgroundService() async {
@@ -190,6 +191,7 @@ bool _isEnglishBankingMessage(String msg) {
     'mobile money',
     'telebirr',
     'cbe',
+    'ahadu',
   ];
 
   final lower = msg.toLowerCase();
@@ -221,6 +223,8 @@ Future<void> processBackgroundSms(SmsMessage message) async {
     if (tx == null && body.toLowerCase().contains('br.')) {
       tx = CbeBirrParser.parse(body, date);
     }
+  } else if (bank == 'Ahadu Bank') {
+    tx = AhaduParser.parse(body, date);
   } else {
     // Custom Senders matching
     final senders = await DatabaseService.instance.getSenders();

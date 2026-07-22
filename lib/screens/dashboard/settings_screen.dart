@@ -79,10 +79,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF1F1F25),
-        body: Stack(
-          children: [
-            SafeArea(
+        extendBody: true,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: AppColors.screenBackgroundGradient,
+          ),
+          child: Stack(
+            children: [
+              SafeArea(
               bottom: false,
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -104,7 +110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(
                             'Customize your app experience',
                             style: TextStyle(
-                                color: AppColors.labelGray, fontSize: 12),
+                                color: AppColors.textSoft, fontSize: 12),
                           ),
                         ],
                       ),
@@ -118,7 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.receipt_long_outlined,
-                        iconColor: const Color(0xFFF2A900), // Gold
+                        iconColor: AppColors.gold, // Gold
                         label: 'Expense Definitions',
                         subtitle: 'Manage recurring and manual templates',
                         onTap: () => Navigator.push(
@@ -131,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.category_outlined,
-                        iconColor: const Color(0xFFAB47BC), // Purple
+                        iconColor: AppColors.violet, // Purple
                         label: 'Reason Management',
                         subtitle: 'Manage transaction reasons and bank links',
                         onTap: () => Navigator.push(
@@ -150,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         return _settingsTile(
                           context,
                           icon: Icons.calendar_month_outlined,
-                          iconColor: const Color(0xFF64B5F6), // Light blue
+                          iconColor: AppColors.info, // Light blue
                           label: 'Custom Month Start',
                           subtitle: subtitle,
                           onTap: () async {
@@ -166,9 +172,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 return Theme(
                                   data: ThemeData.dark().copyWith(
                                     colorScheme: const ColorScheme.dark(
-                                      primary: Color(0xFFF0B90B),
+                                      primary: AppColors.gold,
                                       onPrimary: Colors.black,
-                                      surface: Color(0xFF2A2A34),
+                                      surface: AppColors.overlay,
                                       onSurface: Colors.white,
                                     ),
                                   ),
@@ -183,14 +189,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           trailing: anchor != null
                               ? IconButton(
                                   icon: const Icon(Icons.clear,
-                                      color: AppColors.labelGray, size: 20),
+                                      color: AppColors.textSoft, size: 20),
                                   onPressed: () =>
                                       provider.setCustomMonthAnchorDate(null),
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
                                 )
                               : const Icon(Icons.arrow_forward_ios_rounded,
-                                  color: AppColors.labelGray, size: 14),
+                                  color: AppColors.textSoft, size: 14),
                           showDivider: false,
                         );
                       }),
@@ -204,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.cloud_upload_outlined,
-                        iconColor: const Color(0xFF4FC3F7),
+                        iconColor: AppColors.infoLight,
                         label: 'Backup & Restore',
                         subtitle: 'Export or import your financial data',
                         onTap: () => Navigator.push(
@@ -224,7 +230,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.auto_awesome_rounded,
-                        iconColor: const Color(0xFF4FC3F7),
+                        iconColor: AppColors.infoLight,
                         label: 'Data Maintenance',
                         subtitle: 'Refresh or reset your local database',
                         showDivider: false,
@@ -243,7 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildCardBase([
                       _toggleTile(
                         icon: Icons.notifications_outlined,
-                        iconColor: const Color(0xFFFFB74D),
+                        iconColor: AppColors.amber,
                         label: 'Status Bar Notification',
                         subtitle: _showPersistentNotification
                             ? 'Shown in status bar'
@@ -261,7 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.palette_outlined,
-                        iconColor: const Color(0xFFCE93D8),
+                        iconColor: AppColors.chartPurple,
                         label: 'Theme',
                         subtitle: 'Dark mode (default)',
                         onTap: () {},
@@ -278,7 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.info_outline_rounded,
-                        iconColor: const Color(0xFFFFCC80),
+                        iconColor: AppColors.amberFaint,
                         label: 'About App',
                         subtitle: 'Developer, contributors, and app info',
                         onTap: () => Navigator.push(
@@ -291,7 +297,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _settingsTile(
                         context,
                         icon: Icons.privacy_tip_outlined,
-                        iconColor: const Color(0xFFA5D6A7),
+                        iconColor: AppColors.successLight,
                         label: 'Privacy Policy',
                         subtitle: 'How we handle your data',
                         onTap: () => Navigator.push(
@@ -316,7 +322,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(color: Color(0xFFF0B90B)),
+                      CircularProgressIndicator(color: AppColors.gold),
                       SizedBox(height: 16),
                       Text('Processing…',
                           style: TextStyle(
@@ -327,7 +333,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -374,7 +381,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text(
                         label,
                         style: const TextStyle(
-                          color: AppColors.textWhite,
+                          color: AppColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -431,7 +438,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text(
                   label,
                   style: const TextStyle(
-                    color: AppColors.textWhite,
+                    color: AppColors.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
@@ -467,7 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: const Text(
         'Soon',
         style: TextStyle(
-          color: AppColors.textGray,
+          color: AppColors.textSecondary,
           fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
