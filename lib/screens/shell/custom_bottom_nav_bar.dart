@@ -40,28 +40,33 @@ class CustomBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 28),
-      height: 64,
+      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+      height: 60,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(30),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: AppColors.overlay,
-              borderRadius: BorderRadius.circular(32),
+              borderRadius: BorderRadius.circular(30),
               border: Border.all(
                 color: AppColors.textPrimary.withValues(alpha: 0.08),
                 width: 1,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            // AnimatedBuilder rebuilds the row on every PageController tick —
-            // this is how swipe progress maps to nav bar animation in real time.
+            // AnimatedBuilder rebuilds the row on every PageController tick
             child: AnimatedBuilder(
               animation: pageController,
               builder: (context, _) {
-                // Fractional page position. Falls back to currentIndex when
-                // the controller has no clients yet (first frame).
                 final page = (pageController.hasClients &&
                         pageController.page != null)
                     ? pageController.page!
@@ -71,14 +76,13 @@ class CustomBottomNavBar extends StatelessWidget {
                   builder: (context, constraints) {
                     final total = constraints.maxWidth;
                     // 46% for the active pill — fits all 2-word labels comfortably.
-                    // The remaining 54% is split evenly across the 4 inactive icon slots.
                     final activeW = total * 0.46;
                     final inactiveW = (total - activeW) / 4;
 
                     return Row(
                       children: [
                         _NavItem(
-                          label: 'Shibre Home',
+                          label: 'Home Overview',
                           assetPath: 'assets/images/Shibre Icon.png',
                           activationT: _activationT(page, 0),
                           activeWidth: activeW,
@@ -130,25 +134,9 @@ class CustomBottomNavBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _NavItem  (StatelessWidget — all animation driven by activationT from parent)
-//
-// activationT = 0.0  → fully inactive (container = inactiveWidth, icon gray)
-// activationT = 0.5  → mid-transition (container half-expanded, icon half-white)
-// activationT = 1.0  → fully active   (container = activeWidth, icon white)
-//
-// The text is always laid out at full size inside an OverflowBox.
-// ClipRect masks it. As activationT rises the container expands and reveals
-// the text from left to right — no opacity tricks.
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _NavItem extends StatelessWidget {
   final String label;
-
-  /// 0.0 → fully inactive, 1.0 → fully active.
-  /// Driven directly by pageController.page — updates on every scroll frame.
   final double activationT;
-
   final double activeWidth;
   final double inactiveWidth;
   final VoidCallback onTap;
@@ -169,39 +157,33 @@ class _NavItem extends StatelessWidget {
     if (svgPath != null) {
       return SvgPicture.asset(
         svgPath!,
-        width: 22,
-        height: 22,
+        width: 20,
+        height: 20,
         colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
       );
     }
     if (assetPath != null) {
-      return Image.asset(assetPath!, width: 20, height: 20, color: color);
+      return Image.asset(assetPath!, width: 18, height: 18, color: color);
     }
     return const SizedBox.shrink();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Softer curve than easeInOutCubic — the animation spends more time in the
-    // mid-range (40%–60%) so the 50/50 state between two items is visible.
     final curved = Curves.easeInOut.transform(activationT);
-
-    // Container width: inactiveWidth → activeWidth
     final containerWidth = lerpDouble(inactiveWidth, activeWidth, curved)!;
 
-    // Icon color: gray (inactive) → white (active)
     final iconColor = Color.lerp(
       AppColors.textSecondary,
       AppColors.textPrimary,
       curved,
     )!;
 
-    // Icon scale: 0.88 (inactive) → 1.0 (active)
     final iconScale = lerpDouble(0.88, 1.0, curved)!;
 
     return SizedBox(
       width: containerWidth,
-      height: 64,
+      height: 52,
       child: ClipRect(
         child: OverflowBox(
           maxWidth: activeWidth,
@@ -214,14 +196,11 @@ class _NavItem extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: SizedBox(
               width: activeWidth,
-              height: 64,
+              height: 52,
               child: Row(
-                // mainAxisSize.max → Row fills exactly activeWidth.
-                // This hard-constrains children so nothing can push beyond it.
                 mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // ── Icon slot ───────────────────────────────────────────
                   SizedBox(
                     width: inactiveWidth,
                     child: Center(
@@ -231,19 +210,14 @@ class _NavItem extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // ── Label ───────────────────────────────────────────────
-                  // Expanded takes exactly (activeWidth - inactiveWidth) px.
-                  // Text can never cause the Row to overflow — ClipRect
-                  // handles the visual masking as the container expands.
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.only(right: 4),
+                      padding: const EdgeInsets.only(right: 6),
                       child: Text(
                         label,
                         style: const TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           letterSpacing: -0.3,
                         ),

@@ -6,9 +6,9 @@ class AppColors {
   static const Color gold      = Color(0xFFF0B90B); // Brand golden accent
 
   // ── Backgrounds ───────────────────────────────────────────────────────────
-  static const Color background = Color(0xFF1F1F25); // Main scaffold background
-  static const Color bgMid      = Color(0xFF1B1B21); // Secondary background / gradient mid
-  static const Color bgDeep     = Color(0xFF0A0B0D); // Deepest background stop
+  static const Color background = Color(0xFF050A11); // Main scaffold background (#050a11)
+  static const Color bgMid      = Color(0xFF080F1A); // Secondary background / gradient mid
+  static const Color bgDeep     = Color(0xFF03060A); // Deepest background stop
 
   // ── Surfaces & Cards ──────────────────────────────────────────────────────
   static const Color surface        = Color(0xFF121417); // Base card/panel surface
