@@ -982,11 +982,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
     // Gradient configuration
     List<double> lineStops = [0.0, 1.0];
-    List<Color> lineColors = [AppColors.gold, AppColors.gold];
+    List<Color> lineColors = [AppColors.positive, AppColors.positive];
 
     List<Color> fillColors = [
-      AppColors.gold.withValues(alpha: 0.28),
-      AppColors.gold.withValues(alpha: 0.0),
+      AppColors.positive.withValues(alpha: 0.28),
+      AppColors.positive.withValues(alpha: 0.0),
     ];
 
     if (_touchedX != null && spots.isNotEmpty) {
@@ -995,14 +995,14 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         double ratio = (_touchedX! / maxX).clamp(0.0, 1.0);
         lineStops = [0.0, ratio, ratio, 1.0];
         lineColors = [
-          AppColors.gold,
-          AppColors.gold,
-          AppColors.gold.withValues(alpha: 0.08),
-          AppColors.gold.withValues(alpha: 0.08),
+          AppColors.positive,
+          AppColors.positive,
+          AppColors.positive.withValues(alpha: 0.08),
+          AppColors.positive.withValues(alpha: 0.08),
         ];
         fillColors = [
-          AppColors.gold.withValues(alpha: 0.07),
-          AppColors.gold.withValues(alpha: 0.0),
+          AppColors.positive.withValues(alpha: 0.07),
+          AppColors.positive.withValues(alpha: 0.0),
         ];
       }
     }

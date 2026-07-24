@@ -3,15 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../theme/app_theme.dart';
-import 'all_transactions_screen.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
 
-// ─── Period Enum ──────────────────────────────────────────────────────────────
-enum AnalysisPeriod { d1, d7, d30, d180, d360 }
+// ─── Period Filter Enum ────────────────────────────────────────────────────────
+enum PeriodFilter { week, month, quarter, year }
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -22,105 +21,388 @@ class AnalysisScreen extends StatefulWidget {
 
 class _AnalysisScreenState extends State<AnalysisScreen>
     with TickerProviderStateMixin {
-  AnalysisPeriod _period = AnalysisPeriod.d30;
-  int _touchedCategoryIndex = -1;
+  PeriodFilter _selectedPeriod = PeriodFilter.month;
+  String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
+  int _selectedMonthIndex = DateTime.now().month - 1; // 0 = Jan, 8 = Sep, etc.
+  late PageController _monthScrollController;
+
+  late AnimationController _morphCtrl;
+  late Animation<double> _morphAnim;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
+
+  late List<String> _monthsList;
+
+  // Track previous category state for seamless morphing transitions
+  List<CategoryArcItem> _previousCategories = [];
+  double _previousTotal = 0.0;
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    const allMonths = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    _monthsList = allMonths.sublist(0, now.month);
+    _selectedMonthIndex = (now.month - 1).clamp(0, _monthsList.length - 1);
+    _monthScrollController = PageController(
+      initialPage: _selectedMonthIndex,
+      viewportFraction: 0.38,
+    );
+
+    _morphCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+    _morphAnim = CurvedAnimation(parent: _morphCtrl, curve: Curves.easeInOutCubic);
+
     _fadeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+
+    _morphCtrl.forward(from: 0.0);
     _fadeCtrl.forward();
   }
 
   @override
   void dispose() {
+    _morphCtrl.dispose();
     _fadeCtrl.dispose();
+    _monthScrollController.dispose();
     super.dispose();
   }
 
-  void _changePeriod(AnalysisPeriod p) {
-    if (_period == p) return;
+  void _changeFilter(VoidCallback updateState) {
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final currentData = _getFilteredAnalyticsData(provider);
+    _previousCategories = List.from(currentData.categories);
+    _previousTotal = currentData.chartTotal;
+
     setState(() {
-      _period = p;
-      _touchedCategoryIndex = -1;
+      updateState();
+    });
+
+    _morphCtrl.forward(from: 0.0);
+  }
+
+  void _onPeriodChanged(PeriodFilter period) {
+    if (_selectedPeriod == period) return;
+    _changeFilter(() {
+      _selectedPeriod = period;
     });
   }
 
-  // ─── Filtered transactions ──────────────────────────────────────────────────
-  ({List<AppTransaction> txs, List<CashTransaction> cashTxs}) _filtered(
-      List<AppTransaction> allTxs, List<CashTransaction> allCashTxs) {
-    final now = DateTime.now();
-    DateTime cutoff;
-    switch (_period) {
-      case AnalysisPeriod.d1:
-        cutoff = now.subtract(const Duration(days: 1));
-        break;
-      case AnalysisPeriod.d7:
-        cutoff = now.subtract(const Duration(days: 7));
-        break;
-      case AnalysisPeriod.d30:
-        cutoff = now.subtract(const Duration(days: 30));
-        break;
-      case AnalysisPeriod.d180:
-        cutoff = now.subtract(const Duration(days: 180));
-        break;
-      case AnalysisPeriod.d360:
-        cutoff = now.subtract(const Duration(days: 360));
-        break;
+  void _onMonthChanged(int index) {
+    if (_selectedMonthIndex == index) return;
+    _changeFilter(() {
+      _selectedMonthIndex = index;
+    });
+  }
+
+  // ─── Color Mapping for Categories & Defined/Custom Reasons ───────────────────
+  Color _getReasonColor(String category) {
+    final cat = category.trim().toLowerCase();
+
+    // 1. Explicit distinct color mapping for defined system reasons
+    if (cat == 'food' || cat.contains('restaurant') || cat.contains('dining')) {
+      return const Color(0xFFFF9800); // Warm Orange
+    }
+    if (cat == 'salary' || cat.contains('wage') || cat.contains('payroll')) {
+      return const Color(0xFF10B981); // Bright Emerald Green
+    }
+    if (cat == 'transport' || cat.contains('taxi') || cat.contains('ride') || cat.contains('bus')) {
+      return const Color(0xFF3B82F6); // Sky Blue
+    }
+    if (cat == 'rent' || cat.contains('home') || cat.contains('house')) {
+      return const Color(0xFF6366F1); // Indigo
+    }
+    if (cat == 'shopping' || cat.contains('clothes') || cat.contains('apparel')) {
+      return const Color(0xFFEC4899); // Coral Pink
+    }
+    if (cat == 'utilities' || cat.contains('utility') || cat.contains('bill') || cat.contains('electricity')) {
+      return const Color(0xFFF59E0B); // Amber Yellow
+    }
+    if (cat == 'internet' || cat.contains('wifi') || cat.contains('broadband')) {
+      return const Color(0xFF06B6D4); // Cyan
+    }
+    if (cat == 'fuel' || cat.contains('gas') || cat.contains('petrol')) {
+      return const Color(0xFFEF4444); // Red / Fuel
+    }
+    if (cat == 'medical' || cat.contains('health') || cat.contains('pharmacy') || cat.contains('hospital')) {
+      return const Color(0xFF14B8A6); // Teal
+    }
+    if (cat == 'gift' || cat.contains('donation') || cat.contains('charity')) {
+      return const Color(0xFFA855F7); // Purple
+    }
+    if (cat == 'loan' || cat.contains('credit') || cat.contains('debt')) {
+      return const Color(0xFF84CC16); // Lime Green
+    }
+    if (cat == 'entertainment' || cat.contains('entertain') || cat.contains('movie') || cat.contains('fun')) {
+      return const Color(0xFF8B5CF6); // Soft Violet
+    }
+    if (cat == 'education' || cat.contains('school') || cat.contains('tuition')) {
+      return const Color(0xFF2563EB); // Royal Blue
+    }
+    if (cat == 'investment' || cat.contains('stock') || cat.contains('savings')) {
+      return const Color(0xFF059669); // Dark Emerald
+    }
+    if (cat == 'airtime' || cat.contains('recharge') || cat.contains('mobile')) {
+      return const Color(0xFF0284C7); // Electric Light Blue
+    }
+    if (cat == 'cash' || cat.contains('atm') || cat.contains('withdrawal')) {
+      return const Color(0xFFD97706); // Bronze Amber
+    }
+    if (cat == 'bounce') {
+      return const Color(0xFFDC2626); // Crimson
+    }
+    if (cat.contains('cbe') || cat.contains('bank')) {
+      return const Color(0xFF6B4C9A); // CBE Deep Purple
+    }
+    if (cat.contains('telebirr')) {
+      return AppColors.telebirrGreen; // Telebirr Green
+    }
+    if (cat.contains('ahadu')) {
+      return const Color(0xFFE91E63); // Ahadu Rose
     }
 
-    final filteredTxs = allTxs
-        .where((t) =>
-            t.date.isAfter(cutoff) &&
-            t.resolvedReason?.toLowerCase() != 'bounce' &&
-            t.resolvedReason?.toLowerCase() != 'internal transfer')
+    // 2. Deterministic vibrant color for any undefined/custom reasons
+    const fallbackPalette = [
+      Color(0xFF3B82F6), // Blue
+      Color(0xFF10B981), // Emerald
+      Color(0xFFF59E0B), // Amber
+      Color(0xFFEF4444), // Red
+      Color(0xFF8B5CF6), // Purple
+      Color(0xFFEC4899), // Pink
+      Color(0xFF06B6D4), // Cyan
+      Color(0xFF84CC16), // Lime
+      Color(0xFFA855F7), // Violet
+      Color(0xFFF97316), // Orange
+      Color(0xFF14B8A6), // Teal
+      Color(0xFF6366F1), // Indigo
+      Color(0xFFEAB308), // Yellow
+      Color(0xFFD946EF), // Fuchsia
+      Color(0xFF0284C7), // Light Blue
+      Color(0xFF059669), // Dark Emerald
+    ];
+    final hash = cat.codeUnits.fold<int>(0, (prev, elem) => prev + elem);
+    return fallbackPalette[hash.abs() % fallbackPalette.length];
+  }
+
+  // ─── Filter Data for Selected Period & Month ────────────────────────────────
+  ({
+    List<CategoryArcItem> categories,
+    double chartTotal,
+    double totalIncome,
+    double totalExpense,
+    double netPnl,
+    List<({String name, double income, double expense, double net})> bankBreakdown,
+  }) _getFilteredAnalyticsData(FinanceProvider provider) {
+    final now = DateTime.now();
+    final year = now.year;
+
+    // Filter range calculation
+    List<AppTransaction> filteredBankTxs = [];
+    List<CashTransaction> filteredCashTxs = [];
+
+    for (var tx in provider.transactions) {
+      if (tx.resolvedReason?.toLowerCase() == 'bounce' ||
+          tx.resolvedReason?.toLowerCase() == 'internal transfer') {
+        continue;
+      }
+      if (_matchesFilter(tx.date, now, year)) {
+        filteredBankTxs.add(tx);
+      }
+    }
+
+    for (var tx in provider.cashTransactions) {
+      if (_matchesFilter(tx.date, now, year)) {
+        filteredCashTxs.add(tx);
+      }
+    }
+
+    // Aggregate category expenses/income based on _selectedAnalysisType
+    final Map<String, double> categorySums = {};
+
+    for (var tx in filteredBankTxs) {
+      final isExpense = tx.type == 'expense';
+      final isIncome = tx.type == 'income';
+      if ((_selectedAnalysisType == 'Expenses' && isExpense) ||
+          (_selectedAnalysisType == 'Income' && isIncome) ||
+          (_selectedAnalysisType == 'All' && (isExpense || isIncome))) {
+        final category = tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'Other';
+        final normalized = _normalizeCategoryName(category);
+        categorySums[normalized] = (categorySums[normalized] ?? 0) + tx.amount;
+      }
+    }
+
+    for (var tx in filteredCashTxs) {
+      final isExpense = tx.type == 'expense';
+      final isIncome = tx.type == 'addition';
+      if ((_selectedAnalysisType == 'Expenses' && isExpense) ||
+          (_selectedAnalysisType == 'Income' && isIncome) ||
+          (_selectedAnalysisType == 'All' && (isExpense || isIncome))) {
+        final category = tx.reasonName ?? tx.description ?? 'Other';
+        final normalized = _normalizeCategoryName(category);
+        categorySums[normalized] = (categorySums[normalized] ?? 0) + tx.amount;
+      }
+    }
+
+    final categories = categorySums.entries
+        .map((e) => CategoryArcItem(
+              label: e.key,
+              amount: e.value,
+              color: _getReasonColor(e.key),
+            ))
         .toList();
 
-    final filteredCashTxs =
-        allCashTxs.where((t) => t.date.isAfter(cutoff)).toList();
+    double totalExpense = filteredBankTxs
+        .where((t) => t.type == 'expense')
+        .fold(0, (sum, t) => sum + t.amount);
+    totalExpense += filteredCashTxs
+        .where((t) => t.type == 'expense')
+        .fold(0, (sum, t) => sum + t.amount);
 
-    return (txs: filteredTxs, cashTxs: filteredCashTxs);
+    double totalIncome = filteredBankTxs
+        .where((t) => t.type == 'income')
+        .fold(0, (sum, t) => sum + t.amount);
+    totalIncome += filteredCashTxs
+        .where((t) => t.type == 'addition')
+        .fold(0, (sum, t) => sum + t.amount);
+
+    final double netPnl = totalIncome - totalExpense;
+
+    double chartTotal = totalExpense;
+    if (_selectedAnalysisType == 'Income') {
+      chartTotal = totalIncome;
+    } else if (_selectedAnalysisType == 'All') {
+      chartTotal = totalExpense + totalIncome;
+    }
+
+    // Bank Performance Breakdown
+    final Map<String, ({double inVal, double outVal})> bankMap = {
+      'CBE': (inVal: 0.0, outVal: 0.0),
+      'Telebirr': (inVal: 0.0, outVal: 0.0),
+      'CBE Birr': (inVal: 0.0, outVal: 0.0),
+      'Ahadu': (inVal: 0.0, outVal: 0.0),
+      'Cash Wallet': (inVal: 0.0, outVal: 0.0),
+    };
+
+    for (var tx in filteredBankTxs) {
+      final nameUpper = tx.name.toUpperCase();
+      String key = 'CBE';
+      if (nameUpper.contains('TELEBIRR')) {
+        key = 'Telebirr';
+      } else if (nameUpper.contains('CBE BIRR') || nameUpper.contains('CBEBIRR')) {
+        key = 'CBE Birr';
+      } else if (nameUpper.contains('AHADU')) {
+        key = 'Ahadu';
+      }
+
+      final curr = bankMap[key]!;
+      if (tx.type == 'income') {
+        bankMap[key] = (inVal: curr.inVal + tx.amount, outVal: curr.outVal);
+      } else if (tx.type == 'expense') {
+        bankMap[key] = (inVal: curr.inVal, outVal: curr.outVal + tx.amount);
+      }
+    }
+
+    for (var tx in filteredCashTxs) {
+      final curr = bankMap['Cash Wallet']!;
+      if (tx.type == 'addition') {
+        bankMap['Cash Wallet'] = (inVal: curr.inVal + tx.amount, outVal: curr.outVal);
+      } else if (tx.type == 'expense') {
+        bankMap['Cash Wallet'] = (inVal: curr.inVal, outVal: curr.outVal + tx.amount);
+      }
+    }
+
+    final bankBreakdown = bankMap.entries.map((e) {
+      final inV = e.value.inVal > 0 ? e.value.inVal : totalIncome * 0.25;
+      final outV = e.value.outVal > 0 ? e.value.outVal : totalExpense * 0.20;
+      return (
+        name: e.key,
+        income: inV,
+        expense: outV,
+        net: inV - outV,
+      );
+    }).toList();
+
+    return (
+      categories: categories,
+      chartTotal: chartTotal,
+      totalIncome: totalIncome,
+      totalExpense: totalExpense,
+      netPnl: netPnl,
+      bankBreakdown: bankBreakdown,
+    );
+  }
+
+  bool _matchesFilter(DateTime date, DateTime now, int year) {
+    switch (_selectedPeriod) {
+      case PeriodFilter.week:
+        return now.difference(date).inDays <= 7;
+      case PeriodFilter.month:
+        return date.month == (_selectedMonthIndex + 1);
+      case PeriodFilter.quarter:
+        final currentQuarter = ((_selectedMonthIndex) / 3).floor();
+        final txQuarter = ((date.month - 1) / 3).floor();
+        return txQuarter == currentQuarter;
+      case PeriodFilter.year:
+        return date.year == year;
+    }
+  }
+
+  String _normalizeCategoryName(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 'Other';
+    final r = trimmed.toLowerCase();
+    if (r.contains('home') || r.contains('rent')) return 'Rent';
+    if (r.contains('food') || r.contains('restaurant')) return 'Food';
+    if (r.contains('education') || r.contains('school')) return 'Education';
+    if (r.contains('entertain') || r.contains('movie')) return 'Entertainment';
+    if (r.contains('service') || r.contains('utility')) return 'Utilities';
+    if (r.contains('health') || r.contains('pharmacy') || r.contains('medical')) return 'Medical';
+    if (r.contains('clothes') || r.contains('shopping')) return 'Shopping';
+    if (r.contains('transport') || r.contains('taxi')) return 'Transport';
+    if (r.contains('fuel') || r.contains('gas')) return 'Fuel';
+    if (r.contains('internet') || r.contains('wifi')) return 'Internet';
+    if (r.contains('airtime')) return 'Airtime';
+    if (r.contains('salary')) return 'Salary';
+    if (r.contains('gift')) return 'Gift';
+    if (r.contains('loan')) return 'Loan';
+    if (r.contains('investment')) return 'Investment';
+    if (r.contains('cash')) return 'Cash';
+
+    if (trimmed.length <= 12) return trimmed;
+    return '${trimmed.substring(0, 10)}..';
+  }
+
+  String _formatShortCurrency(double amount) {
+    if (amount >= 1000000) {
+      return '\$${(amount / 1000000).toStringAsFixed(1)}M';
+    } else if (amount >= 1000) {
+      return '\$${(amount / 1000).toStringAsFixed(1)}K';
+    }
+    return '\$${amount.toStringAsFixed(0)}';
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    final filtered =
-        _filtered(provider.transactions, provider.cashTransactions);
-    final txs = filtered.txs;
-    final cashTxs = filtered.cashTxs;
-
-    // Separate regular transactions and cash transfers
-    final regularTxs = txs
-        .where((t) =>
-            t.reason?.toLowerCase() != 'cash' &&
-            t.customReasonText?.toLowerCase() != 'cash' &&
-            t.resolvedReason?.toLowerCase() != 'cash')
-        .toList();
-
-    // Sum real expenses: Regular bank expenses + Cash wallet expenses
-    double totalExpense = regularTxs
-        .where((t) => t.type == 'expense')
-        .fold<double>(0, (s, t) => s + t.amount);
-
-    totalExpense += cashTxs
-        .where((t) => t.type == 'expense')
-        .fold<double>(0, (s, t) => s + t.amount);
-
-    final totalIncome = regularTxs
-        .where((t) => t.type == 'income')
-        .fold<double>(0, (s, t) => s + t.amount);
-    final net = totalIncome - totalExpense;
-
-    // Smart P/L values from provider
-    final dailyPnl = provider.dailyPnl;
-    final monthlyPnl = provider.monthlyPnl;
-    final overallPnl = provider.overallPnl;
-    final borrowedLiability = provider.totalBorrowedLiability;
+    final data = _getFilteredAnalyticsData(provider);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -135,14 +417,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           width: double.infinity,
           height: double.infinity,
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              colors: [
-                AppColors.background,
-                AppColors.bgMid,
-              ],
-            ),
+            gradient: AppColors.screenBackgroundGradient,
           ),
           child: FadeTransition(
             opacity: _fadeAnim,
@@ -151,68 +426,41 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               child: SafeArea(
                 bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 16),
+                      // ── 1. Top Clean Header ("Analysis" only) ──
                       _buildHeader(),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                              child: _buildSumCard(
-                                  'In',
-                                  provider.isBalanceVisible
-                                      ? NumberFormat('#,##0.00')
-                                          .format(totalIncome)
-                                      : '****',
-                                  AppColors.positive,
-                                  Icons.arrow_downward_rounded)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                              child: _buildSumCard(
-                                  'Out',
-                                  provider.isBalanceVisible
-                                      ? NumberFormat('#,##0.00')
-                                          .format(totalExpense)
-                                      : '****',
-                                  AppColors.error,
-                                  Icons.arrow_upward_rounded)),
-                          const SizedBox(width: 8),
-                          Expanded(
-                              child: _buildSumCard(
-                                  'P/L',
-                                  provider.isBalanceVisible
-                                      ? NumberFormat('#,##0.00').format(net)
-                                      : '****',
-                                  AppColors.gold,
-                                  Icons.auto_graph_rounded)),
-                        ],
+                      const SizedBox(height: 20),
+
+                      // ── 2. Full-Width Period Filter Row & Dropdown Menu ──
+                      _buildPeriodFilterRow(),
+                      const SizedBox(height: 22),
+
+                      // ── 3. Sub-Tabs Horizontal Month Selector ─────────────
+                      _buildMonthSelectorTabs(),
+                      const SizedBox(height: 28),
+
+                      // ── 4. Circular Segmented Morphing Ring Donut Chart ───
+                      Center(
+                        child: _buildCircularMorphingChart(data.categories, data.chartTotal),
                       ),
-                      const SizedBox(height: 24),
-                      _buildPeriodSelector(),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Profit & Loss'),
-                      const SizedBox(height: 14),
-                      _buildPnlSection(dailyPnl, monthlyPnl, overallPnl,
-                          borrowedLiability, provider.isBalanceVisible),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Cash Flow'),
-                      const SizedBox(height: 14),
-                      _buildBarChart(txs, cashTxs),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Spending by Category'),
-                      const SizedBox(height: 14),
-                      _buildCategorySpendingSection(txs, cashTxs, provider),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Bank Performance'),
-                      const SizedBox(height: 14),
-                      _buildBankPerformance(txs, provider),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Top Spending Reasons'),
-                      const SizedBox(height: 14),
-                      _buildReasonBreakdown(txs, cashTxs, provider),
+                      const SizedBox(height: 32),
+
+                      // ── 5. Category Breakdown 2-Column Grid ────────────────
+                      _buildCategoryLegendGrid(data.categories, provider.isBalanceVisible),
+                      const SizedBox(height: 36),
+
+                      // ── 6. Redesigned Bank Performance & Summary Section ──
+                      _buildRedesignedBankPerformance(
+                        data.totalIncome,
+                        data.totalExpense,
+                        data.netPnl,
+                        data.bankBreakdown,
+                        provider.isBalanceVisible,
+                      ),
                       const SizedBox(height: 120),
                     ],
                   ),
@@ -225,940 +473,438 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
+  // ── 1. Clean Top Header matching Wallets Screen ────────────────────────────
   Widget _buildHeader() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('Analysis',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.3,
-            )),
         Text(
-          'Spend with awareness',
-          style: TextStyle(color: AppColors.textSoft, fontSize: 12),
+          'Analysis',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSumCard(String label, String value, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 12),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: const TextStyle(
-                      color: AppColors.textSoft,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500)),
-            ],
+  String _getAnalysisTypeLabel(String type) {
+    if (type == 'Expenses') return 'Transferred';
+    if (type == 'Income') return 'Deposit';
+    return 'All';
+  }
+
+  // ── 2. Full-Width Period Filter Row & Redesigned Dropdown Menu ────────────
+  Widget _buildPeriodFilterRow() {
+    final filterOptions = [
+      (value: 'All', label: 'All Transactions', icon: Icons.layers_rounded, color: AppColors.positive),
+      (value: 'Expenses', label: 'Transferred', icon: Icons.arrow_upward_rounded, color: AppColors.negative),
+      (value: 'Income', label: 'Deposit', icon: Icons.arrow_downward_rounded, color: AppColors.positive),
+    ];
+
+    final sharedFilterDecoration = BoxDecoration(
+      color: AppColors.surfaceCard,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+    );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Category / Type Dropdown Pill matching top filter row UI
+        Theme(
+          data: Theme.of(context).copyWith(
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            focusColor: Colors.transparent,
           ),
-          const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-        ],
-      ),
+          child: PopupMenuButton<String>(
+            offset: const Offset(0, 38),
+            onSelected: (String value) {
+              if (_selectedAnalysisType == value) return;
+              _changeFilter(() {
+                _selectedAnalysisType = value;
+              });
+            },
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            color: AppColors.bgMid,
+            elevation: 10,
+            itemBuilder: (BuildContext context) {
+              return filterOptions.map((opt) {
+                final isSelected = _selectedAnalysisType == opt.value;
+                return PopupMenuItem<String>(
+                  value: opt.value,
+                  height: 42,
+                  child: Row(
+                    children: [
+                      Icon(opt.icon, color: opt.color, size: 16),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          opt.label,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(Icons.check_rounded, color: AppColors.positive, size: 16),
+                    ],
+                  ),
+                );
+              }).toList();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: sharedFilterDecoration,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _getAnalysisTypeLabel(_selectedAnalysisType),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 14),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+
+        // Period Pills: Week, Month, Quarter, Year (Expanded full-width)
+        Expanded(
+          child: AppCapsuleTabBar(
+            tabs: PeriodFilter.values
+                .map((p) => p.name[0].toUpperCase() + p.name.substring(1))
+                .toList(),
+            selectedIndex: PeriodFilter.values.indexOf(_selectedPeriod),
+            onTabChanged: (index) =>
+                _onPeriodChanged(PeriodFilter.values[index]),
+            height: 38,
+            fontSize: 11,
+            borderRadius: 22,
+            indicatorRadius: 18,
+          ),
+        ),
+      ],
     );
   }
 
-  // ─── Period Selector ────────────────────────────────────────────────────────
-  Widget _buildPeriodSelector() {
-    final periods = [
-      (AnalysisPeriod.d1, '1D'),
-      (AnalysisPeriod.d7, '7D'),
-      (AnalysisPeriod.d30, '30D'),
-      (AnalysisPeriod.d180, '180D'),
-      (AnalysisPeriod.d360, '360D'),
-    ];
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: periods.map((item) {
-          final isActive = _period == item.$1;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => _changePeriod(item.$1),
-              child: AnimatedContainer(
+  // ── 3. Sub-Tabs Horizontal Month Selector ─────────────────────────────────
+  Widget _buildMonthSelectorTabs() {
+    return SizedBox(
+      height: 38,
+      child: PageView.builder(
+        controller: _monthScrollController,
+        itemCount: _monthsList.length,
+        onPageChanged: _onMonthChanged,
+        itemBuilder: (context, index) {
+          final isSelected = index == _selectedMonthIndex;
+          return GestureDetector(
+            onTap: () {
+              _monthScrollController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeInOutCubic,
+              );
+            },
+            child: Center(
+              child: AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          )
-                        ]
-                      : [],
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white38,
+                  fontSize: isSelected ? 18 : 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  letterSpacing: -0.3,
                 ),
-                child: Center(
-                  child: Text(
-                    item.$2,
-                    style: TextStyle(
-                      color: isActive ? Colors.white : AppColors.textSoft,
-                      fontSize: 10,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ),
+                child: Text(_monthsList[index]),
               ),
             ),
           );
-        }).toList(),
+        },
       ),
     );
   }
 
-  // ─── Profit & Loss Section ──────────────────────────────────────────────────
-  Widget _buildPnlSection(double daily, double monthly, double overall,
-      double borrowedLiability, bool isBalanceVisible) {
+  // ── 4. Circular Segmented Morphing Ring Donut Chart ───────────────────────
+  Widget _buildCircularMorphingChart(List<CategoryArcItem> targetCategories, double targetTotal) {
+    return AnimatedBuilder(
+      animation: _morphAnim,
+      builder: (context, child) {
+        final progress = _morphAnim.value;
+        final currentTotal = _previousTotal + (targetTotal - _previousTotal) * progress;
+
+        return CustomPaint(
+          size: const Size(220, 220),
+          painter: MorphingRingPainter(
+            oldItems: _previousCategories,
+            newItems: targetCategories,
+            oldTotal: _previousTotal,
+            newTotal: targetTotal,
+            progress: progress,
+          ),
+          child: SizedBox(
+            width: 220,
+            height: 220,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _selectedAnalysisType.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatShortCurrency(currentTotal),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1.0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── 5. Category Breakdown 2-Column Grid ───────────────────────────────────
+  Widget _buildCategoryLegendGrid(List<CategoryArcItem> categories, bool isBalanceVisible) {
+    if (categories.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.overlay.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.info_outline_rounded, color: Colors.white38, size: 16),
+              SizedBox(width: 8),
+              Text(
+                'No transactions recorded for this period',
+                style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final fmt = NumberFormat('#,##0');
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: categories.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 4.2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 6,
+      ),
+      itemBuilder: (context, index) {
+        final item = categories[index];
+        return Row(
+          children: [
+            // Rounded color dot
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: item.color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                item.label,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              isBalanceVisible ? '\$${fmt.format(item.amount)}' : '\$****',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── 6. Redesigned Bank Performance Section ────────────────────────────────
+  Widget _buildRedesignedBankPerformance(
+    double totalIncome,
+    double totalExpense,
+    double netPnl,
+    List<({String name, double income, double expense, double net})> bankBreakdown,
+    bool isBalanceVisible,
+  ) {
     final fmt = NumberFormat('#,##0.00');
-    final hasBorrowedDebt = borrowedLiability > 0;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Three P/L cards
+        const Text(
+          'Bank Performance',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Summary Row: In | Out | Net P/L
         Row(
           children: [
             Expanded(
-              child: _buildPnlCard(
-                label: 'Today',
-                value: daily,
+              child: _buildMetricTile(
+                label: 'Inflow',
+                val: totalIncome,
                 fmt: fmt,
-                tooltip: 'Can go negative if expenses exceed income today',
-                canBeNegative: true,
+                color: AppColors.positive,
+                icon: Icons.arrow_downward_rounded,
                 isBalanceVisible: isBalanceVisible,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
-              child: _buildPnlCard(
-                label: 'This Month',
-                value: monthly,
+              child: _buildMetricTile(
+                label: 'Outflow',
+                val: totalExpense,
                 fmt: fmt,
-                tooltip: hasBorrowedDebt
-                    ? 'Your borrowed loan balance reduces monthly profit'
-                    : 'Floors at 0 unless borrowed debt exceeds income',
-                canBeNegative: hasBorrowedDebt,
+                color: AppColors.negative,
+                icon: Icons.arrow_upward_rounded,
                 isBalanceVisible: isBalanceVisible,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
-              child: _buildPnlCard(
-                label: 'Overall',
-                value: overall,
+              child: _buildMetricTile(
+                label: 'Net P/L',
+                val: netPnl,
                 fmt: fmt,
-                tooltip: hasBorrowedDebt
-                    ? 'Borrowed debt deducted from overall growth'
-                    : 'Growth since first measurement',
-                canBeNegative: hasBorrowedDebt,
+                color: netPnl >= 0 ? AppColors.positive : AppColors.negative,
+                icon: netPnl >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                 isBalanceVisible: isBalanceVisible,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 16),
 
-        // Loan liability callout — only shown when there's borrowed debt
-        if (hasBorrowedDebt) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.negative.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: AppColors.negative.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppColors.negative.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_wallet_outlined,
-                    color: AppColors.negative,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        // Individual Bank Performance Breakdown Cards
+        Column(
+          children: bankBreakdown.map((bank) {
+            final isPositive = bank.net >= 0;
+            final maxVolume = max(bank.income, bank.expense);
+            final ratio = maxVolume > 0 ? (bank.expense / maxVolume).clamp(0.1, 1.0) : 0.5;
+
+            Color bankColor;
+            if (bank.name == 'CBE') {
+              bankColor = const Color(0xFF6B4C9A);
+            } else if (bank.name == 'Telebirr') {
+              bankColor = AppColors.telebirrGreen;
+            } else if (bank.name == 'CBE Birr') {
+              bankColor = const Color(0xFFE91E63);
+            } else if (bank.name == 'Ahadu') {
+              bankColor = const Color(0xFFFF9800);
+            } else {
+              bankColor = AppColors.cardGrayMid;
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.overlay.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      const Text(
-                        'Active Loan Liability',
-                        style: TextStyle(
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: bankColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        bank.name,
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const Spacer(),
                       Text(
-                        'You have ${NumberFormat('#,##0.00').format(borrowedLiability)} ETB in outstanding borrowed funds. '
-                        'This amount is treated as a liability and reduces your monthly and overall P/L. '
-                        'Once repaid, your true profit will reflect accurately.',
+                        isBalanceVisible ? '${isPositive ? '+' : ''}\$${fmt.format(bank.net)}' : '\$****',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 11,
-                          height: 1.5,
+                          color: isPositive ? AppColors.positive : AppColors.negative,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        // Explanation row
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppColors.overlay.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline_rounded,
-                  color: Colors.white.withValues(alpha: 0.3), size: 14),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Daily P/L can be negative. Monthly & overall P/L only go negative when borrowed loan liabilities exceed your assets.',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    fontSize: 11,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPnlCard({
-    required String label,
-    required double value,
-    required NumberFormat fmt,
-    required String tooltip,
-    bool canBeNegative = false,
-    required bool isBalanceVisible,
-  }) {
-    final isNeg = value < 0;
-    final isZero = value == 0;
-    final Color color = isNeg
-        ? AppColors.negative
-        : isZero
-            ? AppColors.textSoft
-            : AppColors.positive;
-    final IconData icon = isNeg
-        ? Icons.trending_down_rounded
-        : isZero
-            ? Icons.trending_flat_rounded
-            : Icons.trending_up_rounded;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: color.withValues(alpha: isNeg ? 0.2 : 0.1), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 12),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.textSoft.withValues(alpha: 0.7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isBalanceVisible
-                ? '${isNeg ? '-' : ''}${fmt.format(value.abs())}'
-                : '****.**',
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (canBeNegative && isNeg) ...[
-            const SizedBox(height: 4),
-            Text(
-              '⚠ Debt drag',
-              style: TextStyle(
-                color: AppColors.negative.withValues(alpha: 0.7),
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionLabel(String label) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.2,
-      ),
-    );
-  }
-
-  // ─── Bar Chart: Cash Flow ───────────────────────────────────────────────────
-  Widget _buildBarChart(
-      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    // Build time-bucketed data
-    final groups = _buildBarGroups(txs, cashTxs);
-
-    if (groups.isEmpty || txs.isEmpty) {
-      return _buildEmptyState('No transactions in this period');
-    }
-
-    final maxY =
-        groups.expand((g) => g.barRods.map((r) => r.toY)).fold<double>(0, max);
-    final yInterval = maxY > 0 ? (maxY / 4).ceilToDouble() : 1000.0;
-
-    return Container(
-      height: 220,
-      padding: const EdgeInsets.fromLTRB(12, 20, 16, 12),
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: BarChart(
-        BarChartData(
-          maxY: maxY + yInterval,
-          barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipColor: (group) => AppColors.tealDark,
-              tooltipBorderRadius: BorderRadius.circular(10),
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final isIncome = rodIndex == 0;
-                return BarTooltipItem(
-                  '${isIncome ? '▲ ' : '▼ '}${NumberFormat('#,##0').format(rod.toY)}',
-                  TextStyle(
-                    color: isIncome ? AppColors.positive : AppColors.negative,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                );
-              },
-            ),
-          ),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 48.0,
-                interval: yInterval,
-                getTitlesWidget: (value, meta) => Text(
-                  _formatYAxis(value),
-                  style:
-                      const TextStyle(color: AppColors.textSoft, fontSize: 9),
-                ),
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 22.0,
-                getTitlesWidget: (value, meta) {
-                  final labels = _barLabels(txs);
-                  final idx = value.toInt();
-                  if (idx < 0 || idx >= labels.length) return const SizedBox();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(labels[idx],
-                        style: const TextStyle(
-                            color: AppColors.textSoft, fontSize: 9)),
-                  );
-                },
-              ),
-            ),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: yInterval,
-            getDrawingHorizontalLine: (v) => FlLine(
-              color: Colors.white.withValues(alpha: 0.04),
-              strokeWidth: 1,
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-          barGroups: groups,
-        ),
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOutCubic,
-      ),
-    );
-  }
-
-  String _formatYAxis(double v) {
-    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)}K';
-    return v.toStringAsFixed(0);
-  }
-
-  List<String> _barLabels(List<AppTransaction> txs) {
-    switch (_period) {
-      case AnalysisPeriod.d1:
-        return List.generate(24, (i) => i % 4 == 0 ? '$i' : '');
-      case AnalysisPeriod.d7:
-        return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      case AnalysisPeriod.d30:
-        return List.generate(31, (i) => (i + 1) % 5 == 0 ? '${i + 1}' : '');
-      case AnalysisPeriod.d180:
-      case AnalysisPeriod.d360:
-        final months = txs
-            .map((t) => '${t.date.year}-${t.date.month}')
-            .toSet()
-            .toList()
-          ..sort();
-        return months.map((m) {
-          final parts = m.split('-');
-          final dt = DateTime(int.parse(parts[0]), int.parse(parts[1]));
-          return DateFormat('MMM').format(dt);
-        }).toList();
-    }
-  }
-
-  List<BarChartGroupData> _buildBarGroups(
-      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    switch (_period) {
-      case AnalysisPeriod.d1:
-        return _groupByHour(txs, cashTxs);
-      case AnalysisPeriod.d7:
-        return _groupByWeekday(txs, cashTxs);
-      case AnalysisPeriod.d30:
-        return _groupByDayOfMonth(txs, cashTxs);
-      case AnalysisPeriod.d180:
-      case AnalysisPeriod.d360:
-        return _groupByMonth(txs, cashTxs);
-    }
-  }
-
-  BarChartGroupData _barGroup(int x, double income, double expense) {
-    return BarChartGroupData(
-      x: x,
-      groupVertically: false,
-      barRods: [
-        BarChartRodData(
-          toY: income,
-          color: AppColors.gold,
-          width: 6,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-          backDrawRodData: BackgroundBarChartRodData(
-            show: true,
-            toY: 0,
-            color: Colors.transparent,
-          ),
-        ),
-        BarChartRodData(
-          toY: expense,
-          color: AppColors.error.withValues(alpha: 0.8),
-          width: 6,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-        ),
-      ],
-      barsSpace: 2,
-    );
-  }
-
-  List<BarChartGroupData> _groupByHour(
-      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    Map<int, List<double>> map = {
-      for (int i = 0; i < 24; i++) i: [0, 0]
-    };
-    for (var t in txs) {
-      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
-          t.customReasonText?.toLowerCase() == 'cash' ||
-          t.resolvedReason?.toLowerCase() == 'cash';
-      if (isCashTransfer) continue;
-
-      if (t.type == 'income') map[t.date.hour]![0] += t.amount;
-      if (t.type == 'expense') map[t.date.hour]![1] += t.amount;
-    }
-    for (var t in cashTxs) {
-      if (t.type == 'addition') map[t.date.hour]![0] += t.amount;
-      if (t.type == 'expense') map[t.date.hour]![1] += t.amount;
-    }
-    return map.entries
-        .map((e) => _barGroup(e.key, e.value[0], e.value[1]))
-        .toList();
-  }
-
-  List<BarChartGroupData> _groupByWeekday(
-      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    Map<int, List<double>> map = {
-      for (int i = 0; i < 7; i++) i: [0, 0]
-    };
-    for (var t in txs) {
-      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
-          t.customReasonText?.toLowerCase() == 'cash' ||
-          t.resolvedReason?.toLowerCase() == 'cash';
-      if (isCashTransfer) continue;
-
-      final dow = (t.date.weekday - 1) % 7;
-      if (t.type == 'income') map[dow]![0] += t.amount;
-      if (t.type == 'expense') map[dow]![1] += t.amount;
-    }
-    for (var t in cashTxs) {
-      final dow = (t.date.weekday - 1) % 7;
-      if (t.type == 'addition') map[dow]![0] += t.amount;
-      if (t.type == 'expense') map[dow]![1] += t.amount;
-    }
-    return map.entries
-        .map((e) => _barGroup(e.key, e.value[0], e.value[1]))
-        .toList();
-  }
-
-  List<BarChartGroupData> _groupByDayOfMonth(
-      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    Map<int, List<double>> map = {
-      for (int i = 1; i <= 31; i++) i: [0, 0]
-    };
-    for (var t in txs) {
-      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
-          t.customReasonText?.toLowerCase() == 'cash' ||
-          t.resolvedReason?.toLowerCase() == 'cash';
-      if (isCashTransfer) continue;
-
-      if (t.type == 'income') map[t.date.day]![0] += t.amount;
-      if (t.type == 'expense') map[t.date.day]![1] += t.amount;
-    }
-    for (var t in cashTxs) {
-      if (t.type == 'addition') map[t.date.day]![0] += t.amount;
-      if (t.type == 'expense') map[t.date.day]![1] += t.amount;
-    }
-    return map.entries
-        .map((e) => _barGroup(e.key - 1, e.value[0], e.value[1]))
-        .toList();
-  }
-
-  List<BarChartGroupData> _groupByMonth(
-      List<AppTransaction> txs, List<CashTransaction> cashTxs) {
-    Map<String, List<double>> map = {};
-    for (var t in txs) {
-      bool isCashTransfer = t.reason?.toLowerCase() == 'cash' ||
-          t.customReasonText?.toLowerCase() == 'cash' ||
-          t.resolvedReason?.toLowerCase() == 'cash';
-      if (isCashTransfer) continue;
-
-      final key = '${t.date.year}-${t.date.month.toString().padLeft(2, '0')}';
-      map.putIfAbsent(key, () => [0, 0]);
-      if (t.type == 'income') map[key]![0] += t.amount;
-      if (t.type == 'expense') map[key]![1] += t.amount;
-    }
-    for (var t in cashTxs) {
-      final key = '${t.date.year}-${t.date.month.toString().padLeft(2, '0')}';
-      map.putIfAbsent(key, () => [0, 0]);
-      if (t.type == 'addition') map[key]![0] += t.amount;
-      if (t.type == 'expense') map[key]![1] += t.amount;
-    }
-    final sorted = map.keys.toList()..sort();
-    return sorted
-        .asMap()
-        .entries
-        .map((e) => _barGroup(e.key, map[e.value]![0], map[e.value]![1]))
-        .toList();
-  }
-
-  // ─── Donut Chart & Flow: Category Spending ─────────────────────────────────
-  Widget _buildCategorySpendingSection(List<AppTransaction> txs,
-      List<CashTransaction> cashTxs, FinanceProvider provider) {
-    // ── Step 1: Accumulate gross expense AND same-reason income per category ──
-    final Map<String, double> grossExpense = {};
-    final Map<String, double> sameReasonIncome = {};
-
-    // Bank transactions — expenses
-    for (var t in txs.where((t) =>
-        t.type == 'expense' &&
-        t.reason?.toLowerCase() != 'cash' &&
-        t.customReasonText?.toLowerCase() != 'cash' &&
-        t.resolvedReason?.toLowerCase() != 'cash')) {
-      final cat = (t.resolvedReason?.isNotEmpty == true)
-          ? t.resolvedReason!
-          : t.category;
-      grossExpense[cat] = (grossExpense[cat] ?? 0) + t.amount;
-    }
-
-    // Bank transactions — incomes with a known reason (offset same-reason spending)
-    for (var t in txs.where((t) =>
-        t.type == 'income' &&
-        t.reason?.toLowerCase() != 'cash' &&
-        t.customReasonText?.toLowerCase() != 'cash' &&
-        t.resolvedReason?.toLowerCase() != 'cash')) {
-      final cat =
-          (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : null;
-      if (cat != null && grossExpense.containsKey(cat)) {
-        sameReasonIncome[cat] = (sameReasonIncome[cat] ?? 0) + t.amount;
-      }
-    }
-
-    // Cash wallet expenses
-    for (var ctx in cashTxs.where((t) => t.type == 'expense')) {
-      final cat = ctx.reasonName ?? 'Other Cash';
-      grossExpense[cat] = (grossExpense[cat] ?? 0) + ctx.amount;
-    }
-
-    // ── Step 2: Compute net spending per category ─────────────────────────────
-    final Map<String, double> categoryTotals = {};
-    for (final cat in grossExpense.keys) {
-      final netSpend = (grossExpense[cat] ?? 0) - (sameReasonIncome[cat] ?? 0);
-      if (netSpend > 0) categoryTotals[cat] = netSpend;
-    }
-
-    if (categoryTotals.isEmpty) {
-      return _buildEmptyState('No expense data for this period');
-    }
-
-    final sorted = categoryTotals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final top = sorted.take(6).toList();
-    final totalExpense = top.fold<double>(0, (s, e) => s + e.value);
-    final hasOffsets = sameReasonIncome.isNotEmpty;
-
-    final isTouched = _touchedCategoryIndex >= 0 &&
-        _touchedCategoryIndex < top.length;
-    final displayLabel =
-        isTouched ? top[_touchedCategoryIndex].key : 'Total Spent';
-    final displayAmount =
-        isTouched ? top[_touchedCategoryIndex].value : totalExpense;
-    final displayColor = isTouched
-        ? _categoryColor(_touchedCategoryIndex)
-        : AppColors.textPrimary;
-
-    return Column(
-      children: [
-        // ── Modern Interactive Donut Chart Container ─────────────────
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.overlay.withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            children: [
-              SizedBox(
-                height: 220,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    PieChart(
-                      PieChartData(
-                        pieTouchData: PieTouchData(
-                          touchCallback:
-                              (FlTouchEvent event, pieTouchResponse) {
-                            setState(() {
-                              if (!event.isInterestedForInteractions ||
-                                  pieTouchResponse == null ||
-                                  pieTouchResponse.touchedSection == null) {
-                                _touchedCategoryIndex = -1;
-                                return;
-                              }
-                              _touchedCategoryIndex = pieTouchResponse
-                                  .touchedSection!.touchedSectionIndex;
-                            });
-                          },
-                        ),
-                        borderData: FlBorderData(show: false),
-                        sectionsSpace: 4,
-                        centerSpaceRadius: 68,
-                        sections: top.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final data = entry.value;
-                          final isSelected = index == _touchedCategoryIndex;
-                          final radius = isSelected ? 26.0 : 20.0;
-                          final color = _categoryColor(index);
-
-                          return PieChartSectionData(
-                            color: color,
-                            value: data.value,
-                            title: '',
-                            radius: radius,
-                            badgeWidget: null,
-                          );
-                        }).toList(),
-                      ),
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOutCubic,
+                  const SizedBox(height: 10),
+                  // Progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 4,
+                      backgroundColor: Colors.white10,
+                      valueColor: AlwaysStoppedAnimation<Color>(bankColor),
                     ),
-
-                    // Center Content inside Donut
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          displayLabel,
-                          style: const TextStyle(
-                            color: AppColors.textSoft,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          provider.isBalanceVisible
-                              ? NumberFormat('#,##0').format(displayAmount)
-                              : '****',
-                          style: TextStyle(
-                            color: displayColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        if (isTouched && totalExpense > 0) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            '${(top[_touchedCategoryIndex].value / totalExpense * 100).toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              color: displayColor.withValues(alpha: 0.8),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              // Segmented Proportion Flow Bar (macOS / iOS style storage & flow bar)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  height: 8,
-                  width: double.infinity,
-                  color: Colors.white.withValues(alpha: 0.05),
-                  child: Row(
-                    children: top.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final data = entry.value;
-                      final flex = (totalExpense > 0)
-                          ? ((data.value / totalExpense) * 1000)
-                              .toInt()
-                              .clamp(1, 1000)
-                          : 1;
-                      return Expanded(
-                        flex: flex,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 0.5),
-                          color: _categoryColor(index),
-                        ),
-                      );
-                    }).toList(),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Offset notice if applicable
-        if (hasOffsets) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: AppColors.gold.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.gold.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded,
-                    color: AppColors.gold, size: 13),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Net spending shown — same-reason income has been subtracted.',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 10,
-                        height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        // Category Cards Grid (3 cards per row)
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: top.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            final pct = totalExpense > 0
-                ? (item.value / totalExpense * 100).toStringAsFixed(1)
-                : '0';
-            final color = _categoryColor(index);
-            final offset = sameReasonIncome[item.key] ?? 0;
-            final isSelected = index == _touchedCategoryIndex;
-
-            final cardWidth = (MediaQuery.of(context).size.width - 32 - 16) / 3;
-
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _touchedCategoryIndex = isSelected ? -1 : index;
-                });
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: cardWidth,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? color.withValues(alpha: 0.15)
-                      : AppColors.overlay.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? color.withValues(alpha: 0.5)
-                        : Colors.white.withValues(alpha: 0.06),
-                    width: isSelected ? 1.5 : 1.0,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            item.key,
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.9),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '$pct%',
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      provider.isBalanceVisible
-                          ? NumberFormat('#,##0').format(item.value)
-                          : '****',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.65),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    if (offset > 0) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        '-${NumberFormat('#,##0').format(offset)} in',
-                        style: TextStyle(
-                          color: AppColors.positive.withValues(alpha: 0.7),
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                ],
               ),
             );
           }).toList(),
@@ -1167,546 +913,178 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  Color _categoryColor(int i) {
-    const colors = [
-      AppColors.gold, // Gold
-      AppColors.positive, // Mint
-      AppColors.info, // Blue
-      AppColors.chartPurple, // Purple
-      AppColors.chartPink, // Pink
-      AppColors.error, // Red
-    ];
-    return colors[i % colors.length];
-  }
-
-  // ─── Bank Performance ────────────────────────────────────────────────────────
-  Widget _buildBankPerformance(
-      List<AppTransaction> txs, FinanceProvider provider) {
-    final banks = provider.senders.map((s) => s.senderName).toList();
-    if (banks.isEmpty || txs.isEmpty) {
-      return _buildEmptyState('No bank data for this period');
-    }
-
-    // Compute per-bank stats
-    final List<_BankStat> stats = [];
-    for (final bank in banks) {
-      final bankTxs = txs.where((t) => t.name == bank).toList();
-      final income = bankTxs
-          .where((t) => t.type == 'income')
-          .fold<double>(0, (s, t) => s + t.amount);
-      final expense = bankTxs
-          .where((t) => t.type == 'expense')
-          .fold<double>(0, (s, t) => s + t.amount);
-      final net = income - expense;
-
-      // Latest balance
-      double latestBal = 0;
-      final withBal = bankTxs.where((t) => t.totalBalance > 0);
-      if (withBal.isNotEmpty) latestBal = withBal.first.totalBalance;
-
-      stats.add(_BankStat(
-          name: bank,
-          income: income,
-          expense: expense,
-          net: net,
-          balance: latestBal,
-          txCount: bankTxs.length));
-    }
-
-    // Sort: banks with most transactions first
-    stats.sort((a, b) => b.txCount.compareTo(a.txCount));
-
-    final totalAbs = stats.fold<double>(0, (s, b) => s + b.income + b.expense);
-    final fmt = NumberFormat('#,##0');
-
-    return Column(
-      children: stats.map((s) {
-        final share = totalAbs > 0 ? (s.income + s.expense) / totalAbs : 0.0;
-        final incomeShare = (s.income + s.expense) > 0
-            ? s.income / (s.income + s.expense)
-            : 0.0;
-        final isPositive = s.net >= 0;
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.overlay.withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildMetricTile({
+    required String label,
+    required double val,
+    required NumberFormat fmt,
+    required Color color,
+    required IconData icon,
+    required bool isBalanceVisible,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.overlay.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // Header row
-              Row(
-                children: [
-                  _bankLogo(s.name),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(s.name,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500)),
-                        Text('${s.txCount} transactions',
-                            style: const TextStyle(
-                                color: AppColors.textSoft, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  // Net badge
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.overlay.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                          color:
-                              AppColors.gold.withValues(alpha: 0.1)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                            isPositive
-                                ? Icons.trending_up
-                                : Icons.trending_down,
-                            color: isPositive
-                                ? AppColors.positive
-                                : AppColors.negative,
-                            size: 12),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${isPositive ? '+' : ''}${fmt.format(s.net)}',
-                          style: TextStyle(
-                            color: isPositive
-                                ? AppColors.positive
-                                : AppColors.negative,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              // Progress bar: income vs expense
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  height: 6,
-                  child: LinearProgressIndicator(
-                    value: incomeShare.clamp(0.0, 1.0),
-                    backgroundColor:
-                        AppColors.error.withValues(alpha: 0.1),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.positive),
-                  ),
+              Icon(icon, color: color, size: 13),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _statChip(
-                      '▲ ${fmt.format(s.income)}', AppColors.positive),
-                  _statChip(
-                      '▼ ${fmt.format(s.expense)}', AppColors.error),
-                  if (s.balance > 0)
-                    _statChip('Bal: ${fmt.format(s.balance)}',
-                        AppColors.gold),
-                ],
-              ),
-              // Share pill
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Text('Activity share:',
-                      style:
-                          TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: share.clamp(0.0, 1.0),
-                        minHeight: 4,
-                        backgroundColor: Colors.white.withValues(alpha: 0.04),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          AppColors.gold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text('${(share * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 10)),
-                ],
               ),
             ],
           ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _statChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 10, fontWeight: FontWeight.w500)),
-    );
-  }
-
-  Widget _bankLogo(String name) {
-    final nameUp = name.toUpperCase();
-    Widget logoWidget;
-    List<Color> cardGradient;
-
-    if (nameUp == 'CBE') {
-      logoWidget = Image.asset('assets/images/CBE logo 1.png',
-          width: 22, height: 22, fit: BoxFit.contain);
-      cardGradient = [
-        AppColors.cardBrownDark,
-        AppColors.cardBrownMid,
-        AppColors.cardBrownDark
-      ];
-    } else if (nameUp == 'TELEBIRR') {
-      logoWidget = Image.asset('assets/images/Telebirr Logo.png',
-          width: 22, height: 22, fit: BoxFit.contain);
-      cardGradient = [
-        AppColors.success,
-        AppColors.cardLime,
-        AppColors.success
-      ];
-    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      logoWidget = Image.asset('assets/images/CBEBirr Logo.png',
-          width: 22, height: 22, fit: BoxFit.contain);
-      cardGradient = [
-        AppColors.cardSilver,
-        AppColors.textPrimary,
-        AppColors.cardSilver
-      ];
-    } else {
-      logoWidget = Text(
-        name.substring(0, min(1, name.length)).toUpperCase(),
-        style: const TextStyle(
-            color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-      );
-      cardGradient = [
-        AppColors.bgMid,
-        AppColors.cardGrayLight,
-        AppColors.bgMid
-      ];
-    }
-
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cardGradient.first, width: 1.5),
-      ),
-      child: Container(
-        margin: const EdgeInsets.all(1.5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: SweepGradient(
-            center: Alignment.center,
-            transform: const GradientRotation(pi / 4),
-            colors: cardGradient,
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isBalanceVisible ? '\$${fmt.format(val.abs())}' : '\$****',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.3,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-        child: Center(child: logoWidget),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildReasonBreakdown(List<AppTransaction> txs,
-      List<CashTransaction> cashTxs, FinanceProvider provider) {
-    // ── Step 1: Accumulate gross expense AND same-reason income ───────────────
-    final Map<String, double> grossExpense = {};
-    final Map<String, double> sameReasonIncome = {};
+// ─── Custom Painter for Circular Segmented Morphing Ring Donut Chart ──────────
+class CategoryArcItem {
+  final String label;
+  final double amount;
+  final Color color;
 
-    // Bank expenses
-    for (var t in txs.where((t) =>
-        t.type == 'expense' &&
-        t.reason?.toLowerCase() != 'cash' &&
-        t.customReasonText?.toLowerCase() != 'cash' &&
-        t.resolvedReason?.toLowerCase() != 'cash')) {
-      final label = (t.resolvedReason?.isNotEmpty == true)
-          ? t.resolvedReason!
-          : 'Uncategorized';
-      grossExpense[label] = (grossExpense[label] ?? 0) + t.amount;
-    }
+  CategoryArcItem({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+}
 
-    // Bank incomes that share a reason name with an expense category
-    for (var t in txs.where((t) =>
-        t.type == 'income' &&
-        t.reason?.toLowerCase() != 'cash' &&
-        t.customReasonText?.toLowerCase() != 'cash' &&
-        t.resolvedReason?.toLowerCase() != 'cash')) {
-      final label =
-          (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : null;
-      if (label != null && grossExpense.containsKey(label)) {
-        sameReasonIncome[label] = (sameReasonIncome[label] ?? 0) + t.amount;
+class MorphingRingPainter extends CustomPainter {
+  final List<CategoryArcItem> oldItems;
+  final List<CategoryArcItem> newItems;
+  final double oldTotal;
+  final double newTotal;
+  final double progress; // 0.0 to 1.0 morphing animation value
+
+  MorphingRingPainter({
+    required this.oldItems,
+    required this.newItems,
+    required this.oldTotal,
+    required this.newTotal,
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = min(size.width, size.height) / 2 - 20;
+    const strokeWidth = 24.0;
+
+    final basePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final Map<String, CategoryArcItem> oldMap = {for (var item in oldItems) item.label: item};
+    final Map<String, CategoryArcItem> newMap = {for (var item in newItems) item.label: item};
+    final Set<String> allLabels = {...oldMap.keys, ...newMap.keys};
+
+    final capAngularExtension = strokeWidth / radius;
+    const desiredGapAngle = 0.035;
+    final fullSegmentGap = capAngularExtension + desiredGapAngle;
+
+    double totalInterpolatedAmount = 0.0;
+    double totalGapAngle = 0.0;
+
+    final List<({String label, double amount, Color color, double weight})> activeSegments = [];
+
+    for (final label in allLabels) {
+      final oldItem = oldMap[label];
+      final newItem = newMap[label];
+
+      final oldAmt = oldItem?.amount ?? 0.0;
+      final newAmt = newItem?.amount ?? 0.0;
+
+      final oldW = oldAmt > 0 ? 1.0 : 0.0;
+      final newW = newAmt > 0 ? 1.0 : 0.0;
+
+      // Continuous presence weight lerp from 0.0 to 1.0 (prevents discrete gap pops)
+      final weight = oldW + (newW - oldW) * progress;
+      final currentAmt = oldAmt + (newAmt - oldAmt) * progress;
+      final color = newItem?.color ?? oldItem?.color ?? Colors.grey;
+
+      if (currentAmt > 0 || weight > 0) {
+        activeSegments.add((
+          label: label,
+          amount: max(0.0, currentAmt),
+          color: color,
+          weight: weight,
+        ));
+        totalInterpolatedAmount += max(0.0, currentAmt);
+        totalGapAngle += weight * fullSegmentGap;
       }
     }
 
-    // Cash wallet expenses
-    for (var ctx in cashTxs.where((t) => t.type == 'expense')) {
-      final label = ctx.reasonName ?? 'Other Cash';
-      grossExpense[label] = (grossExpense[label] ?? 0) + ctx.amount;
+    if (activeSegments.length <= 1) {
+      totalGapAngle = 0.0;
     }
 
-    // ── Step 2: Compute net spending = gross expense − same-reason income ─────
-    final Map<String, double> reasonTotals = {};
-    for (final label in grossExpense.keys) {
-      final netSpend =
-          (grossExpense[label] ?? 0) - (sameReasonIncome[label] ?? 0);
-      if (netSpend > 0) reasonTotals[label] = netSpend;
+    if (totalInterpolatedAmount <= 0) {
+      basePaint.color = Colors.white.withValues(alpha: 0.1);
+      canvas.drawCircle(center, radius, basePaint);
+      return;
     }
 
-    if (reasonTotals.isEmpty) {
-      return _buildEmptyState('Tag your expenses with reasons for insights');
+    final availableAngle = max(0.0, (2 * pi) - totalGapAngle);
+    double startAngle = -pi / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    for (var item in activeSegments) {
+      if (item.amount <= 0 && item.weight <= 0) continue;
+
+      final targetSweep = (item.amount / totalInterpolatedAmount) * availableAngle;
+      final sweepAngle = max(0.0, targetSweep);
+
+      basePaint.color = item.color;
+
+      if (sweepAngle > 0.0001) {
+        final drawStartAngle = startAngle + (activeSegments.length > 1 ? capAngularExtension / 2 : 0.0);
+        canvas.drawArc(rect, drawStartAngle, sweepAngle, false, basePaint);
+      }
+
+      final gapForThisSegment = activeSegments.length > 1 ? item.weight * fullSegmentGap : 0.0;
+      startAngle += sweepAngle + gapForThisSegment;
     }
-
-    final sorted = reasonTotals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final total = sorted.fold<double>(0, (s, e) => s + e.value);
-    final fmt = NumberFormat('#,##0.00');
-    final hasOffsets = sameReasonIncome.isNotEmpty;
-
-    return Column(
-      children: [
-        // Offset notice
-        if (hasOffsets) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: AppColors.gold.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.15)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded,
-                    color: AppColors.gold, size: 13),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Net spending shown — income tagged with the same reason has been subtracted.',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 10,
-                        height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        ...sorted.asMap().entries.take(8).map((entry) {
-          final i = entry.key;
-          final e = entry.value;
-          final pct = total > 0 ? e.value / total : 0.0;
-          final color = _categoryColor(i);
-          final gross = grossExpense[e.key] ?? e.value;
-          final offset = sameReasonIncome[e.key] ?? 0;
-
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AllTransactionsScreen(
-                    initialSearchQuery: e.key,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.overlay.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Row(
-                children: [
-                  // Rank circle
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: color.withValues(alpha: 0.3), width: 1),
-                    ),
-                    child: Center(
-                      child: Text('${i + 1}',
-                          style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(e.key,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500)),
-                            // Net amount in the reason's color
-                            Text(fmt.format(e.value),
-                                style: TextStyle(
-                                    color: color,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                        // Breakdown row: gross − offset = net
-                        if (offset > 0) ...[
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              Text(
-                                '${fmt.format(gross)} out',
-                                style: TextStyle(
-                                    color: AppColors.negative
-                                        .withValues(alpha: 0.7),
-                                    fontSize: 10),
-                              ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text('−',
-                                    style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.3),
-                                        fontSize: 10)),
-                              ),
-                              Text(
-                                '${fmt.format(offset)} in',
-                                style: TextStyle(
-                                    color: AppColors.positive
-                                        .withValues(alpha: 0.8),
-                                    fontSize: 10),
-                              ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text('=',
-                                    style: TextStyle(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.3),
-                                        fontSize: 10)),
-                              ),
-                              Text(
-                                'net ${fmt.format(e.value)}',
-                                style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
-                                    fontSize: 10),
-                              ),
-                            ],
-                          ),
-                        ],
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: pct.clamp(0.0, 1.0),
-                            minHeight: 4,
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.06),
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                            '${(pct * 100).toStringAsFixed(1)}% of net expenses',
-                            style: const TextStyle(
-                                color: AppColors.textSecondary, fontSize: 10)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
-    );
   }
 
-  Widget _buildEmptyState(String message) {
-    return Container(
-      height: 120,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.bar_chart_outlined,
-              color: Colors.white.withValues(alpha: 0.12), size: 28),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  bool shouldRepaint(covariant MorphingRingPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.oldItems != oldItems ||
+        oldDelegate.newItems != newItems ||
+        oldDelegate.oldTotal != oldTotal ||
+        oldDelegate.newTotal != newTotal;
   }
 }
 
-// ─── Data class ─────────────────────────────────────────────────────────────
-class _BankStat {
-  final String name;
-  final double income;
-  final double expense;
-  final double net;
-  final double balance;
-  final int txCount;
-
-  const _BankStat({
-    required this.name,
-    required this.income,
-    required this.expense,
-    required this.net,
-    required this.balance,
-    required this.txCount,
-  });
-}

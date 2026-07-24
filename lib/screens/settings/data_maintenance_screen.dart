@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
 
 class DataMaintenanceScreen extends StatefulWidget {
   const DataMaintenanceScreen({super.key});
@@ -215,23 +216,35 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
   }
 
   Widget _buildHeader() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      child: Row(
         children: [
-          Text(
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Text(
             'Data Maintenance',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
               letterSpacing: -0.5,
             ),
-          ),
-          Text(
-            'Keep your financial data accurate and clean',
-            style: TextStyle(color: AppColors.textSoft, fontSize: 13),
           ),
         ],
       ),
@@ -239,35 +252,12 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
   }
 
   Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: Colors.white,
-        unselectedLabelColor: AppColors.textSoft,
-        dividerColor: Colors.transparent,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        unselectedLabelStyle:
-            const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
-        splashFactory: NoSplash.splashFactory,
-        overlayColor: WidgetStateProperty.all(Colors.transparent),
-        tabs: const [
-          Tab(height: 38, text: 'Smart Refresh'),
-          Tab(height: 38, text: 'Full Reset'),
-        ],
-      ),
+    return AppCapsuleTabBar(
+      tabs: const ['Clean Data', 'Import & Export'],
+      controller: _tabController,
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      fontSize: 12,
     );
   }
 
@@ -333,9 +323,9 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

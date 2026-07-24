@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -10,10 +11,10 @@ import 'sender_detail_screen.dart';
 import 'transaction_detail_screen.dart';
 import 'notifications_screen.dart';
 import 'cash_wallet_detail_screen.dart';
-import 'transaction_search_screen.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../widgets/hold_to_refresh.dart';
+import '../../widgets/interactive_drag_handle.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -25,7 +26,16 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final String _searchQuery = '';
+  final FocusNode _searchFocusNode = FocusNode();
+  String _searchQuery = '';
+  String _typeFilter = 'All';
+  String _dateFilter = 'Any Time';
+  String _senderFilter = 'All Senders';
+  String _bankFilter = 'All Banks';
+  bool _isSearchActive = false;
+  bool _isFilterExpanded = false;
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
   late PageController _bannerController;
   bool _isShowingTodayOnly = false;
   Timer? _bannerTimer;
@@ -35,8 +45,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _searchLabelIndex = 0;
   Timer? _searchLabelTimer;
   double? _touchedX;
-  bool _isFilterExpanded = false;
-  String _filterType = 'All';
+  final GlobalKey _topSectionKey = GlobalKey();
+  double? _measuredTopSectionHeight;
 
   @override
   void initState() {
@@ -71,9 +81,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       if (provider.userName != null && provider.userName!.isNotEmpty) {
-        return '$greeting, Dear ${provider.userName}! Welcome back to your dashboard';
+        return '$greeting ${provider.userName} Have A Good Day';
       }
-      return '$greeting! Welcome back to your mobile banking overview';
+      return '$greeting Have A Good Day';
     } else if (_searchLabelIndex == 1) {
       return 'Search & filter all bank accounts, wallets, and cash transactions instantly';
     } else if (_searchLabelIndex == 2) {
@@ -95,8 +105,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       if (_bannerController.hasClients) {
         _bannerController.nextPage(
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeInOutCubic,
+          duration: const Duration(milliseconds: 900),
+          curve: Curves.fastOutSlowIn,
         );
       }
     });
@@ -104,11 +114,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
-    _searchController.dispose();
     _bannerTimer?.cancel();
     _searchLabelTimer?.cancel();
     _bannerController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _sheetController.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+          ),
+          child: Stack(
+            children: [
+              // Top background ambient glow
+              Positioned(
+                top: 15,
+                right: -65,
+                width: 270,
+                height: 270,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.telebirrGreen.withValues(alpha: 0.45),
+                    ),
+                  ),
+                ),
+              ),
+              Consumer<FinanceProvider>(
+                builder: (context, financeProvider, child) {
+                  return _buildMainDashboardLayout(context);
+                },
+              ),
+              _buildDraggableTransactionsSheet(context),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showPNLInfo(BuildContext context, bool isToday) {
@@ -236,47 +294,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Icons.category_outlined;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ),
-      child: Scaffold(
-        extendBody: true,
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              colors: [
-                AppColors.background,
-                AppColors.bgMid,
-              ],
-            ),
-          ),
-          child: Stack(
-            children: [
-              Consumer<FinanceProvider>(
-                builder: (context, financeProvider, child) {
-                  return _buildMainDashboardLayout(context);
-                },
-              ),
-              _buildDraggableTransactionsSheet(context),
-            ],
-          ),
-        ),
-      ),
-    );
+
+
+  void _updateTopSectionHeight() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final RenderBox? box =
+          _topSectionKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        final newHeight = box.size.height;
+        if (_measuredTopSectionHeight != newHeight) {
+          setState(() {
+            _measuredTopSectionHeight = newHeight;
+          });
+        }
+      }
+    });
   }
 
   Widget _buildMainDashboardLayout(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
+    _updateTopSectionHeight();
     return HoldToRefresh(
       onRefresh: () => provider.refreshData(lastDays: 7),
       child: SingleChildScrollView(
@@ -289,23 +327,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SafeArea(
               bottom: false,
               child: Column(
+                key: _topSectionKey,
                 children: [
                   if (provider.overdueLoans.isNotEmpty)
                     _buildOverdueLoanBanner(context),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _buildHeader(context),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   _buildBalanceCard(context),
                   _buildOverallChartSection(context),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 10),
+                  _buildBannerCarousel(context),
+                  const SizedBox(height: 14),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            _buildSendersList(context),
-            const SizedBox(height: 24),
-            _buildBannerCarousel(context),
-            const SizedBox(height: 340),
           ],
         ),
       ),
@@ -375,97 +411,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-          );
-        },
-        child: Container(
-          height: 35,
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(
-                    Icons.notifications,
-                    color: Color(0xFF1A1A1A),
-                    size: 17,
-                  ),
-                  if (provider.unreadNotificationCount > 0)
-                    Positioned(
-                      right: -3,
-                      top: -3,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.gold,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 600),
-                  switchInCurve: Curves.easeInOutCubic,
-                  switchOutCurve: Curves.easeInOutCubic,
-                  transitionBuilder:
-                      (Widget child, Animation<double> animation) {
-                    final inAnimation = Tween<Offset>(
-                      begin: const Offset(0.0, 1.2),
-                      end: Offset.zero,
-                    ).animate(animation);
-                    final outAnimation = Tween<Offset>(
-                      begin: const Offset(0.0, -1.2),
-                      end: Offset.zero,
-                    ).animate(animation);
-
-                    return ClipRect(
-                      child: SlideTransition(
-                        position: child.key == ValueKey(_searchLabelIndex)
-                            ? inAnimation
-                            : outAnimation,
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: Text(
-                    _getSearchHint(provider),
-                    key: ValueKey(_searchLabelIndex),
-                    style: const TextStyle(
-                      color: Color(0xFF1A1A1A),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w400, // Regular weight
-                      letterSpacing: -0.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.0),
+      child: DynamicNotificationPill(),
     );
   }
+
 
   Widget _buildBalanceCard(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
@@ -477,225 +428,336 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? (provider.totalBalance % 1).toStringAsFixed(2).split('.')[1]
         : '**';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
-                onTap: provider.toggleBalanceVisibility,
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  children: [
-                    const Text(
-                      'Total balance',
-                      style:
-                          TextStyle(color: AppColors.textSoft, fontSize: 13),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      provider.isBalanceVisible
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: AppColors.textSoft,
-                      size: 14,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: provider.toggleBalanceVisibility,
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const Text(
-                          '\$',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          fullyFormatted,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 34,
-                            fontWeight: FontWeight.w600,
-                            height: 1.0,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      '.$decimals',
-                      style: const TextStyle(
-                        color: AppColors.textSoft,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w400,
-                        height: 1.0,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
+    final netVal = _isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall;
+    final pctVal = _isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall;
+    final bool isPositive = netVal >= 0;
+
+    return Container(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Left Column: Total Balance & PNL
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Label + Visibility icon
                   GestureDetector(
-                    onTap: () => _showPNLInfo(context, _isShowingTodayOnly),
-                    behavior: HitTestBehavior.opaque,
-                    child: IntrinsicWidth(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
-                            style: const TextStyle(
-                              color: AppColors.textSoft,
-                              fontSize: 9, // Reduced
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 1),
-                          CustomPaint(
-                            size: const Size(double.infinity, 1),
-                            painter: DashedUnderlinePainter(
-                                color:
-                                    AppColors.textSoft.withValues(alpha: 0.4)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isOverallChartVisible = !_isOverallChartVisible;
-                      });
-                    },
+                    onTap: provider.toggleBalanceVisibility,
                     behavior: HitTestBehavior.opaque,
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '${(_isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall) >= 0 ? '+' : '-'}${NumberFormat('#,##0').format((_isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall).abs())}',
+                        const Text(
+                          'Total balance',
                           style: TextStyle(
-                            color: (_isShowingTodayOnly
-                                        ? provider.netForSelectedDate
-                                        : provider.netOverall) >=
-                                    0
-                                ? AppColors.positive
-                                : AppColors.negative,
-                            fontSize: 10, // Reduced
-                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
-                        const SizedBox(width: 4), // Reduced from 8
-                        Text(
-                          '(',
-                          style: TextStyle(
-                            color: (_isShowingTodayOnly
-                                        ? provider.incomePercentageChange
-                                        : provider.percentageChangeOverall) >=
-                                    0
-                                ? AppColors.positive
-                                : AppColors.negative,
-                            fontSize: 10, // Reduced
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
+                        const SizedBox(width: 6),
                         Icon(
-                          (_isShowingTodayOnly
-                                      ? provider.incomePercentageChange
-                                      : provider.percentageChangeOverall) >=
-                                  0
-                              ? Icons.trending_up
-                              : Icons.trending_down,
-                          color: (_isShowingTodayOnly
-                                      ? provider.incomePercentageChange
-                                      : provider.percentageChangeOverall) >=
-                                  0
-                              ? AppColors.positive
-                              : AppColors.negative,
-                          size: 12, // Reduced from 14
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${(_isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall).abs().toStringAsFixed(2)}%)',
-                          style: TextStyle(
-                            color: (_isShowingTodayOnly
-                                        ? provider.incomePercentageChange
-                                        : provider.percentageChangeOverall) >=
-                                    0
-                                ? AppColors.positive
-                                : AppColors.negative,
-                            fontSize: 10, // Reduced
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          _isOverallChartVisible
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                          color: Colors.white54,
-                          size: 16,
+                          provider.isBalanceVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.textSecondary,
+                          size: 15,
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
-          GestureDetector(
-            onTap: () {
-              provider.setScreenIndex(1);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.gold,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.keyboard_double_arrow_right,
-                      color: AppColors.background, size: 18),
-                  SizedBox(width: 6),
-                  Text(
-                    'Overview',
-                    style: TextStyle(
-                      color: AppColors.background,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                  const SizedBox(height: 6),
+
+                  // Large Balance Display
+                  GestureDetector(
+                    onTap: provider.toggleBalanceVisibility,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            fullyFormatted,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1.0,
+                              height: 1.05,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '.$decimals',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
+                            height: 1.05,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Sub-row: Today's / Overall PNL with Dashed Underline & Chart Toggle Arrow
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showPNLInfo(context, _isShowingTodayOnly),
+                          behavior: HitTestBehavior.opaque,
+                          child: IntrinsicWidth(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
+                                  style: const TextStyle(
+                                    color: AppColors.textSoft,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 1),
+                                CustomPaint(
+                                  size: const Size(double.infinity, 1),
+                                  painter: DashedUnderlinePainter(
+                                    color: AppColors.textSoft.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isOverallChartVisible = !_isOverallChartVisible;
+                            });
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: Row(
+                            children: [
+                              Text(
+                                '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}',
+                                style: TextStyle(
+                                  color: isPositive ? AppColors.positive : AppColors.negative,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '(',
+                                style: TextStyle(
+                                  color: isPositive ? AppColors.positive : AppColors.negative,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(
+                                isPositive ? Icons.trending_up : Icons.trending_down,
+                                color: isPositive ? AppColors.positive : AppColors.negative,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${pctVal.abs().toStringAsFixed(2)}%)',
+                                style: TextStyle(
+                                  color: isPositive ? AppColors.positive : AppColors.negative,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _isOverallChartVisible
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: Colors.white54,
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(width: 12),
+
+            // Right Column: Stacked Cards Deck
+            _buildStackedCardsDeck(context, provider),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStackedCardsDeck(BuildContext context, FinanceProvider provider) {
+    final t = (provider.pageOffset).clamp(0.0, 1.0);
+
+    // Hide static deck when swiping so physical flying overlay in MainShell handles screen flight
+    if (t > 0.001 && t < 0.999) {
+      return const SizedBox(width: 65, height: 185);
+    }
+
+    final opacity = (1.0 - t * 1.5).clamp(0.0, 1.0);
+
+    return GestureDetector(
+      onTap: () {
+        provider.setScreenIndex(1); // Navigate to My Wallets screen
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: opacity,
+        child: SizedBox(
+          height: 185,
+          width: 65,
+          child: Stack(
+            alignment: Alignment.centerRight,
+            clipBehavior: Clip.none,
+            children: [
+              // Layer 1: Bottom (Green Telebirr card)
+              Positioned(
+                right: lerpDouble(18, -120, t)!,
+                top: lerpDouble(0, 100, t)!,
+                bottom: 0,
+                width: lerpDouble(95, 260, t)!,
+                child: Hero(
+                  tag: 'hero_card_TELEBIRR',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.telebirrGreen,
+                          AppColors.cardLime,
+                        ],
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(lerpDouble(24, 22, t)!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.telebirrGreen.withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          offset: const Offset(-4, 0),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Layer 2: Middle (Brown CBE card)
+              Positioned(
+                right: lerpDouble(-6, -60, t)!,
+                top: lerpDouble(0, 220, t)!,
+                bottom: 0,
+                width: lerpDouble(95, 260, t)!,
+                child: Hero(
+                  tag: 'hero_card_CBE',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.cardBrownMid,
+                          AppColors.cardBrownDark,
+                        ],
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(lerpDouble(24, 22, t)!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.cardBrownDark.withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          offset: const Offset(-3, 0),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Layer 3: Top (White CBE Birr card)
+              Positioned(
+                right: lerpDouble(-30, 0, t)!,
+                top: lerpDouble(0, 340, t)!,
+                bottom: 0,
+                width: lerpDouble(95, 260, t)!,
+                child: Hero(
+                  tag: 'hero_card_CBE BIRR',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.cardCbeBirrSilver,
+                          AppColors.cardCbeBirrWhite,
+                        ],
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(lerpDouble(24, 22, t)!),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          offset: const Offset(-4, 2),
+                        ),
+                      ],
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.6),
+                            Colors.white.withValues(alpha: 0.0),
+                          ],
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(lerpDouble(24, 22, t)!),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildOverallChartSection(BuildContext context) {
     if (!_isOverallChartVisible) return const SizedBox.shrink();
+    return _buildOverallChartContent(context);
+  }
 
+  Widget _buildOverallChartContent(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
     List<FlSpot> spots = [];
     int daysLimit = 30;
@@ -852,12 +914,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     //         When touched we simply dim the entire fill uniformly; the clear
     //         left/right distinction is shown by the line gradient + indicator.
     List<double> lineStops = [0.0, 1.0];
-    List<Color> lineColors = [AppColors.gold, AppColors.gold];
+    List<Color> lineColors = [AppColors.positive, AppColors.positive];
 
     // Fill: top strong → bottom fully transparent (always top→bottom)
     List<Color> fillColors = [
-      AppColors.gold.withValues(alpha: 0.28),
-      AppColors.gold.withValues(alpha: 0.0),
+      AppColors.positive.withValues(alpha: 0.28),
+      AppColors.positive.withValues(alpha: 0.0),
     ];
 
     if (_touchedX != null && spots.isNotEmpty) {
@@ -867,15 +929,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         lineStops = [0.0, ratio, ratio, 1.0];
         // Line: full left of indicator, nearly invisible right of it
         lineColors = [
-          AppColors.gold,
-          AppColors.gold,
-          AppColors.gold.withValues(alpha: 0.08),
-          AppColors.gold.withValues(alpha: 0.08),
+          AppColors.positive,
+          AppColors.positive,
+          AppColors.positive.withValues(alpha: 0.08),
+          AppColors.positive.withValues(alpha: 0.08),
         ];
         // Fill: dim the whole fill uniformly when touching
         fillColors = [
-          AppColors.gold.withValues(alpha: 0.07),
-          AppColors.gold.withValues(alpha: 0.0),
+          AppColors.positive.withValues(alpha: 0.07),
+          AppColors.positive.withValues(alpha: 0.0),
         ];
       }
     }
@@ -1367,9 +1429,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'main': mostExpenseToday != null
             ? mostExpenseToday['reason'] as String
             : 'Keep Savings!',
-        'bgColor': const Color(0xFF1B5E4B),
-        'darkIconColor': const Color(0xFF0F3A2E),
-        'titleColor': const Color(0xFF88C9B8),
+        'bgColor': AppColors.cardCbeBg,
+        'darkIconColor': AppColors.cardCbeDarkIcon,
+        'titleColor': AppColors.cardCbeTitle,
         'iconData': _getReasonIcon(mostExpenseToday?['reason']),
         'isBankIcon': false,
         'bankName': null,
@@ -1379,9 +1441,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'main': mostExpenseMonth != null
             ? mostExpenseMonth['reason'] as String
             : 'No Transactions',
-        'bgColor': const Color(0xFF9E4B2D),
-        'darkIconColor': const Color(0xFF542412),
-        'titleColor': const Color(0xFFE8BDB0),
+        'bgColor': AppColors.cardBoaBg,
+        'darkIconColor': AppColors.cardBoaDarkIcon,
+        'titleColor': AppColors.cardBoaTitle,
         'iconData': _getReasonIcon(mostExpenseMonth?['reason']),
         'isBankIcon': false,
         'bankName': null,
@@ -1389,9 +1451,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       {
         'title': 'THE MOST AFFECTED ACCOUNT',
         'main': mostAffected?.senderName ?? 'N/A',
-        'bgColor': const Color(0xFFF9B825),
-        'darkIconColor': const Color(0xFF805A04),
-        'titleColor': const Color(0xFFFFF1C6),
+        'bgColor': AppColors.cardDashenBg,
+        'darkIconColor': AppColors.cardDashenDarkIcon,
+        'titleColor': AppColors.cardDashenTitle,
         'iconData': Icons.account_balance,
         'isBankIcon': true,
         'bankName': mostAffected?.senderName,
@@ -1399,93 +1461,197 @@ class _DashboardScreenState extends State<DashboardScreen> {
       {
         'title': 'THE LESS AFFECTED ACCOUNT',
         'main': lessAffected?.senderName ?? 'N/A',
-        'bgColor': const Color(0xFF5E35B1),
-        'darkIconColor': const Color(0xFF2E175B),
-        'titleColor': const Color(0xFFD1C4E9),
+        'bgColor': AppColors.cardCoopBg,
+        'darkIconColor': AppColors.cardCoopDarkIcon,
+        'titleColor': AppColors.cardCoopTitle,
         'iconData': Icons.account_balance,
         'isBankIcon': true,
         'bankName': lessAffected?.senderName,
       },
     ];
 
-    return SizedBox(
-      height: 56,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: bannerItems.length,
-        itemBuilder: (context, index) {
-          final item = bannerItems[index];
-          final Color bgColor = item['bgColor'] as Color;
-          final Color darkIconColor = item['darkIconColor'] as Color;
-          final Color titleColor = item['titleColor'] as Color;
-          final String title = item['title'] as String;
-          final String mainText = item['main'] as String;
-          final bool isBankIcon = item['isBankIcon'] as bool;
-          final String? bankName = item['bankName'] as String?;
-          final IconData iconData = item['iconData'] as IconData;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome,
+                color: AppColors.gold,
+                size: 13,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'SAVINGS & SPENDING INSIGHTS',
+                style: TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Smart Tracking',
+                style: TextStyle(
+                  color: AppColors.telebirrGreen,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 50,
+          child: ListView.builder(
+            padding: const EdgeInsets.only(left: 4, right: 16, top: 2, bottom: 2),
+            clipBehavior: Clip.none,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: bannerItems.length,
+            itemBuilder: (context, index) {
+              final item = bannerItems[index];
+              final Color bgColor = item['bgColor'] as Color;
+              final Color darkIconColor = item['darkIconColor'] as Color;
+              final Color titleColor = item['titleColor'] as Color;
+              final String title = item['title'] as String;
+              final String mainText = item['main'] as String;
+              final bool isBankIcon = item['isBankIcon'] as bool;
+              final String? bankName = item['bankName'] as String?;
+              final IconData iconData = item['iconData'] as IconData;
 
-          return Container(
-            width: 225,
-            margin: const EdgeInsets.only(right: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: bgColor.withValues(alpha: 0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+              return Container(
+                width: 185,
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: bgColor.withValues(alpha: 0.3),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: titleColor,
+                              fontSize: 7.0,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            mainText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (isBankIcon && bankName != null)
+                      _getBankIconSmall(bankName, size: 20, overrideColor: darkIconColor)
+                    else
+                      Icon(
+                        iconData,
+                        color: darkIconColor,
+                        size: 20,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWhiteFilterDropdown({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    double? maxWidth,
+  }) {
+    final bool isDefault = value == 'All' ||
+        value == 'Any Time' ||
+        value == 'All Senders' ||
+        value == 'All Banks';
+
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isDefault
+            ? AppColors.lightGreyBackground
+            : AppColors.darkCharcoal,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDefault
+              ? AppColors.lightGreyText.withValues(alpha: 0.3)
+              : AppColors.darkCharcoal,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          icon: Padding(
+            padding: const EdgeInsets.only(left: 4.0),
+            child: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: isDefault ? AppColors.darkCharcoal : Colors.white,
+              size: 16,
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: titleColor,
-                          fontSize: 7.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        mainText,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+          ),
+          dropdownColor: Colors.white,
+          style: TextStyle(
+            color: isDefault ? AppColors.darkCharcoal : Colors.white,
+            fontSize: 12,
+            fontWeight: isDefault ? FontWeight.w500 : FontWeight.w600,
+          ),
+          onChanged: onChanged,
+          items: items.map((String item) {
+            return DropdownMenuItem<String>(
+              value: item,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth ?? 150),
+                child: Text(
+                  item,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: item == value && !isDefault
+                        ? AppColors.darkCharcoal
+                        : AppColors.darkCharcoal,
                   ),
                 ),
-                const SizedBox(width: 6),
-                if (isBankIcon && bankName != null)
-                  _getBankIconSmall(bankName, size: 24, overrideColor: darkIconColor)
-                else
-                  Icon(
-                    iconData,
-                    color: darkIconColor,
-                    size: 24,
-                  ),
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -1493,31 +1659,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDraggableTransactionsSheet(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
 
-    List<AppTransaction> transactionsList;
-    if (_filterType == 'Today') {
-      transactionsList = provider.transactionsForSelectedDate;
-    } else if (_filterType == 'Month') {
-      transactionsList = provider.transactionsForSelectedMonth;
-    } else if (_filterType == 'Missing Reason') {
-      transactionsList = provider.transactions.where((tx) =>
-          tx.reasonId == null &&
-          (tx.customReasonText == null || tx.customReasonText!.isEmpty) &&
-          (tx.reason == null || tx.reason!.isEmpty)).toList();
-    } else {
-      transactionsList = provider.transactions;
+    final allTransactions = provider.transactions;
+    final allSenders = ['All Senders'];
+    allSenders
+        .addAll(allTransactions.map((t) => t.sender).toSet().toList()..sort());
+
+    if (!allSenders.contains(_senderFilter)) {
+      _senderFilter = 'All Senders';
     }
 
+    final allBanks = ['All Banks'];
+    allBanks
+        .addAll(allTransactions.map((t) => t.name).toSet().toList()..sort());
+
+    if (!allBanks.contains(_bankFilter)) {
+      _bankFilter = 'All Banks';
+    }
+
+    final transactionsList = allTransactions.where((tx) {
+      if (_typeFilter == 'Incoming' && tx.type != 'income') return false;
+      if (_typeFilter == 'Outgoing' && tx.type != 'expense') return false;
+
+      if (_senderFilter != 'All Senders' && tx.sender != _senderFilter) {
+        return false;
+      }
+
+      if (_bankFilter != 'All Banks' && tx.name != _bankFilter) {
+        return false;
+      }
+
+      if (_dateFilter != 'Any Time') {
+        final now = DateTime.now();
+        final txDate = tx.date;
+        if (_dateFilter == 'Today') {
+          if (txDate.year != now.year ||
+              txDate.month != now.month ||
+              txDate.day != now.day) {
+            return false;
+          }
+        } else if (_dateFilter == 'This Week') {
+          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+          final startOfToday =
+              DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+          if (txDate.isBefore(startOfToday)) return false;
+        } else if (_dateFilter == 'This Month') {
+          if (txDate.year != now.year || txDate.month != now.month) {
+            return false;
+          }
+        }
+      }
+
+      if (_searchQuery.isNotEmpty) {
+        final searchLower = _searchQuery.toLowerCase();
+        final nameStr = tx.name.toLowerCase();
+        final senderStr = tx.sender.toLowerCase();
+        final reasonStr = tx.reason?.toLowerCase() ?? '';
+        final customReasonStr = tx.customReasonText?.toLowerCase() ?? '';
+        final amountStr = tx.amount.toString();
+        final rawStr = tx.rawMessage.toLowerCase();
+
+        final matchesSearch = nameStr.contains(searchLower) ||
+            senderStr.contains(searchLower) ||
+            reasonStr.contains(searchLower) ||
+            customReasonStr.contains(searchLower) ||
+            amountStr.contains(searchLower) ||
+            rawStr.contains(searchLower);
+
+        return matchesSearch;
+      }
+
+      return true;
+    }).toList();
+
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final topPadding = mediaQuery.padding.top;
+    final textScale = mediaQuery.textScaler.scale(1.0);
+
+    final double estimatedTopContent =
+        (provider.overdueLoans.isNotEmpty ? 54.0 : 0.0) +
+            (345.0 * textScale.clamp(1.0, 1.4));
+
+    double dynamicRestSize;
+    if (_measuredTopSectionHeight != null && _measuredTopSectionHeight! > 0) {
+      dynamicRestSize =
+          (screenHeight - (_measuredTopSectionHeight! + topPadding)) /
+              screenHeight;
+    } else {
+      dynamicRestSize =
+          (screenHeight - (topPadding + estimatedTopContent)) / screenHeight;
+    }
+    dynamicRestSize = dynamicRestSize.clamp(0.20, 0.75);
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.48,
-      minChildSize: 0.45,
+      controller: _sheetController,
+      initialChildSize: dynamicRestSize,
+      minChildSize: dynamicRestSize,
       maxChildSize: 0.95,
       snap: true,
-      snapSizes: const [0.45, 0.95],
+      snapSizes: [dynamicRestSize, 0.95],
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.18),
@@ -1530,98 +1776,242 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               // Drag Handle
               Center(
-                child: Container(
+                child: InteractiveDragHandle(
+                  color: const Color(0xFFCBD5E1),
                   width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 10, bottom: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCCCCCC),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  padding: const EdgeInsets.only(top: 10, bottom: 6),
+                  onTap: () {
+                    final bool isExpanded =
+                        _sheetController.size > (dynamicRestSize + 0.95) / 2;
+                    _sheetController.animateTo(
+                      isExpanded ? dynamicRestSize : 0.95,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                    );
+                  },
+                  onVerticalDragUpdate: (details) {
+                    final double delta = details.primaryDelta ?? 0;
+                    final double currentSize = _sheetController.size;
+                    final double newSize = (currentSize - delta / screenHeight)
+                        .clamp(dynamicRestSize, 0.95);
+                    _sheetController.jumpTo(newSize);
+                  },
+                  onVerticalDragEnd: (details) {
+                    final double currentSize = _sheetController.size;
+                    final double mid = (dynamicRestSize + 0.95) / 2;
+                    final double target = (currentSize >= mid ||
+                            (details.velocity.pixelsPerSecond.dy < -200))
+                        ? 0.95
+                        : dynamicRestSize;
+                    _sheetController.animateTo(
+                      target,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutCubic,
+                    );
+                  },
                 ),
               ),
-              // Top Bar: Filter Icon (Left), Title (Center), Search Icon (Right 50% opacity)
+
+              // Search & Header Row
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isFilterExpanded = !_isFilterExpanded;
-                        });
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        child: const Icon(
-                          Icons.filter_list,
-                          color: Color(0x80000000), // 50% opacity dark text color
-                          size: 22,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: _isSearchActive
+                    ? Container(
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.lightGreyBackground,
+                          borderRadius: BorderRadius.circular(21),
                         ),
-                      ),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'Transactions',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF1A1A1A),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.3,
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 14),
+                            const Icon(Icons.search_rounded,
+                                color: AppColors.darkGreyText, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                focusNode: _searchFocusNode,
+                                style: const TextStyle(
+                                    color: AppColors.darkCharcoal,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500),
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'Search by sender, bank, or reason...',
+                                  hintStyle: const TextStyle(
+                                      color: AppColors.greyText,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w400),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  suffixIconConstraints: const BoxConstraints(
+                                    minHeight: 24,
+                                    minWidth: 24,
+                                  ),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _searchQuery = '';
+                                              _searchController.clear();
+                                            });
+                                          },
+                                          child: const Padding(
+                                            padding: EdgeInsets.only(
+                                                right: 10.0),
+                                            child: Icon(Icons.cancel_rounded,
+                                                color: AppColors.greyText,
+                                                size: 16),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _searchQuery = val;
+                                  });
+                                },
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isSearchActive = false;
+                                  _searchQuery = '';
+                                  _searchController.clear();
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                child: const Icon(Icons.close_rounded,
+                                    color: AppColors.darkCharcoal, size: 18),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
                         ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const TransactionSearchScreen(),
+                      )
+                    : Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isFilterExpanded = !_isFilterExpanded;
+                              });
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.filter_list,
+                                color: _isFilterExpanded
+                                    ? AppColors.darkCharcoal
+                                    : AppColors.overlayDark50,
+                                size: 22,
+                              ),
+                            ),
                           ),
-                        );
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        child: const Icon(
-                          Icons.search,
-                          color: Color(0x80000000), // 50% opacity dark text color
-                          size: 22,
-                        ),
+                          const Expanded(
+                            child: Text(
+                              'Transactions',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.darkCharcoal,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isSearchActive = true;
+                              });
+                              _searchFocusNode.requestFocus();
+                              _sheetController.animateTo(0.95,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutCubic);
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              child: const Icon(
+                                Icons.search,
+                                color: AppColors.overlayDark50,
+                                size: 22,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
-              if (_isFilterExpanded) ...[
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+
+              // Filter Row Dropdowns (Hidden by default; appears when search active or filter icon tapped)
+              if (_isSearchActive || _isFilterExpanded) ...[
+                const SizedBox(height: 6),
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      _buildWhiteFilterChip('All', _filterType == 'All'),
-                      const SizedBox(width: 8),
-                      _buildWhiteFilterChip('Month', _filterType == 'Month'),
-                      const SizedBox(width: 8),
-                      _buildWhiteFilterChip('Today', _filterType == 'Today'),
-                      const SizedBox(width: 8),
-                      _buildWhiteFilterChip('Missing Reason', _filterType == 'Missing Reason'),
-                    ],
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _buildWhiteFilterDropdown(
+                          value: _typeFilter,
+                          items: const ['All', 'Incoming', 'Outgoing'],
+                          onChanged: (val) {
+                            if (val != null) setState(() => _typeFilter = val);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildWhiteFilterDropdown(
+                          value: _dateFilter,
+                          items: const [
+                            'Any Time',
+                            'Today',
+                            'This Week',
+                            'This Month'
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() => _dateFilter = val);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildWhiteFilterDropdown(
+                          value: _bankFilter,
+                          items: allBanks,
+                          maxWidth: 90,
+                          onChanged: (val) {
+                            if (val != null) setState(() => _bankFilter = val);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _buildWhiteFilterDropdown(
+                          value: _senderFilter,
+                          items: allSenders,
+                          maxWidth: 100,
+                          onChanged: (val) {
+                            if (val != null) setState(() => _senderFilter = val);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
               ],
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Expanded(
                 child: transactionsList.isEmpty
                     ? const Center(
                         child: Text(
                           'No transactions found',
                           style: TextStyle(
-                            color: Color(0xFF888888),
+                            color: AppColors.greyText,
                             fontSize: 13,
                           ),
                         ),
@@ -1635,7 +2025,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           thickness: 0.5,
                           indent: 72,
                           endIndent: 20,
-                          color: Color(0xFFF0F0F0),
+                          color: AppColors.lightGreySurface,
                         ),
                         itemBuilder: (context, index) {
                           final tx = transactionsList[index];
@@ -1650,33 +2040,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
     );
   }
-
-  Widget _buildWhiteFilterChip(String label, bool isSelected) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _filterType = label;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1A1A1A) : const Color(0xFFF2F4F7),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF555555),
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildWhiteTransactionItem(
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
@@ -1714,7 +2077,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Text(
                           label,
                           style: const TextStyle(
-                            color: Color(0xFF1A1A1A),
+                            color: AppColors.darkCharcoal,
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1728,7 +2091,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE53935),
+                            color: AppColors.alertRed,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -1737,7 +2100,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               color: Colors.white,
                               fontSize: 7.5,
                               fontWeight: FontWeight.bold,
-                            ),
+                              ),
                           ),
                         ),
                       if (tx.reasonId == null &&
@@ -1750,7 +2113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 5, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF6D00),
+                              color: AppColors.alertOrange,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: const Text(
@@ -1769,7 +2132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Text(
                     subLabel,
                     style: const TextStyle(
-                      color: Color(0xFF757575),
+                      color: AppColors.mediumGreyText,
                       fontSize: 10,
                       fontWeight: FontWeight.w400,
                     ),
@@ -1783,7 +2146,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(
               '${isIncome ? '+' : '-'}$amountStr',
               style: const TextStyle(
-                color: Color(0xFF1A1A1A),
+                color: AppColors.darkCharcoal,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -1799,30 +2162,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildBankAvatarSmallWhite(String bankName) {
     final nameUp = bankName.toUpperCase();
     Widget img;
-    Color bgColor = const Color(0xFFF2F4F7);
+    Color bgColor = AppColors.lightGreyBackground;
 
     if (nameUp == 'CBE') {
       img = Image.asset('assets/images/CBE logo 1.png', width: 22, height: 22);
-      bgColor = const Color(0xFF4A154B).withValues(alpha: 0.12);
+      bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
       img = Image.asset(
         'assets/images/Telebirr Logo.png',
         width: 22,
         height: 22,
-        color: const Color(0xFF00A859),
+        color: AppColors.telebirrGreen,
         colorBlendMode: BlendMode.srcIn,
       );
-      bgColor = const Color(0xFFDCF5E8); // Visible Telebirr soft green background
+      bgColor = AppColors.telebirrGreenSoft; // Visible Telebirr soft green background
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       img = Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
-      bgColor = const Color(0xFFE91E63).withValues(alpha: 0.10);
+      bgColor = AppColors.cbeBirrPink.withValues(alpha: 0.10);
     } else if (nameUp.contains('AHADU')) {
       img = Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
-      bgColor = const Color(0xFFC62828).withValues(alpha: 0.10);
+      bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.10);
     } else {
       img = Text(
         bankName.substring(0, min(1, bankName.length)).toUpperCase(),
-        style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 11, fontWeight: FontWeight.bold),
+        style: const TextStyle(color: AppColors.darkCharcoal, fontSize: 11, fontWeight: FontWeight.bold),
       );
     }
 

@@ -97,22 +97,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     // ── Header ────────────────────────────────────────
                     const Padding(
-                      padding: EdgeInsets.fromLTRB(24, 16, 24, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Settings',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: -0.3)),
-                          Text(
-                            'Customize your app experience',
-                            style: TextStyle(
-                                color: AppColors.textSoft, fontSize: 12),
-                          ),
-                        ],
+                      padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                      child: Text(
+                        'Settings',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
                       ),
                     ),
 
@@ -172,9 +165,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 return Theme(
                                   data: ThemeData.dark().copyWith(
                                     colorScheme: const ColorScheme.dark(
-                                      primary: AppColors.gold,
-                                      onPrimary: Colors.black,
-                                      surface: AppColors.overlay,
+                                      primary: AppColors.positive,
+                                      onPrimary: Colors.white,
+                                      surface: AppColors.bgMid,
                                       onSurface: Colors.white,
                                     ),
                                   ),

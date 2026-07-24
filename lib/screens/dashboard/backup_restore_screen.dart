@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Backup & Restore Screen
@@ -234,10 +235,10 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
               child: Container(
                 height: 56,
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.15),
+                  color: AppColors.positive.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                      color: AppColors.gold.withValues(alpha: 0.35)),
+                      color: AppColors.positive.withValues(alpha: 0.35)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -246,14 +247,14 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
                       isExportTab
                           ? Icons.backup_outlined
                           : Icons.folder_open_rounded,
-                      color: AppColors.gold,
+                      color: AppColors.positive,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       isExportTab ? 'Create Backup' : 'Browse & Pick File',
                       style: const TextStyle(
-                        color: AppColors.gold,
+                        color: AppColors.positive,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
@@ -270,58 +271,49 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   // ─── Header ─────────────────────────────────────────────────────────────
   Widget _buildHeader() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Text(
-        'Backup & Restore',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 26,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Text(
+            'Backup & Restore',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   // ─── Tab Bar ─────────────────────────────────────────────────────────────
   Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: Colors.white,
-        unselectedLabelColor: AppColors.textSoft,
-        dividerColor: Colors.transparent,
-        labelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w400,
-        ),
-        splashFactory: NoSplash.splashFactory,
-        overlayColor: WidgetStateProperty.all(Colors.transparent),
-        tabs: const [
-          Tab(height: 38, text: 'Backup'),
-          Tab(height: 38, text: 'Restore'),
-        ],
-      ),
+    return AppCapsuleTabBar(
+      tabs: const ['Backup', 'Restore'],
+      controller: _tabController,
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      fontSize: 12,
     );
   }
 

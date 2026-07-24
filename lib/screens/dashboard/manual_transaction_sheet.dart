@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/app_notification.dart';
 import '../../models/transaction.dart';
@@ -262,7 +262,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 child: Row(
                   children: [
                     const Icon(Icons.calendar_today_rounded,
-                        color: AppColors.gold, size: 18),
+                        color: AppColors.positive, size: 18),
                     const SizedBox(width: 12),
                     Text(
                       DateFormat('MMM d, yyyy').format(_selectedDate),
@@ -271,7 +271,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                     const Spacer(),
                     const Text('Change',
                         style: TextStyle(
-                            color: AppColors.gold, fontSize: 13)),
+                            color: AppColors.positive, fontSize: 13)),
                   ],
                 ),
               ),
@@ -289,17 +289,17 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                     ? null
                     : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.gold,
+                  backgroundColor: AppColors.positive,
                   disabledBackgroundColor:
-                      AppColors.gold.withValues(alpha: 0.3),
+                      AppColors.positive.withValues(alpha: 0.3),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
                 child: _isSaving
-                    ? const CircularProgressIndicator(color: Colors.black)
+                    ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('Save Transaction',
                         style: TextStyle(
-                            color: Colors.black,
+                            color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.bold)),
               ),
@@ -376,8 +376,8 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.dark(
-            primary: AppColors.gold,
-            surface: AppColors.surface,
+            primary: AppColors.positive,
+            surface: AppColors.bgMid,
           ),
         ),
         child: child!,

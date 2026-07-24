@@ -540,8 +540,8 @@ class _AddEditExpenseDefinitionScreenState
     final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.bgMid,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('New Reason', style: TextStyle(color: Colors.white)),
         content: TextField(
@@ -555,12 +555,12 @@ class _AddEditExpenseDefinitionScreenState
                 borderSide:
                     BorderSide(color: Colors.white.withValues(alpha: 0.1))),
             focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: AppColors.gold)),
+                borderSide: BorderSide(color: AppColors.positive)),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel',
                 style: TextStyle(color: AppColors.textSoft)),
           ),
@@ -575,11 +575,13 @@ class _AddEditExpenseDefinitionScreenState
                   setState(() {
                     _selectedReason = newReason;
                   });
-                  Navigator.pop(context);
+                  if (dialogCtx.mounted) {
+                    Navigator.pop(dialogCtx);
+                  }
                 }
               }
             },
-            child: const Text('Add', style: TextStyle(color: AppColors.gold)),
+            child: const Text('Add', style: TextStyle(color: AppColors.positive)),
           ),
         ],
       ),

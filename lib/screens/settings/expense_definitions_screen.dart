@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
@@ -56,21 +56,33 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0, vertical: 20.0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Row(
                   children: [
-                    const Expanded(
-                      child: Text(
-                        'Expense Definitions',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          shape: BoxShape.circle,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Text(
+                      'Expense Definitions',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ],
@@ -280,8 +292,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                 context: context,
                                                 builder: (c) => AlertDialog(
                                                       backgroundColor:
-                                                          const Color(
-                                                              0xFF1C1F24),
+                                                          AppColors.surfaceCard,
                                                       shape:
                                                           RoundedRectangleBorder(
                                                               borderRadius:

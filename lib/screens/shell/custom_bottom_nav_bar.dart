@@ -49,17 +49,17 @@ class CustomBottomNavBar extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.overlay,
+              color: AppColors.bottomNavBg,
               borderRadius: BorderRadius.circular(30),
               border: Border.all(
-                color: AppColors.textPrimary.withValues(alpha: 0.08),
+                color: AppColors.textPrimary.withValues(alpha: 0.12),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),

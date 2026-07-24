@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 
@@ -9,36 +9,60 @@ class AboutAppScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'About App',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+      body: SafeArea(
+        bottom: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDeveloperCard(),
-            const SizedBox(height: 32),
-            _buildSectionLabel('CONTRIBUTOR'),
-            _buildContributorCard('Kaleab Afesha Abayneh'),
-            const SizedBox(height: 32),
-            _buildSectionLabel('ABOUT SHIBRE'),
-            _buildAboutContent(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Text(
+                    'About App',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDeveloperCard(),
+                    const SizedBox(height: 28),
+                    _buildSectionLabel('CONTRIBUTOR'),
+                    _buildContributorCard('Kaleab Afesha Abayneh'),
+                    const SizedBox(height: 28),
+                    _buildSectionLabel('ABOUT SHIBRE'),
+                    _buildAboutContent(),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -49,9 +73,9 @@ class AboutAppScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.overlay,
+        color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Row(
         children: [
@@ -145,9 +169,9 @@ class AboutAppScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.overlay,
+        color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Row(
         children: [
@@ -179,9 +203,9 @@ class AboutAppScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.overlay,
+        color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Text(
         'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from CBE, Telebirr, and CBE Birr, providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',

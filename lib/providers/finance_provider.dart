@@ -57,6 +57,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isShowingAll = false;
   bool _isMenuOpen = false;
   int _currentScreenIndex = 0;
+  double _pageOffset = 0.0;
   String? _userName;
   Timer? _dbSyncTimer;
   int _lastKnownTxCount = 0;
@@ -148,6 +149,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   DateTime get selectedDate => _selectedDate;
   DateTime? get customMonthAnchorDate => _customMonthAnchorDate;
   int get currentScreenIndex => _currentScreenIndex;
+  double get pageOffset => _pageOffset;
+
+  void setPageOffset(double offset) {
+    if ((_pageOffset - offset).abs() > 0.001) {
+      _pageOffset = offset;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
+    }
+  }
 
   bool get isSelectedDateToday {
     final now = DateTime.now();
@@ -1254,7 +1265,35 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  // ── Reason CRUD ──────────────────────────────────
+  /// Removes the internal transfer link from a transaction (and its counterpart).
+  Future<void> unlinkInternalTransfer(String txId) async {
+    final idx = _transactions.indexWhere((t) => t.id == txId);
+    if (idx == -1) return;
+
+    final tx = _transactions[idx];
+    final linkedId = tx.linkedTransactionId;
+
+    // Clear this transaction's link
+    final unlinkedTx = tx.copyWith(clearLinkedTransactionId: true);
+    await DatabaseService.instance.updateTransaction(unlinkedTx);
+    _transactions[idx] = unlinkedTx;
+
+    // Also clear the counterpart's link
+    if (linkedId != null) {
+      final idx2 = _transactions.indexWhere((t) => t.id == linkedId);
+      if (idx2 != -1) {
+        final unlinkedTx2 =
+            _transactions[idx2].copyWith(clearLinkedTransactionId: true);
+        await DatabaseService.instance.updateTransaction(unlinkedTx2);
+        _transactions[idx2] = unlinkedTx2;
+      }
+    }
+
+    _calculateStats();
+    notifyListeners();
+  }
+
+
   Future<void> loadReasons() async {
     _reasons = await DatabaseService.instance.getReasons();
     _reasonLinks = await DatabaseService.instance.getReasonLinks();
@@ -1421,50 +1460,24 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
       for (var tx in potentialRepayments) {
         // Run it through the exact matching logic
-        final senderLower = tx.sender.trim().toLowerCase();
-        final exactMatch = (senderLower == trackedSenderName.toLowerCase() ||
-            tx.name.toLowerCase() == trackedSenderName.toLowerCase());
+        final score = _nameMatchScore(
+          incoming: tx.sender,
+          tracked: trackedSenderName,
+        );
+        // Also try tx.name (bank-extracted name) if sender score is 0
+        final nameScore = score == 0
+            ? _nameMatchScore(incoming: tx.name, tracked: trackedSenderName)
+            : 0;
+        final bestScore = score > nameScore ? score : nameScore;
 
-        if (exactMatch) {
-          // We have to fetch the most up-to-date loan state from memory
-          // since previous iterations in this loop might have paid it down
+        if (bestScore > 0) {
           final currentLoanState = _loanRecords.firstWhere((l) => l.id == id);
           if (currentLoanState.status == 'active') {
-            // Queue as pending approval instead of auto-settling
             await _queueRepaymentRequest(
               loan: currentLoanState,
               tx: tx,
-              matchType: 'exact',
+              matchType: bestScore == 2 ? 'exact' : 'partial',
             );
-          }
-        } else {
-          // Pass 2: First-two-words partial match
-          final senderWords = senderLower.trim().split(RegExp(r'\s+'));
-          final trackedWords =
-              trackedSenderName.toLowerCase().trim().split(RegExp(r'\s+'));
-
-          if (senderWords.length >= 2 && trackedWords.length >= 2) {
-            final incomingPrefix = '${senderWords[0]} ${senderWords[1]}';
-            final trackedPrefix = '${trackedWords[0]} ${trackedWords[1]}';
-
-            if (incomingPrefix == trackedPrefix) {
-              final currentLoanState =
-                  _loanRecords.firstWhere((l) => l.id == id);
-              if (currentLoanState.status == 'active') {
-                // Create pending request
-                final req = LoanRepaymentRequest(
-                  loanId: id,
-                  transactionId:
-                      tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
-                  senderFound: tx.sender,
-                  trackedName: trackedSenderName,
-                  amount:
-                      tx.amount.clamp(0.0, currentLoanState.remainingAmount),
-                  createdAt: DateTime.now(),
-                );
-                await DatabaseService.instance.insertLoanRepaymentRequest(req);
-              }
-            }
           }
         }
       }
@@ -1572,103 +1585,96 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// Called when a new income SMS arrives — checks if the sender is tracked
-  /// by any active loan and auto-records a payment.
-  Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
-    final senderLower = tx.sender.trim().toLowerCase();
-    final nameLower = tx.name.trim().toLowerCase();
+  /// Scores how well [incoming] matches [tracked].
+  ///
+  /// Returns:
+  ///   2 = high-confidence (exact token match, or first+second names both match)
+  ///   1 = low-confidence  (first name is the SAME but rest differs)
+  ///   0 = no match        (first names don't match at all → NEVER show)
+  ///
+  /// Rule: first name MUST match, otherwise score is always 0.
+  /// [incoming] and [tracked] may be comma-separated token lists.
+  int _nameMatchScore({required String incoming, required String tracked}) {
+    if (incoming.trim().isEmpty || tracked.trim().isEmpty) return 0;
 
-    // ── Pass 1: Exact match (case-insensitive) against each tracked token ──
-    // Now creates a PENDING REQUEST instead of auto-settling, even for exact matches.
+    // Normalise: lower-case, strip extra spaces
+    String norm(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+    // Split comma-separated multi-bank token lists
+    final trackedTokens = tracked
+        .split(',')
+        .map((t) => norm(t))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    final incomingNorm = norm(incoming);
+    final incomingWords = incomingNorm.split(' ');
+    final incomingFirst = incomingWords.first;
+
+    int best = 0;
+
+    for (final token in trackedTokens) {
+      final tokenWords = token.split(' ');
+      final tokenFirst = tokenWords.first;
+
+      // ── GATE: first names must match ─────────────────────────────────────
+      if (incomingFirst != tokenFirst) continue; // different first name → skip
+
+      // First names are the same from here on.
+
+      // Score 2: exact full-name match (or one fully contains the other)
+      if (incomingNorm == token ||
+          incomingNorm.contains(token) ||
+          token.contains(incomingNorm)) {
+        return 2; // can't do better, return immediately
+      }
+
+      // Score 2: first AND second name both match
+      if (incomingWords.length >= 2 && tokenWords.length >= 2) {
+        if (incomingWords[1] == tokenWords[1]) {
+          best = best < 2 ? 2 : best;
+          continue;
+        }
+      }
+
+      // Score 1: only first name matches
+      if (best < 1) best = 1;
+    }
+
+    return best;
+  }
+
+  /// Called when a new income SMS arrives — checks if the sender is tracked
+  /// by any active loan and creates a pending approval request.
+  ///
+  /// RULE: first name MUST match. Transactions with a different first name
+  /// are NEVER shown to the user regardless of any other overlap.
+  Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
     final allActive = _loanRecords
         .where((l) => l.status == 'active' && l.trackedSenderName != null)
         .toList();
 
-    final exactMultiMatches = allActive.where((loan) {
-      final tokens = loan.trackedSenderName!
-          .split(',')
-          .map((t) => t.trim().toLowerCase())
-          .where((t) => t.isNotEmpty)
-          .toList();
-      return tokens.any((t) =>
-          senderLower.contains(t) ||
-          nameLower.contains(t) ||
-          t.contains(senderLower) ||
-          t.contains(nameLower));
-    }).toList();
-
-    if (exactMultiMatches.isNotEmpty) {
-      for (final loan in exactMultiMatches) {
-        await _queueRepaymentRequest(
-          loan: loan,
-          tx: tx,
-          matchType: 'exact',
-        );
-      }
-      return;
-    }
-
-    // Fall back to DB exact query (handles legacy single-value tracked names)
-    final exactLoans =
-        await DatabaseService.instance.findActiveLoansForSender(senderLower);
-    if (exactLoans.isNotEmpty) {
-      for (final loan in exactLoans) {
-        await _queueRepaymentRequest(
-          loan: loan,
-          tx: tx,
-          matchType: 'exact',
-        );
-      }
-      return;
-    }
-
-    final byBankName =
-        await DatabaseService.instance.findActiveLoansForSender(nameLower);
-    if (byBankName.isNotEmpty) {
-      for (final loan in byBankName) {
-        await _queueRepaymentRequest(
-          loan: loan,
-          tx: tx,
-          matchType: 'exact',
-        );
-      }
-      return;
-    }
-
-    // ── Pass 2: First-two-words partial match → ask for approval ──────────
-    final senderWords = senderLower.trim().split(RegExp(r'\s+'));
-    if (senderWords.length < 2) return;
-
-    final incomingPrefix = '${senderWords[0]} ${senderWords[1]}';
+    if (allActive.isEmpty) return;
 
     for (final loan in allActive) {
-      final trackedTokens = loan.trackedSenderName!
-          .split(',')
-          .map((t) => t.trim().toLowerCase())
-          .where((t) => t.isNotEmpty)
-          .toList();
+      // Score against tx.sender (bank sender code) and tx.name (parsed name)
+      final senderScore = _nameMatchScore(
+        incoming: tx.sender,
+        tracked: loan.trackedSenderName!,
+      );
+      final nameScore = _nameMatchScore(
+        incoming: tx.name,
+        tracked: loan.trackedSenderName!,
+      );
+      final best = senderScore > nameScore ? senderScore : nameScore;
 
-      bool alreadyQueued = false;
-      for (final token in trackedTokens) {
-        if (alreadyQueued) break;
-        final trackedWords = token.split(RegExp(r'\s+'));
+      if (best == 0) continue; // first name doesn't match at all — skip
 
-        if (trackedWords.isEmpty) continue;
-        final trackedPrefix = trackedWords.length >= 2
-            ? '${trackedWords[0]} ${trackedWords[1]}'
-            : trackedWords[0];
-
-        if (incomingPrefix == trackedPrefix ||
-            (trackedWords.length >= 2 &&
-                '${senderWords[0]} ${senderWords[1]}' == trackedPrefix)) {
-          await _queueRepaymentRequest(
-            loan: loan,
-            tx: tx,
-            matchType: 'partial',
-          );
-          alreadyQueued = true;
-        }
-      }
+      await _queueRepaymentRequest(
+        loan: loan,
+        tx: tx,
+        matchType: best == 2 ? 'exact' : 'partial',
+      );
     }
   }
 

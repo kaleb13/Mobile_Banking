@@ -31,7 +31,7 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
         String? errorMsg;
         return StatefulBuilder(builder: (ctx, setInner) {
           return AlertDialog(
-            backgroundColor: AppColors.surface,
+            backgroundColor: AppColors.bgMid,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(existing == null ? 'New Reason' : 'Edit Reason',
@@ -406,8 +406,25 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    final systemReasons = provider.reasons.where((r) => r.isSystem).toList();
-    final userReasons = provider.reasons.where((r) => !r.isSystem).toList();
+
+    const specialNames = {
+      'loan',
+      'internal transfer',
+      'bounce',
+      'cash',
+      'airtime',
+    };
+
+    bool isSpecial(AppReason r) {
+      final nameLower = r.name.trim().toLowerCase();
+      return specialNames.contains(nameLower) || nameLower.contains('loan');
+    }
+
+    final specialReasons = provider.reasons.where(isSpecial).toList();
+    final systemReasons =
+        provider.reasons.where((r) => r.isSystem && !isSpecial(r)).toList();
+    final userReasons =
+        provider.reasons.where((r) => !r.isSystem && !isSpecial(r)).toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -445,21 +462,21 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                   child: Container(
                     height: 56,
                     decoration: BoxDecoration(
-                      color: AppColors.gold.withValues(alpha: 0.15),
+                      color: AppColors.positive.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(28),
                       border: Border.all(
-                          color: AppColors.gold.withValues(alpha: 0.35)),
+                          color: AppColors.positive.withValues(alpha: 0.35)),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.add_rounded,
-                            color: AppColors.gold, size: 20),
+                            color: AppColors.positive, size: 20),
                         SizedBox(width: 8),
                         Text(
                           'Add Reason',
                           style: TextStyle(
-                            color: AppColors.gold,
+                            color: AppColors.positive,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -479,25 +496,52 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                 left: 20, right: 20, top: 16, bottom: 120),
             children: [
               // ── Header ───────────────────────────────────────────
-              const Padding(
-                padding: EdgeInsets.only(bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Row(
                   children: [
-                    Text('Reason Management',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.3)),
-                    Text(
-                      'Manage transaction reasons and bank links',
-                      style:
-                          TextStyle(color: AppColors.textSoft, fontSize: 12),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Text(
+                      'Reason Management',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ],
                 ),
               ),
+
+              // ── Special Reasons ──────────────────────────────────
+              if (specialReasons.isNotEmpty) ...[
+                _sectionHeader('Special Reasons', Icons.star_outline_rounded,
+                    AppColors.positive),
+                const SizedBox(height: 10),
+                ...specialReasons.map((r) => _ReasonTile(
+                      reason: r,
+                      onLinkTap: () => _showLinkDialog(context, provider, r),
+                      provider: provider,
+                    )),
+                const SizedBox(height: 24),
+              ],
 
               // ── System Reasons ───────────────────────────────────
               _sectionHeader('System Reasons', Icons.verified_outlined,

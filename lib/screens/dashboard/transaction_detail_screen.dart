@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +8,7 @@ import '../../models/reason.dart';
 import '../../models/loan_record.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/interactive_drag_handle.dart';
 import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 
@@ -38,7 +39,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     super.dispose();
   }
 
-  void _showReasonPicker(BuildContext context, FinanceProvider provider) {
+  Future<void> _showReasonPicker(
+      BuildContext context, FinanceProvider provider) async {
     AppReason? initial = _selectedReason;
     if (initial == null && widget.transaction.resolvedReason != null) {
       initial = provider.reasons
@@ -48,45 +50,46 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           .firstOrNull;
     }
 
-    showModalBottomSheet(
+    // Track which reason the user chose inside the sheet.
+    AppReason? chosen;
+
+    // AWAIT the sheet so _save only runs after the dismiss animation completes.
+    await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (BottomSheetContext) {
+      builder: (sheetCtx) {
         return _ReasonPickerSheet(
           provider: provider,
           initialReason: initial,
           onSave: (reason) {
-            setState(() {
-              _selectedReason = reason;
-            });
-            _save(provider);
+            chosen = reason;
+            // Pop the sheet from here — parent will detect the close via await.
+            Navigator.of(sheetCtx).pop();
           },
         );
       },
     );
+
+    // Sheet is now FULLY dismissed (animation complete). Safe to show next modal.
+    if (chosen != null && mounted) {
+      setState(() {
+        _selectedReason = chosen!;
+      });
+      await _save(provider);
+    }
   }
 
   Future<void> _save(FinanceProvider provider) async {
-    print('DEBUG: _save called for transaction ${widget.transaction.id}');
-    if (widget.transaction.id == null) {
-      print('DEBUG: transaction ID is null, aborting _save');
-      return;
-    }
+    if (widget.transaction.id == null) return;
 
     final noteText = _noteController.text.trim();
-    // Use the potentially new _selectedReason if available
     final currentResolvedReason =
         _selectedReason?.name ?? widget.transaction.resolvedReason ?? '';
-
-    print('DEBUG: currentResolvedReason is "$currentResolvedReason"');
 
     bool changesMade = false;
 
     if (_selectedReason != null) {
-      print(
-          'DEBUG: updating reason to ${_selectedReason!.name} (ID: ${_selectedReason!.id})');
-      // Re-save even if same reason to ensure new notes take effect
       await provider.updateTransactionReason(
         widget.transaction.id!,
         reasonId: _selectedReason!.id,
@@ -94,20 +97,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       );
       changesMade = true;
     } else if (noteText != (widget.transaction.customReasonText ?? '')) {
-      print('DEBUG: updating notes only ($noteText)');
       await provider.updateTransactionReason(
         widget.transaction.id!,
         customReasonText: noteText.isNotEmpty ? noteText : null,
       );
       changesMade = true;
-    } else {
-      print('DEBUG: no changes made');
     }
 
+    // Capture ScaffoldMessenger BEFORE any await/async gaps
+    final messenger = mounted ? ScaffoldMessenger.of(context) : null;
+
     if (mounted) {
-      print('DEBUG: showing snackbar, mounted');
       if (changesMade) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger?.showSnackBar(
           const SnackBar(
             content: Text('Reason saved ✓'),
             backgroundColor: AppColors.gold,
@@ -116,11 +118,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         );
       }
 
-      print('DEBUG: checking reason "$currentResolvedReason" for modals');
-      // Check the new reason name to trigger modals
+      // Sheet is fully gone — safe to show any follow-up dialog.
       if (currentResolvedReason.toLowerCase() == 'loan' && mounted) {
-        print('DEBUG: showing loan modal');
-        await Future.delayed(const Duration(milliseconds: 400));
         if (!mounted) return;
         final shouldCreate = await showDialog<bool>(
           context: context,
@@ -174,15 +173,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         }
       } else if (currentResolvedReason.toLowerCase() == 'internal transfer' &&
           mounted) {
-        print('DEBUG: condition met for internal transfer modal');
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (!mounted) {
-          print('DEBUG: unmounted before showing IT modal');
-          return;
-        }
+        if (!mounted) return;
         if (widget.transaction.linkedTransactionId == null) {
-          print('DEBUG: linkedTransactionId is null, showing modal');
-          // Show the picker
+          // Show picker to link this transaction to another
           await showModalBottomSheet(
             context: context,
             isScrollControlled: true,
@@ -193,12 +186,53 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
           );
         } else {
-          print(
-              'DEBUG: linkedTransactionId is NOT null! (${widget.transaction.linkedTransactionId})');
+          // Already linked — offer to unlink
+          if (!mounted) return;
+          final shouldUnlink = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Icon(Icons.sync_alt, color: AppColors.gold, size: 20),
+                  SizedBox(width: 8),
+                  Text('Already Linked',
+                      style: TextStyle(color: Colors.white, fontSize: 16)),
+                ],
+              ),
+              content: const Text(
+                'This transaction is already linked to another internal transfer.\n\nWould you like to unlink it?',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Keep Link',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Unlink',
+                      style: TextStyle(color: AppColors.negative)),
+                ),
+              ],
+            ),
+          );
+          if (shouldUnlink == true && mounted) {
+            await provider.unlinkInternalTransfer(widget.transaction.id!);
+            if (mounted) {
+              messenger?.showSnackBar(
+                const SnackBar(
+                  content: Text('Internal transfer unlinked'),
+                  backgroundColor: AppColors.negative,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
         }
-      } else {
-        print(
-            'DEBUG: reason "$currentResolvedReason" did not match internal transfer, or not mounted');
       }
     }
   }
@@ -235,6 +269,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           widget.transaction.sender.toLowerCase());
       if (idx != -1) activeLink = links[idx];
     }
+
+    // Special reasons have dedicated tile renderer — hide the generic Link User button for these
+    const specialReasonNames = {
+      'loan', 'bounce', 'internal transfer', 'cash'
+    };
+    final activeReasonName = (_selectedReason?.name ??
+            widget.transaction.resolvedReason ??
+            '')
+        .trim()
+        .toLowerCase();
+    final isSpecialReason = specialReasonNames.contains(activeReasonName) ||
+        activeReasonName.contains('loan');
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -439,12 +485,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   letterSpacing: 1.2,
                                 ),
                               ),
-                              if (activeReasonId != null)
+                              if (activeReasonId != null && !isSpecialReason)
                                 GestureDetector(
                                   onTap: () async {
                                     if (activeLink != null) {
                                       await provider
-                                          .deleteReasonLink(activeLink.id!);
+                                          .deleteReasonLink(activeLink!.id!);
                                     } else {
                                       await provider.addReasonLink(
                                         reasonId: activeReasonId,
@@ -1045,6 +1091,8 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
       desc = 'Links to another transaction to balance them out';
     } else if (lower == 'cash') {
       desc = 'Used for ATM withdrawals and physical cash deposits';
+    } else if (lower == 'loan' || lower.contains('loan')) {
+      desc = 'Marks this as a loan — track its repayment in Loan Manager';
     }
 
     return GestureDetector(
@@ -1118,12 +1166,17 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
       final systemReasons = provider.reasons.where((r) => r.isSystem).toList();
       final userReasons = provider.reasons.where((r) => !r.isSystem).toList();
 
-      final specialNames = ['bounce', 'internal transfer', 'cash'];
+      // Special reasons: Bounce, Internal Transfer, Cash, Loan
+      const specialNames = {'bounce', 'internal transfer', 'cash', 'loan'};
+      bool isSpecial(AppReason r) =>
+          specialNames.contains(r.name.trim().toLowerCase()) ||
+          r.name.trim().toLowerCase().contains('loan');
+
       final normalSystem = systemReasons
-          .where((r) => !specialNames.contains(r.name.toLowerCase()))
+          .where((r) => !isSpecial(r))
           .toList();
       final specialSystem = systemReasons
-          .where((r) => specialNames.contains(r.name.toLowerCase()))
+          .where((r) => isSpecial(r))
           .toList();
 
       return Container(
@@ -1141,14 +1194,15 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Handle
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 4),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.textSecondary.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
+            InteractiveDragHandle(
+              color: AppColors.textSecondary.withValues(alpha: 0.4),
+              onTap: () => Navigator.pop(ctx),
+              onVerticalDragUpdate: (details) {
+                if ((details.primaryDelta ?? 0) > 3) {
+                  Navigator.pop(ctx);
+                }
+              },
+              padding: const EdgeInsets.only(top: 10, bottom: 4),
             ),
             Padding(
               padding: const EdgeInsets.all(16),
@@ -1269,9 +1323,7 @@ class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
                     onPressed: _selectedReason == null
                         ? null
                         : () {
-                            print(
-                                'DEBUG: Button clicked with reason ${_selectedReason!.name}');
-                            Navigator.of(context).pop();
+                            // onSave will pop the sheet from the parent
                             widget.onSave(_selectedReason!);
                           },
                     style: ElevatedButton.styleFrom(
