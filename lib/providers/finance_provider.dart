@@ -10,6 +10,8 @@ import '../models/loan_record.dart';
 import '../models/loan_repayment_request.dart';
 import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
+import '../models/saving_goal.dart';
+import '../models/goal_feasibility.dart';
 import '../services/database_service.dart';
 import '../services/sms_service.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as sms_inbox;
@@ -35,10 +37,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<ExpenseDefinition> _expenseDefinitions = [];
   List<CashTransaction> _cashTransactions = [];
   double _cashBalance = 0;
+  List<SavingGoal> _savingGoals = [];
 
   int _unreadNotificationCount = 0;
   bool _isLoading = true;
   double _totalBalance = 0;
+  /// Latest known balance per bank/account name (e.g. {'CBE': 12500.0, 'Telebirr': 3200.0}).
+  Map<String, double> _latestBalancesMap = {};
   double _incomeThisMonth = 0;
   double _expenseThisMonth = 0;
   double _incomeForSelectedDate = 0;
@@ -168,6 +173,148 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   double get totalBalance => _totalBalance;
+
+  /// Returns 1–5 based on total balance thresholds:
+  /// LV1: ≤ 100,000 | LV2: 100k–500k | LV3: 500k–1M | LV4: 1M–5M | LV5: > 5M
+  int get userLevel {
+    if (_totalBalance <= 100000) return 1;
+    if (_totalBalance <= 500000) return 2;
+    if (_totalBalance <= 1000000) return 3;
+    if (_totalBalance <= 5000000) return 4;
+    return 5;
+  }
+
+  /// Human-readable name for the user's current level.
+  String get userLevelName {
+    switch (userLevel) {
+      case 1: return 'Survivor';
+      case 2: return 'Achiever';
+      case 3: return 'Builder';
+      case 4: return 'Prospering';
+      case 5: return 'Elite';
+      default: return 'Survivor';
+    }
+  }
+
+  /// Motivational description per level.
+  String get userLevelDescription {
+    switch (userLevel) {
+      case 1:
+        return 'Welcome to the journey! Every birr you save is a step forward. Keep tracking your spending, build an emergency fund, and watch your future grow.';
+      case 2:
+        return 'You\'re making real progress! Your consistency is paying off. Focus on growing your savings and making your money work smarter for you.';
+      case 3:
+        return 'You\'ve built a solid financial base. You\'re in the top tier of savers. Now it\'s time to diversify and let your wealth multiply.';
+      case 4:
+        return 'Outstanding! You\'re among the financially prosperous. Your discipline has created real wealth. Keep optimizing and expanding your portfolio.';
+      case 5:
+        return 'Elite level achieved! You are in a rare class of financial excellence. Your wealth speaks for itself — now focus on legacy and impact.';
+      default:
+        return 'Keep going! Every step counts toward your financial freedom.';
+    }
+  }
+
+  /// Start loading financial data in the background during onboarding
+  /// without marking onboarding as complete. Call this early so data
+  /// is ready by the time the user reaches the level reveal page.
+  Future<void> startBackgroundInit() async {
+    final prefs = await SharedPreferences.getInstance();
+    _userName = prefs.getString('user_name_v1');
+    _hasPermission = await Permission.sms.status.isGranted;
+    if (!_hasPermission) return;
+
+    final dbSenders = await DatabaseService.instance.getSenders();
+    if (dbSenders.isNotEmpty) {
+      _senders = dbSenders;
+      if (!_senders.any((s) => s.senderName.toUpperCase().contains('AHADU'))) {
+        final ahadu = AppSender(id: '4', senderName: 'Ahadu Bank');
+        await DatabaseService.instance.insertSender(ahadu);
+        _senders.add(ahadu);
+      }
+    } else {
+      _senders = [
+        AppSender(id: '1', senderName: 'Telebirr'),
+        AppSender(id: '2', senderName: 'CBE'),
+        AppSender(id: '3', senderName: 'CBE Birr'),
+        AppSender(id: '4', senderName: 'Ahadu Bank'),
+      ];
+      for (var s in _senders) {
+        await DatabaseService.instance.insertSender(s);
+      }
+    }
+
+    _transactions = await DatabaseService.instance.getTransactions();
+    _expenseDefinitions = await DatabaseService.instance.getExpenseDefinitions();
+    _cashTransactions = await DatabaseService.instance.getCashTransactions();
+    _savingGoals = await DatabaseService.instance.getSavingGoals();
+
+    // Ensure install_anchor_date is set so refreshData() never silently bails.
+    // This mirrors the same guard in init(). Without this, any user who goes
+    // through the new onboarding flow (startBackgroundInit → completeOnboarding
+    // early-return path) would never have install_anchor_date written, causing
+    // refreshData() to return immediately with no SMS scan.
+    const anchorVersion = 'v4';
+    final bool needsAnchorReset =
+        prefs.getString('anchor_version') != anchorVersion;
+    if (needsAnchorReset) {
+      await prefs.setString('install_anchor_date',
+          DateTime.now().subtract(const Duration(days: 30)).toIso8601String());
+      await prefs.setString('anchor_version', anchorVersion);
+    }
+
+    bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
+    if (isFirstBoot && _transactions.isEmpty) {
+      final installAnchor = DateTime.now().subtract(const Duration(days: 30));
+      List<sms_inbox.SmsMessage> allMessages =
+          await SmsService().getAllMessages(since: installAnchor);
+      allMessages.sort((a, b) {
+        if (a.date == null || b.date == null) return 0;
+        return b.date!.compareTo(a.date!);
+      });
+      Set<String> processedSenders = {};
+      _isBatchProcessing = true;
+      for (var msg in allMessages) {
+        if (msg.sender != null && msg.body != null && msg.date != null) {
+          final msgDate = msg.date!;
+          if (!_isEnglishBankingMessage(msg.body!)) continue;
+          final bank = BankSenders.match(msg.sender);
+          if (bank == 'Telebirr' && !processedSenders.contains('Telebirr')) {
+            AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
+            if (tx != null) { await addTransaction(tx); processedSenders.add('Telebirr'); }
+          } else if (bank == 'CBE Birr' && !processedSenders.contains('CBE Birr')) {
+            AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
+            if (tx != null) { await addTransaction(tx); processedSenders.add('CBE Birr'); }
+          } else if (bank == 'CBE' && !processedSenders.contains('CBE')) {
+            if (_userName == null) {
+              final name = CbeParser.extractOwnerName(msg.body!);
+              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
+            }
+            AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
+            if (tx != null) { await addTransaction(tx); processedSenders.add('CBE'); }
+          } else if (bank == 'Ahadu Bank' && !processedSenders.contains('Ahadu Bank')) {
+            if (_userName == null) {
+              final name = AhaduParser.extractOwnerName(msg.body!);
+              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
+            }
+            AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
+            if (tx != null) { await addTransaction(tx); processedSenders.add('Ahadu Bank'); }
+          }
+        }
+        if (processedSenders.contains('Telebirr') &&
+            processedSenders.contains('CBE') &&
+            processedSenders.contains('CBE Birr') &&
+            processedSenders.contains('Ahadu Bank')) { break; }
+      }
+      _isBatchProcessing = false;
+      await prefs.setBool('is_first_boot_v5', false);
+      _transactions = await DatabaseService.instance.getTransactions();
+    }
+
+    _calculateStats();
+    _isLoading = false;
+    notifyListeners();
+  }
+
   double get incomeThisMonth => _incomeThisMonth;
   double get expenseThisMonth => _expenseThisMonth;
   double get incomeForSelectedDate => _incomeForSelectedDate;
@@ -189,6 +336,67 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<ExpenseDefinition> get expenseDefinitions => _expenseDefinitions;
   List<CashTransaction> get cashTransactions => _cashTransactions;
   double get cashBalance => _cashBalance;
+  List<SavingGoal> get savingGoals => _savingGoals;
+
+  /// Live balance per detected bank account, e.g. {'CBE': 12500.0, 'Telebirr': 3200.0}.
+  Map<String, double> get latestBalancesMap => Map.unmodifiable(_latestBalancesMap);
+
+  /// Sorted list of account names that have a known balance (for the account picker UI).
+  List<String> get allAccountNames =>
+      _latestBalancesMap.keys.where((k) => _latestBalancesMap[k]! > 0).toList()
+        ..sort();
+
+  // ── Feasibility Engine ─────────────────────────────────────────────────────
+
+  /// Computes the feasibility of [goal] given current account balances and
+  /// the allocation settings of every other active goal.
+  GoalFeasibility goalFeasibility(SavingGoal goal) {
+    final balances = _latestBalancesMap;
+    final remaining = goal.remainingAmount;
+
+    // ── 1. Compute available amount ──────────────────────────────────────────
+    double available = 0;
+    switch (goal.allocationMode) {
+      case AllocationMode.globalPercent:
+        final pct = (goal.accountAllocations['*'] ?? 30.0) / 100.0;
+        available = _totalBalance * pct;
+        break;
+      case AllocationMode.accountSpecific:
+      case AllocationMode.multiAccount:
+        for (final entry in goal.accountAllocations.entries) {
+          final acctBalance = balances[entry.key] ?? 0.0;
+          available += acctBalance * (entry.value / 100.0);
+        }
+        break;
+    }
+
+    // ── 2. Conflict detection ─────────────────────────────────────────────────
+    // For each account this goal uses, sum allocations from ALL other active goals.
+    final conflicts = <String>[];
+    if (goal.allocationMode != AllocationMode.globalPercent) {
+      for (final accountName in goal.accountAllocations.keys) {
+        double totalPct = goal.accountAllocations[accountName] ?? 0;
+        for (final other in _savingGoals) {
+          if (other.id == goal.id) continue;
+          if (other.status != 'active') continue;
+          if (other.allocationMode == AllocationMode.globalPercent) continue;
+          final otherPct = other.accountAllocations[accountName];
+          if (otherPct != null) totalPct += otherPct;
+        }
+        if (totalPct > 100) {
+          conflicts.add(
+              '$accountName is over-allocated (${totalPct.toStringAsFixed(0)}%)');
+        }
+      }
+    }
+
+    return GoalFeasibility(
+      availableAmount: available,
+      remainingAmount: remaining,
+      canAffordNow: available >= remaining,
+      conflictWarning: conflicts.join(' · '),
+    );
+  }
 
   // Stub for cash spending tracking (not yet implemented in DB)
   List<dynamic> spendingsForTransaction(String transactionId) => [];
@@ -477,9 +685,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _isOnboardingComplete = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_onboarding_complete_v1', true);
-    // Now run init() to load all financial data.
-    // Since _isOnboardingComplete is now true, init() will show the
-    // loading spinner correctly and then route to MainShell.
+    // If startBackgroundInit() already loaded the data (_isLoading == false),
+    // we just flip onboardingComplete and start the sync — no need to re-scan.
+    if (!_isLoading && _transactions.isNotEmpty) {
+      _startLightweightDbSync();
+      notifyListeners();
+      return;
+    }
+    // Otherwise run the full init (this covers the edge case where SMS was
+    // not granted before reaching this point).
     await init();
   }
 
@@ -568,6 +782,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _expenseDefinitions =
         await DatabaseService.instance.getExpenseDefinitions();
     _cashTransactions = await DatabaseService.instance.getCashTransactions();
+    _savingGoals = await DatabaseService.instance.getSavingGoals();
     await _loadLoans();
     await _refreshOverdueStatuses();
 
@@ -1101,6 +1316,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
 
     // Process latest bank balances
+    _latestBalancesMap = Map.from(latestBalances);
     for (var value in latestBalances.values) {
       _totalBalance += value;
     }
@@ -2268,5 +2484,39 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  // ──────────────────────────────────────────────
+  // Saving Goals State Management
+  // ──────────────────────────────────────────────
+  Future<void> fetchSavingGoals() async {
+    _savingGoals = await DatabaseService.instance.getSavingGoals();
+    notifyListeners();
+  }
+
+  Future<void> addSavingGoal(SavingGoal goal) async {
+    await DatabaseService.instance.insertSavingGoal(goal);
+    await fetchSavingGoals();
+  }
+
+  Future<void> updateSavingGoal(SavingGoal goal) async {
+    await DatabaseService.instance.updateSavingGoal(goal);
+    await fetchSavingGoals();
+  }
+
+  Future<void> topUpSavingGoal(String goalId, double amount) async {
+    final idx = _savingGoals.indexWhere((g) => g.id == goalId);
+    if (idx != -1) {
+      final updated = _savingGoals[idx].copyWith(
+        savedAmount: _savingGoals[idx].savedAmount + amount,
+      );
+      await DatabaseService.instance.updateSavingGoal(updated);
+      await fetchSavingGoals();
+    }
+  }
+
+  Future<void> deleteSavingGoal(String goalId) async {
+    await DatabaseService.instance.deleteSavingGoal(goalId);
+    await fetchSavingGoals();
   }
 }

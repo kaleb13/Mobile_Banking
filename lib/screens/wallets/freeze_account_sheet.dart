@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
-import '../../widgets/app_capsule_tab_bar.dart';
 
 class FreezeAccountBottomSheet extends StatefulWidget {
   final String initialSenderName;
@@ -41,8 +40,6 @@ class FreezeAccountBottomSheet extends StatefulWidget {
 }
 
 class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
-  int _selectedTab = 0; // 0: All SMS, 1: Deposit SMS Only, 2: Transfer SMS only
-
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
@@ -60,11 +57,11 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
     }
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.74,
-      minChildSize: 0.40,
-      maxChildSize: 0.94,
+      initialChildSize: 0.62,
+      minChildSize: 0.38,
+      maxChildSize: 0.88,
       snap: true,
-      snapSizes: const [0.74, 0.94],
+      snapSizes: const [0.62, 0.88],
       builder: (context, scrollController) {
         return Container(
           decoration: const BoxDecoration(
@@ -73,7 +70,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           ),
           child: Column(
             children: [
-              // Top Drag Handle (matching Home Page Draggable Sheet)
+              // Top Drag Handle
               Center(
                 child: InteractiveDragHandle(
                   color: Colors.grey.shade300,
@@ -94,14 +91,14 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                     16,
                     4,
                     16,
-                    MediaQuery.of(context).padding.bottom + 10,
+                    MediaQuery.of(context).padding.bottom + 16,
                   ),
                   children: [
-                    // Title
-                    const Center(
+                    // Dynamic Title listing Account / Sender Name
+                    Center(
                       child: Text(
-                        'Freeze Account',
-                        style: TextStyle(
+                        'Freeze $activeSenderName',
+                        style: const TextStyle(
                           color: AppColors.darkCharcoal,
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
@@ -109,47 +106,27 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
 
-                    // Subtitle description
+                    // Clear Subtitle description for complete account freezing
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        'Manage how Shibre interacts with this bank account. You can completely freeze the account, stop reading all bank messages, or choose to read only specific message types, such as Deposit SMS Only or Transfer SMS only.',
+                        'Freezing $activeSenderName will completely stop Shibre from reading and processing bank messages for this account. You can unfreeze it at any time.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.grey.shade600,
-                          fontSize: 11,
-                          height: 1.35,
+                          fontSize: 12,
+                          height: 1.4,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
 
-                    // Tab Selector Row (All SMS, Deposit SMS Only, Transfer SMS only)
-                    AppCapsuleTabBar(
-                      tabs: const [
-                        'All SMS',
-                        'Deposit SMS Only',
-                        'Transfer SMS only'
-                      ],
-                      selectedIndex: _selectedTab,
-                      onTabChanged: (index) {
-                        setState(() {
-                          _selectedTab = index;
-                        });
-                      },
-                      height: 40,
-                      fontSize: 10,
-                      borderRadius: 24,
-                      indicatorRadius: 20,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Single Bank Card Preview with 3D Swipe Tilt Reaction
+                    // Single Bank Card Preview with 3D Horizontal Swipe Tilt Reaction
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: _InteractiveFrozenCardPreview(
                         senderName: activeSenderName,
                         balance: balance,
@@ -157,20 +134,16 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                         isBalanceVisible: provider.isBalanceVisible,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 36),
 
-                    // 3 Checked Information Rules based on selected tab
-                    _buildCheckRulesList(),
-                    const SizedBox(height: 18),
-
-                    // Action Button: [ ❄ Freeze selected ones ]
+                    // Action Button: [ ❄ Freeze <Account Name> ]
                     GestureDetector(
                       onTap: () {
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'Freeze rules applied for $activeSenderName!',
+                              '$activeSenderName account frozen!',
                             ),
                             duration: const Duration(seconds: 2),
                           ),
@@ -190,18 +163,18 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                             ),
                           ],
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.ac_unit,
                               color: Colors.white,
                               size: 20,
                             ),
-                            SizedBox(width: 10),
+                            const SizedBox(width: 10),
                             Text(
-                              'Freeze selected ones',
-                              style: TextStyle(
+                              'Freeze $activeSenderName',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -221,62 +194,10 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
       },
     );
   }
-
-  Widget _buildCheckRulesList() {
-    // Determine check states based on _selectedTab
-    // Tab 0 (All SMS): All 3 checked
-    // Tab 1 (Deposit SMS Only): Only 'Don't read Deposit' checked
-    // Tab 2 (Transfer SMS Only): Only 'Don't read Transfer' checked
-    final bool checkDeposit = _selectedTab == 0 || _selectedTab == 1;
-    final bool checkTransfer = _selectedTab == 0 || _selectedTab == 2;
-    final bool checkAllNoMsg = _selectedTab == 0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          _buildCheckRow("Don't read Deposit", checkDeposit),
-          const SizedBox(height: 10),
-          _buildCheckRow("Don't read Transfer", checkTransfer),
-          const SizedBox(height: 10),
-          _buildCheckRow("No Message what so ever", checkAllNoMsg),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCheckRow(String text, bool isChecked) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 20,
-          height: 20,
-          child: isChecked
-              ? const Icon(
-                  Icons.check_rounded,
-                  color: AppColors.darkCharcoal,
-                  size: 18,
-                )
-              : const SizedBox.shrink(),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          text,
-          style: TextStyle(
-            color: isChecked
-                ? AppColors.darkCharcoal
-                : Colors.grey.shade400,
-            fontSize: 13,
-            fontWeight: isChecked ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3D Tilting Card Preview with Moving Animated Shimmer Gradient
+// 3D Tilting Card Preview with Moving Animated Shimmer Gradient & Horizontal Spin
 // ─────────────────────────────────────────────────────────────────────────────
 class _InteractiveFrozenCardPreview extends StatefulWidget {
   final String senderName;
@@ -298,24 +219,70 @@ class _InteractiveFrozenCardPreview extends StatefulWidget {
 
 class __InteractiveFrozenCardPreviewState
     extends State<_InteractiveFrozenCardPreview>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  double _rotX = 0.0;
+    with TickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late AnimationController _resetController;
+  late Animation<double> _resetAnimation;
+
   double _rotY = 0.0;
+  double _startRotY = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
+    _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 5),
     )..repeat();
+
+    _resetController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+
+    _resetAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(
+      CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
+    );
+
+    _resetController.addListener(() {
+      setState(() {
+        _rotY = _resetAnimation.value;
+      });
+    });
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _shimmerController.dispose();
+    _resetController.dispose();
     super.dispose();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (_resetController.isAnimating) {
+      _resetController.stop();
+    }
+    setState(() {
+      // Swiping left (negative delta) tilts left side back (shrinks left edge)
+      // Swiping right (positive delta) tilts right side back (shrinks right edge)
+      _rotY = (_rotY + details.primaryDelta! * 0.0035).clamp(-0.45, 0.45);
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    _resetSpringBack();
+  }
+
+  void _onHorizontalDragCancel() {
+    _resetSpringBack();
+  }
+
+  void _resetSpringBack() {
+    _startRotY = _rotY;
+    _resetAnimation = Tween<double>(begin: _startRotY, end: 0.0).animate(
+      CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
+    );
+    _resetController.forward(from: 0.0);
   }
 
   Widget _bankLogo(String name) {
@@ -405,35 +372,22 @@ class __InteractiveFrozenCardPreviewState
     final baseGradient = _getCardGradient(widget.senderName);
 
     return GestureDetector(
-      onPanUpdate: (details) {
-        setState(() {
-          // Interactive 3D tilt reaction on swiping across the card
-          _rotY = (_rotY + details.delta.dx * 0.005).clamp(-0.35, 0.35);
-          _rotX = (_rotX - details.delta.dy * 0.005).clamp(-0.35, 0.35);
-        });
-      },
-      onPanEnd: (_) {
-        // Smooth spring back to resting flat state when swipe released
-        setState(() {
-          _rotX = 0.0;
-          _rotY = 0.0;
-        });
-      },
+      onHorizontalDragUpdate: _onHorizontalDragUpdate,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      onHorizontalDragCancel: _onHorizontalDragCancel,
       child: AnimatedBuilder(
-        animation: _animController,
+        animation: _shimmerController,
         builder: (context, child) {
-          final t = _animController.value;
+          final t = _shimmerController.value;
           
-          // Infinite continuous rightward motion shift (-2.5 to +2.5)
+          // Continuous rightward shimmer motion
           final centerX = -2.5 + (t * 5.0);
 
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+          return Transform(
             transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001) // 3D Perspective
-              ..rotateX(_rotX)
+              ..setEntry(3, 2, 0.0018) // 3D Perspective intensity
               ..rotateY(_rotY),
-            transformAlignment: Alignment.center,
+            alignment: Alignment.center,
             child: Container(
               height: 165,
               width: double.infinity,
@@ -454,7 +408,7 @@ class __InteractiveFrozenCardPreviewState
                   BoxShadow(
                     color: baseGradient.first.withValues(alpha: 0.4),
                     blurRadius: 18,
-                    offset: Offset(_rotY * 20, _rotX * 20 + 6),
+                    offset: Offset(_rotY * 25, 6),
                   ),
                 ],
               ),

@@ -114,8 +114,8 @@ class CustomBottomNavBar extends StatelessWidget {
                           onTap: () => onTap?.call(3),
                         ),
                         _NavItem(
-                          label: 'App Settings',
-                          svgPath: 'assets/images/Settings_icon.svg',
+                          label: 'Profile Hub',
+                          svgPath: 'assets/images/Profile_Icon.svg',
                           activationT: _activationT(page, 4),
                           activeWidth: activeW,
                           inactiveWidth: inactiveW,

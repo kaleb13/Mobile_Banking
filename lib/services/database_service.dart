@@ -8,6 +8,7 @@ import '../models/loan_record.dart';
 import '../models/loan_repayment_request.dart';
 import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
+import '../models/saving_goal.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -26,7 +27,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 17, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 19, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -106,6 +107,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL
 )
 ''');
+
+    // Saving goals table
+    await _createSavingGoalsTable(db);
   }
 
   Future<void> _createCashTables(Database db) async {
@@ -317,6 +321,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
       try {
         await db.execute(
             'ALTER TABLE expense_definitions ADD COLUMN reasonId INTEGER;');
+      } catch (_) {}
+    }
+    if (oldVersion < 18) {
+      await _createSavingGoalsTable(db);
+    }
+    if (oldVersion < 19) {
+      // Add allocation columns to existing saving_goals rows.
+      // Wrapped in try/catch so re-runs on the same version are safe.
+      try {
+        await db.execute(
+            "ALTER TABLE saving_goals ADD COLUMN allocation_mode TEXT NOT NULL DEFAULT 'global_percent';");
+      } catch (_) {}
+      try {
+        await db.execute(
+            'ALTER TABLE saving_goals ADD COLUMN account_allocations TEXT;');
       } catch (_) {}
     }
   }
@@ -810,5 +829,50 @@ CREATE TABLE IF NOT EXISTS app_settings (
       {'key': key, 'value': value},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  // ──────────────────────────────────────────────
+  // Saving Goals Methods & Helper
+  // ──────────────────────────────────────────────
+  Future<void> _createSavingGoalsTable(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS saving_goals (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  targetAmount REAL NOT NULL,
+  savedAmount REAL NOT NULL,
+  imagePath TEXT NOT NULL,
+  category TEXT NOT NULL,
+  status TEXT NOT NULL,
+  targetDate TEXT,
+  priority INTEGER NOT NULL DEFAULT 1,
+  allocation_mode TEXT NOT NULL DEFAULT 'global_percent',
+  account_allocations TEXT NOT NULL DEFAULT '{"*":30.0}'
+)
+''');
+    // No seed data — user creates their own goals
+  }
+
+  Future<int> insertSavingGoal(SavingGoal goal) async {
+    final db = await instance.database;
+    return await db.insert('saving_goals', goal.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<SavingGoal>> getSavingGoals() async {
+    final db = await instance.database;
+    final maps = await db.query('saving_goals', orderBy: 'priority ASC, id ASC');
+    return maps.map((map) => SavingGoal.fromMap(map)).toList();
+  }
+
+  Future<int> updateSavingGoal(SavingGoal goal) async {
+    final db = await instance.database;
+    return await db.update('saving_goals', goal.toMap(),
+        where: 'id = ?', whereArgs: [goal.id]);
+  }
+
+  Future<int> deleteSavingGoal(String id) async {
+    final db = await instance.database;
+    return await db.delete('saving_goals', where: 'id = ?', whereArgs: [id]);
   }
 }

@@ -54,13 +54,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {}
   }
 
-  // Helper for grouped cards
   Widget _buildCardBase(List<Widget> children) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xFF111821),
+        borderRadius: BorderRadius.circular(16),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -79,13 +78,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
+        backgroundColor: AppColors.background,
         extendBody: true,
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: AppColors.screenBackgroundGradient,
-          ),
+          color: AppColors.background,
           child: Stack(
             children: [
               SafeArea(
@@ -96,20 +94,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Header ────────────────────────────────────────
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      child: Text(
-                        'Settings',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.5,
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                                color: Colors.white, size: 20),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          const Text(
+                            'Settings',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
 
                     // ── Section: Financial Logic ────────────────────────
                     _sectionLabel('Core Finance'),

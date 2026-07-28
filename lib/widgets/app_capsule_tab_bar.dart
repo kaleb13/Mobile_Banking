@@ -16,6 +16,8 @@ class AppCapsuleTabBar extends StatelessWidget {
   final double borderRadius;
   final double indicatorRadius;
 
+  final bool expandTabs;
+
   const AppCapsuleTabBar({
     super.key,
     required this.tabs,
@@ -28,6 +30,7 @@ class AppCapsuleTabBar extends StatelessWidget {
     this.padding = const EdgeInsets.all(4),
     this.borderRadius = 24,
     this.indicatorRadius = 20,
+    this.expandTabs = true,
   });
 
   @override
@@ -77,38 +80,42 @@ class AppCapsuleTabBar extends StatelessWidget {
       padding: padding,
       decoration: decoration,
       child: Row(
+        mainAxisSize: expandTabs ? MainAxisSize.max : MainAxisSize.min,
         children: List.generate(tabs.length, (index) {
           final isSelected = currIndex == index;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (onTabChanged != null) {
-                  onTabChanged!(index);
-                }
-              },
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.white : Colors.transparent,
-                  borderRadius: BorderRadius.circular(indicatorRadius),
-                ),
-                child: Text(
-                  tabs[index],
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isSelected ? AppColors.tabBackground : Colors.white,
-                    fontSize: fontSize,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  ),
+          final itemWidget = GestureDetector(
+            onTap: () {
+              if (onTabChanged != null) {
+                onTabChanged!(index);
+              }
+            },
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.center,
+              padding: expandTabs
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white : Colors.transparent,
+                borderRadius: BorderRadius.circular(indicatorRadius),
+              ),
+              child: Text(
+                tabs[index],
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isSelected ? AppColors.tabBackground : Colors.white,
+                  fontSize: fontSize,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 ),
               ),
             ),
           );
+
+          return expandTabs ? Expanded(child: itemWidget) : itemWidget;
         }),
       ),
     );

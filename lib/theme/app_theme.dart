@@ -6,14 +6,15 @@ class AppColors {
   static const Color gold      = Color(0xFFF0B90B); // Brand golden accent
 
   // ── Backgrounds ───────────────────────────────────────────────────────────
-  static const Color background = Color(0xFF050A11); // Main scaffold background (#050a11)
-  static const Color bgMid      = Color(0xFF080F1A); // Secondary background / gradient mid
-  static const Color bgDeep     = Color(0xFF03060A); // Deepest background stop
+  static const Color background = Color(0xFF050C16); // Main scaffold background (#050C16)
+  static const Color bgMid      = Color(0xFF050C16); // Secondary background / gradient mid (#050C16)
+  static const Color bgDeep     = Color(0xFF050C16); // Deepest background stop (#050C16)
 
   // ── Surfaces & Cards ──────────────────────────────────────────────────────
-  static const Color surface        = Color(0xFF121417); // Base card/panel surface
-  static const Color surfaceCard    = Color(0xFF1C1F24); // Raised card surface
-  static const Color tabBackground  = Color(0xFF191F28); // Capsule tab & loan card background (#191F28)
+  static const Color surface        = Color(0xFF111821); // Base card/panel surface (#111821)
+  static const Color surfaceCard    = Color(0xFF111821); // Raised card surface (#111821)
+  static const Color tabBackground  = Color(0xFF111821); // Capsule tab & loan card background (#111821)
+  static const Color cardDarkHex    = Color(0xFF111821); // Defined card background color (#111821)
   static const Color surfaceElevated = Color(0xFF363640); // Elevated surface / divider
   static const Color overlay        = Color(0xFF2A2A34); // Modal / bottom sheet
   static const Color bottomNavBg    = Color(0xFF141924); // Navigation bar & Freeze Account button background (#141924)
@@ -46,6 +47,16 @@ class AppColors {
   static const Color toggleActive    = Color(0xFF34C759); // iOS toggle on
   static const Color toggleInactive  = Color(0xFF39393D); // iOS toggle off
   static const Color brownDark       = Color(0xFF301900); // Dark brown icon tint
+
+  // ── Saving Card & Progress Bar Palette ─────────────────────────────────
+  static const Color savingCardTopLeft     = Color(0xFFD55B43);
+  static const Color savingCardCenter      = Color(0xFF8B2231);
+  static const Color savingCardBottomRight = Color(0xFF9A2551);
+  static const Color savingProgressDark    = Color(0xFF7E1C30);
+  static const Color savingProgressGradStart = Color(0xFFFF6846);
+  static const Color savingProgressGradEnd   = Color(0xFFFE9F99);
+  static const Color activeBadgeBg         = Color(0xFFDCFCE7);
+  static const Color activeBadgeText       = Color(0xFF166534);
 
   // ── Wallet Card Palette ───────────────────────────────────────────────────
   static const Color cardBrownDark  = Color(0xFF3D1B0F); // Wallet — brown dark

@@ -8,6 +8,7 @@ import '../../models/loan_repayment_request.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/custom_progress_bar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loan Management Screen
@@ -518,43 +519,19 @@ class _LoanCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
 
-            // Centered Progress Bar Section
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final totalWidth = constraints.maxWidth;
-                final filledWidth = (totalWidth * pct).clamp(0.0, totalWidth);
-                return Container(
-                  height: 28,
-                  width: totalWidth,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Stack(
-                    children: [
-                      if (filledWidth > 0)
-                        Container(
-                          width: filledWidth,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00A86B),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      Center(
-                        child: Text(
-                          '${(pct * 100).toStringAsFixed(0)}% Repaid',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+            // Centered Progress Bar Section (Reused CustomProgressBar Component)
+            CustomProgressBar(
+              progress: pct,
+              height: 28,
+              backgroundColor: Colors.white.withValues(alpha: 0.13),
+              progressColor: const Color(0xFF00A86B),
+              centerLabel: '${(pct * 100).toStringAsFixed(0)}% Repaid',
+              labelInFilledOnly: false,
+              labelStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 10),
 

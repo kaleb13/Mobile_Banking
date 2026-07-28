@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../dashboard/analysis_screen.dart';
-import '../dashboard/settings_screen.dart';
+import '../dashboard/profile_hub_screen.dart';
 import '../wallets/wallets_screen.dart';
 import '../loans/loan_management_screen.dart';
 import '../../providers/finance_provider.dart';
@@ -142,12 +142,12 @@ class _MainShellState extends State<MainShell> {
                     physics: const ClampingScrollPhysics(),
                     onPageChanged: (index) => _onPageChanged(index, provider),
                     children: const [
-                      // Order: Home | Wallet | Analysis | Loans | Settings
+                      // Order: Home | Wallet | Analysis | Loans | Profile Hub
                       DashboardScreen(),
                       WalletsScreen(),
                       AnalysisScreen(),
                       LoanManagementScreen(),
-                      SettingsScreen(),
+                      ProfileHubScreen(),
                     ],
                   ),
                   _buildFlyingCardsOverlay(context, provider),
