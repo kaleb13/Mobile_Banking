@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/app_back_button.dart';
 
 class DataMaintenanceScreen extends StatefulWidget {
   const DataMaintenanceScreen({super.key});
@@ -129,21 +130,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       child: Row(
         children: [
           // Back button
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.overlay,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                    color: AppColors.textPrimary.withValues(alpha: 0.08)),
-              ),
-              child: const Icon(Icons.arrow_back_rounded,
-                  color: AppColors.textPrimary, size: 22),
-            ),
-          ),
+          AppBackButton(onPressed: () => Navigator.pop(context)),
           const SizedBox(width: 12),
           // Action button
           Expanded(
@@ -220,23 +207,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
+          const AppBackButton(),
+          const SizedBox(width: 8),
           const Text(
             'Data Maintenance',
             style: TextStyle(

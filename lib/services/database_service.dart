@@ -27,7 +27,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 19, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 20, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -336,6 +336,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
       try {
         await db.execute(
             'ALTER TABLE saving_goals ADD COLUMN account_allocations TEXT;');
+      } catch (_) {}
+    }
+    if (oldVersion < 20) {
+      try {
+        await db.execute(
+            "ALTER TABLE saving_goals ADD COLUMN color_theme TEXT NOT NULL DEFAULT 'green';");
       } catch (_) {}
     }
   }
@@ -831,6 +837,27 @@ CREATE TABLE IF NOT EXISTS app_settings (
     );
   }
 
+  // ── Pause Tracking helpers ─────────────────────────────────────────────────
+  /// Returns the set of bank names for which tracking is currently paused.
+  Future<Set<String>> getPausedBanks() async {
+    final raw = await getSetting('paused_banks');
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final list = (raw.split(','))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      return list;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Persists the set of paused bank names.
+  Future<void> setPausedBanks(Set<String> banks) async {
+    await setSetting('paused_banks', banks.join(','));
+  }
+
   // ──────────────────────────────────────────────
   // Saving Goals Methods & Helper
   // ──────────────────────────────────────────────
@@ -847,7 +874,8 @@ CREATE TABLE IF NOT EXISTS saving_goals (
   targetDate TEXT,
   priority INTEGER NOT NULL DEFAULT 1,
   allocation_mode TEXT NOT NULL DEFAULT 'global_percent',
-  account_allocations TEXT NOT NULL DEFAULT '{"*":30.0}'
+  account_allocations TEXT NOT NULL DEFAULT '{"*":30.0}',
+  color_theme TEXT NOT NULL DEFAULT 'green'
 )
 ''');
     // No seed data — user creates their own goals
@@ -855,8 +883,17 @@ CREATE TABLE IF NOT EXISTS saving_goals (
 
   Future<int> insertSavingGoal(SavingGoal goal) async {
     final db = await instance.database;
-    return await db.insert('saving_goals', goal.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    try {
+      return await db.insert('saving_goals', goal.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {
+      try {
+        await db.execute(
+            "ALTER TABLE saving_goals ADD COLUMN color_theme TEXT NOT NULL DEFAULT 'green';");
+      } catch (_) {}
+      return await db.insert('saving_goals', goal.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 
   Future<List<SavingGoal>> getSavingGoals() async {
@@ -867,8 +904,17 @@ CREATE TABLE IF NOT EXISTS saving_goals (
 
   Future<int> updateSavingGoal(SavingGoal goal) async {
     final db = await instance.database;
-    return await db.update('saving_goals', goal.toMap(),
-        where: 'id = ?', whereArgs: [goal.id]);
+    try {
+      return await db.update('saving_goals', goal.toMap(),
+          where: 'id = ?', whereArgs: [goal.id]);
+    } catch (_) {
+      try {
+        await db.execute(
+            "ALTER TABLE saving_goals ADD COLUMN color_theme TEXT NOT NULL DEFAULT 'green';");
+      } catch (_) {}
+      return await db.update('saving_goals', goal.toMap(),
+          where: 'id = ?', whereArgs: [goal.id]);
+    }
   }
 
   Future<int> deleteSavingGoal(String id) async {

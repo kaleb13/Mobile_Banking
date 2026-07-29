@@ -24,12 +24,8 @@ class SavingGoal {
   /// How this goal sources money for its feasibility calculation.
   /// Serialised as 'global_percent' | 'account_specific' | 'multi_account'.
   final AllocationMode allocationMode;
-
-  /// The allocation percentages keyed by account name.
-  /// For globalPercent: {'*': 30.0}
-  /// For accountSpecific: {'CBE': 100.0}
-  /// For multiAccount: {'CBE': 60.0, 'Telebirr': 40.0}
   final Map<String, double> accountAllocations;
+  final String colorTheme;
 
   const SavingGoal({
     required this.id,
@@ -43,6 +39,7 @@ class SavingGoal {
     this.priority = 1,
     this.allocationMode = AllocationMode.globalPercent,
     this.accountAllocations = const {'*': 30.0},
+    this.colorTheme = 'green',
   });
 
   double get progressPercentage {
@@ -70,6 +67,7 @@ class SavingGoal {
     int? priority,
     AllocationMode? allocationMode,
     Map<String, double>? accountAllocations,
+    String? colorTheme,
   }) {
     return SavingGoal(
       id: id ?? this.id,
@@ -83,6 +81,7 @@ class SavingGoal {
       priority: priority ?? this.priority,
       allocationMode: allocationMode ?? this.allocationMode,
       accountAllocations: accountAllocations ?? this.accountAllocations,
+      colorTheme: colorTheme ?? this.colorTheme,
     );
   }
 
@@ -116,6 +115,7 @@ class SavingGoal {
       'allocation_mode': _modeToString(allocationMode),
       'account_allocations': json.encode(
           accountAllocations.map((k, v) => MapEntry(k, v))),
+      'color_theme': colorTheme,
     };
   }
 
@@ -141,6 +141,7 @@ class SavingGoal {
       priority: (map['priority'] as num?)?.toInt() ?? 1,
       allocationMode: _modeFromString(map['allocation_mode']?.toString()),
       accountAllocations: allocations,
+      colorTheme: map['color_theme']?.toString() ?? map['colorTheme']?.toString() ?? 'green',
     );
   }
 

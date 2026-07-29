@@ -1,13 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-/// A pull-to-refresh that requires a deliberate **hold**.
-///
-/// The user drags down past [triggerDistance] and keeps holding while a
-/// circular indicator fills over [holdDuration]. If they release (or pull back
-/// up) before the circle fills, the refresh is cancelled — so an accidental
-/// flick or light drag never triggers [onRefresh]. Only a sustained hold that
-/// fills the circle fires the refresh.
+/// A premium pull-to-refresh widget featuring the **Shibre Logo** with smooth scale,
+/// pulsing animations, and primary green theme highlights.
 class HoldToRefresh extends StatefulWidget {
   final Widget child;
   final Future<void> Function() onRefresh;
@@ -23,7 +18,7 @@ class HoldToRefresh extends StatefulWidget {
     required this.child,
     required this.onRefresh,
     this.triggerDistance = 75,
-    this.holdDuration = const Duration(milliseconds: 1000),
+    this.holdDuration = const Duration(milliseconds: 900),
   });
 
   @override
@@ -31,7 +26,7 @@ class HoldToRefresh extends StatefulWidget {
 }
 
 class _HoldToRefreshState extends State<HoldToRefresh>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _fill = AnimationController(
     vsync: this,
     duration: widget.holdDuration,
@@ -39,21 +34,41 @@ class _HoldToRefreshState extends State<HoldToRefresh>
     ..addListener(() => setState(() {}))
     ..addStatusListener(_onFillStatus);
 
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  )..addListener(() => setState(() {}));
+
+  late final Animation<double> _pulseScale =
+      Tween<double>(begin: 0.92, end: 1.08).animate(
+    CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+  );
+
   double _pull = 0; // current overscroll distance at the top
   bool _pointerDown = false;
   bool _armed = false; // hold timer is running
   bool _refreshing = false;
 
-  static const Color _accent = AppColors.gold;
+  @override
+  void initState() {
+    super.initState();
+    _pulse.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _pulse.reverse();
+      } else if (status == AnimationStatus.dismissed && _refreshing) {
+        _pulse.forward();
+      }
+    });
+  }
 
   @override
   void dispose() {
     _fill.dispose();
+    _pulse.dispose();
     super.dispose();
   }
 
   void _onFillStatus(AnimationStatus status) {
-    // Circle filled while still held → fire the refresh.
     if (status == AnimationStatus.completed && _armed && !_refreshing) {
       _triggerRefresh();
     }
@@ -61,10 +76,13 @@ class _HoldToRefreshState extends State<HoldToRefresh>
 
   Future<void> _triggerRefresh() async {
     setState(() => _refreshing = true);
+    _pulse.forward(from: 0);
     try {
       await widget.onRefresh();
     } finally {
       if (mounted) {
+        _pulse.stop();
+        _pulse.value = 0;
         setState(() {
           _refreshing = false;
           _armed = false;
@@ -87,11 +105,9 @@ class _HoldToRefreshState extends State<HoldToRefresh>
 
     if (!_refreshing) {
       if (!_armed && _pointerDown && _pull >= widget.triggerDistance) {
-        // Reached the threshold while holding → start filling.
         _armed = true;
         _fill.forward(from: 0);
       } else if (_armed && _pull < widget.triggerDistance * 0.4) {
-        // Pulled back up before it filled → cancel.
         _cancel();
       }
     }
@@ -101,7 +117,6 @@ class _HoldToRefreshState extends State<HoldToRefresh>
 
   void _onRelease() {
     _pointerDown = false;
-    // Released before the circle filled → ignore (no refresh).
     if (_armed &&
         !_refreshing &&
         _fill.status != AnimationStatus.completed) {
@@ -112,7 +127,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
   @override
   Widget build(BuildContext context) {
     final bool showIndicator = _refreshing || _armed || _pull > 4;
-    final double progress = _refreshing
+    final double rawProgress = _refreshing
         ? 1.0
         : (_armed
             ? _fill.value
@@ -122,8 +137,12 @@ class _HoldToRefreshState extends State<HoldToRefresh>
         : (_pull / widget.triggerDistance).clamp(0.0, 1.0);
 
     final String label = _refreshing
-        ? 'Refreshing…'
-        : (_armed ? 'Keep holding…' : 'Hold to refresh');
+        ? 'Updating transactions…'
+        : (_armed ? 'Keep holding…' : 'Pull to refresh');
+
+    final double logoScale = _refreshing
+        ? _pulseScale.value
+        : (0.6 + (rawProgress * 0.4));
 
     return Listener(
       onPointerDown: (_) => _pointerDown = true,
@@ -142,38 +161,78 @@ class _HoldToRefreshState extends State<HoldToRefresh>
                   child: SafeArea(
                     bottom: false,
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 14),
+                      padding: const EdgeInsets.only(top: 12),
                       child: Center(
                         child: Opacity(
                           opacity: opacity,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              SizedBox(
-                                width: 26,
-                                height: 26,
-                                child: _refreshing
-                                    ? const CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        valueColor:
-                                            AlwaysStoppedAnimation(_accent),
-                                      )
-                                    : CircularProgressIndicator(
-                                        value: progress,
-                                        strokeWidth: 2.5,
-                                        backgroundColor: Colors.white
-                                            .withValues(alpha: 0.12),
-                                        valueColor:
-                                            const AlwaysStoppedAnimation(
-                                                _accent),
+                              Transform.scale(
+                                scale: logoScale,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // Outer Progress Ring / Spinner
+                                    SizedBox(
+                                      width: 48,
+                                      height: 48,
+                                      child: _refreshing
+                                          ? const CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation(
+                                                      AppColors.positive),
+                                            )
+                                          : CircularProgressIndicator(
+                                              value: rawProgress,
+                                              strokeWidth: 2.5,
+                                              backgroundColor: AppColors
+                                                  .positive
+                                                  .withValues(alpha: 0.15),
+                                              valueColor:
+                                                  const AlwaysStoppedAnimation(
+                                                      AppColors.positive),
+                                            ),
+                                    ),
+                                    // Center Shibre Logo Container
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surfaceCard,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: AppColors.positive
+                                              .withValues(alpha: 0.25),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.positive
+                                                .withValues(alpha: 0.15),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
                                       ),
+                                      padding: const EdgeInsets.all(7),
+                                      child: Image.asset(
+                                        'assets/images/Shibre Icon.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Text(
                                 label,
                                 style: const TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.positive,
                                   fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.3,
                                 ),
                               ),
                             ],

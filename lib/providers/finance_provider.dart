@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../models/app_currency.dart';
 import '../models/sender.dart';
 import '../models/transaction.dart';
 import '../models/app_notification.dart';
@@ -39,6 +40,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   double _cashBalance = 0;
   List<SavingGoal> _savingGoals = [];
 
+  /// Set of bank names whose tracking is currently paused.
+  /// When a bank is paused, its messages are not processed and its
+  /// transactions are excluded from all balance and stats calculations.
+  Set<String> _pausedBanks = {};
+
   int _unreadNotificationCount = 0;
   bool _isLoading = true;
   double _totalBalance = 0;
@@ -55,6 +61,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   int _todayTransactionCount = 0;
   DateTime _selectedDate = DateTime.now();
   DateTime? _customMonthAnchorDate;
+  AppCurrency _currentCurrency = AppCurrency.defaultCurrency;
+
+  AppCurrency get currentCurrency => _currentCurrency;
+
+  Future<void> setCurrency(String code) async {
+    _currentCurrency = AppCurrency.fromCode(code);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_currency_code', code);
+    await DatabaseService.instance.setSetting('selected_currency_code', code);
+  }
 
   bool _hasPermission = false;
   bool _isOnboardingComplete;
@@ -75,6 +92,36 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   String? get userName => _userName;
 
+  // ── Pause Tracking ────────────────────────────────────────────────────────
+  /// The set of bank names that are currently paused.
+  Set<String> get pausedBanks => Set.unmodifiable(_pausedBanks);
+
+  /// Returns true if tracking for [bankName] is currently paused.
+  bool isTrackingPaused(String bankName) =>
+      _pausedBanks.any((b) => b.toUpperCase() == bankName.toUpperCase());
+
+  /// Pauses tracking for [bankName].
+  /// - New SMS messages from this bank will be ignored.
+  /// - Existing transactions from this bank are excluded from all
+  ///   balance and income/expense calculations until tracking resumes.
+  Future<void> pauseTracking(String bankName) async {
+    _pausedBanks = {..._pausedBanks, bankName};
+    await DatabaseService.instance.setPausedBanks(_pausedBanks);
+    _calculateStats();
+    notifyListeners();
+  }
+
+  /// Resumes tracking for [bankName], re-including its transactions in
+  /// all balance and stats calculations.
+  Future<void> resumeTracking(String bankName) async {
+    _pausedBanks = _pausedBanks
+        .where((b) => b.toUpperCase() != bankName.toUpperCase())
+        .toSet();
+    await DatabaseService.instance.setPausedBanks(_pausedBanks);
+    _calculateStats();
+    notifyListeners();
+  }
+
   List<AppSender> get senders => _senders;
 
   /// Returns all unique person/sender names captured in transaction records.
@@ -94,11 +141,25 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<String> get bankSenderNames =>
       _senders.map((s) => s.senderName).toList();
 
-  List<AppTransaction> get transactions => _transactions;
+  /// Public transactions list — **excludes** transactions from paused banks.
+  /// All UI screens (dashboard, search, analysis) should use this getter so
+  /// paused bank data is invisible to the user.
+  List<AppTransaction> get transactions => _pausedBanks.isEmpty
+      ? _transactions
+      : _transactions
+          .where((tx) => !_pausedBanks
+              .any((b) => b.toUpperCase() == tx.name.toUpperCase()))
+          .toList();
+
+  /// Raw unfiltered transaction list — includes paused bank transactions.
+  /// Used only internally (e.g. loan repayment history lookups) where the
+  /// full history is needed regardless of pause state.
+  List<AppTransaction> get allTransactionsUnfiltered => _transactions;
 
   List<AppTransaction> get transactionsForSelectedDate {
-    if (_isShowingAll) return _transactions;
-    return _transactions
+    final base = transactions; // already filtered
+    if (_isShowingAll) return base;
+    return base
         .where((tx) =>
             tx.date.year == _selectedDate.year &&
             tx.date.month == _selectedDate.month &&
@@ -107,7 +168,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   List<AppTransaction> get transactionsForSelectedMonth {
-    return _transactions
+    return transactions // already filtered
         .where((tx) => isDateInMonthOf(tx.date, _selectedDate))
         .toList();
   }
@@ -188,8 +249,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   String get userLevelName {
     switch (userLevel) {
       case 1: return 'Survivor';
-      case 2: return 'Achiever';
-      case 3: return 'Builder';
+      case 2: return 'Builder';
+      case 3: return 'Flourishing';
       case 4: return 'Prospering';
       case 5: return 'Elite';
       default: return 'Survivor';
@@ -202,16 +263,71 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       case 1:
         return 'Welcome to the journey! Every birr you save is a step forward. Keep tracking your spending, build an emergency fund, and watch your future grow.';
       case 2:
-        return 'You\'re making real progress! Your consistency is paying off. Focus on growing your savings and making your money work smarter for you.';
+        return 'You are a Builder! Your financial foundation is taking shape. Keep growing your savings and making your money work smarter for you.';
       case 3:
-        return 'You\'ve built a solid financial base. You\'re in the top tier of savers. Now it\'s time to diversify and let your wealth multiply.';
+        return 'You are Flourishing! You have built a strong financial cushion. Now it is time to diversify and let your wealth multiply.';
       case 4:
-        return 'Outstanding! You\'re among the financially prosperous. Your discipline has created real wealth. Keep optimizing and expanding your portfolio.';
+        return 'Outstanding! You are among the financially prosperous. Your discipline has created real wealth. Keep optimizing and expanding your portfolio.';
       case 5:
         return 'Elite level achieved! You are in a rare class of financial excellence. Your wealth speaks for itself — now focus on legacy and impact.';
       default:
         return 'Keep going! Every step counts toward your financial freedom.';
     }
+  }
+
+  /// The minimum balance threshold for the user's current level.
+  double get currentLevelMinBalance {
+    switch (userLevel) {
+      case 1: return 0.0;
+      case 2: return 100000.0;
+      case 3: return 500000.0;
+      case 4: return 1000000.0;
+      case 5: return 5000000.0;
+      default: return 0.0;
+    }
+  }
+
+  /// The target balance needed to reach the next level (or null if max level).
+  double? get nextLevelTargetBalance {
+    switch (userLevel) {
+      case 1: return 100000.0;
+      case 2: return 500000.0;
+      case 3: return 1000000.0;
+      case 4: return 5000000.0;
+      case 5: return null;
+      default: return 100000.0;
+    }
+  }
+
+  /// Name of the next level (or null if at max level).
+  String? get nextLevelName {
+    switch (userLevel) {
+      case 1: return 'Builder';
+      case 2: return 'Flourishing';
+      case 3: return 'Prospering';
+      case 4: return 'Elite';
+      case 5: return null;
+      default: return null;
+    }
+  }
+
+  /// How much money remains to reach the next level (0.0 if max level).
+  double get remainingToNextLevel {
+    final target = nextLevelTargetBalance;
+    if (target == null) return 0.0;
+    final diff = target - _totalBalance;
+    return diff < 0 ? 0.0 : diff;
+  }
+
+  /// Progress fraction (0.0 to 1.0) towards the next level.
+  double get nextLevelProgress {
+    final target = nextLevelTargetBalance;
+    if (target == null) return 1.0;
+    final minBal = currentLevelMinBalance;
+    final span = target - minBal;
+    if (span <= 0) return 1.0;
+    final currentInSpan = _totalBalance - minBal;
+    return (currentInSpan / span).clamp(0.0, 1.0);
   }
 
   /// Start loading financial data in the background during onboarding
@@ -243,6 +359,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
 
+    _pausedBanks = await DatabaseService.instance.getPausedBanks();
     _transactions = await DatabaseService.instance.getTransactions();
     _expenseDefinitions = await DatabaseService.instance.getExpenseDefinitions();
     _cashTransactions = await DatabaseService.instance.getCashTransactions();
@@ -776,6 +893,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
 
+    _pausedBanks = await DatabaseService.instance.getPausedBanks();
     _transactions = await DatabaseService.instance.getTransactions();
     _reasons = await DatabaseService.instance.getReasons();
     _reasonLinks = await DatabaseService.instance.getReasonLinks();
@@ -795,6 +913,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final anchorIso = prefs.getString('custom_month_anchor_date');
     if (anchorIso != null) {
       _customMonthAnchorDate = DateTime.tryParse(anchorIso);
+    }
+
+    final savedCurrencyCode = prefs.getString('selected_currency_code') ??
+        await DatabaseService.instance.getSetting('selected_currency_code');
+    if (savedCurrencyCode != null) {
+      _currentCurrency = AppCurrency.fromCode(savedCurrencyCode);
     }
 
     // The install_anchor_date marks the oldest boundary for message scanning.
@@ -1249,6 +1373,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     // Single pass through transactions to collect all necessary data
     for (var tx in _transactions) {
+      // Skip transactions from paused banks entirely so they don't affect
+      // balance, income/expense totals, or any other aggregation.
+      if (_pausedBanks.any((b) => b.toUpperCase() == tx.name.toUpperCase())) {
+        continue;
+      }
+
       // 1. Balance Tracking (Newest per bank)
       if (!latestBalances.containsKey(tx.name)) {
         if (tx.totalBalance > 0) {
@@ -1866,8 +1996,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// RULE: first name MUST match. Transactions with a different first name
   /// are NEVER shown to the user regardless of any other overlap.
   Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
+    // Only 'lent' loans are repaid via incoming money.
+    // 'borrowed' loans are repaid by the user sending money OUT — those
+    // cannot be auto-detected from an income SMS, so they are excluded entirely.
     final allActive = _loanRecords
-        .where((l) => l.status == 'active' && l.trackedSenderName != null)
+        .where((l) =>
+            l.status == 'active' &&
+            l.trackedSenderName != null &&
+            l.loanType == 'lent')
         .toList();
 
     if (allActive.isEmpty) return;
@@ -2014,6 +2150,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     // 0. Use modular parsers for trusted bank sender IDs only.
     final bank = BankSenders.match(sender);
+
+    // If the matched bank is paused, skip processing the SMS entirely.
+    if (bank != null &&
+        _pausedBanks.any((b) => b.toUpperCase() == bank.toUpperCase())) {
+      return;
+    }
+
     if (bank == 'Telebirr') {
       AppTransaction? telebirrTx = TelebirrParser.parse(message, date);
       if (telebirrTx != null) {

@@ -15,6 +15,7 @@ import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/interactive_drag_handle.dart';
+import '../../widgets/currency_symbol_widget.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -478,30 +479,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onTap: provider.toggleBalanceVisibility,
                     behavior: HitTestBehavior.opaque,
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Flexible(
-                          child: Text(
-                            fullyFormatted,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -1.0,
-                              height: 1.05,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        const CurrencySymbolWidget(
+                          size: 28,
+                          color: Colors.white,
                         ),
-                        Text(
-                          '.$decimals',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w600,
-                            height: 1.05,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  fullyFormatted,
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 40,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -1.0,
+                                    height: 1.05,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                '.$decimals',
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.05,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -1368,15 +1381,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           ),
                                       ],
                                     ),
-                                    Text(
-                                      provider.isBalanceVisible
-                                          ? '\$${NumberFormat('#,##0.00').format(senderBalance)}'
-                                          : '\$****.**',
-                                      style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600),
-                                    ),
+                                    provider.isBalanceVisible
+                                        ? CurrencyTextWidget(
+                                            amount: senderBalance,
+                                            style: TextStyle(
+                                                color: textColor,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600),
+                                          )
+                                        : Text(
+                                            '****.**',
+                                            style: TextStyle(
+                                                color: textColor,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600),
+                                          ),
                                   ],
                                 ),
                               ),
@@ -1605,32 +1624,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: isDefault
-            ? AppColors.lightGreyBackground
-            : AppColors.darkCharcoal,
+        color: AppColors.lightGreyBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDefault
               ? AppColors.lightGreyText.withValues(alpha: 0.3)
-              : AppColors.darkCharcoal,
+              : AppColors.darkCharcoal.withValues(alpha: 0.6),
+          width: isDefault ? 1.0 : 1.2,
         ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 4.0),
+          icon: const Padding(
+            padding: EdgeInsets.only(left: 4.0),
             child: Icon(
               Icons.keyboard_arrow_down_rounded,
-              color: isDefault ? AppColors.darkCharcoal : Colors.white,
+              color: AppColors.darkCharcoal,
               size: 16,
             ),
           ),
           dropdownColor: Colors.white,
           style: TextStyle(
-            color: isDefault ? AppColors.darkCharcoal : Colors.white,
+            color: AppColors.darkCharcoal,
             fontSize: 12,
-            fontWeight: isDefault ? FontWeight.w500 : FontWeight.w600,
+            fontWeight: isDefault ? FontWeight.w500 : FontWeight.bold,
           ),
           onChanged: onChanged,
           items: items.map((String item) {
@@ -1642,10 +1660,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   item,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: item == value && !isDefault
-                        ? AppColors.darkCharcoal
-                        : AppColors.darkCharcoal,
+                  style: const TextStyle(
+                    color: AppColors.darkCharcoal,
                   ),
                 ),
               ),

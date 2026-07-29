@@ -8,8 +8,11 @@ import '../../providers/finance_provider.dart';
 import '../../services/database_service.dart';
 import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
+import '../../widgets/app_back_button.dart';
 import 'reason_management_screen.dart';
 import 'about_app_screen.dart';
+import '../../models/app_currency.dart';
+import '../../widgets/currency_symbol_widget.dart';
 import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -98,11 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
                       child: Row(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                                color: Colors.white, size: 20),
-                            onPressed: () => Navigator.pop(context),
-                          ),
+                          const AppBackButton(),
                           const Text(
                             'Settings',
                             style: TextStyle(
@@ -264,6 +263,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // ── Section: Appearance ────────────────────────────
                     _sectionLabel('Appearance'),
                     _buildCardBase([
+                      Consumer<FinanceProvider>(
+                        builder: (context, provider, _) {
+                          final currency = provider.currentCurrency;
+                          return _settingsTile(
+                            context,
+                            icon: Icons.monetization_on_outlined,
+                            iconColor: AppColors.positive,
+                            label: 'Currency Icon',
+                            subtitle: currency.name,
+                            onTap: () => _showCurrencyPickerSheet(context, provider),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.positive.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.positive.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CurrencySymbolWidget(
+                                        currency: currency,
+                                        size: 14,
+                                        color: AppColors.positive,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        currency.shortLabel,
+                                        style: const TextStyle(
+                                          color: AppColors.positive,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  size: 14,
+                                ),
+                              ],
+                            ),
+                            showDivider: true,
+                          );
+                        },
+                      ),
                       _settingsTile(
                         context,
                         icon: Icons.palette_outlined,
@@ -479,6 +530,124 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+
+  void _showCurrencyPickerSheet(BuildContext context, FinanceProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        final currentCode = provider.currentCurrency.code;
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF161F2C),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Select Default Currency Icon',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Choose your preferred currency symbol to display across your balance and transactions.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: AppCurrency.supportedCurrencies.map((curr) {
+                      final isSelected = curr.code.toLowerCase() == currentCode.toLowerCase();
+                      return InkWell(
+                        onTap: () {
+                          provider.setCurrency(curr.code);
+                          Navigator.pop(context);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.positive.withValues(alpha: 0.15)
+                                : Colors.white.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.positive
+                                  : Colors.white.withValues(alpha: 0.05),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: CurrencySymbolWidget(
+                                  currency: curr,
+                                  size: 18,
+                                  color: isSelected ? AppColors.positive : Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  curr.name,
+                                  style: TextStyle(
+                                    color: isSelected ? AppColors.positive : Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppColors.positive,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

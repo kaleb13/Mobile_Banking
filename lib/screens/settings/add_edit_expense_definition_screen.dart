@@ -4,6 +4,7 @@ import '../../models/expense_definition.dart';
 import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_back_button.dart';
 import '../dashboard/reason_selection_sheet.dart';
 
 class AddEditExpenseDefinitionScreen extends StatefulWidget {
@@ -164,21 +165,7 @@ class _AddEditExpenseDefinitionScreenState
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
         child: Row(
           children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.overlay,
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                      color: AppColors.textPrimary.withValues(alpha: 0.08)),
-                ),
-                child: const Icon(Icons.arrow_back_rounded,
-                    color: AppColors.textPrimary, size: 22),
-              ),
-            ),
+            AppBackButton(onPressed: () => Navigator.pop(context)),
             const SizedBox(width: 12),
             Expanded(
               child: GestureDetector(

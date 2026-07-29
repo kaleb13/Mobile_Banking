@@ -8,6 +8,8 @@ import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/currency_symbol_widget.dart';
+import 'all_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
 enum PeriodFilter { week, month, quarter, year }
@@ -203,13 +205,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ─── Filter Data for Selected Period & Month ────────────────────────────────
-  ({
+    ({
     List<CategoryArcItem> categories,
     double chartTotal,
     double totalIncome,
     double totalExpense,
     double netPnl,
     List<({String name, double income, double expense, double net})> bankBreakdown,
+    List<AppTransaction> filteredBankTxs,
+    List<CashTransaction> filteredCashTxs,
   }) _getFilteredAnalyticsData(FinanceProvider provider) {
     final now = DateTime.now();
     final year = now.year;
@@ -347,6 +351,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       totalExpense: totalExpense,
       netPnl: netPnl,
       bankBreakdown: bankBreakdown,
+      filteredBankTxs: filteredBankTxs,
+      filteredCashTxs: filteredCashTxs,
     );
   }
 
@@ -392,11 +398,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   String _formatShortCurrency(double amount) {
     if (amount >= 1000000) {
-      return '\$${(amount / 1000000).toStringAsFixed(1)}M';
+      return '${(amount / 1000000).toStringAsFixed(1)}M';
     } else if (amount >= 1000) {
-      return '\$${(amount / 1000).toStringAsFixed(1)}K';
+      return '${(amount / 1000).toStringAsFixed(1)}K';
     }
-    return '\$${amount.toStringAsFixed(0)}';
+    return amount.toStringAsFixed(0);
   }
 
   @override
@@ -451,9 +457,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
                       // ── 5. Category Breakdown 2-Column Grid ────────────────
                       _buildCategoryLegendGrid(data.categories, provider.isBalanceVisible),
+                      const SizedBox(height: 32),
+
+                      // ── 6. Redesigned Reason Analysis Section ──────────────
+                      _buildReasonBreakdownSection(
+                        data.filteredBankTxs,
+                        data.filteredCashTxs,
+                        provider,
+                      ),
                       const SizedBox(height: 36),
 
-                      // ── 6. Redesigned Bank Performance & Summary Section ──
+                      // ── 7. Redesigned Bank Performance & Summary Section ──
                       _buildRedesignedBankPerformance(
                         data.totalIncome,
                         data.totalExpense,
@@ -675,14 +689,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    _formatShortCurrency(currentTotal),
+                  CurrencyTextWidget(
+                    amount: currentTotal,
+                    customFormattedStr: _formatShortCurrency(currentTotal),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 30,
+                      fontSize: 26,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: -1.0,
+                      letterSpacing: -0.5,
                     ),
+                    iconSize: 20,
                   ),
                 ],
               ),
@@ -755,22 +771,384 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(
-              isBalanceVisible ? '\$${fmt.format(item.amount)}' : '\$****',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.2,
-              ),
-            ),
+            isBalanceVisible
+                ? CurrencyTextWidget(
+                    amount: item.amount,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.2,
+                    ),
+                    customFormattedStr: fmt.format(item.amount),
+                  )
+                : const Text(
+                    '****',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
           ],
         );
       },
     );
   }
 
-  // ── 6. Redesigned Bank Performance Section ────────────────────────────────
+  // ── 6. Redesigned Reason Analysis Section ──────────────────────────────────
+  Widget _buildReasonBreakdownSection(
+    List<AppTransaction> filteredBankTxs,
+    List<CashTransaction> filteredCashTxs,
+    FinanceProvider provider,
+  ) {
+    // ── Step 1: Accumulate gross expense AND same-reason income ───────────────
+    final Map<String, double> grossExpense = {};
+    final Map<String, double> sameReasonIncome = {};
+
+    if (_selectedAnalysisType == 'Income') {
+      for (var t in filteredBankTxs.where((t) => t.type == 'income')) {
+        final label = (t.resolvedReason?.isNotEmpty == true)
+            ? t.resolvedReason!
+            : (t.reason ?? t.customReasonText ?? 'Uncategorized');
+        grossExpense[label] = (grossExpense[label] ?? 0) + t.amount;
+      }
+      for (var ctx in filteredCashTxs.where((t) => t.type == 'addition')) {
+        final label = ctx.reasonName ?? ctx.description ?? 'Other Cash';
+        grossExpense[label] = (grossExpense[label] ?? 0) + ctx.amount;
+      }
+    } else {
+      for (var t in filteredBankTxs.where((t) =>
+          t.type == 'expense' &&
+          t.reason?.toLowerCase() != 'cash' &&
+          t.customReasonText?.toLowerCase() != 'cash' &&
+          t.resolvedReason?.toLowerCase() != 'cash')) {
+        final label = (t.resolvedReason?.isNotEmpty == true)
+            ? t.resolvedReason!
+            : (t.reason ?? t.customReasonText ?? 'Uncategorized');
+        grossExpense[label] = (grossExpense[label] ?? 0) + t.amount;
+      }
+
+      for (var t in filteredBankTxs.where((t) =>
+          t.type == 'income' &&
+          t.reason?.toLowerCase() != 'cash' &&
+          t.customReasonText?.toLowerCase() != 'cash' &&
+          t.resolvedReason?.toLowerCase() != 'cash')) {
+        final label =
+            (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : t.reason;
+        if (label != null && grossExpense.containsKey(label)) {
+          sameReasonIncome[label] = (sameReasonIncome[label] ?? 0) + t.amount;
+        }
+      }
+
+      for (var ctx in filteredCashTxs.where((t) => t.type == 'expense')) {
+        final label = ctx.reasonName ?? ctx.description ?? 'Other Cash';
+        grossExpense[label] = (grossExpense[label] ?? 0) + ctx.amount;
+      }
+    }
+
+    final Map<String, double> reasonTotals = {};
+    for (final label in grossExpense.keys) {
+      final netSpend = (grossExpense[label] ?? 0) - (sameReasonIncome[label] ?? 0);
+      if (netSpend > 0) {
+        reasonTotals[label] = netSpend;
+      } else if ((grossExpense[label] ?? 0) > 0) {
+        reasonTotals[label] = grossExpense[label]!;
+      }
+    }
+
+    if (reasonTotals.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.analytics_outlined, color: Colors.white38, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'No transaction reasons recorded for this period',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final sorted = reasonTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final totalSum = sorted.fold<double>(0, (s, e) => s + e.value);
+    final fmt = NumberFormat('#,##0.00');
+    final hasOffsets = sameReasonIncome.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Reason Analysis',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.3,
+              ),
+            ),
+            Text(
+              '${sorted.length} ${sorted.length == 1 ? 'Reason' : 'Reasons'}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        if (hasOffsets) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppColors.positive.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.positive.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: AppColors.positive, size: 14),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Net spending shown — income tagged with matching reasons has been offset.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        ...sorted.asMap().entries.map((entry) {
+          final i = entry.key;
+          final e = entry.value;
+          final pct = totalSum > 0 ? e.value / totalSum : 0.0;
+          final color = _getReasonColor(e.key);
+          final gross = grossExpense[e.key] ?? e.value;
+          final offset = sameReasonIncome[e.key] ?? 0;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AllTransactionsScreen(
+                        initialSearchQuery: e.key,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceCard,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      // Rank badge
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: color.withValues(alpha: 0.4),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    e.key,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                provider.isBalanceVisible
+                                    ? CurrencyTextWidget(
+                                        amount: e.value,
+                                        style: TextStyle(
+                                          color: color,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        customFormattedStr: fmt.format(e.value),
+                                      )
+                                    : Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CurrencySymbolWidget(
+                                            color: color,
+                                            size: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '****',
+                                            style: TextStyle(
+                                              color: color,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Colors.white38,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                            if (offset > 0) ...[
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  CurrencyTextWidget(
+                                    amount: gross,
+                                    style: TextStyle(
+                                      color: AppColors.negative.withValues(alpha: 0.8),
+                                      fontSize: 10,
+                                    ),
+                                    customFormattedStr: fmt.format(gross),
+                                  ),
+                                  Text(
+                                    ' out',
+                                    style: TextStyle(
+                                      color: AppColors.negative.withValues(alpha: 0.8),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 4),
+                                    child: Text('−',
+                                        style: TextStyle(
+                                            color: Colors.white38, fontSize: 10)),
+                                  ),
+                                  CurrencyTextWidget(
+                                    amount: offset,
+                                    style: TextStyle(
+                                      color: AppColors.positive.withValues(alpha: 0.8),
+                                      fontSize: 10,
+                                    ),
+                                    customFormattedStr: fmt.format(offset),
+                                  ),
+                                  Text(
+                                    ' in',
+                                    style: TextStyle(
+                                      color: AppColors.positive.withValues(alpha: 0.8),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 4),
+                                    child: Text('=',
+                                        style: TextStyle(
+                                            color: Colors.white38, fontSize: 10)),
+                                  ),
+                                  Text(
+                                    'net ${fmt.format(e.value)}',
+                                    style: const TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: LinearProgressIndicator(
+                                value: pct.clamp(0.0, 1.0),
+                                minHeight: 4,
+                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                valueColor: AlwaysStoppedAnimation<Color>(color),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${(pct * 100).toStringAsFixed(1)}% of total spent',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ── 7. Redesigned Bank Performance Section ────────────────────────────────
   Widget _buildRedesignedBankPerformance(
     double totalIncome,
     double totalExpense,
@@ -857,9 +1235,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.overlay.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: AppColors.surfaceCard,
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 children: [
@@ -883,14 +1260,25 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         ),
                       ),
                       const Spacer(),
-                      Text(
-                        isBalanceVisible ? '${isPositive ? '+' : ''}\$${fmt.format(bank.net)}' : '\$****',
-                        style: TextStyle(
-                          color: isPositive ? AppColors.positive : AppColors.negative,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      isBalanceVisible
+                          ? CurrencyTextWidget(
+                              amount: bank.net,
+                              showSign: true,
+                              style: TextStyle(
+                                color: isPositive ? AppColors.positive : AppColors.negative,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              customFormattedStr: fmt.format(bank.net.abs()),
+                            )
+                          : Text(
+                              '****',
+                              style: TextStyle(
+                                color: isPositive ? AppColors.positive : AppColors.negative,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -924,9 +1312,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.5),
+        color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -949,17 +1336,26 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(
-              isBalanceVisible ? '\$${fmt.format(val.abs())}' : '\$****',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.3,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: isBalanceVisible
+                ? CurrencyTextWidget(
+                    amount: val.abs(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
+                    ),
+                    customFormattedStr: fmt.format(val.abs()),
+                  )
+                : const Text(
+                    '****',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
           ),
         ],
       ),

@@ -56,142 +56,233 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
       balance = withBal.first.totalBalance;
     }
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.62,
-      minChildSize: 0.38,
-      maxChildSize: 0.88,
-      snap: true,
-      snapSizes: const [0.62, 0.88],
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+    final bool isPaused = provider.isTrackingPaused(activeSenderName);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface, // Color(0xFF0F141C)
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top Drag Handle
+          Center(
+            child: InteractiveDragHandle(
+              color: AppColors.textSecondary.withValues(alpha: 0.4),
+              onTap: () => Navigator.pop(context),
+              padding: const EdgeInsets.only(bottom: 12),
+            ),
           ),
-          child: Column(
-            children: [
-              // Top Drag Handle
-              Center(
-                child: InteractiveDragHandle(
-                  color: Colors.grey.shade300,
-                  onTap: () => Navigator.pop(context),
-                  onVerticalDragUpdate: (details) {
-                    if ((details.primaryDelta ?? 0) > 3) {
-                      Navigator.pop(context);
-                    }
-                  },
-                  padding: const EdgeInsets.only(top: 10, bottom: 6),
-                ),
+
+          // Section 1: Title
+          Center(
+            child: Text(
+              isPaused
+                  ? '$activeSenderName Tracking Paused'
+                  : 'Pause Tracking for $activeSenderName',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.3,
               ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 4),
 
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    4,
-                    16,
-                    MediaQuery.of(context).padding.bottom + 16,
-                  ),
+          // Section 2: Description
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              isPaused
+                  ? 'Tracking is currently paused for this bank. Tap "Resume Tracking" to re-enable SMS detection and recalculate balances.'
+                  : 'Temporarily pause SMS transaction detection and automatic balance updates for this bank account.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 11.5,
+                height: 1.35,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Section 3: 3D Bank Card Preview
+          _InteractiveFrozenCardPreview(
+            senderName: activeSenderName,
+            balance: balance,
+            txCount: senderTxs.length,
+            isBalanceVisible: provider.isBalanceVisible,
+            isPaused: isPaused,
+          ),
+          const SizedBox(height: 14),
+
+          // Section 4: Info Section Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceCard, // Color(0xFF111821)
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    // Dynamic Title listing Account / Sender Name
-                    Center(
-                      child: Text(
-                        'Freeze $activeSenderName',
-                        style: const TextStyle(
-                          color: AppColors.darkCharcoal,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: (isPaused ? Colors.amber : AppColors.positive)
+                            .withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isPaused
+                            ? Icons.pause_circle_outline_rounded
+                            : Icons.info_outline_rounded,
+                        color: isPaused ? Colors.amber : AppColors.positive,
+                        size: 16,
                       ),
                     ),
-                    const SizedBox(height: 8),
-
-                    // Clear Subtitle description for complete account freezing
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Freezing $activeSenderName will completely stop Shibre from reading and processing bank messages for this account. You can unfreeze it at any time.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                          height: 1.4,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // Single Bank Card Preview with 3D Horizontal Swipe Tilt Reaction
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                      child: _InteractiveFrozenCardPreview(
-                        senderName: activeSenderName,
-                        balance: balance,
-                        txCount: senderTxs.length,
-                        isBalanceVisible: provider.isBalanceVisible,
-                      ),
-                    ),
-                    const SizedBox(height: 36),
-
-                    // Action Button: [ ❄ Freeze <Account Name> ]
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '$activeSenderName account frozen!',
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: AppColors.bottomNavBg,
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.ac_unit,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Freeze $activeSenderName',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(width: 10),
+                    Text(
+                      isPaused ? 'Currently paused' : 'What happens when paused?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                _buildInfoBullet(
+                    isPaused
+                        ? 'New bank SMS messages from $activeSenderName are currently being ignored.'
+                        : 'Incoming bank SMS messages will not be parsed into transactions.'),
+                const SizedBox(height: 6),
+                _buildInfoBullet(
+                    isPaused
+                        ? '$activeSenderName balance and transactions are excluded from all totals.'
+                        : 'Balance updates and spending analytics will temporarily pause.'),
+                const SizedBox(height: 6),
+                _buildInfoBullet('All existing transactions and history remain 100% safe & untouched.'),
+                const SizedBox(height: 6),
+                _buildInfoBullet(
+                    isPaused
+                        ? 'Tap "Resume Tracking" to bring $activeSenderName back into calculations.'
+                        : 'You can resume tracking at any time with a single tap.'),
+              ],
+            ),
           ),
-        );
-      },
+          const SizedBox(height: 18),
+
+          // Section 5: Primary Action Button (No Drop Shadow!)
+          GestureDetector(
+            onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final String name = activeSenderName;
+              final bool wasPaused = isPaused;
+
+              // Pop the bottom sheet first so notifyListeners doesn't rebuild a deactivated context
+              Navigator.pop(context);
+
+              if (wasPaused) {
+                await provider.resumeTracking(name);
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('$name tracking resumed'),
+                    backgroundColor: AppColors.positive,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              } else {
+                await provider.pauseTracking(name);
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('$name tracking paused'),
+                    backgroundColor: AppColors.pausedBadge,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: Container(
+              width: double.infinity,
+              height: 52,
+              decoration: BoxDecoration(
+                color: isPaused ? AppColors.pausedBadge : AppColors.positive,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isPaused
+                        ? Icons.play_circle_rounded
+                        : Icons.pause_circle_rounded,
+                    color: AppColors.background,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    isPaused
+                        ? 'Resume Tracking ($activeSenderName)'
+                        : 'Pause Tracking ($activeSenderName)',
+                    style: const TextStyle(
+                      color: AppColors.background,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBullet(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 6),
+          width: 5,
+          height: 5,
+          decoration: const BoxDecoration(
+            color: AppColors.textSecondary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -204,12 +295,14 @@ class _InteractiveFrozenCardPreview extends StatefulWidget {
   final double balance;
   final int txCount;
   final bool isBalanceVisible;
+  final bool isPaused;
 
   const _InteractiveFrozenCardPreview({
     required this.senderName,
     required this.balance,
     required this.txCount,
     required this.isBalanceVisible,
+    required this.isPaused,
   });
 
   @override
@@ -384,100 +477,144 @@ class __InteractiveFrozenCardPreviewState
           final centerX = -2.5 + (t * 5.0);
 
           return Transform(
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0018) // 3D Perspective intensity
-              ..rotateY(_rotY),
-            alignment: Alignment.center,
-            child: Container(
-              height: 165,
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: RadialGradient(
-                  center: Alignment(centerX, 0.0),
-                  radius: 1.8,
-                  colors: [
-                    baseGradient.first,
-                    baseGradient.last,
-                    baseGradient.first,
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: baseGradient.first.withValues(alpha: 0.4),
-                    blurRadius: 18,
-                    offset: Offset(_rotY * 25, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.0018) // 3D Perspective intensity
+                ..rotateY(_rotY),
+              alignment: Alignment.center,
+              child: Stack(
                 children: [
-                  Row(
-                    children: [
-                      _bankLogo(widget.senderName),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.senderName,
-                            style: TextStyle(
-                              color: textColorPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            _subtitle(widget.senderName),
-                            style: TextStyle(
-                              color: textColorSub,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
+                  Container(
+                    height: 165,
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: RadialGradient(
+                        center: Alignment(centerX, 0.0),
+                        radius: 1.8,
+                        colors: [
+                          baseGradient.first,
+                          baseGradient.last,
+                          baseGradient.first,
                         ],
+                        stops: const [0.0, 0.5, 1.0],
                       ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        parts[0],
-                        style: TextStyle(
-                          color: textColorPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
+                      border: widget.isPaused
+                          ? Border.all(
+                              color: Colors.amber.withValues(alpha: 0.7),
+                              width: 2,
+                            )
+                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (widget.isPaused
+                                  ? Colors.amber
+                                  : baseGradient.first)
+                              .withValues(alpha: 0.4),
+                          blurRadius: 18,
+                          offset: Offset(_rotY * 25, 6),
                         ),
-                      ),
-                      Text(
-                        '.${parts[1]}',
-                        style: TextStyle(
-                          color: textColorSub,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            _bankLogo(widget.senderName),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.senderName,
+                                  style: TextStyle(
+                                    color: textColorPrimary,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  _subtitle(widget.senderName),
+                                  style: TextStyle(
+                                    color: textColorSub,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${widget.txCount} total Transactions',
-                    style: TextStyle(
-                      color: textColorSub,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
+                        const Spacer(),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              parts[0],
+                              style: TextStyle(
+                                color: textColorPrimary,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              '.${parts[1]}',
+                              style: TextStyle(
+                                color: textColorSub,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${widget.txCount} total Transactions',
+                          style: TextStyle(
+                            color: textColorSub,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  // PAUSED badge overlay
+                  if (widget.isPaused)
+                    Positioned(
+                      top: 12,
+                      right: 14,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade700,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.pause_rounded,
+                                color: Colors.white, size: 11),
+                            SizedBox(width: 3),
+                            Text(
+                              'PAUSED',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
-            ),
-          );
+            );
         },
       ),
     );

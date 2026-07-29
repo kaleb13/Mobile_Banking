@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/carousel_page_indicator.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -292,13 +293,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             // Header with back arrow
             Row(
               children: [
-                IconButton(
-                  onPressed: _previousPage,
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 12),
+                AppBackButton(onPressed: _previousPage),
+                const SizedBox(width: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(

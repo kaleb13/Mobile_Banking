@@ -622,108 +622,178 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       );
     }
 
-    return ListView.builder(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       physics: const BouncingScrollPhysics(),
-      itemCount: transactions.length,
-      itemBuilder: (context, index) {
-        final tx = transactions[index];
-
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => TransactionDetailScreen(transaction: tx)),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.textDisabled.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              children: [
-                _buildAvatar(tx),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tx.type == 'income' ? 'Deposit' : 'Transferred',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${tx.type == 'income' ? 'From' : 'For'} ${tx.sender}',
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _buildAmountText(tx, provider),
-                    const SizedBox(height: 6),
-                    Text(
-                      DateFormat('MMM d, HH:mm').format(tx.date),
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          itemCount: transactions.length,
+          separatorBuilder: (context, index) => Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 64,
+            endIndent: 16,
+            color: Colors.white.withValues(alpha: 0.08),
           ),
-        );
-      },
+          itemBuilder: (context, index) {
+            final tx = transactions[index];
+            return _buildTransactionRowItem(context, tx, provider);
+          },
+        ),
+      ),
     );
   }
 
-  Widget _buildAvatar(AppTransaction tx) {
-    final nameUp = tx.name.toUpperCase();
-    String? assetPath;
-    if (nameUp == 'CBE') {
-      assetPath = 'assets/images/CBE logo 1.png';
-    } else if (nameUp == 'TELEBIRR') {
-      assetPath = 'assets/images/Telebirr Logo.png';
-    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      assetPath = 'assets/images/CBEBirr Logo.png';
-    } else if (nameUp.contains('AHADU')) {
-      assetPath = 'assets/images/Ahadu_Logo.png';
-    }
+  Widget _buildTransactionRowItem(
+      BuildContext context, AppTransaction tx, FinanceProvider provider) {
+    final bool isIncome = tx.type == 'income';
+    final String label = isIncome ? 'Deposit' : 'Transferred';
+    final String subLabel = isIncome ? 'From ${tx.sender}' : 'For ${tx.sender}';
 
-    if (assetPath != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.asset(assetPath, width: 44, height: 44, fit: BoxFit.cover),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TransactionDetailScreen(transaction: tx),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              _buildDarkBankAvatar(tx.name),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (tx.reasonId == null &&
+                            (tx.customReasonText == null ||
+                                tx.customReasonText!.isEmpty) &&
+                            (tx.reason == null || tx.reason!.isEmpty))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6.0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: AppColors.negative.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'REASON?',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 7.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subLabel,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildAmountText(tx, provider),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('MMM d, HH:mm').format(tx.date),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDarkBankAvatar(String bankName) {
+    final nameUp = bankName.toUpperCase();
+    Widget img;
+    Color bgColor = Colors.white.withValues(alpha: 0.05);
+
+    if (nameUp == 'CBE') {
+      img = Image.asset('assets/images/CBE logo 1.png',
+          width: 20, height: 20, fit: BoxFit.contain);
+      bgColor = const Color(0xFF6B4C9A).withValues(alpha: 0.20);
+    } else if (nameUp == 'TELEBIRR') {
+      img = Image.asset('assets/images/Telebirr Logo.png',
+          width: 20, height: 20, fit: BoxFit.contain);
+      bgColor = AppColors.telebirrGreen.withValues(alpha: 0.20);
+    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
+      img = Image.asset('assets/images/CBEBirr Logo.png',
+          width: 20, height: 20, fit: BoxFit.contain);
+      bgColor = const Color(0xFFE91E63).withValues(alpha: 0.20);
+    } else if (nameUp.contains('AHADU')) {
+      img = Image.asset('assets/images/Ahadu_Logo.png',
+          width: 20, height: 20, fit: BoxFit.contain);
+      bgColor = const Color(0xFFFF9800).withValues(alpha: 0.20);
+    } else {
+      img = Text(
+        bankName.substring(0, min(1, bankName.length)).toUpperCase(),
+        style: const TextStyle(
+            color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
       );
     }
 
     return Container(
-      width: 44,
-      height: 44,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: bgColor,
         shape: BoxShape.circle,
       ),
-      child: Center(
-        child: Text(
-          tx.name.substring(0, min(3, tx.name.length)).toUpperCase(),
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-      ),
+      child: Center(child: img),
     );
   }
 
@@ -733,7 +803,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         '****',
         style: TextStyle(
           color: AppColors.textPrimary,
-          fontSize: 15,
+          fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
       );
@@ -749,7 +819,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             text: '${tx.type == 'income' ? '+' : '-'}${amountParts[0]}',
             style: const TextStyle(
               color: AppColors.textPrimary,
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
           ),

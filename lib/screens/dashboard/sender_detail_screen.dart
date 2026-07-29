@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -10,6 +8,9 @@ import '../../models/sender.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/app_back_button.dart';
+import '../../widgets/currency_symbol_widget.dart';
 import 'transaction_detail_screen.dart';
 import 'manage_bank_screen.dart';
 
@@ -205,8 +206,24 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         backgroundColor: AppColors.background,
         extendBody: true,
         extendBodyBehindAppBar: true,
-        // ── Floating bottom pill nav bar ──
-        bottomNavigationBar: _buildBottomNav(context, provider),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => ManualTransactionSheet(
+                provider: provider,
+                initialSender: widget.sender,
+              ),
+            );
+          },
+          backgroundColor: AppColors.gold,
+          foregroundColor: AppColors.brownDark,
+          elevation: 6,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.add_rounded, size: 28),
+        ),
         body: Stack(
           children: [
             // Background Gradient
@@ -223,7 +240,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       child: Column(
                         children: [
                           _buildBankCard(
-                              currentBalance, monthChange, monthPercent),
+                              currentBalance, monthChange, monthPercent, allTxForSender.length),
                           if (isLinked)
                             _buildDynamicButtons(context, currentSender)
                           else
@@ -236,7 +253,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                           const SizedBox(height: 32),
                           _buildActivityFilterSection(),
                           _buildTransactionList(filteredTransactions),
-                          const SizedBox(height: 110), // clears the bottom bar
+                          const SizedBox(height: 80),
                         ],
                       ),
                     ),
@@ -252,32 +269,36 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
   Widget _buildSearchHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(8, 4, 16, 8),
       child: Row(
         children: [
-          // Search Input
+          const AppBackButton(),
+          const SizedBox(width: 4),
           Expanded(
             child: Container(
-              height: 40,
+              height: 42,
               decoration: BoxDecoration(
-                color: AppColors.overlay,
+                color: AppColors.tabBackground,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
                 children: [
-                  const SizedBox(width: 16),
-                  const Icon(Icons.search_rounded,
-                      color: AppColors.textSoft, size: 16),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
+                  const Icon(
+                    Icons.search_rounded,
+                    color: AppColors.textSoft,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
                       controller: _searchController,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'Search in ${widget.sender.senderName}...',
                         hintStyle: const TextStyle(
                           color: AppColors.textSoft,
-                          fontSize: 12,
+                          fontSize: 13,
                         ),
                         border: InputBorder.none,
                         isDense: true,
@@ -295,10 +316,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                                 },
                                 child: Padding(
                                   padding: const EdgeInsets.only(right: 12.0),
-                                  child: Icon(Icons.cancel_rounded,
-                                      color:
-                                          Colors.white.withValues(alpha: 0.3),
-                                      size: 16),
+                                  child: Icon(
+                                    Icons.cancel_rounded,
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    size: 16,
+                                  ),
                                 ),
                               )
                             : null,
@@ -310,7 +332,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
                 ],
               ),
             ),
@@ -320,268 +341,292 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
-  Widget _buildBankCard(double balance, double change, double percent) {
-    final nameUp = widget.sender.senderName.toUpperCase();
-    String subTitle = '';
-    String imagePath = 'assets/images/CBE logo 1.png';
+  Widget _bankLogo(String name) {
+    final nameUp = name.toUpperCase();
+    String imagePath = '';
 
-    if (nameUp.contains('CBE') && !nameUp.contains('BIRR')) {
-      subTitle = 'Bank';
-    } else if (nameUp.contains('TELEBIRR')) {
-      subTitle = 'E-money';
+    if (nameUp == 'CBE') {
+      imagePath = 'assets/images/CBE logo 1.png';
+    } else if (nameUp == 'TELEBIRR') {
       imagePath = 'assets/images/Telebirr Logo.png';
-    } else if (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR')) {
-      subTitle = 'Wallet';
+    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
-      subTitle = 'Bank';
       imagePath = 'assets/images/Ahadu_Logo.png';
     }
 
-    List<Color> cardGradient;
-    if (nameUp == 'CBE') {
-      cardGradient = [
-        AppColors.cardBrownDark,
-        AppColors.cardBrownMid,
-        AppColors.cardBrownDark
-      ];
-    } else if (nameUp.contains('TELEBIRR')) {
-      cardGradient = [
-        AppColors.success,
-        AppColors.cardLime,
-        AppColors.success
-      ];
-    } else if (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR')) {
-      cardGradient = [
-        AppColors.cardSilver,
-        AppColors.textPrimary,
-        AppColors.cardSilver
-      ];
-    } else if (nameUp.contains('AHADU')) {
-      cardGradient = [
-        AppColors.cardAhaduPink,
-        AppColors.cardAhaduWhite,
-        AppColors.cardAhaduPink
-      ];
-    } else {
-      cardGradient = [
-        AppColors.bgMid,
-        AppColors.cardGrayLight,
-        AppColors.bgMid
-      ];
+    if (imagePath.isNotEmpty) {
+      return Image.asset(
+        imagePath,
+        width: 38,
+        height: 38,
+        fit: BoxFit.contain,
+      );
     }
 
-    final textColor =
-        (nameUp.contains('CBEBIRR') || nameUp.contains('CBE BIRR') || nameUp.contains('AHADU'))
-            ? Colors.black
-            : Colors.white;
-    final isPositive = change >= 0;
+    return Icon(
+      Icons.account_balance,
+      color: Colors.white.withValues(alpha: 0.9),
+      size: 34,
+    );
+  }
+
+  String _bankSubtitle(String name) {
+    final n = name.toUpperCase();
+    if (n == 'TELEBIRR') return 'Ethio Telecom, E-money';
+    if (n == 'CBE') return 'Commercial Bank of Ethiopia';
+    if (n == 'CBE BIRR' || n == 'CBEBIRR') return 'CBE Birr Mobile Wallet';
+    if (n.contains('AHADU')) return 'Ahadu Bank S.C.';
+    return 'Bank Account';
+  }
+
+  List<Color> _getCardGradient(String name) {
+    final nameUp = name.toUpperCase();
+    if (nameUp == 'TELEBIRR') {
+      return [
+        AppColors.success,
+        AppColors.cardLime,
+      ];
+    } else if (nameUp == 'CBE') {
+      return [
+        AppColors.cardBrownDark,
+        AppColors.cardBrownMid,
+      ];
+    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
+      return [
+        AppColors.cardCbeBirrSilver,
+        AppColors.cardCbeBirrWhite,
+      ];
+    } else if (nameUp.contains('AHADU')) {
+      return [
+        AppColors.cardAhaduPink,
+        AppColors.cardAhaduWhite,
+      ];
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA') {
+      return [
+        AppColors.cardBoaDarkIcon,
+        AppColors.cardBoaBg,
+      ];
+    } else if (nameUp.contains('DASHEN')) {
+      return [
+        AppColors.cardDashenDarkIcon,
+        AppColors.cardDashenBg,
+      ];
+    } else if (nameUp.contains('COOP')) {
+      return [
+        AppColors.cardCoopDarkIcon,
+        AppColors.cardCoopBg,
+      ];
+    }
+    return [
+      AppColors.bgMid,
+      AppColors.cardGrayLight,
+    ];
+  }
+
+  Widget _buildBankCard(
+      double balance, double change, double percent, int txCount) {
+    final senderName = widget.sender.senderName;
+    final cardGradient = _getCardGradient(senderName);
+    final bool isDarkTextTheme = senderName.toUpperCase().contains('AHADU') ||
+        senderName.toUpperCase() == 'CBE BIRR' ||
+        senderName.toUpperCase() == 'CBEBIRR';
+    final Color textColorPrimary =
+        isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
+    final Color textColorSub = isDarkTextTheme
+        ? AppColors.darkCharcoal.withValues(alpha: 0.6)
+        : Colors.white.withValues(alpha: 0.6);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: double.infinity,
-            height: 200,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                  color: cardGradient.first.withValues(alpha: 0.5), width: 1.5),
-            ),
-            child: Container(
-              margin: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(29),
-                gradient: RadialGradient(
-                  center: Alignment.centerRight,
-                  radius: 1.5,
-                  colors: cardGradient,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(29),
-                child: Stack(
-                  children: [
-                    // Right aligned huge logo/image
-                    Positioned(
-                      right: -10,
-                      top: 10,
-                      bottom: 0,
-                      child: Image.asset(
-                        imagePath,
-                        fit: BoxFit.contain,
-                        width: 140,
-                      ),
-                    ),
-                    // Content padding
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                nameUp.contains('AHADU')
-                                    ? 'Ahadu'
-                                    : widget.sender.senderName,
-                                style: TextStyle(
-                                  color: textColor,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (subTitle.isNotEmpty)
-                                Text(
-                                  subTitle,
-                                  style: TextStyle(
-                                    color: textColor.withValues(alpha: 0.6),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    'Your balance',
-                                    style: TextStyle(
-                                      color: textColor.withValues(alpha: 0.7),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Consumer<FinanceProvider>(
-                                builder: (context, provider, child) {
-                                  return GestureDetector(
-                                    onTap: provider.toggleBalanceVisibility,
-                                    behavior: HitTestBehavior.opaque,
-                                    child: Text(
-                                      provider.isBalanceVisible
-                                          ? NumberFormat('#,##0.00')
-                                              .format(balance)
-                                          : '****.**',
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w500,
-                                        letterSpacing: 0.5,
-                                        height: 1.1,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 6),
-                              GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _isChartVisible = !_isChartVisible;
-                                  });
-                                },
-                                behavior: HitTestBehavior.opaque,
-                                child: Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => _showPNLInfo(context),
-                                      behavior: HitTestBehavior.opaque,
-                                      child: IntrinsicWidth(
-                                        child: Column(
-                                          children: [
-                                            Text(
-                                              '30D PNL  ',
-                                              style: TextStyle(
-                                                color: textColor.withValues(
-                                                    alpha: 0.7),
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.bold,
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 1),
-                                            CustomPaint(
-                                              size: const Size(
-                                                  double.infinity, 1),
-                                              painter: DashedUnderlinePainter(
-                                                  color: textColor.withValues(
-                                                      alpha: 0.4)),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())}',
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '(',
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Icon(
-                                      isPositive
-                                          ? Icons.trending_up
-                                          : Icons.trending_down,
-                                      color: textColor,
-                                      size: 12,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    Text(
-                                      '${percent.abs().toStringAsFixed(2)}%)',
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(
-                                      _isChartVisible
-                                          ? Icons.keyboard_arrow_up
-                                          : Icons.keyboard_arrow_down,
-                                      color: textColor.withValues(alpha: 0.54),
-                                      size: 16,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
+            colors: cardGradient,
           ),
-        ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Logo + Bank Title + Sub-description + Top-Right Refresh Button
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _bankLogo(senderName),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        senderName.toUpperCase().contains('AHADU')
+                            ? 'Ahadu Bank'
+                            : senderName,
+                        style: TextStyle(
+                          color: textColorPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _bankSubtitle(senderName),
+                        style: TextStyle(
+                          color: textColorSub,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Top-Right Refresh Button on Bank Card
+                GestureDetector(
+                  onTap: () => _showRefreshChooser(
+                    context,
+                    Provider.of<FinanceProvider>(context, listen: false),
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isDarkTextTheme
+                          ? Colors.black.withValues(alpha: 0.08)
+                          : Colors.white.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.refresh_rounded,
+                      color: textColorPrimary,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+
+            // Large Balance Display (Integer + Decimals)
+            Consumer<FinanceProvider>(
+              builder: (context, provider, child) {
+                final fmt = NumberFormat('#,##0.00');
+                final balStr = provider.isBalanceVisible
+                    ? fmt.format(balance)
+                    : '****,***.**';
+                final parts = balStr.split('.');
+
+                return GestureDetector(
+                  onTap: provider.toggleBalanceVisibility,
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        parts[0],
+                        style: TextStyle(
+                          color: textColorPrimary,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                          height: 1.0,
+                        ),
+                      ),
+                      Text(
+                        '.${parts[1]}',
+                        style: TextStyle(
+                          color: isDarkTextTheme
+                              ? AppColors.darkCharcoal.withValues(alpha: 0.5)
+                              : Colors.white.withValues(alpha: 0.65),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+
+            // Bottom Info & Chart Toggle Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$txCount total Transactions',
+                  style: TextStyle(
+                    color: textColorSub,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isChartVisible = !_isChartVisible;
+                    });
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isDarkTextTheme
+                          ? Colors.black.withValues(alpha: 0.08)
+                          : Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showPNLInfo(context),
+                          child: Text(
+                            '30D PNL ',
+                            style: TextStyle(
+                              color: textColorPrimary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${change >= 0 ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())} (${percent.abs().toStringAsFixed(1)}%)',
+                          style: TextStyle(
+                            color: textColorPrimary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          _isChartVisible
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          color: textColorPrimary,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -813,145 +858,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
-  /// Variant bottom nav — same sizing/geometry as the home CustomBottomNavBar,
-  /// with bank-specific content (refresh | logo+name pill | back).
-  Widget _buildBottomNav(BuildContext context, FinanceProvider provider) {
-    return Container(
-      // Identical margins to CustomBottomNavBar
-      margin: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
-      height: 56,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final totalWidth = constraints.maxWidth;
-          // Two 56-wide circles + the pill fills the rest
-          const circleW = 56.0;
-          const gap = 8.0;
-          final pillWidth = totalWidth - (circleW * 2) - (gap * 2);
-
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // ── LEFT: Refresh circle ──────────────────────────────────
-              Positioned(
-                left: 0,
-                top: 0,
-                width: circleW,
-                height: 56,
-                child: GestureDetector(
-                  onTap: () => _showRefreshChooser(context, provider),
-                  behavior: HitTestBehavior.opaque,
-                  child: ClipOval(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color:
-                              AppColors.overlay.withValues(alpha: 0.25),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.refresh_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── CENTER: Plus Button for Manual Transaction ───────────────────
-              Positioned(
-                left: circleW + gap,
-                top: 0,
-                width: pillWidth,
-                height: 56,
-                child: GestureDetector(
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (context) => ManualTransactionSheet(
-                        provider: provider,
-                        initialSender: widget.sender,
-                      ),
-                    );
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    clipBehavior: Clip.antiAlias,
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.gold.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.add_rounded,
-                          color: AppColors.brownDark,
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── RIGHT: Back circle ────────────────────────────────────
-              Positioned(
-                left: totalWidth - circleW,
-                top: 0,
-                width: circleW,
-                height: 56,
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  behavior: HitTestBehavior.opaque,
-                  child: ClipOval(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color:
-                              AppColors.overlay.withValues(alpha: 0.25),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 1,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: SvgPicture.asset(
-                          'assets/images/BackForNav.svg',
-                          colorFilter: const ColorFilter.mode(
-                              Colors.white, BlendMode.srcIn),
-                          width: 20,
-                          height: 20,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildChartSection(List<AppTransaction> transactions) {
     if (transactions.isEmpty) return const SizedBox(height: 100);
 
@@ -1145,44 +1051,27 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   Widget _buildActivityFilterSection() {
+    const tabs = ['All', 'Income', 'Expense'];
+    final selectedIdx = tabs.indexOf(_typeFilter).clamp(0, 2);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Type Filter Chips
-          Row(
-            children: ['All', 'Income', 'Expense'].map((t) {
-              final isSelected = _typeFilter == t;
-              return GestureDetector(
-                onTap: () => setState(() => _typeFilter = t),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: isSelected
-                          ? Colors.transparent
-                          : Colors.white.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Text(
-                    t,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textSoft,
-                      fontSize: 12,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w400,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+          // AppCapsuleTabBar component
+          AppCapsuleTabBar(
+            tabs: tabs,
+            selectedIndex: selectedIdx,
+            onTabChanged: (idx) {
+              setState(() {
+                _typeFilter = tabs[idx];
+              });
+            },
+            height: 44,
+            fontSize: 13,
+            borderRadius: 24,
+            indicatorRadius: 20,
           ),
           const SizedBox(height: 24),
           const Text(
@@ -1194,8 +1083,45 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               letterSpacing: 1.5,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
         ],
+      ),
+    );
+  }
+
+  String _getDateHeaderLabel(DateTime groupDate) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    if (groupDate.year == today.year &&
+        groupDate.month == today.month &&
+        groupDate.day == today.day) {
+      return 'Today';
+    } else if (groupDate.year == yesterday.year &&
+        groupDate.month == yesterday.month &&
+        groupDate.day == yesterday.day) {
+      return 'Yesterday';
+    } else if (groupDate.year == now.year) {
+      return DateFormat('d MMMM').format(groupDate);
+    } else {
+      return DateFormat('d MMMM yyyy').format(groupDate);
+    }
+  }
+
+  Widget _buildDateGroupHeader(String label, {bool isFirst = false}) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(0, isFirst ? 8 : 18, 0, 10),
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSoft,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
       ),
     );
   }
@@ -1211,20 +1137,45 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       );
     }
 
+    // Group transactions by calendar day
+    final Map<DateTime, List<AppTransaction>> grouped = {};
+    for (final tx in transactions) {
+      final dayKey = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      grouped.putIfAbsent(dayKey, () => []).add(tx);
+    }
+
+    // Sort group keys newest date first
+    final sortedDayKeys = grouped.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: transactions.length,
-      itemBuilder: (context, index) {
-        final tx = transactions[index];
-        return _buildTransactionItem(tx);
+      itemCount: sortedDayKeys.length,
+      itemBuilder: (context, groupIdx) {
+        final dayKey = sortedDayKeys[groupIdx];
+        final dayTxs = grouped[dayKey]!;
+        final headerLabel = _getDateHeaderLabel(dayKey);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDateGroupHeader(headerLabel, isFirst: groupIdx == 0),
+            ...dayTxs.map((tx) => _buildTransactionItem(tx)),
+          ],
+        );
       },
     );
   }
 
   Widget _buildTransactionItem(AppTransaction tx) {
     final isIncome = tx.type == 'income';
+    final partyName = tx.sender.trim();
+    final partyLabel = partyName.isNotEmpty
+        ? (isIncome ? 'From $partyName' : 'For $partyName')
+        : (isIncome ? 'Deposit' : 'Transfer');
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -1232,12 +1183,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             builder: (context) => TransactionDetailScreen(transaction: tx)),
       ),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.overlay.withValues(alpha: 0.45),
+          color: AppColors.tabBackground, // Loan card background (#191F28)
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           children: [
@@ -1247,57 +1197,82 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isIncome
-                    ? AppColors.positive.withValues(alpha: 0.10)
-                    : AppColors.negative.withValues(alpha: 0.10),
+                    ? AppColors.positive.withValues(alpha: 0.12)
+                    : AppColors.negative.withValues(alpha: 0.12),
               ),
               child: Icon(
-                isIncome ? Icons.south_west : Icons.north_east,
-                size: 18,
+                isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
+                size: 20,
                 color: isIncome ? AppColors.positive : AppColors.negative,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     tx.resolvedReason ?? (isIncome ? 'Deposit' : 'Expense'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600),
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    DateFormat('MMM dd, yyyy').format(tx.date),
+                    partyLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        color: AppColors.textSoft, fontSize: 11),
+                      color: AppColors.textSoft,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  Provider.of<FinanceProvider>(context, listen: false)
-                          .isBalanceVisible
-                      ? '${isIncome ? '+' : '-'}${NumberFormat('#,##0.0').format(tx.amount)}'
-                      : '****',
-                  style: TextStyle(
-                    color: isIncome ? AppColors.positive : Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'ETB',
-                  style:
-                      const TextStyle(color: AppColors.textSoft, fontSize: 10),
-                ),
-              ],
+            Consumer<FinanceProvider>(
+              builder: (context, provider, child) {
+                final isVisible = provider.isBalanceVisible;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    isVisible
+                        ? CurrencyTextWidget(
+                            amount: tx.amount,
+                            showSign: true,
+                            style: TextStyle(
+                              color: isIncome ? AppColors.positive : Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            customFormattedStr:
+                                NumberFormat('#,##0.00').format(tx.amount),
+                          )
+                        : Text(
+                            '****',
+                            style: TextStyle(
+                              color: isIncome ? AppColors.positive : Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                    const SizedBox(height: 4),
+                    Text(
+                      DateFormat('hh:mm a').format(tx.date),
+                      style: const TextStyle(
+                        color: AppColors.textSoft,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),

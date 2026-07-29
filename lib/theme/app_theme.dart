@@ -109,6 +109,20 @@ class AppColors {
   static const Color alertRed           = Color(0xFFE53935);
   static const Color alertOrange        = Color(0xFFFF6D00);
 
+  // ── Paused Tracking State ──────────────────────────────────────────────────
+  /// Amber badge/button background used when a bank's tracking is paused.
+  static const Color pausedBadge        = Color(0xFFB45309); // dark amber
+  /// Text / icon color on the amber pause badge.
+  static const Color pausedBadgeText    = Color(0xFFFFFFFF);
+  /// Amber border drawn around a paused bank card.
+  static const Color pausedBorder       = Color(0xFFFFB74D); // = AppColors.amber
+  /// Dark greyscale gradient stop for a paused card (start / top).
+  static const Color pausedCardDark     = Color(0xFF2A2A2A);
+  /// Mid greyscale gradient stop for a paused card (end / bottom).
+  static const Color pausedCardMid      = Color(0xFF4A4A4A);
+  /// Glow / shadow color for paused card.
+  static const Color pausedCardGlow     = Color(0xFF888888);
+
 
   // ── Gradients ─────────────────────────────────────────────────────────────
   static const LinearGradient bgGradient = LinearGradient(

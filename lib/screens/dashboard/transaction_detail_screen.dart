@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
@@ -9,6 +8,8 @@ import '../../models/loan_record.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
+import '../../widgets/app_back_button.dart';
+import '../../widgets/currency_symbol_widget.dart';
 import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 
@@ -71,12 +72,135 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       },
     );
 
-    // Sheet is now FULLY dismissed (animation complete). Safe to show next modal.
-    if (chosen != null && mounted) {
-      setState(() {
-        _selectedReason = chosen!;
-      });
-      await _save(provider);
+    // Sheet is now FULLY dismissed (animation complete).
+    if (chosen == null || !mounted) return;
+
+    setState(() {
+      _selectedReason = chosen!;
+    });
+
+    // Save the reason to the DB first.
+    await _save(provider);
+
+    if (!mounted) return;
+
+    // ── Always trigger the follow-up modal for special reasons, regardless
+    //    of whether the reason changed — the user explicitly hit Save.
+    final chosenName = chosen!.name.trim().toLowerCase();
+
+    if (chosenName == 'loan' || chosenName.contains('loan')) {
+      if (!mounted) return;
+      final loanCtx = context;
+      final shouldCreate = await showDialog<bool>(
+        context: loanCtx,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.handshake_outlined, color: AppColors.positive, size: 20),
+              SizedBox(width: 8),
+              Text('Create Loan Record?',
+                  style: TextStyle(color: Colors.white, fontSize: 16)),
+            ],
+          ),
+          content: Text(
+            'This transaction (${NumberFormat("#,##0.00").format(widget.transaction.amount)} ETB) '
+            'was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Skip',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Create Loan',
+                  style: TextStyle(color: AppColors.positive)),
+            ),
+          ],
+        ),
+      );
+      if (shouldCreate == true && mounted) {
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => AddLoanSheet(
+            provider: provider,
+            linkedTransactionId: widget.transaction.id,
+            prefilledAmount: widget.transaction.amount,
+            prefilledName: widget.transaction.sender,
+            prefilledTrackedSender: widget.transaction.sender,
+            prefilledType:
+                widget.transaction.type == 'expense' ? 'lent' : 'borrowed',
+          ),
+        );
+      }
+    } else if (chosenName == 'internal transfer') {
+      if (!mounted) return;
+      final itCtx = context;
+      if (widget.transaction.linkedTransactionId == null) {
+        await showModalBottomSheet(
+          context: itCtx,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => InternalTransferPickerSheet(
+            sourceTransaction: widget.transaction,
+            provider: provider,
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        final itCtx2 = context;
+        final messenger = ScaffoldMessenger.of(itCtx2);
+        final shouldUnlink = await showDialog<bool>(
+          context: itCtx2,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.sync_alt, color: AppColors.gold, size: 20),
+                SizedBox(width: 8),
+                Text('Already Linked',
+                    style: TextStyle(color: Colors.white, fontSize: 16)),
+              ],
+            ),
+            content: const Text(
+              'This transaction is already linked to another internal transfer.\n\nWould you like to unlink it?',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Keep Link',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Unlink',
+                    style: TextStyle(color: AppColors.negative)),
+              ),
+            ],
+          ),
+        );
+        if (shouldUnlink == true && mounted) {
+          await provider.unlinkInternalTransfer(widget.transaction.id!);
+          if (mounted) {
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Internal transfer unlinked'),
+                backgroundColor: AppColors.negative,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
     }
   }
 
@@ -84,9 +208,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (widget.transaction.id == null) return;
 
     final noteText = _noteController.text.trim();
-    final currentResolvedReason =
-        _selectedReason?.name ?? widget.transaction.resolvedReason ?? '';
-
     bool changesMade = false;
 
     if (_selectedReason != null) {
@@ -104,137 +225,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       changesMade = true;
     }
 
-    // Capture ScaffoldMessenger BEFORE any await/async gaps
-    final messenger = mounted ? ScaffoldMessenger.of(context) : null;
-
-    if (mounted) {
-      if (changesMade) {
-        messenger?.showSnackBar(
-          const SnackBar(
-            content: Text('Reason saved ✓'),
-            backgroundColor: AppColors.gold,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-
-      // Sheet is fully gone — safe to show any follow-up dialog.
-      if (currentResolvedReason.toLowerCase() == 'loan' && mounted) {
-        if (!mounted) return;
-        final shouldCreate = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: AppColors.surface,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Row(
-              children: [
-                Icon(Icons.handshake_outlined,
-                    color: AppColors.positive, size: 20),
-                SizedBox(width: 8),
-                Text('Create Loan Record?',
-                    style: TextStyle(color: Colors.white, fontSize: 16)),
-              ],
-            ),
-            content: Text(
-              'This transaction (${NumberFormat("#,##0.00").format(widget.transaction.amount)} ETB) '
-              'was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Skip',
-                    style: TextStyle(color: AppColors.textSecondary)),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Create Loan',
-                    style: TextStyle(color: AppColors.positive)),
-              ),
-            ],
-          ),
-        );
-        if (shouldCreate == true && mounted) {
-          await showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => AddLoanSheet(
-              provider: provider,
-              linkedTransactionId: widget.transaction.id,
-              prefilledAmount: widget.transaction.amount,
-              prefilledName: widget.transaction.sender,
-              prefilledTrackedSender: widget.transaction.sender,
-              prefilledType:
-                  widget.transaction.type == 'expense' ? 'lent' : 'borrowed',
-            ),
-          );
-        }
-      } else if (currentResolvedReason.toLowerCase() == 'internal transfer' &&
-          mounted) {
-        if (!mounted) return;
-        if (widget.transaction.linkedTransactionId == null) {
-          // Show picker to link this transaction to another
-          await showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => InternalTransferPickerSheet(
-              sourceTransaction: widget.transaction,
-              provider: provider,
-            ),
-          );
-        } else {
-          // Already linked — offer to unlink
-          if (!mounted) return;
-          final shouldUnlink = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: const Row(
-                children: [
-                  Icon(Icons.sync_alt, color: AppColors.gold, size: 20),
-                  SizedBox(width: 8),
-                  Text('Already Linked',
-                      style: TextStyle(color: Colors.white, fontSize: 16)),
-                ],
-              ),
-              content: const Text(
-                'This transaction is already linked to another internal transfer.\n\nWould you like to unlink it?',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Keep Link',
-                      style: TextStyle(color: AppColors.textSecondary)),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Unlink',
-                      style: TextStyle(color: AppColors.negative)),
-                ),
-              ],
-            ),
-          );
-          if (shouldUnlink == true && mounted) {
-            await provider.unlinkInternalTransfer(widget.transaction.id!);
-            if (mounted) {
-              messenger?.showSnackBar(
-                const SnackBar(
-                  content: Text('Internal transfer unlinked'),
-                  backgroundColor: AppColors.negative,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            }
-          }
-        }
-      }
+    if (mounted && changesMade) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reason saved ✓'),
+          backgroundColor: AppColors.gold,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
+    // NOTE: Loan / Internal Transfer follow-up modals are now handled
+    // in _showReasonPicker() directly after this method returns, so that
+    // they ALWAYS appear when the user saves one of those special reasons —
+    // regardless of whether the reason was already set to the same value.
   }
 
   @override
@@ -282,6 +285,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final isSpecialReason = specialReasonNames.contains(activeReasonName) ||
         activeReasonName.contains('loan');
 
+    final bankInfo = _getBankInfo();
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -299,28 +304,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.bold,
             ),
           ),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          leading: IconButton(
-            icon: SvgPicture.asset(
-              'assets/images/BackForNav.svg',
-              colorFilter:
-                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-              width: 20,
-              height: 20,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.share_outlined,
-                  color: Colors.white, size: 20),
-              onPressed: () {}, // For future share functionality
-            ),
-          ],
+          leading: const AppBackButton(),
         ),
         body: SingleChildScrollView(
           child: Column(
@@ -331,39 +320,39 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   _buildBackground(),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.only(top: 120, bottom: 40),
+                    padding: const EdgeInsets.only(top: 110, bottom: 20),
                     child: Column(
                       children: [
-                        // Animated Success Glow
+                        // Animated Hero Icon
                         Hero(
                           tag: 'tx_icon_${widget.transaction.id}',
                           child: Container(
-                            width: 80,
-                            height: 80,
+                            width: 72,
+                            height: 72,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isIncome
-                                  ? AppColors.positive.withValues(alpha: 0.1)
-                                  : AppColors.negative.withValues(alpha: 0.1),
+                                  ? AppColors.positive.withValues(alpha: 0.12)
+                                  : AppColors.negative.withValues(alpha: 0.12),
                               border: Border.all(
                                 color: (isIncome
                                         ? AppColors.positive
                                         : AppColors.negative)
-                                    .withValues(alpha: 0.2),
-                                width: 1,
+                                    .withValues(alpha: 0.3),
+                                width: 1.5,
                               ),
                             ),
                             child: Icon(
-                              isIncome ? Icons.south_west : Icons.north_east,
-                              size: 32,
+                              isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
+                              size: 30,
                               color: isIncome
                                   ? AppColors.positive
                                   : AppColors.negative,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        // Currency + Amount with premium split decimals
+                        const SizedBox(height: 18),
+                        // Currency + Amount with premium split decimals & active currency symbol
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -372,7 +361,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               sign,
                               style: TextStyle(
                                 color: amountColor,
-                                fontSize: 48,
+                                fontSize: 44,
                                 fontWeight: FontWeight.w300,
                               ),
                             ),
@@ -382,8 +371,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   .format(widget.transaction.amount),
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 48,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w700,
                                 letterSpacing: -1,
                               ),
                             ),
@@ -391,63 +380,100 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               '.${(widget.transaction.amount % 1).toStringAsFixed(2).split('.')[1]}',
                               style: const TextStyle(
                                 color: AppColors.textSoft,
-                                fontSize: 28,
+                                fontSize: 26,
                                 fontWeight: FontWeight.w400,
                               ),
                             ),
+                            const SizedBox(width: 6),
+                            const CurrencySymbolWidget(
+                              size: 22,
+                              color: AppColors.textSoft,
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'ETB',
-                          style: const TextStyle(
-                            color: AppColors.textSoft,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        // Status Badge
+                        const SizedBox(height: 18),
+
+                        // ── Prominent Bank / Provider Branding Card ──────
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(30),
+                            color: AppColors.surfaceCard, // Color(0xFF111821)
+                            borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1)),
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
                           ),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                width: 6,
-                                height: 6,
+                                width: 44,
+                                height: 44,
                                 decoration: BoxDecoration(
+                                  color: bankInfo.bgColor,
                                   shape: BoxShape.circle,
-                                  color: AppColors.positive,
+                                ),
+                                child: Center(child: bankInfo.icon),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      bankInfo.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    if (bankInfo.subtitle.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        bankInfo.subtitle,
+                                        style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Text(
-                                'TRANSACTION SUCCESSFUL',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.positive.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: AppColors.positive.withValues(alpha: 0.2)),
+                                ),
+                                child: const Text(
+                                  'SUCCESS',
+                                  style: TextStyle(
+                                    color: AppColors.positive,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.8,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
+
                         if (linkedLoan != null) ...[
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           _buildLoanTrackingCard(context, linkedLoan, provider),
-                        ] else if (widget.transaction.linkedTransactionId !=
-                            null) ...[
-                          const SizedBox(height: 24),
+                        ] else if (currentLabel?.toLowerCase().contains('loan') == true) ...[
+                          const SizedBox(height: 16),
+                          _buildCreateLoanCard(context, provider),
+                        ] else if (widget.transaction.linkedTransactionId != null) ...[
+                          const SizedBox(height: 16),
                           _buildInternalTransferCard(context, provider),
                         ],
                       ],
@@ -456,20 +482,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 ],
               ),
               Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Reason Section ────────────────────────────
                     // ── Reason Card ────────────────────────────
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.03),
-                        borderRadius: BorderRadius.circular(28),
+                        color: AppColors.surfaceCard, // Color(0xFF111821)
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.03)),
+                            color: Colors.white.withValues(alpha: 0.08)),
                       ),
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -480,7 +505,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 'ASSIGNED REASON',
                                 style: TextStyle(
                                   color: AppColors.textSecondary,
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1.2,
                                 ),
@@ -490,7 +515,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   onTap: () async {
                                     if (activeLink != null) {
                                       await provider
-                                          .deleteReasonLink(activeLink!.id!);
+                                          .deleteReasonLink(activeLink.id!);
                                     } else {
                                       await provider.addReasonLink(
                                         reasonId: activeReasonId,
@@ -506,10 +531,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                     decoration: BoxDecoration(
                                       color: activeLink != null
                                           ? AppColors.negative
-                                              .withValues(alpha: 0.1)
-                                          : AppColors.gold
-                                              .withValues(alpha: 0.1),
+                                              .withValues(alpha: 0.12)
+                                          : AppColors.positive
+                                              .withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: activeLink != null
+                                            ? AppColors.negative.withValues(alpha: 0.25)
+                                            : AppColors.positive.withValues(alpha: 0.25),
+                                      ),
                                     ),
                                     child: Row(
                                       children: [
@@ -519,7 +549,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                               : Icons.add_link,
                                           color: activeLink != null
                                               ? AppColors.negative
-                                              : AppColors.gold,
+                                              : AppColors.positive,
                                           size: 14,
                                         ),
                                         const SizedBox(width: 4),
@@ -530,7 +560,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           style: TextStyle(
                                             color: activeLink != null
                                                 ? AppColors.negative
-                                                : AppColors.gold,
+                                                : AppColors.positive,
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -541,31 +571,51 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
                           GestureDetector(
-                            onTap: () => _showReasonPicker(context, provider),
+                            onTap: () {
+                              if (linkedLoan != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'In order to change the reason, delete the loan record from Loan Manager first.'),
+                                    backgroundColor: AppColors.warning,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
+                              _showReasonPicker(context, provider);
+                            },
                             child: Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.04),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.05)),
+                                    color: linkedLoan != null
+                                        ? AppColors.warning.withValues(alpha: 0.3)
+                                        : Colors.white.withValues(alpha: 0.06)),
                               ),
                               child: Row(
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: AppColors.gold
-                                          .withValues(alpha: 0.1),
+                                      color: AppColors.positive
+                                          .withValues(alpha: 0.12),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(Icons.tag,
-                                        color: AppColors.gold, size: 20),
+                                    child: Icon(
+                                        linkedLoan != null
+                                            ? Icons.lock_outline
+                                            : Icons.tag,
+                                        color: linkedLoan != null
+                                            ? AppColors.warning
+                                            : AppColors.positive,
+                                        size: 20),
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -575,35 +625,93 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           currentLabel ?? 'Uncategorized',
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          currentLabel != null
-                                              ? 'Tap to change reason'
-                                              : 'Assign a reason for tracking',
-                                          style: const TextStyle(
-                                            color: AppColors.textSoft,
+                                          linkedLoan != null
+                                              ? 'Locked • Delete loan in manager to change'
+                                              : (currentLabel != null
+                                                  ? 'Tap to change reason'
+                                                  : 'Assign a reason for tracking'),
+                                          style: TextStyle(
+                                            color: linkedLoan != null
+                                                ? AppColors.warning
+                                                : AppColors.textSecondary,
                                             fontSize: 12,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.chevron_right,
-                                      color: AppColors.textSecondary),
+                                  Icon(
+                                      linkedLoan != null
+                                          ? Icons.lock
+                                          : Icons.chevron_right,
+                                      color: linkedLoan != null
+                                          ? AppColors.warning
+                                          : AppColors.textSecondary,
+                                      size: linkedLoan != null ? 18 : 22),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          if (linkedLoan != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: AppColors.warning
+                                        .withValues(alpha: 0.2)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.info_outline_rounded,
+                                      color: AppColors.warning, size: 16),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'To change this transaction\'s reason, delete the linked loan record from Loan Manager first.',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 11,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ── Personal Note Card ───────────────────────────
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceCard, // Color(0xFF111821)
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           const Text(
                             'PERSONAL NOTE',
                             style: TextStyle(
                               color: AppColors.textSecondary,
-                              fontSize: 10,
+                              fontSize: 11,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 1.2,
                             ),
@@ -616,27 +724,25 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             maxLines: 3,
                             decoration: InputDecoration(
                               hintText:
-                                  'Add a private note about this expense...',
+                                  'Add a private note about this transaction...',
                               hintStyle: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.2)),
+                                  color: Colors.white.withValues(alpha: 0.25)),
                               filled: true,
-                              fillColor: Colors.white.withValues(alpha: 0.02),
+                              fillColor: Colors.white.withValues(alpha: 0.03),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(14),
                                 borderSide: BorderSide(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.05)),
+                                    color: Colors.white.withValues(alpha: 0.06)),
                               ),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(14),
                                 borderSide: BorderSide(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.05)),
+                                    color: Colors.white.withValues(alpha: 0.06)),
                               ),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(14),
                                 borderSide: const BorderSide(
-                                    color: AppColors.gold),
+                                    color: AppColors.positive),
                               ),
                             ),
                             onChanged: (_) => setState(() {}),
@@ -648,7 +754,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 32),
+
+                    const SizedBox(height: 24),
+
+                    // ── Transaction Info Card ───────────────────────
                     const Text(
                       'TRANSACTION INFO',
                       style: TextStyle(
@@ -658,42 +767,103 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         letterSpacing: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    // Detail Items
+                    const SizedBox(height: 12),
                     _buildInfoPanel([
                       _buildInfoItem(Icons.fingerprint, 'Transaction ID',
                           widget.transaction.id ?? 'Pending'),
+                      _buildInfoItem(Icons.account_balance_outlined, 'Provider',
+                          bankInfo.name),
                       _buildInfoItem(Icons.grid_view_rounded, 'Category',
                           widget.transaction.category),
-                      _buildInfoItem(Icons.account_balance_wallet_outlined,
-                          'Account', widget.transaction.sender),
                       _buildInfoItem(
                           Icons.calendar_today_outlined,
                           'Date & Time',
                           DateFormat('MMMM dd, yyyy • HH:mm')
                               .format(widget.transaction.date)),
-                      _buildInfoItem(Icons.account_balance, 'Post Balance',
-                          '${NumberFormat('#,##0.00').format(widget.transaction.totalBalance)} ETB'),
-                    ]),
-                    const SizedBox(height: 32),
-                    const Text(
-                      'RAW MESSAGE SOURCE',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
+                      _buildInfoItem(
+                        Icons.account_balance_wallet_outlined,
+                        'Post Balance',
+                        '',
+                        customValueWidget: CurrencyTextWidget(
+                          amount: widget.transaction.totalBalance,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
+                    ]),
+
+                    const SizedBox(height: 24),
+
+                    // ── Raw Message Source Card ─────────────────────
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'RAW MESSAGE SOURCE',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(
+                                text: widget.transaction.rawMessage));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Raw message copied to clipboard'),
+                                backgroundColor: AppColors.positive,
+                                behavior: SnackBarBehavior.floating,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.positive.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: AppColors.positive.withValues(alpha: 0.2)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.copy_rounded,
+                                  color: AppColors.positive,
+                                  size: 13,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Copy',
+                                  style: TextStyle(
+                                    color: AppColors.positive,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.02),
+                        color: AppColors.surfaceCard, // Color(0xFF111821)
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.05)),
+                            color: Colors.white.withValues(alpha: 0.08)),
                       ),
                       child: Text(
                         widget.transaction.rawMessage,
@@ -713,6 +883,64 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  ({Widget icon, String name, String subtitle, Color bgColor}) _getBankInfo() {
+    final senderStr = widget.transaction.sender.trim();
+    final nameStr = widget.transaction.name.trim();
+    final combined = '$senderStr $nameStr'.toUpperCase();
+
+    Widget iconWidget;
+    String bankName;
+    Color bg;
+
+    if (combined.contains('CBE BIRR') || combined.contains('CBEBIRR')) {
+      iconWidget = Image.asset('assets/images/CBEBirr Logo.png', width: 24, height: 24);
+      bankName = 'CBE Birr Mobile Banking';
+      bg = AppColors.cbeBirrPink.withValues(alpha: 0.15);
+    } else if (combined.contains('TELEBIRR')) {
+      iconWidget = Image.asset(
+        'assets/images/Telebirr Logo.png',
+        width: 24,
+        height: 24,
+        color: AppColors.telebirrGreen,
+        colorBlendMode: BlendMode.srcIn,
+      );
+      bankName = 'Telebirr Digital Wallet';
+      bg = AppColors.telebirrGreenSoft;
+    } else if (combined.contains('AHADU')) {
+      iconWidget = Image.asset('assets/images/Ahadu_Logo.png', width: 24, height: 24);
+      bankName = 'Ahadu Bank';
+      bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
+    } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
+      iconWidget = Image.asset('assets/images/CBE logo 1.png', width: 24, height: 24);
+      bankName = 'Commercial Bank of Ethiopia';
+      bg = AppColors.slackPurple.withValues(alpha: 0.15);
+    } else if (combined.contains('CASH')) {
+      iconWidget = const Icon(Icons.account_balance_wallet_outlined, color: AppColors.positive, size: 22);
+      bankName = 'Cash Wallet';
+      bg = AppColors.positive.withValues(alpha: 0.15);
+    } else {
+      iconWidget = const Icon(Icons.account_balance_outlined, color: AppColors.positive, size: 22);
+      bankName = senderStr.isNotEmpty ? senderStr : 'Mobile Banking';
+      bg = AppColors.surfaceElevated;
+    }
+
+    String subtitleText = '';
+    if (senderStr.isNotEmpty && senderStr.toUpperCase() != bankName.toUpperCase()) {
+      subtitleText = senderStr;
+    } else if (widget.transaction.customReasonText?.isNotEmpty == true) {
+      subtitleText = widget.transaction.customReasonText!;
+    } else {
+      subtitleText = widget.transaction.type.toUpperCase();
+    }
+
+    return (
+      icon: iconWidget,
+      name: bankName,
+      subtitle: subtitleText,
+      bgColor: bg,
     );
   }
 
@@ -736,9 +964,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Widget _buildInfoPanel(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.03)),
+        color: AppColors.surfaceCard, // Color(0xFF111821)
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         children: children,
@@ -746,9 +974,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  Widget _buildInfoItem(IconData icon, String label, String value) {
+  Widget _buildInfoItem(IconData icon, String label, String value,
+      {Widget? customValueWidget}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
           Container(
@@ -773,14 +1002,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                customValueWidget ??
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
               ],
             ),
           ),
@@ -796,113 +1026,322 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         isLent ? AppColors.positive : AppColors.warning;
     final fmt = NumberFormat('#,##0.00');
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.handshake_outlined,
-                    color: accentColor, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isLent
-                          ? 'Lent to ${loan.personName}'
-                          : 'Borrowed from ${loan.personName}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      loan.isPaid ? 'Fully Settled ✓' : 'In Progress',
-                      style: TextStyle(
-                        color: loan.isPaid ? AppColors.positive : accentColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  provider.setScreenIndex(3);
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    'View Manager',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Repaid: ${fmt.format(loan.paidAmount)} ETB',
-                style:
-                    const TextStyle(color: AppColors.textSoft, fontSize: 11),
-              ),
-              Text(
-                'Remaining: ${fmt.format(loan.remainingAmount)} ETB',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: loan.progressPercent,
-              minHeight: 6,
-              backgroundColor: Colors.white.withValues(alpha: 0.05),
-              valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+    return GestureDetector(
+      onLongPress: () => _showLoanOptionsSheet(context, loan, provider),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withValues(alpha: 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.handshake_outlined,
+                      color: accentColor, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isLent
+                            ? 'Lent to ${loan.personName}'
+                            : 'Borrowed from ${loan.personName}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        loan.isPaid ? 'Fully Settled ✓' : 'In Progress (Hold for options)',
+                        style: TextStyle(
+                          color: loan.isPaid ? AppColors.positive : accentColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    provider.setScreenIndex(3);
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'View Manager',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Repaid: ${fmt.format(loan.paidAmount)} ETB',
+                  style:
+                      const TextStyle(color: AppColors.textSoft, fontSize: 11),
+                ),
+                Text(
+                  'Remaining: ${fmt.format(loan.remainingAmount)} ETB',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: loan.progressPercent,
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.05),
+                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLoanOptionsSheet(
+      BuildContext context, LoanRecord loan, FinanceProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: InteractiveDragHandle(
+                color: AppColors.textSecondary.withValues(alpha: 0.4),
+                onTap: () => Navigator.pop(ctx),
+                padding: const EdgeInsets.only(bottom: 12),
+              ),
+            ),
+            Row(
+              children: [
+                const Icon(Icons.handshake_outlined,
+                    color: AppColors.gold, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Loan Options (${loan.personName})',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              tileColor: Colors.white.withValues(alpha: 0.04),
+              leading: const Icon(Icons.open_in_new, color: AppColors.gold),
+              title: const Text('Open in Loan Manager',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600)),
+              subtitle: const Text('View repayments & full schedule',
+                  style: TextStyle(color: AppColors.textSoft, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.setScreenIndex(3);
+                Navigator.popUntil(context, (route) => route.isFirst);
+              },
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              tileColor: AppColors.negative.withValues(alpha: 0.1),
+              leading: const Icon(Icons.delete_outline,
+                  color: AppColors.negative),
+              title: const Text('Delete Loan Record',
+                  style: TextStyle(
+                      color: AppColors.negative,
+                      fontWeight: FontWeight.bold)),
+              subtitle: const Text(
+                  'Deletes loan tracking & unlocks reason editing',
+                  style: TextStyle(color: AppColors.textSoft, fontSize: 12)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                final messenger = ScaffoldMessenger.of(context);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (dCtx) => AlertDialog(
+                    backgroundColor: AppColors.surface,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Delete Loan Record?',
+                        style: TextStyle(color: Colors.white)),
+                    content: const Text(
+                      'Are you sure you want to delete this loan record?\n\nDeleting it will stop tracking its repayments and unlock the reason section so you can change it.',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, false),
+                        child: const Text('Cancel',
+                            style: TextStyle(color: AppColors.textSecondary)),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, true),
+                        child: const Text('Delete Loan',
+                            style: TextStyle(color: AppColors.negative)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true && mounted) {
+                  await provider.deleteLoan(loan.id!);
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Loan record deleted. Reason editing is now unlocked.'),
+                        backgroundColor: AppColors.gold,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCreateLoanCard(
+      BuildContext context, FinanceProvider provider) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => AddLoanSheet(
+            provider: provider,
+            linkedTransactionId: widget.transaction.id,
+            prefilledAmount: widget.transaction.amount,
+            prefilledName: widget.transaction.sender,
+            prefilledTrackedSender: widget.transaction.sender,
+            prefilledType:
+                widget.transaction.type == 'expense' ? 'lent' : 'borrowed',
           ),
-        ],
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard, // Color(0xFF111821)
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.positive.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.positive.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.handshake_outlined,
+                  color: AppColors.positive, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Track as Loan',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Create loan record to track repayments',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.positive,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Create',
+                style: TextStyle(
+                  color: AppColors.background,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -916,17 +1355,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     } catch (_) {}
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+        color: AppColors.surfaceCard, // Color(0xFF111821)
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.positive.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.gold.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: AppColors.positive.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -938,11 +1377,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.1),
+                  color: AppColors.positive.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.sync_alt,
-                    color: AppColors.gold, size: 18),
+                    color: AppColors.positive, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -962,7 +1401,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           ? 'Linked to ${linkedTx.sender}'
                           : 'Linked to another transaction',
                       style: const TextStyle(
-                        color: AppColors.gold,
+                        color: AppColors.positive,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),

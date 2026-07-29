@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/sender.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_back_button.dart';
 
 class ManageBankScreen extends StatefulWidget {
   final AppSender sender;
@@ -131,10 +132,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
         elevation: 0,
         title: Text('Manage ${widget.sender.senderName}',
             style: const TextStyle(fontSize: 18)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const AppBackButton(),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

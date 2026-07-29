@@ -213,6 +213,14 @@ Future<void> processBackgroundSms(SmsMessage message) async {
 
   final bank = BankSenders.match(senderAddress);
 
+  // If the matched bank is paused, do not process the message.
+  if (bank != null) {
+    final pausedBanks = await DatabaseService.instance.getPausedBanks();
+    if (pausedBanks.any((b) => b.toUpperCase() == bank.toUpperCase())) {
+      return; // Silently skip — tracking is paused for this bank
+    }
+  }
+
   if (bank == 'Telebirr') {
     tx = TelebirrParser.parse(body, date);
   } else if (bank == 'CBE Birr') {

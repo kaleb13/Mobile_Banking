@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +8,7 @@ import '../../models/cash_transaction.dart';
 import '../../models/expense_definition.dart';
 import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_back_button.dart';
 import '../settings/expense_definitions_screen.dart';
 import 'transaction_detail_screen.dart';
 import 'reason_selection_sheet.dart';
@@ -64,16 +65,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          IconButton(
-                            icon: SvgPicture.asset(
-                              'assets/images/BackForNav.svg',
-                              colorFilter: const ColorFilter.mode(
-                                  Colors.white, BlendMode.srcIn),
-                              width: 20,
-                              height: 20,
-                            ),
-                            onPressed: () => Navigator.pop(context),
-                          ),
+                          const AppBackButton(),
                           const Text(
                             'Cash Wallet',
                             style: TextStyle(
