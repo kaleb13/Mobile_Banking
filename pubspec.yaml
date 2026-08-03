@@ -27,6 +27,8 @@ dependencies:
   file_picker: any
   flutter_slidable: ^4.0.3
   url_launcher: ^6.3.2
+  local_auth: any
+  crypto: any
 
 dev_dependencies:
   flutter_test:

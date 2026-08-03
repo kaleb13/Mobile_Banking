@@ -38,6 +38,17 @@ class AppTransaction {
   /// fallback to customReasonText.
   String? get resolvedReason => reason ?? customReasonText;
 
+  /// True when this transaction was auto-created from a Telebirr credit or
+  /// repayment SMS. The reason is pre-set to "Loan" and cannot be changed
+  /// by the user.
+  bool get isReasonLocked {
+    if (!isAutoDetected) return false;
+    final lower = rawMessage.toLowerCase();
+    return lower.contains('credit request') ||
+        lower.contains('outstanding credit amount') ||
+        lower.contains('contract number');
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -86,6 +97,7 @@ class AppTransaction {
     bool clearReason = false,
     String? linkedTransactionId,
     bool clearLinkedTransactionId = false,
+    double? totalBalance,
   }) {
     return AppTransaction(
       id: id,
@@ -97,7 +109,7 @@ class AppTransaction {
       category: category,
       rawMessage: rawMessage,
       isAutoDetected: isAutoDetected,
-      totalBalance: totalBalance,
+      totalBalance: totalBalance ?? this.totalBalance,
       reasonId: clearReasonId ? null : (reasonId ?? this.reasonId),
       customReasonText: clearCustomReason
           ? null

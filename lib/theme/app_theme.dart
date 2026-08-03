@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+export '../widgets/app_switch.dart';
 
 class AppColors {
   // ── Brand ─────────────────────────────────────────────────────────────────
@@ -35,6 +35,9 @@ class AppColors {
   static const Color chartPurple   = Color(0xFFCE93D8); // Chart — pastel purple
   static const Color chartPink     = Color(0xFFF48FB1); // Chart — pastel pink
   static const Color tealDark      = Color(0xFF1A2530); // Dark blue-teal surface
+  static const Color statusActiveBg  = Color(0xFF0F3A2E); // Deep emerald background for active status
+  static const Color statusWarningBg = Color(0xFF3A240F); // Deep amber background for warning status
+  static const Color previewCardBg   = Color(0xFF141D2B); // Dark navy tint for notification preview card
 
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFFFFFFFF); // Primary text on dark
@@ -171,66 +174,6 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(vertical: 16),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// iOS-style toggle switch — use this everywhere instead of raw Switch()
-// ─────────────────────────────────────────────────────────────────────────────
-class AppSwitch extends StatelessWidget {
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const AppSwitch({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onChanged(!value);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        width: 68,
-        height: 30,
-        padding: const EdgeInsets.all(3.0),
-        decoration: BoxDecoration(
-          color: value ? AppColors.toggleActive : AppColors.toggleInactive,
-          borderRadius: BorderRadius.circular(17),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 38,
-            height: 25,
-            decoration: BoxDecoration(
-              color: AppColors.textPrimary,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 2,
-                  offset: const Offset(0, 0),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

@@ -16,6 +16,17 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+Color _levelGlowColor(int level) {
+  switch (level) {
+    case 1: return const Color(0xFF8B9DFF); // LV1 Indigo / Blue
+    case 2: return const Color(0xFF38BDF8); // LV2 Silver Cyan / Sky Blue
+    case 3: return const Color(0xFFAC58FE); // LV3 Royal Purple / Violet
+    case 4: return const Color(0xFFF87171); // LV4 Red / Coral
+    case 5: return const Color(0xFFFBBF24); // LV5 Gold / Amber
+    default: return const Color(0xFF8B9DFF);
+  }
+}
+
 class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
   final PageController _pageController = PageController();
@@ -23,7 +34,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   int _currentPage = 0;
   bool _isTermsAccepted = false;
   bool _bgInitStarted = false;
-  bool _isAutoProceedingToReveal = false;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
@@ -49,7 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _nextPage() {
-    if (_currentPage < 3) {
+    if (_currentPage < 2) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeInOutCubic,
@@ -111,10 +121,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // 1. Shared Background Graphics Composition
+            // 1. Background Graphics (Only shown on Page 0)
             _buildBackgroundStack(),
 
-            // 2. PageView for Page Body Contents (NeverScrollable to enforce button flow)
+            // 2. PageView for 3 Onboarding Pages
             PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
@@ -127,12 +137,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               children: [
                 _buildWelcomePageBody(),
                 _buildTermsPageBody(),
-                _buildCalculatingPageBody(),
                 _buildLevelRevealPageBody(),
               ],
             ),
 
-            // 3. Fixed Bottom Area (Carousel Indicator + Action Button)
+            // 3. Fixed Bottom Area (3-dot Carousel Indicator + Action Button)
             Positioned(
               bottom: 0,
               left: 0,
@@ -147,6 +156,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- BACKGROUND GRAPHICS ---
   Widget _buildBackgroundStack() {
+    // Only display background logo outline and gradient on the 1st screen
+    if (_currentPage != 0) {
+      return Container(
+        color: AppColors.bgDeep,
+      );
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -166,7 +182,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background ambient fading glow (vertical oval)
+              // Background ambient fading glow
               Positioned(
                 top: -60,
                 bottom: 60,
@@ -282,7 +298,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 1: TERMS & PRIVACY + PERMISSION PAGE ---
+  // --- PAGE 1: TERMS & PRIVACY PAGE ---
   Widget _buildTermsPageBody() {
     return SafeArea(
       child: Padding(
@@ -290,43 +306,23 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with back arrow
+            // Header with back arrow and title in place of badge
             Row(
               children: [
                 AppBackButton(onPressed: _previousPage),
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.telebirrGreen.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.telebirrGreen.withValues(alpha: 0.25)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shield_rounded, color: AppColors.telebirrGreen, size: 14),
-                      SizedBox(width: 6),
-                      Text(
-                        'Legal',
-                        style: TextStyle(color: AppColors.telebirrGreen, fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                const SizedBox(width: 12),
+                const Text(
+                  'Terms & Privacy',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Terms & Privacy',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-              ),
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
               'Please read and accept the terms below to grant access.',
               style: TextStyle(
@@ -336,11 +332,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 16),
 
-            // Scrollable Bounded Terms Card
+            // Scrollable Bounded Terms Card using loan card background color (AppColors.tabBackground)
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
+                  color: AppColors.tabBackground,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
@@ -394,12 +390,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 decoration: BoxDecoration(
                   color: _isTermsAccepted
                       ? AppColors.telebirrGreen.withValues(alpha: 0.12)
-                      : Colors.white.withValues(alpha: 0.03),
+                      : AppColors.tabBackground,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: _isTermsAccepted
                         ? AppColors.telebirrGreen.withValues(alpha: 0.40)
-                        : Colors.white.withValues(alpha: 0.10),
+                        : Colors.white.withValues(alpha: 0.08),
                   ),
                 ),
                 child: Row(
@@ -477,91 +473,69 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 2: CALCULATING / TRANSITIONAL PAGE ---
-  Widget _buildCalculatingPageBody() {
-    return Consumer<FinanceProvider>(
-      builder: (context, provider, _) {
-        if (!provider.isLoading && _currentPage == 2 && !_isAutoProceedingToReveal) {
-          _isAutoProceedingToReveal = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _currentPage == 2) {
-              _pageController.animateToPage(
-                3,
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.easeInOutCubic,
-              );
-            }
-          });
-        }
-
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ScaleTransition(
-                  scale: _pulseAnim,
-                  child: Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.telebirrGreen.withValues(alpha: 0.12),
-                      border: Border.all(
-                        color: AppColors.telebirrGreen.withValues(alpha: 0.35),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.telebirrGreen.withValues(alpha: 0.20),
-                          blurRadius: 30,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.analytics_rounded,
-                      color: AppColors.telebirrGreen,
-                      size: 48,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 36),
-                const Text(
-                  'Calculating your financial level…',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'We\'re scanning your banking messages and calculating your financial level and total balance.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.60),
-                    fontSize: 14,
-                    height: 1.55,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // --- PAGE 3: LEVEL REVEAL PAGE ---
+  // --- PAGE 2: LEVEL REVEAL & LOADING PAGE ---
   Widget _buildLevelRevealPageBody() {
     return Consumer<FinanceProvider>(
       builder: (context, provider, _) {
-        if (provider.isLoading && !_isAutoProceedingToReveal) {
-          return _buildCalculatingPageBody();
+        if (provider.isLoading) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ScaleTransition(
+                    scale: _pulseAnim,
+                    child: Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.telebirrGreen.withValues(alpha: 0.12),
+                        border: Border.all(
+                          color: AppColors.telebirrGreen.withValues(alpha: 0.35),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.telebirrGreen.withValues(alpha: 0.20),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.analytics_rounded,
+                        color: AppColors.telebirrGreen,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+                  const Text(
+                    'Calculating your financial level…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'We\'re scanning your banking messages and calculating your financial level and total balance.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.60),
+                      fontSize: 14,
+                      height: 1.55,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         final level = provider.userLevel;
@@ -570,7 +544,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         final totalBalance = provider.totalBalance;
         final balancesMap = provider.latestBalancesMap;
         final cashBalance = provider.cashBalance;
-        final levelColor = _levelColor(level);
+        final glowColor = _levelGlowColor(level);
         final badgePath = 'assets/images/LV$level.svg';
 
         return SafeArea(
@@ -584,18 +558,36 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 Center(
                   child: Column(
                     children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: levelColor.withValues(alpha: 0.40),
-                              blurRadius: 70,
-                              spreadRadius: 10,
+                      SizedBox(
+                        width: 160,
+                        height: 160,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            OverflowBox(
+                              maxWidth: 300,
+                              maxHeight: 300,
+                              child: Container(
+                                width: 300,
+                                height: 300,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: [
+                                      glowColor.withValues(alpha: 0.45),
+                                      glowColor.withValues(alpha: 0.20),
+                                      glowColor.withValues(alpha: 0.05),
+                                      Colors.transparent,
+                                    ],
+                                    stops: const [0.0, 0.35, 0.70, 1.0],
+                                  ),
+                                ),
+                              ),
                             ),
+                            SvgPicture.asset(badgePath, width: 140, height: 140),
                           ],
                         ),
-                        child: SvgPicture.asset(badgePath, width: 150, height: 150),
                       ),
                       const SizedBox(height: 24),
                       Text(
@@ -642,39 +634,53 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ),
                 const SizedBox(height: 24),
                 if (balancesMap.isNotEmpty || cashBalance > 0) ...[
-                  Text(
-                    'How we calculated this',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.35),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.8,
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppColors.tabBackground,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  ...balancesMap.entries.map((e) => _buildBankRow(e.key, e.value, levelColor)),
-                  if (cashBalance > 0) _buildBankRow('Cash Wallet', cashBalance, levelColor),
-                  const SizedBox(height: 4),
-                  Divider(color: Colors.white.withValues(alpha: 0.08)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Total',
+                          'How we calculated this',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.70),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.8,
                           ),
                         ),
-                        Text(
-                          '${_formatAmount(totalBalance)} ETB',
-                          style: TextStyle(
-                            color: levelColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(height: 10),
+                        ...balancesMap.entries.map((e) => _buildBankRow(e.key, e.value, glowColor)),
+                        if (cashBalance > 0) _buildBankRow('Cash Wallet', cashBalance, glowColor),
+                        const SizedBox(height: 4),
+                        Divider(color: Colors.white.withValues(alpha: 0.08)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Total',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.70),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                '${_formatAmount(totalBalance)} ETB',
+                                style: TextStyle(
+                                  color: glowColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -691,78 +697,82 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- FIXED BOTTOM SECTION ---
   Widget _buildFixedBottomSection() {
-    final isCalculatingPage = _currentPage == 2;
+    return Consumer<FinanceProvider>(
+      builder: (context, provider, _) {
+        final bool isLoadingPage2 = _currentPage == 2 && provider.isLoading;
 
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Morphing Carousel Indicator (morphs dots dynamically)
-            Center(
-              child: CarouselPageIndicator(
-                controller: _pageController,
-                pageCount: 4,
-              ),
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 3-dot Morphing Carousel Indicator
+                Center(
+                  child: CarouselPageIndicator(
+                    controller: _pageController,
+                    pageCount: 3,
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Action Button
+                if (!isLoadingPage2) ...[
+                  _buildPillButton(
+                    label: _getButtonLabelForPage(_currentPage),
+                    enabled: _isButtonEnabledForPage(_currentPage),
+                    onTap: () {
+                      if (_currentPage == 0) {
+                        _nextPage();
+                      } else if (_currentPage == 1) {
+                        _handleSmsPermissionAndProceed();
+                      } else if (_currentPage == 2) {
+                        HapticFeedback.mediumImpact();
+                        final p = Provider.of<FinanceProvider>(context, listen: false);
+                        p.completeOnboarding();
+                      }
+                    },
+                  ),
+                ] else ...[
+                  // Processing bar on calculating state
+                  Container(
+                    height: 58,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.telebirrGreen),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Analyzing transactions…',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.70),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 18),
-
-            // Action Button
-            if (!isCalculatingPage) ...[
-              _buildPillButton(
-                label: _getButtonLabelForPage(_currentPage),
-                enabled: _isButtonEnabledForPage(_currentPage),
-                onTap: () {
-                  if (_currentPage == 0) {
-                    _nextPage();
-                  } else if (_currentPage == 1) {
-                    _handleSmsPermissionAndProceed();
-                  } else if (_currentPage == 3) {
-                    HapticFeedback.mediumImpact();
-                    final p = Provider.of<FinanceProvider>(context, listen: false);
-                    p.completeOnboarding();
-                  }
-                },
-              ),
-            ] else ...[
-              // Processing bar on calculating page
-              Container(
-                height: 58,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.telebirrGreen),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Analyzing transactions…',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.70),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -772,8 +782,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         return 'Get started';
       case 1:
         return 'Grant SMS permission';
-      case 3:
-        return 'See Your Level';
+      case 2:
+        return 'Open App';
       default:
         return 'Continue';
     }
@@ -785,7 +795,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         return true;
       case 1:
         return _isTermsAccepted;
-      case 3:
+      case 2:
         return true;
       default:
         return false;
@@ -876,18 +886,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  Color _levelColor(int level) {
-    switch (level) {
-      case 1: return const Color(0xFFE57373);
-      case 2: return const Color(0xFFFFB74D);
-      case 3: return const Color(0xFFFFD54F);
-      case 4: return const Color(0xFF81C784);
-      case 5: return const Color(0xFF4FC3F7);
-      case 6: return const Color(0xFFBA68C8);
-      default: return AppColors.telebirrGreen;
-    }
-  }
-
   IconData _bankIcon(String name) {
     final n = name.toLowerCase();
     if (n.contains('cbe')) return Icons.account_balance;
@@ -915,3 +913,4 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return buf.toString();
   }
 }
+

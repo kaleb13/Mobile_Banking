@@ -6,19 +6,18 @@ import 'providers/finance_provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/shell/main_shell.dart';
 import 'screens/intro/onboarding_screen.dart';
+import 'screens/privacy/app_lock_screen.dart';
 import 'services/background_service.dart';
+import 'services/pin_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeBackgroundService();
 
-  // Read the onboarding flag BEFORE runApp() so the first frame
-  // already has the correct value — no flash of the OnboardingScreen.
   final prefs = await SharedPreferences.getInstance();
   final bool onboardingDone =
       prefs.getBool('is_onboarding_complete_v1') ?? false;
 
-  // Make the app immersive (Edge to Edge)
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     systemNavigationBarColor: Colors.transparent,
@@ -41,8 +40,36 @@ void main() async {
   );
 }
 
-class MobileBankingApp extends StatelessWidget {
+class MobileBankingApp extends StatefulWidget {
   const MobileBankingApp({super.key});
+
+  @override
+  State<MobileBankingApp> createState() => _MobileBankingAppState();
+}
+
+class _MobileBankingAppState extends State<MobileBankingApp> {
+  bool _isLocked = false;
+  bool _checkedOnStart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialLock();
+  }
+
+  Future<void> _checkInitialLock() async {
+    final locked = await PinService.instance.isLockEnabled();
+    if (mounted) {
+      setState(() {
+        _isLocked = locked;
+        _checkedOnStart = true;
+      });
+    }
+  }
+
+  void _unlock() {
+    setState(() => _isLocked = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,14 +77,18 @@ class MobileBankingApp extends StatelessWidget {
       title: 'Shibre',
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
-      home: Consumer<FinanceProvider>(
-        builder: (context, provider, child) {
-          if (!provider.isOnboardingComplete) {
-            return const OnboardingScreen();
-          }
-          return const MainShell();
-        },
-      ),
+      home: !_checkedOnStart
+          ? const Scaffold(backgroundColor: AppColors.background)
+          : _isLocked
+              ? AppLockScreen(onUnlocked: _unlock)
+              : Consumer<FinanceProvider>(
+                  builder: (context, provider, child) {
+                    if (!provider.isOnboardingComplete) {
+                      return const OnboardingScreen();
+                    }
+                    return const MainShell();
+                  },
+                ),
     );
   }
 }

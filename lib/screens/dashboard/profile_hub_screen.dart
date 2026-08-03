@@ -118,6 +118,7 @@ class ProfileHubScreen extends StatelessWidget {
                         final progress = provider.nextLevelProgress;
                         final targetBal = provider.nextLevelTargetBalance;
                         final fmt = NumberFormat('#,##0.00');
+                        final isVisible = provider.isBalanceVisible;
 
                         return Column(
                           children: [
@@ -257,7 +258,9 @@ class ProfileHubScreen extends StatelessWidget {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          '${fmt.format(provider.totalBalance)} ETB',
+                                          isVisible
+                                              ? '${fmt.format(provider.totalBalance)} ETB'
+                                              : '****,***.** ETB',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
@@ -275,7 +278,9 @@ class ProfileHubScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Need ${fmt.format(remaining)} ETB more to unlock Level ${level + 1} ($nextLvName)',
+                                      isVisible
+                                          ? 'Need ${fmt.format(remaining)} ETB more to unlock Level ${level + 1} ($nextLvName)'
+                                          : 'Need ****,***.** ETB more to unlock Level ${level + 1} ($nextLvName)',
                                       style: TextStyle(
                                         color: Colors.white.withValues(alpha: 0.7),
                                         fontSize: 12,

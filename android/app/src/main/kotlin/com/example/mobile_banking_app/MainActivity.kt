@@ -6,7 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.telephony.TelephonyManager
 import androidx.annotation.NonNull
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -20,7 +20,7 @@ import android.text.TextUtils
 import io.flutter.plugin.common.EventChannel
 import android.net.Uri
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.shibre/ussd"
     private val EVENT_CHANNEL = "com.shibre/ussd_events"
 

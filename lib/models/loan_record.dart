@@ -34,6 +34,10 @@ class LoanRecord {
   /// Optional note
   final String? note;
 
+  /// Telebirr credit contract number — set only for auto-detected credit loans.
+  /// Used to match repayment messages to the correct loan.
+  final String? contractNumber;
+
   LoanRecord({
     this.id,
     required this.loanType,
@@ -46,6 +50,7 @@ class LoanRecord {
     this.linkedTransactionId,
     this.status = 'active',
     this.note,
+    this.contractNumber,
   });
 
   double get remainingAmount =>
@@ -73,6 +78,7 @@ class LoanRecord {
         'linkedTransactionId': linkedTransactionId,
         'status': status,
         'note': note,
+        'contractNumber': contractNumber,
       };
 
   factory LoanRecord.fromMap(Map<String, dynamic> m) => LoanRecord(
@@ -87,6 +93,7 @@ class LoanRecord {
         linkedTransactionId: m['linkedTransactionId'] as String?,
         status: m['status'] as String? ?? 'active',
         note: m['note'] as String?,
+        contractNumber: m['contractNumber'] as String?,
       );
 
   LoanRecord copyWith({
@@ -95,6 +102,8 @@ class LoanRecord {
     String? trackedSenderName,
     String? note,
     DateTime? dueDate,
+    String? contractNumber,
+    bool clearContractNumber = false,
   }) =>
       LoanRecord(
         id: id,
@@ -108,7 +117,11 @@ class LoanRecord {
         linkedTransactionId: linkedTransactionId,
         status: status ?? this.status,
         note: note ?? this.note,
+        contractNumber: clearContractNumber ? null : (contractNumber ?? this.contractNumber),
       );
+
+  /// True if this loan was auto-created from a Telebirr credit SMS.
+  bool get isTelebirrCredit => contractNumber != null;
 }
 
 /// Represents a single repayment event against a loan.

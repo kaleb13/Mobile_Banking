@@ -26,13 +26,16 @@ class SmsService {
 
     List<SmsMessage> messages = await query.querySms(
       kinds: [SmsQueryKind.inbox],
-      count: 200, // Reduced from 1000 — significantly less CPU and memory
     );
+
+    // Sort newest messages first so index 0 is always the latest SMS
+    messages.sort((a, b) {
+      if (a.date == null || b.date == null) return 0;
+      return b.date!.compareTo(a.date!);
+    });
 
     // Filter out messages that arrived before 'since' if provided
     if (since != null) {
-      // Subtract 2 seconds from cutoff so we never miss a message
-      // right on the boundary of the last known transaction date.
       final cutoff = since.subtract(const Duration(seconds: 2));
       return messages.where((msg) {
         if (msg.date == null) return false;

@@ -264,6 +264,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       linkedLoan = null;
     }
 
+    // True if this transaction is auto-locked (Telebirr credit/repayment)
+    final bool isAutoLocked = widget.transaction.isReasonLocked;
+    // True if reason editing is blocked by any lock (linked loan OR auto-lock)
+    final bool isReasonBlocked = linkedLoan != null || isAutoLocked;
+
     AppReasonLink? activeLink;
     if (activeReasonId != null) {
       final links = provider.linksForReason(activeReasonId);
@@ -574,11 +579,24 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           const SizedBox(height: 14),
                           GestureDetector(
                             onTap: () {
+                              // Locked because a loan record is linked
                               if (linkedLoan != null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
                                         'In order to change the reason, delete the loan record from Loan Manager first.'),
+                                    backgroundColor: AppColors.warning,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
+                              // Locked because it's an auto-detected Telebirr credit/repayment
+                              if (isAutoLocked) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Reason is locked — this transaction was auto-created from a Telebirr credit SMS.'),
                                     backgroundColor: AppColors.warning,
                                     behavior: SnackBarBehavior.floating,
                                   ),
@@ -593,7 +611,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 color: Colors.white.withValues(alpha: 0.04),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                    color: linkedLoan != null
+                                    color: isReasonBlocked
                                         ? AppColors.warning.withValues(alpha: 0.3)
                                         : Colors.white.withValues(alpha: 0.06)),
                               ),
@@ -607,10 +625,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                       shape: BoxShape.circle,
                                     ),
                                     child: Icon(
-                                        linkedLoan != null
+                                        isReasonBlocked
                                             ? Icons.lock_outline
                                             : Icons.tag,
-                                        color: linkedLoan != null
+                                        color: isReasonBlocked
                                             ? AppColors.warning
                                             : AppColors.positive,
                                         size: 20),
@@ -631,13 +649,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          linkedLoan != null
-                                              ? 'Locked • Delete loan in manager to change'
+                                          isReasonBlocked
+                                              ? (isAutoLocked
+                                                  ? 'Auto-locked • Telebirr credit transaction'
+                                                  : 'Locked • Delete loan in manager to change')
                                               : (currentLabel != null
                                                   ? 'Tap to change reason'
                                                   : 'Assign a reason for tracking'),
                                           style: TextStyle(
-                                            color: linkedLoan != null
+                                            color: isReasonBlocked
                                                 ? AppColors.warning
                                                 : AppColors.textSecondary,
                                             fontSize: 12,
@@ -647,18 +667,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                     ),
                                   ),
                                   Icon(
-                                      linkedLoan != null
+                                      isReasonBlocked
                                           ? Icons.lock
                                           : Icons.chevron_right,
-                                      color: linkedLoan != null
+                                      color: isReasonBlocked
                                           ? AppColors.warning
                                           : AppColors.textSecondary,
-                                      size: linkedLoan != null ? 18 : 22),
+                                      size: isReasonBlocked ? 18 : 22),
                                 ],
                               ),
                             ),
                           ),
-                          if (linkedLoan != null) ...[
+                          if (isReasonBlocked) ...[
                             const SizedBox(height: 12),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -670,15 +690,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                     color: AppColors.warning
                                         .withValues(alpha: 0.2)),
                               ),
-                              child: const Row(
+                              child: Row(
                                 children: [
-                                  Icon(Icons.info_outline_rounded,
+                                  const Icon(Icons.info_outline_rounded,
                                       color: AppColors.warning, size: 16),
-                                  SizedBox(width: 10),
+                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      'To change this transaction\'s reason, delete the linked loan record from Loan Manager first.',
-                                      style: TextStyle(
+                                      isAutoLocked
+                                          ? 'This transaction was auto-created from a Telebirr credit SMS. The reason is set to Loan and cannot be changed.'
+                                          : 'To change this transaction\'s reason, delete the linked loan record from Loan Manager first.',
+                                      style: const TextStyle(
                                         color: AppColors.textSecondary,
                                         fontSize: 11,
                                         height: 1.3,

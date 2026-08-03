@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_badges.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -20,6 +21,7 @@ class AllTransactionsScreen extends StatefulWidget {
 }
 
 class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
+  late TextEditingController _searchController;
   String _searchQuery = '';
   String _selectedSender = 'All';
   DateTimeRange? _selectedDateRange;
@@ -30,9 +32,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialSearchQuery != null) {
-      _searchQuery = widget.initialSearchQuery!;
-    }
+    _searchQuery = widget.initialSearchQuery ?? '';
+    _searchController = TextEditingController(text: _searchQuery);
     _startSearchLabelRotation();
   }
 
@@ -66,6 +67,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _searchLabelTimer?.cancel();
     super.dispose();
   }
@@ -110,6 +112,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       return matchesSearch && matchesSender && matchesType && matchesDate;
     }).toList();
 
+    final double totalSum = filteredTransactions.fold<double>(0, (s, t) => s + t.amount);
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -121,8 +125,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         backgroundColor: AppColors.background,
         body: Column(
           children: [
-            _buildHeader(context),
-            _buildSearchAndFilters(context, senderNames, provider),
+            _buildTopHeaderAndSearch(context, senderNames, provider, totalSum, filteredTransactions.length),
             Expanded(
               child: _buildTransactionList(filteredTransactions, provider),
             ),
@@ -132,75 +135,116 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  // ── Seamless Top Header & Search/Filter Section ────────────────────────────
+  Widget _buildTopHeaderAndSearch(
+    BuildContext context,
+    List<String> senderNames,
+    FinanceProvider provider,
+    double totalSum,
+    int count,
+  ) {
+    final bool isReasonFilter = widget.initialSearchQuery != null && widget.initialSearchQuery!.isNotEmpty;
+
     return Container(
+      color: AppColors.background,
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16,
-        bottom: 16,
+        top: MediaQuery.of(context).padding.top + 12,
+        bottom: 12,
         left: 20,
         right: 20,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                shape: BoxShape.circle,
-              ),
-              child: SvgPicture.asset(
-                'assets/images/BackForNav.svg',
-                colorFilter:
-                    const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-                width: 18,
-                height: 18,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Text(
-            'All Transactions',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchAndFilters(BuildContext context, List<String> senderNames,
-      FinanceProvider provider) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search Bar
+          // Header Row: Clean Back Arrow (No background shape/stroke) + Title + Clear Button (No border)
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Center(
+                    child: SvgPicture.asset(
+                      'assets/images/BackForNav.svg',
+                      colorFilter: const ColorFilter.mode(AppColors.textPrimary, BlendMode.srcIn),
+                      width: 20,
+                      height: 20,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isReasonFilter ? widget.initialSearchQuery! : 'Transactions',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.4,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isReasonFilter ? 'Reason Analysis Detail' : '$count transactions recorded',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_searchQuery.isNotEmpty || _selectedSender != 'All' || _selectedType != 'All' || _selectedDateRange != null)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _searchQuery = '';
+                      _searchController.clear();
+                      _selectedSender = 'All';
+                      _selectedType = 'All';
+                      _selectedDateRange = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceCard,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color: AppColors.negative,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Fully Rounded Search Bar (No border) ──────────────────────────
           Container(
-            height: 40,
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.surfaceCard,
+              borderRadius: BorderRadius.circular(28),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                const Icon(Icons.search, color: AppColors.textSecondary, size: 16),
-                const SizedBox(width: 8),
+                const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 20),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Stack(
                     alignment: Alignment.centerLeft,
@@ -208,121 +252,81 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       if (_searchQuery.isEmpty)
                         IgnorePointer(
                           child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 600),
-                            switchInCurve: Curves.easeInOutCubic,
-                            switchOutCurve: Curves.easeInOutCubic,
-                            layoutBuilder: (Widget? currentChild,
-                                List<Widget> previousChildren) {
-                              return Stack(
-                                alignment: Alignment.centerLeft,
-                                children: [
-                                  ...previousChildren,
-                                  if (currentChild != null) currentChild,
-                                ],
-                              );
-                            },
-                            transitionBuilder:
-                                (Widget child, Animation<double> animation) {
-                              final inAnimation = Tween<Offset>(
-                                begin: const Offset(0.0, 1.2),
-                                end: Offset.zero,
-                              ).animate(animation);
-                              final outAnimation = Tween<Offset>(
-                                begin: const Offset(0.0, -1.2),
-                                end: Offset.zero,
-                              ).animate(animation);
-
-                              return ClipRect(
-                                child: SlideTransition(
-                                  position:
-                                      child.key == ValueKey(_searchLabelIndex)
-                                          ? inAnimation
-                                          : outAnimation,
-                                  child: child,
-                                ),
-                              );
-                            },
+                            duration: const Duration(milliseconds: 400),
                             child: Text(
                               _getSearchHint(provider),
                               key: ValueKey(_searchLabelIndex),
                               style: const TextStyle(
-                                  color: AppColors.textSecondary, fontSize: 12),
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
                       TextField(
-                        controller: TextEditingController(text: _searchQuery)..selection = TextSelection.collapsed(offset: _searchQuery.length),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12),
-                        onChanged: (value) =>
-                            setState(() => _searchQuery = value),
+                        controller: _searchController,
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                        onChanged: (value) => setState(() => _searchQuery = value),
                         decoration: const InputDecoration(
                           hintText: '',
                           border: InputBorder.none,
                           isDense: true,
+                          contentPadding: EdgeInsets.zero,
                         ),
                       ),
                     ],
                   ),
                 ),
+                if (_searchQuery.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _searchQuery = '';
+                        _searchController.clear();
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppColors.surfaceElevated,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 14),
+                    ),
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          // Filter Chips Row
+          const SizedBox(height: 14),
+
+          // ── Selection Filter Chips (Drop-down selections keep subtle outline for clarity) ──
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
-                // Date Filter
                 _buildFilterChip(
                   label: _selectedDateRange == null
                       ? 'Date'
                       : '${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
-                  icon: Icons.calendar_today_outlined,
+                  icon: Icons.calendar_today_rounded,
                   isSelected: _selectedDateRange != null,
                   onTap: _pickDateRange,
                 ),
                 const SizedBox(width: 8),
-                // Sender Filter
                 _buildFilterChip(
                   label: _selectedSender == 'All' ? 'Wallet' : _selectedSender,
-                  icon: Icons.wallet_outlined,
+                  icon: Icons.account_balance_wallet_rounded,
                   isSelected: _selectedSender != 'All',
                   onTap: () => _showSenderPicker(senderNames),
                 ),
                 const SizedBox(width: 8),
-                // Type Filter
                 _buildFilterChip(
                   label: _selectedType == 'All' ? 'Type' : _selectedType,
                   icon: Icons.swap_vert_rounded,
                   isSelected: _selectedType != 'All',
                   onTap: _showTypePicker,
                 ),
-                if (_selectedDateRange != null ||
-                    _selectedSender != 'All' ||
-                    _selectedType != 'All')
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedDateRange = null;
-                          _selectedSender = 'All';
-                          _selectedType = 'All';
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.negative.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.close,
-                            color: AppColors.negative, size: 16),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -343,14 +347,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? Colors.transparent
-                : Colors.white.withValues(alpha: 0.1),
-          ),
+              ? AppColors.telebirrGreen.withValues(alpha: 0.15)
+              : AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(24),
+          border: isSelected
+              ? Border.all(color: AppColors.telebirrGreen)
+              : Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -358,22 +360,22 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             Icon(
               icon,
               size: 14,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
+              color: isSelected ? AppColors.telebirrGreen : AppColors.textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textPrimary,
+                color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
                 fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
             const SizedBox(width: 4),
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 16,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
+              color: isSelected ? AppColors.telebirrGreen : AppColors.textSecondary,
             ),
           ],
         ),
@@ -400,12 +402,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                   const Text(
                     'Select Date Range',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 18,
                         fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
-                  // Presets
                   _buildPresetItem(
                     'All Time',
                     null,
@@ -439,9 +440,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     setModalState,
                   ),
                   const SizedBox(height: 12),
-                  const Divider(color: Colors.white10),
+                  const Divider(color: AppColors.border),
                   const SizedBox(height: 12),
-                  // Custom Range
                   GestureDetector(
                     onTap: () async {
                       final picked = await showDateRangePicker(
@@ -454,11 +454,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             data: ThemeData.dark().copyWith(
                               colorScheme: const ColorScheme.dark(
                                 primary: AppColors.gold,
-                                onPrimary: Colors.white,
+                                onPrimary: AppColors.textPrimary,
                                 surface: AppColors.bgMid,
-                                onSurface: Colors.white,
+                                onSurface: AppColors.textPrimary,
                               ),
-                              dialogTheme: DialogThemeData(
+                              dialogTheme: const DialogThemeData(
                                   backgroundColor: AppColors.bgDeep),
                             ),
                             child: child!,
@@ -474,20 +474,20 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: AppColors.surfaceCard,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
-                          const Icon(Icons.date_range_rounded,
+                          Icon(Icons.date_range_rounded,
                               color: AppColors.gold),
-                          const SizedBox(width: 12),
-                          const Text(
+                          SizedBox(width: 12),
+                          Text(
                             'Custom Range...',
-                            style: TextStyle(color: Colors.white, fontSize: 16),
+                            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
                           ),
-                          const Spacer(),
-                          const Icon(Icons.arrow_forward_ios_rounded,
+                          Spacer(),
+                          Icon(Icons.arrow_forward_ios_rounded,
                               color: AppColors.textSecondary, size: 14),
                         ],
                       ),
@@ -514,7 +514,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             _selectedDateRange!.start.month == range.start.month);
 
     return ListTile(
-      title: Text(title, style: const TextStyle(color: Colors.white)),
+      title: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
       trailing: isSelected
           ? const Icon(Icons.check, color: AppColors.gold)
           : null,
@@ -541,14 +541,14 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
               const Text(
                 'Select Wallet',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               ...senderNames.map((name) => ListTile(
                     title:
-                        Text(name, style: const TextStyle(color: Colors.white)),
+                        Text(name, style: const TextStyle(color: AppColors.textPrimary)),
                     trailing: _selectedSender == name
                         ? const Icon(Icons.check, color: AppColors.gold)
                         : null,
@@ -580,14 +580,14 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
               const Text(
                 'Transaction Type',
                 style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               ...['All', 'Income', 'Expense'].map((type) => ListTile(
                     title:
-                        Text(type, style: const TextStyle(color: Colors.white)),
+                        Text(type, style: const TextStyle(color: AppColors.textPrimary)),
                     trailing: _selectedType == type
                         ? const Icon(Icons.check, color: AppColors.gold)
                         : null,
@@ -603,6 +603,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
+  // ── Cardless Transaction List ──────────────────────────────────────────────
   Widget _buildTransactionList(
       List<AppTransaction> transactions, FinanceProvider provider) {
     if (transactions.isEmpty) {
@@ -611,7 +612,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.search_off_rounded,
-                size: 64, color: Colors.white.withValues(alpha: 0.1)),
+                size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               'No transactions found',
@@ -622,33 +623,19 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       physics: const BouncingScrollPhysics(),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surfaceCard,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
-          itemCount: transactions.length,
-          separatorBuilder: (context, index) => Divider(
-            height: 1,
-            thickness: 0.5,
-            indent: 64,
-            endIndent: 16,
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
-          itemBuilder: (context, index) {
-            final tx = transactions[index];
-            return _buildTransactionRowItem(context, tx, provider);
-          },
-        ),
+      itemCount: transactions.length,
+      separatorBuilder: (context, index) => Divider(
+        height: 1,
+        thickness: 0.5,
+        color: Colors.white.withValues(alpha: 0.06),
       ),
+      itemBuilder: (context, index) {
+        final tx = transactions[index];
+        return _buildTransactionRowItem(context, tx, provider);
+      },
     );
   }
 
@@ -686,7 +673,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                           child: Text(
                             label,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
@@ -698,24 +685,9 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             (tx.customReasonText == null ||
                                 tx.customReasonText!.isEmpty) &&
                             (tx.reason == null || tx.reason!.isEmpty))
-                          Padding(
-                            padding: const EdgeInsets.only(left: 6.0),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: AppColors.negative.withValues(alpha: 0.8),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'REASON?',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 7.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6.0),
+                            child: ReasonBadge(),
                           ),
                       ],
                     ),
@@ -760,7 +732,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildDarkBankAvatar(String bankName) {
     final nameUp = bankName.toUpperCase();
     Widget img;
-    Color bgColor = Colors.white.withValues(alpha: 0.05);
+    Color bgColor = AppColors.surfaceElevated;
 
     if (nameUp == 'CBE') {
       img = Image.asset('assets/images/CBE logo 1.png',
@@ -782,7 +754,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       img = Text(
         bankName.substring(0, min(1, bankName.length)).toUpperCase(),
         style: const TextStyle(
-            color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+            color: AppColors.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
       );
     }
 
@@ -825,8 +797,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           ),
           TextSpan(
             text: '.${amountParts[1]}',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.33),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w400,
             ),

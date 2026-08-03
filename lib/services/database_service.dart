@@ -27,7 +27,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 20, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 21, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -158,7 +158,8 @@ CREATE TABLE IF NOT EXISTS loan_records (
   dueDate TEXT NOT NULL,
   linkedTransactionId TEXT,
   status TEXT NOT NULL DEFAULT 'active',
-  note TEXT
+  note TEXT,
+  contractNumber TEXT
 )
 ''');
     await db.execute('''
@@ -344,6 +345,13 @@ CREATE TABLE IF NOT EXISTS app_settings (
             "ALTER TABLE saving_goals ADD COLUMN color_theme TEXT NOT NULL DEFAULT 'green';");
       } catch (_) {}
     }
+    if (oldVersion < 21) {
+      // Add contractNumber column to loan_records for Telebirr credit tracking.
+      try {
+        await db.execute(
+            'ALTER TABLE loan_records ADD COLUMN contractNumber TEXT;');
+      } catch (_) {}
+    }
   }
 
   Future<void> _addNewSystemReasons2(Database db) async {
@@ -459,6 +467,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
     final db = await instance.database;
     final result =
         await db.rawQuery('SELECT COUNT(*) as count FROM transactions');
+    return (result.first['count'] as int?) ?? 0;
+  }
+
+  /// Quick notification count query — almost zero CPU cost.
+  Future<int> getNotificationCount() async {
+    final db = await instance.database;
+    final result =
+        await db.rawQuery('SELECT COUNT(*) as count FROM notifications');
     return (result.first['count'] as int?) ?? 0;
   }
 
@@ -689,6 +705,78 @@ CREATE TABLE IF NOT EXISTS app_settings (
         AND LOWER(trackedSenderName) = ?
     ''', [lower]);
     return maps.map((m) => LoanRecord.fromMap(m)).toList();
+  }
+
+  // ──────────────────────────────────────────────
+  // Telebirr Credit Loan Helpers
+  // ──────────────────────────────────────────────
+
+  /// Find the oldest active Telebirr credit loan.
+  /// These are loans where contractNumber is not null and trackedSenderName = 'Telebirr'.
+  /// Returns null if no matching loan is found.
+  Future<LoanRecord?> findActiveTelebirrCreditLoan() async {
+    final db = await instance.database;
+    final maps = await db.rawQuery('''
+      SELECT * FROM loan_records
+      WHERE status = 'active'
+        AND contractNumber IS NOT NULL
+        AND LOWER(trackedSenderName) = 'telebirr'
+      ORDER BY loanDate ASC
+      LIMIT 1
+    ''');
+    if (maps.isEmpty) return null;
+    return LoanRecord.fromMap(maps.first);
+  }
+
+  /// Apply a Telebirr repayment to a loan:
+  /// 1. Records a LoanPayment entry
+  /// 2. Updates paidAmount on the loan
+  /// 3. Sets status to 'paid' if totalOutstanding is 0, otherwise recalculates
+  Future<LoanRecord?> applyTelebirrRepayment({
+    required int loanId,
+    required double paidAmount,
+    required double totalOutstanding,
+    String? linkedTransactionId,
+  }) async {
+    final db = await instance.database;
+
+    // 1. Record the payment
+    await db.insert('loan_payments', {
+      'loanId': loanId,
+      'amount': paidAmount,
+      'paymentDate': DateTime.now().toIso8601String(),
+      'linkedTransactionId': linkedTransactionId,
+      'note': 'Auto-detected from Telebirr repayment SMS',
+    });
+
+    // 2. Get the current loan
+    final loanMaps =
+        await db.query('loan_records', where: 'id = ?', whereArgs: [loanId]);
+    if (loanMaps.isEmpty) return null;
+    final loan = LoanRecord.fromMap(loanMaps.first);
+
+    // 3. Recalculate total paid from all payments
+    final payments = await db.query('loan_payments',
+        where: 'loanId = ?', whereArgs: [loanId]);
+    final totalPaid =
+        payments.fold<double>(0, (s, p) => s + (p['amount'] as num).toDouble());
+
+    // 4. Determine new status
+    // If telebirr says outstanding = 0, mark as paid regardless of amounts
+    final String newStatus;
+    if (totalOutstanding <= 0.0 || totalPaid >= loan.principalAmount) {
+      newStatus = 'paid';
+    } else if (DateTime.now().isAfter(loan.dueDate)) {
+      newStatus = 'overdue';
+    } else {
+      newStatus = 'active';
+    }
+
+    // 5. Update the loan record
+    final updated = loan.copyWith(paidAmount: totalPaid, status: newStatus);
+    await db.update('loan_records', updated.toMap(),
+        where: 'id = ?', whereArgs: [loanId]);
+    return updated;
   }
 
   // ──────────────────────────────────────────────

@@ -16,6 +16,7 @@ import '../../models/cash_transaction.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/app_badges.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -2103,44 +2104,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(width: 5),
                       if (tx.isAutoDetected && isLatest)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 5, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: AppColors.alertRed,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'NEW',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 7.5,
-                              fontWeight: FontWeight.bold,
-                              ),
-                          ),
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: NewBadge(),
                         ),
                       if (tx.reasonId == null &&
                           (tx.customReasonText == null ||
                               tx.customReasonText!.isEmpty) &&
                           (tx.reason == null || tx.reason!.isEmpty))
-                        Padding(
-                          padding: const EdgeInsets.only(left: 4.0),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 5, vertical: 1.5),
-                            decoration: BoxDecoration(
-                              color: AppColors.alertOrange,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'REASON?',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 7.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: ReasonBadge(),
                         ),
                     ],
                   ),

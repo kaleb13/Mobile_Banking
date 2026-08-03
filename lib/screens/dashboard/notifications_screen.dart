@@ -398,6 +398,7 @@ class _NotificationPanelContent extends StatefulWidget {
 
 class _NotificationPanelContentState extends State<_NotificationPanelContent> {
   AppNotification? _selectedNotificationForMenu;
+  AppNotification? _selectedNotificationForManualInsert;
   bool _isConfirmingClearAll = false;
 
   @override
@@ -559,6 +560,39 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                   right: 12,
                   bottom: 12,
                   child: _buildInternalClearConfirm(provider),
+                ),
+              ],
+            ),
+          ),
+
+        // ── Internal Manual Transaction Sheet Overlay ──
+        if (_selectedNotificationForManualInsert != null)
+          Positioned.fill(
+            child: Stack(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(
+                      () => _selectedNotificationForManualInsert = null),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.55),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  top: 0,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ManualTransactionSheet(
+                      notification: _selectedNotificationForManualInsert!,
+                      provider: provider,
+                      onClose: () {
+                        setState(() =>
+                            _selectedNotificationForManualInsert = null);
+                      },
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -812,13 +846,10 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
 
   void _showManualInsert(
       BuildContext context, FinanceProvider provider, AppNotification notif) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          ManualTransactionSheet(notification: notif, provider: provider),
-    );
+    setState(() {
+      _selectedNotificationForMenu = null;
+      _selectedNotificationForManualInsert = notif;
+    });
   }
 
   Future<void> _informDeveloper(

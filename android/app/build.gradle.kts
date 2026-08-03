@@ -26,10 +26,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        ndk {
-            // SM A135F runs 32-bit Android (armeabi-v7a)
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
     }
 
     buildTypes {

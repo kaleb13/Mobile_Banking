@@ -23,6 +23,8 @@ import '../services/cbe_birr_parser.dart';
 import '../services/ahadu_parser.dart';
 import '../services/bank_senders.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:telephony/telephony.dart';
+import '../services/background_service.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppSender> _senders = [];
@@ -75,7 +77,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   bool _hasPermission = false;
   bool _isOnboardingComplete;
-  bool _isBalanceVisible = false;
+  bool _isBalanceVisible = true;
   bool _isShowingAll = false;
   bool _isMenuOpen = false;
   int _currentScreenIndex = 0;
@@ -83,6 +85,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   String? _userName;
   Timer? _dbSyncTimer;
   int _lastKnownTxCount = 0;
+  int _lastKnownNotificationCount = 0;
   bool _isBatchProcessing = false;
 
   /// [initialOnboardingComplete] should be read from SharedPreferences in
@@ -338,6 +341,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _userName = prefs.getString('user_name_v1');
     _hasPermission = await Permission.sms.status.isGranted;
     if (!_hasPermission) return;
+    _setupLiveSmsListener();
 
     final dbSenders = await DatabaseService.instance.getSenders();
     if (dbSenders.isNotEmpty) {
@@ -1040,25 +1044,43 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   /// Lightweight periodic DB sync.
-  /// Instead of polling the entire SMS inbox (which reads 1000+ messages
-  /// and drains battery), we just ask the DB if new transactions were
-  /// inserted by the background service isolate.
+  /// Checks SQLite counts every 4 seconds with minimal overhead to catch background insertions.
   void _startLightweightDbSync() {
+    _setupLiveSmsListener();
     _dbSyncTimer?.cancel();
-    _dbSyncTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
+    _dbSyncTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
       await _checkDbForNewTransactions();
     });
+  }
+
+  bool _isLiveSmsListening = false;
+
+  void _setupLiveSmsListener() {
+    if (_isLiveSmsListening || !_hasPermission) return;
+    _isLiveSmsListening = true;
+    try {
+      final Telephony telephony = Telephony.instance;
+      telephony.listenIncomingSms(
+        onNewMessage: (SmsMessage message) async {
+          await processBackgroundSms(message);
+          await _reloadFromDatabase();
+        },
+        listenInBackground: false,
+      );
+    } catch (_) {}
   }
 
   Future<void> _checkDbForNewTransactions() async {
     if (!_hasPermission) return;
 
-    // Quick count query — almost zero CPU cost
-    final currentCount = await DatabaseService.instance.getTransactionCount();
+    // Quick count query — near-zero CPU cost
+    final currentTxCount = await DatabaseService.instance.getTransactionCount();
+    final currentNotifCount =
+        await DatabaseService.instance.getNotificationCount();
 
-    if (currentCount != _lastKnownTxCount) {
-      // Background service inserted new transactions — reload
-      _lastKnownTxCount = currentCount;
+    if (currentTxCount != _lastKnownTxCount ||
+        currentNotifCount != _lastKnownNotificationCount) {
+      // Background service inserted new transactions or notifications — reload
       await _reloadFromDatabase();
     }
   }
@@ -1140,6 +1162,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _cashTransactions = await DatabaseService.instance.getCashTransactions();
     await _loadNotifications();
     await _applyRecurringCashExpenses();
+    _lastKnownTxCount = _transactions.length;
+    _lastKnownNotificationCount = _notifications.length;
     _calculateStats();
     notifyListeners();
   }
@@ -1202,13 +1226,76 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await _loadNotifications();
     await _applyRecurringCashExpenses();
     _calculateStats();
+    _lastKnownTxCount = await DatabaseService.instance.getTransactionCount();
+    _lastKnownNotificationCount = await DatabaseService.instance.getNotificationCount();
     notifyListeners();
   }
 
+  bool _isAmharicMessage(String text) {
+    if (text.isEmpty) return false;
+    return RegExp(r'[\u1200-\u137F]').hasMatch(text);
+  }
+
   Future<void> _loadNotifications() async {
-    _notifications = await DatabaseService.instance.getNotifications();
-    _unreadNotificationCount =
-        await DatabaseService.instance.getUnreadNotificationCount();
+    final all = await DatabaseService.instance.getNotifications();
+    final Set<String> registeredMessages = _transactions
+        .map((t) => t.rawMessage.trim())
+        .where((msg) => msg.isNotEmpty)
+        .toSet();
+
+    final List<AppNotification> filtered = [];
+    final List<String> idsToDelete = [];
+
+    for (final n in all) {
+      final isSystemAlert = n.sender.startsWith('Loan') ||
+          n.sender.startsWith('System') ||
+          n.sender.startsWith('⚠️') ||
+          n.sender.contains('✅');
+
+      if (!isSystemAlert) {
+        final bodyTrimmed = n.body.trim();
+
+        // 1. Ignore Amharic messages completely
+        if (_isAmharicMessage(n.body)) {
+          idsToDelete.add(n.id);
+          continue;
+        }
+
+        // 2. Ignore non-English banking messages
+        if (!_isEnglishBankingMessage(n.body)) {
+          idsToDelete.add(n.id);
+          continue;
+        }
+
+        // 3. Ignore messages that are ALREADY registered as transactions in the app
+        if (registeredMessages.contains(bodyTrimmed)) {
+          idsToDelete.add(n.id);
+          continue;
+        }
+
+        // 4. Ignore messages that CAN be auto-parsed into transactions
+        if (TelebirrParser.parse(n.body, n.date) != null ||
+            TelebirrParser.isCreditDisbursement(n.body) ||
+            TelebirrParser.isCreditRepayment(n.body) ||
+            CbeParser.parse(n.body, n.date) != null ||
+            CbeBirrParser.parse(n.body, n.date) != null ||
+            AhaduParser.parse(n.body, n.date) != null) {
+          idsToDelete.add(n.id);
+          continue;
+        }
+      }
+
+      filtered.add(n);
+    }
+
+    // Asynchronously delete stale/already-registered notifications from SQLite
+    for (final id in idsToDelete) {
+      DatabaseService.instance.deleteNotification(id);
+    }
+
+    _notifications = filtered;
+    _unreadNotificationCount = _notifications.where((n) => !n.isRead).length;
+    _lastKnownNotificationCount = _notifications.length;
   }
 
   Future<void> markNotificationsRead() async {
@@ -1312,8 +1399,27 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         sender.startsWith('⚠️') ||
         sender.contains('✅');
 
-    // ── External SMS: only save if it looks like a financial message ────────
+    // ── External SMS: ignore Amharic messages & non-financial messages ─────
+    if (!isSystemAlert && _isAmharicMessage(body)) return;
     if (!isSystemAlert && !_isEnglishBankingMessage(body)) return;
+
+    // Do NOT add if message is already registered as a transaction in the app
+    if (!isSystemAlert &&
+        _transactions.any((tx) => tx.rawMessage.trim() == body.trim())) {
+      return;
+    }
+
+    // Do NOT add if message is auto-parsable into a transaction
+    if (!isSystemAlert) {
+      if (TelebirrParser.parse(body, date) != null ||
+          TelebirrParser.isCreditDisbursement(body) ||
+          TelebirrParser.isCreditRepayment(body) ||
+          CbeParser.parse(body, date) != null ||
+          CbeBirrParser.parse(body, date) != null ||
+          AhaduParser.parse(body, date) != null) {
+        return;
+      }
+    }
 
     final id = '${sender}_${date.millisecondsSinceEpoch}';
 
@@ -1502,14 +1608,35 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Returns the current latest total balance recorded for a given bank / sender name.
+  double getLatestBalanceForBank(String bankName) {
+    for (final tx in _transactions) {
+      if (tx.name.toUpperCase() == bankName.toUpperCase() && tx.totalBalance > 0) {
+        return tx.totalBalance;
+      }
+    }
+    return 0.0;
+  }
+
   Future<void> addTransaction(AppTransaction transaction) async {
-    // Auto-categorize: check if sender matches a linked reason rule
     AppTransaction txToInsert = transaction;
-    if (transaction.reasonId == null && transaction.customReasonText == null) {
+
+    // Auto-calculate post-balance (totalBalance) if not provided or 0
+    if (txToInsert.totalBalance == 0) {
+      final double currentBalance = getLatestBalanceForBank(txToInsert.name);
+      final double newPostBalance = txToInsert.type == 'income'
+          ? (currentBalance + txToInsert.amount)
+          : (currentBalance - txToInsert.amount);
+      txToInsert = txToInsert.copyWith(
+          totalBalance: newPostBalance > 0 ? newPostBalance : 0.0);
+    }
+
+    // Auto-categorize: check if sender matches a linked reason rule
+    if (txToInsert.reasonId == null && txToInsert.customReasonText == null) {
       final autoReason = await DatabaseService.instance
-          .findAutoReason(transaction.sender, transaction.type);
+          .findAutoReason(txToInsert.sender, txToInsert.type);
       if (autoReason != null) {
-        txToInsert = transaction.copyWith(
+        txToInsert = txToInsert.copyWith(
             reasonId: autoReason.id, reason: autoReason.name);
       }
     }

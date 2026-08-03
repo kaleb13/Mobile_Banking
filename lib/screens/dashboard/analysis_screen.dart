@@ -12,7 +12,7 @@ import '../../widgets/currency_symbol_widget.dart';
 import 'all_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
-enum PeriodFilter { week, month, quarter, year }
+enum PeriodFilter { day, week, month, quarter, year }
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -25,15 +25,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     with TickerProviderStateMixin {
   PeriodFilter _selectedPeriod = PeriodFilter.month;
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
-  int _selectedMonthIndex = DateTime.now().month - 1; // 0 = Jan, 8 = Sep, etc.
-  late PageController _monthScrollController;
+  int _selectedSubPeriodIndex = 0;
+  late PageController _subPeriodScrollController;
 
   late AnimationController _morphCtrl;
   late Animation<double> _morphAnim;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
-
-  late List<String> _monthsList;
 
   // Track previous category state for seamless morphing transitions
   List<CategoryArcItem> _previousCategories = [];
@@ -42,26 +40,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    const allMonths = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    _monthsList = allMonths.sublist(0, now.month);
-    _selectedMonthIndex = (now.month - 1).clamp(0, _monthsList.length - 1);
-    _monthScrollController = PageController(
-      initialPage: _selectedMonthIndex,
-      viewportFraction: 0.38,
+    _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(_selectedPeriod);
+    _subPeriodScrollController = PageController(
+      initialPage: _selectedSubPeriodIndex,
+      viewportFraction: 0.42,
     );
 
     _morphCtrl = AnimationController(
@@ -84,8 +66,69 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   void dispose() {
     _morphCtrl.dispose();
     _fadeCtrl.dispose();
-    _monthScrollController.dispose();
+    _subPeriodScrollController.dispose();
     super.dispose();
+  }
+
+  List<String> _getSubPeriodItems() {
+    final now = DateTime.now();
+    switch (_selectedPeriod) {
+      case PeriodFilter.day:
+        final DateFormat dayFmt = DateFormat('E, MMM d');
+        return List.generate(14, (i) {
+          final d = now.subtract(Duration(days: 13 - i));
+          if (d.year == now.year && d.month == now.month && d.day == now.day) {
+            return 'Today';
+          }
+          final yesterday = now.subtract(const Duration(days: 1));
+          if (d.year == yesterday.year && d.month == yesterday.month && d.day == yesterday.day) {
+            return 'Yesterday';
+          }
+          return dayFmt.format(d);
+        });
+      case PeriodFilter.week:
+        return ['4 Wks Ago', '3 Wks Ago', '2 Wks Ago', 'Last Week', 'This Week'];
+      case PeriodFilter.month:
+        const allMonths = [
+          'January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December',
+        ];
+        return allMonths.sublist(0, now.month);
+      case PeriodFilter.quarter:
+        return ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)', 'Q4 (Oct-Dec)'];
+      case PeriodFilter.year:
+        return [
+          (now.year - 2).toString(),
+          (now.year - 1).toString(),
+          now.year.toString(),
+        ];
+    }
+  }
+
+  int _getDefaultSubPeriodIndex(PeriodFilter period) {
+    final now = DateTime.now();
+    switch (period) {
+      case PeriodFilter.day:
+        return 13; // 'Today'
+      case PeriodFilter.week:
+        return 4; // 'This Week'
+      case PeriodFilter.month:
+        return (now.month - 1).clamp(0, now.month - 1);
+      case PeriodFilter.quarter:
+        return ((now.month - 1) ~/ 3).clamp(0, 3);
+      case PeriodFilter.year:
+        return 2; // current year
+    }
   }
 
   void _changeFilter(VoidCallback updateState) {
@@ -105,13 +148,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (_selectedPeriod == period) return;
     _changeFilter(() {
       _selectedPeriod = period;
+      _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(period);
+      if (_subPeriodScrollController.hasClients) {
+        _subPeriodScrollController.jumpToPage(_selectedSubPeriodIndex);
+      }
     });
   }
 
-  void _onMonthChanged(int index) {
-    if (_selectedMonthIndex == index) return;
+  void _onSubPeriodChanged(int index) {
+    if (_selectedSubPeriodIndex == index) return;
     _changeFilter(() {
-      _selectedMonthIndex = index;
+      _selectedSubPeriodIndex = index;
     });
   }
 
@@ -357,17 +404,34 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   bool _matchesFilter(DateTime date, DateTime now, int year) {
+    final subItems = _getSubPeriodItems();
+    final int subIndex = _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
+
     switch (_selectedPeriod) {
+      case PeriodFilter.day:
+        final targetDay = now.subtract(Duration(days: 13 - subIndex));
+        return date.year == targetDay.year &&
+            date.month == targetDay.month &&
+            date.day == targetDay.day;
+
       case PeriodFilter.week:
-        return now.difference(date).inDays <= 7;
+        final int weeksOffset = (subItems.length - 1) - subIndex;
+        final currentMonday = now.subtract(Duration(days: now.weekday - 1));
+        final targetMonday = DateTime(currentMonday.year, currentMonday.month, currentMonday.day)
+            .subtract(Duration(days: 7 * weeksOffset));
+        final targetSunday = targetMonday.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+        return !date.isBefore(targetMonday) && !date.isAfter(targetSunday);
+
       case PeriodFilter.month:
-        return date.month == (_selectedMonthIndex + 1);
+        return date.month == (subIndex + 1) && date.year == year;
+
       case PeriodFilter.quarter:
-        final currentQuarter = ((_selectedMonthIndex) / 3).floor();
-        final txQuarter = ((date.month - 1) / 3).floor();
-        return txQuarter == currentQuarter;
+        final txQuarter = ((date.month - 1) ~/ 3);
+        return txQuarter == subIndex && date.year == year;
+
       case PeriodFilter.year:
-        return date.year == year;
+        final targetYear = year - ((subItems.length - 1) - subIndex);
+        return date.year == targetYear;
     }
   }
 
@@ -437,29 +501,38 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 16),
-                      // ── 1. Top Clean Header ("Analysis" only) ──
+                      // ── 1. Top Clean Header ("Analysis") ──
                       _buildHeader(),
                       const SizedBox(height: 20),
 
-                      // ── 2. Full-Width Period Filter Row & Dropdown Menu ──
+                      // ── 2. Full-Width Period Filter Row (All/Expense/Income + Day/Week/Month/Quarter/Year) ──
                       _buildPeriodFilterRow(),
                       const SizedBox(height: 22),
 
-                      // ── 3. Sub-Tabs Horizontal Month Selector ─────────────
-                      _buildMonthSelectorTabs(),
+                      // ── 3. Dynamic Sub-Period Selector Tabs (Days, Weeks, Months, Quarters, Years) ───────
+                      _buildSubPeriodSelectorTabs(),
+                      const SizedBox(height: 24),
+
+                      // ── 4. Prominent Inflow / Outflow & Net Cash Flow Summary Section ─────────────────────
+                      _buildRedesignedInflowOutflowNetSection(
+                        data.totalIncome,
+                        data.totalExpense,
+                        data.netPnl,
+                        provider.isBalanceVisible,
+                      ),
                       const SizedBox(height: 28),
 
-                      // ── 4. Circular Segmented Morphing Ring Donut Chart ───
+                      // ── 5. Circular Segmented Morphing Ring Donut Chart ───
                       Center(
                         child: _buildCircularMorphingChart(data.categories, data.chartTotal),
                       ),
                       const SizedBox(height: 32),
 
-                      // ── 5. Category Breakdown 2-Column Grid ────────────────
+                      // ── 6. Category Breakdown 2-Column Grid ────────────────
                       _buildCategoryLegendGrid(data.categories, provider.isBalanceVisible),
                       const SizedBox(height: 32),
 
-                      // ── 6. Redesigned Reason Analysis Section ──────────────
+                      // ── 7. Redesigned Reason Analysis Section ──────────────
                       _buildReasonBreakdownSection(
                         data.filteredBankTxs,
                         data.filteredCashTxs,
@@ -467,11 +540,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       ),
                       const SizedBox(height: 36),
 
-                      // ── 7. Redesigned Bank Performance & Summary Section ──
+                      // ── 8. Redesigned Bank Performance Breakdown ───────────
                       _buildRedesignedBankPerformance(
-                        data.totalIncome,
-                        data.totalExpense,
-                        data.netPnl,
                         data.bankBreakdown,
                         provider.isBalanceVisible,
                       ),
@@ -493,7 +563,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Analysis',
+          'Spending Charts',
           style: TextStyle(
             color: Colors.white,
             fontSize: 28,
@@ -619,19 +689,20 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 3. Sub-Tabs Horizontal Month Selector ─────────────────────────────────
-  Widget _buildMonthSelectorTabs() {
+  // ── 3. Dynamic Sub-Period Selector Tabs (Days, Weeks, Months, Quarters, Years) ───
+  Widget _buildSubPeriodSelectorTabs() {
+    final items = _getSubPeriodItems();
     return SizedBox(
       height: 38,
       child: PageView.builder(
-        controller: _monthScrollController,
-        itemCount: _monthsList.length,
-        onPageChanged: _onMonthChanged,
+        controller: _subPeriodScrollController,
+        itemCount: items.length,
+        onPageChanged: _onSubPeriodChanged,
         itemBuilder: (context, index) {
-          final isSelected = index == _selectedMonthIndex;
+          final isSelected = index == _selectedSubPeriodIndex;
           return GestureDetector(
             onTap: () {
-              _monthScrollController.animateToPage(
+              _subPeriodScrollController.animateToPage(
                 index,
                 duration: const Duration(milliseconds: 350),
                 curve: Curves.easeInOutCubic,
@@ -642,15 +713,236 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 duration: const Duration(milliseconds: 250),
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.white38,
-                  fontSize: isSelected ? 18 : 14,
+                  fontSize: isSelected ? 17 : 13,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                   letterSpacing: -0.3,
                 ),
-                child: Text(_monthsList[index]),
+                child: Text(items[index]),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  // ── 4. Prominent Income / Expense & Net Cash Flow Summary Section ─────────
+  Widget _buildRedesignedInflowOutflowNetSection(
+    double totalIncome,
+    double totalExpense,
+    double netPnl,
+    bool isBalanceVisible,
+  ) {
+    final fmt = NumberFormat('#,##0.00');
+    final isPositiveNet = netPnl >= 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          // Top Hero Row: Net Cash Flow Metric & Status Pill
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Net Cash Flow',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  isBalanceVisible
+                      ? CurrencyTextWidget(
+                          amount: netPnl,
+                          showSign: true,
+                          style: TextStyle(
+                            color: isPositiveNet ? AppColors.positive : AppColors.negative,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                          customFormattedStr: fmt.format(netPnl.abs()),
+                        )
+                      : Text(
+                          '****',
+                          style: TextStyle(
+                            color: isPositiveNet ? AppColors.positive : AppColors.negative,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                ],
+              ),
+              // Net Status Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: (isPositiveNet ? AppColors.positive : AppColors.negative).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: (isPositiveNet ? AppColors.positive : AppColors.negative).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isPositiveNet ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                      color: isPositiveNet ? AppColors.positive : AppColors.negative,
+                      size: 15,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isPositiveNet ? 'Net Savings' : 'Net Deficit',
+                      style: TextStyle(
+                        color: isPositiveNet ? AppColors.positive : AppColors.negative,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(color: Colors.white.withValues(alpha: 0.07), height: 1),
+          const SizedBox(height: 14),
+
+          // Bottom Side-by-Side: Income & Expense
+          Row(
+            children: [
+              // Income Column
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.positive.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_downward_rounded,
+                        color: AppColors.positive,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Income',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          isBalanceVisible
+                              ? CurrencyTextWidget(
+                                  amount: totalIncome,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  customFormattedStr: fmt.format(totalIncome),
+                                )
+                              : const Text(
+                                  '****',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 32,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+              const SizedBox(width: 12),
+              // Expense Column
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.negative.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_upward_rounded,
+                        color: AppColors.negative,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Expense',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          isBalanceVisible
+                              ? CurrencyTextWidget(
+                                  amount: totalExpense,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  customFormattedStr: fmt.format(totalExpense),
+                                )
+                              : const Text(
+                                  '****',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1148,11 +1440,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 7. Redesigned Bank Performance Section ────────────────────────────────
+  // ── 8. Redesigned Bank Performance Breakdown Section ─────────────────────
   Widget _buildRedesignedBankPerformance(
-    double totalIncome,
-    double totalExpense,
-    double netPnl,
     List<({String name, double income, double expense, double net})> bankBreakdown,
     bool isBalanceVisible,
   ) {
@@ -1171,45 +1460,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           ),
         ),
         const SizedBox(height: 14),
-
-        // Summary Row: In | Out | Net P/L
-        Row(
-          children: [
-            Expanded(
-              child: _buildMetricTile(
-                label: 'Inflow',
-                val: totalIncome,
-                fmt: fmt,
-                color: AppColors.positive,
-                icon: Icons.arrow_downward_rounded,
-                isBalanceVisible: isBalanceVisible,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildMetricTile(
-                label: 'Outflow',
-                val: totalExpense,
-                fmt: fmt,
-                color: AppColors.negative,
-                icon: Icons.arrow_upward_rounded,
-                isBalanceVisible: isBalanceVisible,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildMetricTile(
-                label: 'Net P/L',
-                val: netPnl,
-                fmt: fmt,
-                color: netPnl >= 0 ? AppColors.positive : AppColors.negative,
-                icon: netPnl >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                isBalanceVisible: isBalanceVisible,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
 
         // Individual Bank Performance Breakdown Cards
         Column(
@@ -1298,67 +1548,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           }).toList(),
         ),
       ],
-    );
-  }
-
-  Widget _buildMetricTile({
-    required String label,
-    required double val,
-    required NumberFormat fmt,
-    required Color color,
-    required IconData icon,
-    required bool isBalanceVisible,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 13),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.textSoft,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: isBalanceVisible
-                ? CurrencyTextWidget(
-                    amount: val.abs(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                    ),
-                    customFormattedStr: fmt.format(val.abs()),
-                  )
-                : const Text(
-                    '****',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -14,6 +14,8 @@ import 'about_app_screen.dart';
 import '../../models/app_currency.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import 'privacy_policy_screen.dart';
+import '../privacy/privacy_settings_screen.dart';
+import '../settings/background_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,7 +26,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final bool _isResetting = false;
-  bool _showPersistentNotification = true; // default ON
+  bool _showPersistentNotification = false; // default OFF
 
   @override
   void initState() {
@@ -37,8 +39,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .getSetting('show_persistent_notification');
     if (mounted) {
       setState(() {
-        // null = not yet set → default true
-        _showPersistentNotification = val == null || val == '1';
+        // null = not yet set → default false (OFF)
+        _showPersistentNotification = val == '1';
       });
     }
   }
@@ -244,8 +246,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     // ── Section: Notifications ─────────────────────────
-                    _sectionLabel('Notifications'),
+                    _sectionLabel('Notifications & Background'),
                     _buildCardBase([
+                      _settingsTile(
+                        context,
+                        icon: Icons.battery_saver_rounded,
+                        iconColor: AppColors.positive,
+                        label: 'Background & Battery Settings',
+                        subtitle: 'Fix delayed SMS & OEM battery rules',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BackgroundSettingsScreen(),
+                          ),
+                        ),
+                        showDivider: true,
+                      ),
                       _toggleTile(
                         icon: Icons.notifications_outlined,
                         iconColor: AppColors.amber,
@@ -323,6 +339,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: 'Dark mode (default)',
                         onTap: () {},
                         trailing: _comingSoon(),
+                        showDivider: false,
+                      ),
+                    ]),
+
+                    const SizedBox(height: 16),
+
+                    // ── Section: Privacy & Security ───────────────────
+                    _sectionLabel('Privacy & Security'),
+                    _buildCardBase([
+                      _settingsTile(
+                        context,
+                        icon: Icons.lock_rounded,
+                        iconColor: AppColors.gold,
+                        label: 'App Lock & Biometrics',
+                        subtitle: 'PIN lock and fingerprint unlock',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PrivacySettingsScreen(),
+                          ),
+                        ),
                         showDivider: false,
                       ),
                     ]),
