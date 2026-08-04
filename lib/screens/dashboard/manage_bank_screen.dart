@@ -150,7 +150,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
             Text(
               "View or update your linked account details.",
               style:
-                  TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+                  TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 14),
             ),
             const SizedBox(height: 32),
             _buildField("Account Number", _accountController,

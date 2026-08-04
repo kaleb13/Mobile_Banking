@@ -10,6 +10,7 @@ import '../../models/app_notification.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
+import '../../widgets/hold_to_refresh.dart';
 import 'manual_transaction_sheet.dart';
 
 /// A pill widget that morphs in-place into a full notifications panel.
@@ -126,66 +127,81 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
           child: child!,
         );
       },
-      child: GestureDetector(
-        key: _pillKey,
-        onTap: _openPanel,
-        child: Container(
-          height: 38,
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.08),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(
-                    Icons.notifications,
-                    color: AppColors.textSoft,
-                    size: 16,
-                  ),
-                  if (provider.unreadNotificationCount > 0)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: AppColors.gold,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  provider.unreadNotificationCount > 0
-                      ? '${provider.unreadNotificationCount} unread notification${provider.unreadNotificationCount > 1 ? 's' : ''}'
-                      : 'No new notifications',
-                  style: const TextStyle(
-                    color: AppColors.textSoft,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: -0.1,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      child: ValueListenableBuilder<RefreshState>(
+        valueListenable: refreshStateNotifier,
+        builder: (context, refreshState, _) {
+          final isRefreshing = refreshState.phase != RefreshPhase.idle;
+          return GestureDetector(
+            key: _pillKey,
+            // Disable tap-to-open while refresh is active
+            onTap: isRefreshing ? null : _openPanel,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              height: 38,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isRefreshing
+                    ? AppColors.positive.withValues(alpha: 0.07)
+                    : Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isRefreshing
+                      ? AppColors.positive.withValues(alpha: 0.22)
+                      : Colors.white.withValues(alpha: 0.08),
+                  width: 1,
                 ),
               ),
-            ],
-          ),
-        ),
+              child: RefreshAwarePillContent(
+                idleChild: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(
+                          Icons.notifications,
+                          color: AppColors.textSoft,
+                          size: 16,
+                        ),
+                        if (provider.unreadNotificationCount > 0)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: AppColors.gold,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        provider.unreadNotificationCount > 0
+                            ? '${provider.unreadNotificationCount} unread notification${provider.unreadNotificationCount > 1 ? 's' : ''}'
+                            : 'No new notifications',
+                        style: const TextStyle(
+                          color: AppColors.textSoft,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: -0.1,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

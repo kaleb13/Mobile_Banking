@@ -10,6 +10,11 @@ import 'screens/privacy/app_lock_screen.dart';
 import 'services/background_service.dart';
 import 'services/pin_service.dart';
 
+/// Global navigator key — allows non-widget code (e.g. FinanceProvider) to
+/// push routes or show modals without needing a BuildContext.
+final GlobalKey<NavigatorState> appNavigatorKey =
+    GlobalKey<NavigatorState>(debugLabel: 'appNavigatorKey');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeBackgroundService();
@@ -77,6 +82,7 @@ class _MobileBankingAppState extends State<MobileBankingApp> {
       title: 'Shibre',
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
       home: !_checkedOnStart
           ? const Scaffold(backgroundColor: AppColors.background)
           : _isLocked

@@ -1,24 +1,57 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-/// A premium pull-to-refresh widget featuring the **Shibre Logo** with smooth scale,
-/// pulsing animations, and primary green theme highlights.
+/// Shared refresh state passed from [HoldToRefresh] down to [DynamicNotificationPill]
+/// so the pill morphs in-place instead of spawning a floating overlay.
+class RefreshState {
+  /// 0.0–1.0 pull progress (dragging phase)
+  final double dragProgress;
+  /// 0–100 refresh completion percentage
+  final int refreshPercent;
+  final RefreshPhase phase;
+
+  const RefreshState({
+    this.dragProgress = 0.0,
+    this.refreshPercent = 0,
+    this.phase = RefreshPhase.idle,
+  });
+}
+
+enum RefreshPhase { idle, dragging, refreshing, done }
+
+/// Global notifier — HoldToRefresh writes, DynamicNotificationPill reads.
+final refreshStateNotifier = ValueNotifier<RefreshState>(const RefreshState());
+
+/// A custom curve for the progress bar: fast sprint 0→50%, slow crawl 50→95%
+class _EasedRefreshCurve extends Curve {
+  const _EasedRefreshCurve();
+
+  @override
+  double transformInternal(double t) {
+    if (t < 0.30) {
+      return (t / 0.30) * 0.50;
+    } else {
+      final slow = (t - 0.30) / 0.70;
+      return 0.50 + slow * 0.50 * (1 - (1 - slow) * (1 - slow));
+    }
+  }
+}
+
+/// A premium pull-to-refresh widget that morphs the [DynamicNotificationPill]
+/// in-place instead of spawning a floating pill overlay.
 class HoldToRefresh extends StatefulWidget {
   final Widget child;
   final Future<void> Function() onRefresh;
 
-  /// How far the user must pull (in pixels) before the hold timer starts.
+  /// Pull distance (px) before refresh is triggered.
   final double triggerDistance;
-
-  /// How long the user must keep holding for the circle to fill and fire.
-  final Duration holdDuration;
 
   const HoldToRefresh({
     super.key,
     required this.child,
     required this.onRefresh,
-    this.triggerDistance = 75,
-    this.holdDuration = const Duration(milliseconds: 900),
+    this.triggerDistance = 72,
   });
 
   @override
@@ -26,226 +59,454 @@ class HoldToRefresh extends StatefulWidget {
 }
 
 class _HoldToRefreshState extends State<HoldToRefresh>
-    with TickerProviderStateMixin {
-  late final AnimationController _fill = AnimationController(
+    with SingleTickerProviderStateMixin {
+  // Drives 0 → 0.95 over 6 seconds with eased curve
+  late final AnimationController _progressCtrl = AnimationController(
     vsync: this,
-    duration: widget.holdDuration,
-  )
-    ..addListener(() => setState(() {}))
-    ..addStatusListener(_onFillStatus);
+    duration: const Duration(seconds: 6),
+  )..addListener(_onProgressTick);
 
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 800),
-  )..addListener(() => setState(() {}));
-
-  late final Animation<double> _pulseScale =
-      Tween<double>(begin: 0.92, end: 1.08).animate(
-    CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+  late final Animation<double> _progressAnim = CurvedAnimation(
+    parent: _progressCtrl,
+    curve: const _EasedRefreshCurve(),
   );
 
-  double _pull = 0; // current overscroll distance at the top
+  double _pull = 0;
   bool _pointerDown = false;
-  bool _armed = false; // hold timer is running
-  bool _refreshing = false;
+  RefreshPhase _phase = RefreshPhase.idle;
+  bool _refreshTriggered = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _pulse.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _pulse.reverse();
-      } else if (status == AnimationStatus.dismissed && _refreshing) {
-        _pulse.forward();
-      }
-    });
+  void _onProgressTick() {
+    if (_phase == RefreshPhase.refreshing) {
+      final pct = (_progressAnim.value * 95).round().clamp(0, 95);
+      refreshStateNotifier.value = RefreshState(
+        phase: RefreshPhase.refreshing,
+        refreshPercent: pct,
+      );
+    }
   }
 
   @override
   void dispose() {
-    _fill.dispose();
-    _pulse.dispose();
+    _progressCtrl.removeListener(_onProgressTick);
+    _progressCtrl.dispose();
     super.dispose();
   }
 
-  void _onFillStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed && _armed && !_refreshing) {
-      _triggerRefresh();
-    }
-  }
-
   Future<void> _triggerRefresh() async {
-    setState(() => _refreshing = true);
-    _pulse.forward(from: 0);
+    if (_refreshTriggered) return;
+    _refreshTriggered = true;
+    _phase = RefreshPhase.refreshing;
+    _progressCtrl.value = 0;
+    _progressCtrl.forward();
+    refreshStateNotifier.value = const RefreshState(
+      phase: RefreshPhase.refreshing,
+      refreshPercent: 0,
+    );
+
     try {
       await widget.onRefresh();
     } finally {
+      _progressCtrl.stop();
       if (mounted) {
-        _pulse.stop();
-        _pulse.value = 0;
-        setState(() {
-          _refreshing = false;
-          _armed = false;
-        });
-        _fill.value = 0;
+        refreshStateNotifier.value = const RefreshState(
+          phase: RefreshPhase.done,
+          refreshPercent: 100,
+        );
+        await Future.delayed(const Duration(milliseconds: 1600));
+        if (mounted) {
+          refreshStateNotifier.value = const RefreshState();
+          _phase = RefreshPhase.idle;
+          _refreshTriggered = false;
+          _pull = 0;
+        }
       }
     }
-  }
-
-  void _cancel() {
-    _armed = false;
-    _fill.stop();
-    _fill.value = 0;
   }
 
   bool _onScroll(ScrollNotification n) {
     if (n.metrics.axis != Axis.vertical) return false;
+    if (_phase == RefreshPhase.refreshing || _phase == RefreshPhase.done) {
+      return false;
+    }
+
     final over = n.metrics.minScrollExtent - n.metrics.pixels;
     _pull = over > 0 ? over : 0;
 
-    if (!_refreshing) {
-      if (!_armed && _pointerDown && _pull >= widget.triggerDistance) {
-        _armed = true;
-        _fill.forward(from: 0);
-      } else if (_armed && _pull < widget.triggerDistance * 0.4) {
-        _cancel();
-      }
+    final dragProgress = (_pull / widget.triggerDistance).clamp(0.0, 1.0);
+
+    if (_pull > 4) {
+      _phase = RefreshPhase.dragging;
+      refreshStateNotifier.value = RefreshState(
+        phase: RefreshPhase.dragging,
+        dragProgress: dragProgress,
+      );
+    } else {
+      _phase = RefreshPhase.idle;
+      refreshStateNotifier.value = const RefreshState();
     }
-    setState(() {});
+
+    // Fire immediately when threshold reached while holding
+    if (_pointerDown && _pull >= widget.triggerDistance) {
+      _triggerRefresh();
+    }
+
     return false;
   }
 
   void _onRelease() {
     _pointerDown = false;
-    if (_armed &&
-        !_refreshing &&
-        _fill.status != AnimationStatus.completed) {
-      setState(_cancel);
+    if (_phase == RefreshPhase.dragging) {
+      _phase = RefreshPhase.idle;
+      _pull = 0;
+      refreshStateNotifier.value = const RefreshState();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool showIndicator = _refreshing || _armed || _pull > 4;
-    final double rawProgress = _refreshing
-        ? 1.0
-        : (_armed
-            ? _fill.value
-            : (_pull / widget.triggerDistance).clamp(0.0, 1.0));
-    final double opacity = (_refreshing || _armed)
-        ? 1.0
-        : (_pull / widget.triggerDistance).clamp(0.0, 1.0);
-
-    final String label = _refreshing
-        ? 'Updating transactions…'
-        : (_armed ? 'Keep holding…' : 'Pull to refresh');
-
-    final double logoScale = _refreshing
-        ? _pulseScale.value
-        : (0.6 + (rawProgress * 0.4));
-
     return Listener(
       onPointerDown: (_) => _pointerDown = true,
       onPointerUp: (_) => _onRelease(),
       onPointerCancel: (_) => _onRelease(),
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
-        child: Stack(
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Refresh pill content for the notification pill (used inside DynamicNotificationPill)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Drop-in widget that morphs between idle notification display and refresh states.
+/// Wrap the content of DynamicNotificationPill's idle state with this.
+class RefreshAwarePillContent extends StatefulWidget {
+  final Widget idleChild;
+
+  const RefreshAwarePillContent({super.key, required this.idleChild});
+
+  @override
+  State<RefreshAwarePillContent> createState() => _RefreshAwarePillContentState();
+}
+
+class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
+    with SingleTickerProviderStateMixin {
+  late RefreshState _state;
+  late AnimationController _morphCtrl;
+  late Animation<double> _morphAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _state = refreshStateNotifier.value;
+    refreshStateNotifier.addListener(_onStateChange);
+
+    _morphCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _morphAnim = CurvedAnimation(
+      parent: _morphCtrl,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    refreshStateNotifier.removeListener(_onStateChange);
+    _morphCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onStateChange() {
+    final newState = refreshStateNotifier.value;
+    final wasIdle = _state.phase == RefreshPhase.idle;
+    final isIdle = newState.phase == RefreshPhase.idle;
+
+    setState(() => _state = newState);
+
+    if (wasIdle && !isIdle) {
+      _morphCtrl.forward();
+    } else if (!wasIdle && isIdle) {
+      _morphCtrl.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _morphAnim,
+      builder: (context, _) {
+        final t = _morphAnim.value;
+
+        if (_state.phase == RefreshPhase.idle && t < 0.01) {
+          return widget.idleChild;
+        }
+
+        return Stack(
           children: [
-            if (showIndicator)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: IgnorePointer(
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Center(
-                        child: Opacity(
-                          opacity: opacity,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Transform.scale(
-                                scale: logoScale,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    // Outer Progress Ring / Spinner
-                                    SizedBox(
-                                      width: 48,
-                                      height: 48,
-                                      child: _refreshing
-                                          ? const CircularProgressIndicator(
-                                              strokeWidth: 2.5,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation(
-                                                      AppColors.positive),
-                                            )
-                                          : CircularProgressIndicator(
-                                              value: rawProgress,
-                                              strokeWidth: 2.5,
-                                              backgroundColor: AppColors
-                                                  .positive
-                                                  .withValues(alpha: 0.15),
-                                              valueColor:
-                                                  const AlwaysStoppedAnimation(
-                                                      AppColors.positive),
-                                            ),
-                                    ),
-                                    // Center Shibre Logo Container
-                                    Container(
-                                      width: 38,
-                                      height: 38,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surfaceCard,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: AppColors.positive
-                                              .withValues(alpha: 0.25),
-                                          width: 1,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.positive
-                                                .withValues(alpha: 0.15),
-                                            blurRadius: 10,
-                                            spreadRadius: 1,
-                                          ),
-                                        ],
-                                      ),
-                                      padding: const EdgeInsets.all(7),
-                                      child: Image.asset(
-                                        'assets/images/Shibre Icon.png',
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                label,
-                                style: const TextStyle(
-                                  color: AppColors.positive,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+            // Idle content fades out
+            if (t < 0.99)
+              Opacity(
+                opacity: (1.0 - t).clamp(0.0, 1.0),
+                child: widget.idleChild,
+              ),
+
+            // Refresh content fades in
+            if (t > 0.01)
+              Opacity(
+                opacity: t.clamp(0.0, 1.0),
+                child: _buildRefreshContent(),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRefreshContent() {
+    switch (_state.phase) {
+      case RefreshPhase.dragging:
+        return _buildDraggingContent();
+      case RefreshPhase.refreshing:
+        return _buildRefreshingContent();
+      case RefreshPhase.done:
+        return _buildDoneContent();
+      default:
+        return widget.idleChild;
+    }
+  }
+
+  // ── Dragging phase ──────────────────────────────────────────────────────────
+  Widget _buildDraggingContent() {
+    final progress = _state.dragProgress;
+    final pct = (progress * 100).round();
+    final isArmed = progress >= 0.85;
+
+    return Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.surfaceCard,
+            border: Border.all(
+              color: AppColors.positive.withValues(alpha: isArmed ? 0.55 : 0.25),
+              width: 1.2,
+            ),
+          ),
+          padding: const EdgeInsets.all(4),
+          child: Image.asset('assets/images/Shibre Icon.png', fit: BoxFit.contain),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    isArmed ? 'Release to refresh' : 'Pull to refresh',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '$pct%',
+                    style: TextStyle(
+                      color: AppColors.positive.withValues(alpha: 0.80),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              _ThinBar(value: progress, color: AppColors.positive),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Refreshing phase ────────────────────────────────────────────────────────
+  Widget _buildRefreshingContent() {
+    final pct = _state.refreshPercent;
+    final barValue = pct / 100.0;
+
+    final String label;
+    if (pct < 30) {
+      label = 'Preparing…';
+    } else if (pct < 65) {
+      label = 'Syncing…';
+    } else {
+      label = 'Updating transactions…';
+    }
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 22,
+          height: 22,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(AppColors.positive),
+              ),
+              Container(
+                width: 16,
+                height: 16,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surfaceCard,
+                ),
+                padding: const EdgeInsets.all(3),
+                child: Image.asset('assets/images/Shibre Icon.png', fit: BoxFit.contain),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Text(
+                      label,
+                      key: ValueKey(label),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 100),
+                    child: Text(
+                      '$pct%',
+                      key: ValueKey(pct),
+                      style: const TextStyle(
+                        color: AppColors.positive,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              _ThinBar(value: barValue, color: AppColors.positive),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Done phase ──────────────────────────────────────────────────────────────
+  Widget _buildDoneContent() {
+    return Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.positive.withValues(alpha: 0.18),
+            border: Border.all(
+              color: AppColors.positive.withValues(alpha: 0.45),
+              width: 1.2,
+            ),
+          ),
+          child: const Icon(Icons.check_rounded, color: AppColors.positive, size: 13),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Up to date',
+                    style: TextStyle(
+                      color: AppColors.positive,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Text(
+                    '100%',
+                    style: TextStyle(
+                      color: AppColors.positive,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              _ThinBar(value: 1.0, color: AppColors.positive),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Reusable thin progress bar ─────────────────────────────────────────────────
+
+class _ThinBar extends StatelessWidget {
+  final double value;
+  final Color color;
+
+  const _ThinBar({required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: Stack(
+        children: [
+          Container(
+            height: 3,
+            color: Colors.white.withValues(alpha: 0.10),
+          ),
+          FractionallySizedBox(
+            widthFactor: value.clamp(0.0, 1.0),
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(3),
+                gradient: LinearGradient(
+                  colors: [color, Color.lerp(color, Colors.white, 0.30)!],
                 ),
               ),
-            widget.child,
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

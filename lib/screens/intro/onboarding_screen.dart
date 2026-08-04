@@ -8,6 +8,7 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/carousel_page_indicator.dart';
+import '../../widgets/interactive_3d_badge.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -558,36 +559,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 Center(
                   child: Column(
                     children: [
-                      SizedBox(
-                        width: 160,
-                        height: 160,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            OverflowBox(
-                              maxWidth: 300,
-                              maxHeight: 300,
-                              child: Container(
-                                width: 300,
-                                height: 300,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      glowColor.withValues(alpha: 0.45),
-                                      glowColor.withValues(alpha: 0.20),
-                                      glowColor.withValues(alpha: 0.05),
-                                      Colors.transparent,
-                                    ],
-                                    stops: const [0.0, 0.35, 0.70, 1.0],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            SvgPicture.asset(badgePath, width: 140, height: 140),
-                          ],
-                        ),
+                      Interactive3DBadge(
+                        level: level,
+                        levelName: levelName,
+                        badgePath: badgePath,
+                        glowColor: glowColor,
+                        size: 160,
                       ),
                       const SizedBox(height: 24),
                       Text(

@@ -213,13 +213,28 @@ Future<void> processSmsRaw({
   required String body,
   required DateTime date,
 }) async {
+  // ── Sender Allowlist Guard (first and most important gate) ────────────────
+  // Only process messages from:
+  //   1. Known registered bank senders (CBE, Telebirr, CBE Birr, Ahadu Bank)
+  //   2. User-added custom senders from the DB
+  // Any message from a personal contact or unknown address is dropped silently here,
+  // preventing unrelated personal messages from ever appearing in notifications.
+  final bank = BankSenders.match(senderAddress);
+  if (bank == null) {
+    final senders = await DatabaseService.instance.getSenders();
+    final isCustomSender = senders.any(
+      (s) => s.senderName.toLowerCase() == senderAddress.toLowerCase(),
+    );
+    if (!isCustomSender) {
+      return; // Not a registered or custom sender — drop silently
+    }
+  }
+
   // Ignore Amharic messages completely
   if (_isAmharicMessage(body)) return;
 
   // Ignore non-English banking messages entirely
   if (!_isEnglishBankingMessage(body)) return;
-
-  final bank = BankSenders.match(senderAddress);
 
   // If the matched bank is paused, do not process the message.
   if (bank != null) {
@@ -228,6 +243,7 @@ Future<void> processSmsRaw({
       return; // Silently skip — tracking is paused for this bank
     }
   }
+
 
   // 1. Try to parse transaction if matched
   AppTransaction? tx;

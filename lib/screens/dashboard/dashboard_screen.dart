@@ -7,10 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:mobile_banking_app/providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import 'dart:math';
-import 'sender_detail_screen.dart';
 import 'transaction_detail_screen.dart';
 import 'notifications_screen.dart';
-import 'cash_wallet_detail_screen.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../widgets/hold_to_refresh.dart';
@@ -44,8 +42,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final int _bannerLoopFactor = 10000;
   bool _isOverallChartVisible = false;
   String _chartFilter = '30D';
-  int _searchLabelIndex = 0;
-  Timer? _searchLabelTimer;
   double? _touchedX;
   final GlobalKey _topSectionKey = GlobalKey();
   double? _measuredTopSectionHeight;
@@ -56,50 +52,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Start PageController at a large central value for "infinite" scroll
     _bannerController = PageController(initialPage: _bannerLoopFactor ~/ 2);
     _startAutoScroll();
-    _startSearchLabelRotation();
+    // Measure the top section height exactly once after the first frame.
+    // We do NOT call this inside build() to avoid scheduling a postFrameCallback
+    // on every single rebuild (which was causing a recursive setState loop).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateTopSectionHeight());
   }
 
-  void _startSearchLabelRotation() {
-    _searchLabelTimer?.cancel();
-    _searchLabelTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (mounted) {
-        setState(() {
-          _searchLabelIndex = (_searchLabelIndex + 1) % 4;
-        });
-      }
-    });
-  }
 
-  String _getSearchHint(FinanceProvider provider) {
-    if (_searchLabelIndex == 0) {
-      final hour = DateTime.now().hour;
-      String greeting;
-      if (hour < 12) {
-        greeting = 'Good Morning ☀️';
-      } else if (hour < 17) {
-        greeting = 'Good Afternoon 🌤️';
-      } else {
-        greeting = 'Good Evening 🌙';
-      }
-
-      if (provider.userName != null && provider.userName!.isNotEmpty) {
-        return '$greeting ${provider.userName} Have A Good Day';
-      }
-      return '$greeting Have A Good Day';
-    } else if (_searchLabelIndex == 1) {
-      return 'Search & filter all bank accounts, wallets, and cash transactions instantly';
-    } else if (_searchLabelIndex == 2) {
-      final top = provider.topExpenseHighlight;
-      if (top != null) {
-        final amt = NumberFormat('#,###').format(top['amount']);
-        return 'Highest Expense Today: ${top['reason']} — $amt ETB total';
-      }
-      return 'Track your daily spending, incomes, and cash balances seamlessly';
-    } else {
-      final fmtBalance = NumberFormat('#,##0.00').format(provider.totalBalance);
-      return 'Total Balance: $fmtBalance ETB across all your linked accounts';
-    }
-  }
 
   void _startAutoScroll() {
     _bannerTimer?.cancel();
@@ -117,7 +76,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _bannerTimer?.cancel();
-    _searchLabelTimer?.cancel();
     _bannerController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -142,18 +100,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Stack(
             children: [
-              // Top background ambient glow
+              // Top background ambient glow — uses a RadialGradient instead of
+              // ImageFilter.blur to avoid an expensive off-screen render pass.
               Positioned(
-                top: 15,
-                right: -65,
-                width: 270,
-                height: 270,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.telebirrGreen.withValues(alpha: 0.45),
+                top: -30,
+                right: -100,
+                width: 420,
+                height: 420,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.telebirrGreen.withValues(alpha: 0.50),
+                        AppColors.telebirrGreen.withValues(alpha: 0.22),
+                        AppColors.telebirrGreen.withValues(alpha: 0.06),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.38, 0.68, 1.0],
                     ),
                   ),
                 ),
@@ -316,7 +280,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMainDashboardLayout(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    _updateTopSectionHeight();
     return HoldToRefresh(
       onRefresh: () => provider.refreshData(lastDays: 7),
       child: SingleChildScrollView(
@@ -1098,341 +1061,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildCashWalletCard(BuildContext context, FinanceProvider provider) {
-    final pd = provider.selectedDate;
-    double cashNet = 0;
-    for (var tx in provider.cashTransactions) {
-      if (_isShowingTodayOnly) {
-        if (tx.date.year != pd.year ||
-            tx.date.month != pd.month ||
-            tx.date.day != pd.day) {
-          continue;
-        }
-      } else {
-        if (tx.date.year != pd.year || tx.date.month != pd.month) {
-          continue;
-        }
-      }
-      if (tx.type == 'addition') {
-        cashNet += tx.amount;
-      } else if (tx.type == 'subtraction' || tx.type == 'expense') {
-        cashNet -= tx.amount;
-      }
-    }
-    final String sign = cashNet >= 0 ? '+' : '-';
-    final fmt = NumberFormat('#,##0');
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const CashWalletDetailScreen()));
-      },
-      child: Container(
-        width: 110,
-        margin: const EdgeInsets.only(right: 10),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1), width: 1.5),
-              ),
-              child: Container(
-                margin: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(23),
-                  gradient: const SweepGradient(
-                    center: Alignment.center,
-                    transform: GradientRotation(pi / 4),
-                    colors: [
-                      AppColors.cardGrayDark,
-                      AppColors.cardGrayMid,
-                      AppColors.cardGrayDark
-                    ],
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    const Center(
-                        child: Icon(Icons.account_balance_wallet_outlined,
-                            color: Colors.white, size: 40)),
-                    Padding(
-                      padding: const EdgeInsets.all(10.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Cash Wallet',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                          Text(
-                            provider.isBalanceVisible
-                                ? NumberFormat('#,##0.00')
-                                    .format(provider.cashBalance)
-                                : '****.**',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              top: -6,
-              right: -4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '$sign${fmt.format(cashNet.abs())}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.normal),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildSendersList(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final senders = provider.senders;
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 110,
-          child: ListView.builder(
-            clipBehavior: Clip.none,
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: senders.length + 1,
-            itemBuilder: (context, index) {
-              if (index == senders.length) {
-                return _buildCashWalletCard(context, provider);
-              }
-              final sender = senders[index];
-              double senderBalance = 0;
-              final matchingTxs = provider.transactions.where(
-                  (t) => t.name == sender.senderName && t.totalBalance > 0);
-              if (matchingTxs.isNotEmpty) {
-                senderBalance = matchingTxs.first.totalBalance;
-              }
-
-              final relevantTxs = _isShowingTodayOnly
-                  ? provider.transactionsForSelectedDate
-                  : provider.transactionsForSelectedMonth;
-              double totalNet = 0;
-              for (var tx in relevantTxs) {
-                if (tx.name == sender.senderName) {
-                  bool isBounce = tx.resolvedReason?.toLowerCase() ==
-                          'bounce' ||
-                      tx.resolvedReason?.toLowerCase() == 'internal transfer';
-                  if (!isBounce) {
-                    if (tx.type == 'income') {
-                      totalNet += tx.amount;
-                    } else if (tx.type == 'expense') {
-                      totalNet -= tx.amount;
-                    }
-                  }
-                }
-              }
-              final String sign = totalNet >= 0 ? '+' : '-';
-              String subTitle = '';
-              final nameUp = sender.senderName.toUpperCase();
-              if (nameUp == 'CBE') {
-                subTitle = 'Bank';
-              } else if (nameUp == 'TELEBIRR') {
-                subTitle = 'E-money';
-              } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-                subTitle = 'Wallet';
-              } else if (nameUp.contains('AHADU')) {
-                subTitle = 'Bank';
-              }
-
-              Widget logoWidget = _getBankIconSmall(sender.senderName);
-              List<Color> cardGradient;
-              if (nameUp == 'CBE') {
-                cardGradient = [
-                  AppColors.cardBrownDark,
-                  AppColors.cardBrownMid,
-                  AppColors.cardBrownDark
-                ];
-              } else if (nameUp == 'TELEBIRR') {
-                cardGradient = [
-                  AppColors.success,
-                  AppColors.cardLime,
-                  AppColors.success
-                ];
-              } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-                cardGradient = [
-                  AppColors.cardSilver,
-                  AppColors.textPrimary,
-                  AppColors.cardSilver
-                ];
-              } else if (nameUp.contains('AHADU')) {
-                cardGradient = [
-                  AppColors.cardAhaduPink,
-                  AppColors.cardAhaduWhite,
-                  AppColors.cardAhaduPink
-                ];
-              } else {
-                cardGradient = [
-                  AppColors.bgMid,
-                  AppColors.cardGrayLight,
-                  AppColors.bgMid
-                ];
-              }
-
-              final textColor = (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR' || nameUp.contains('AHADU'))
-                  ? Colors.black
-                  : Colors.white;
-
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                              SenderDetailScreen(sender: sender)));
-                },
-                child: Container(
-                  width: 110,
-                  margin: const EdgeInsets.only(right: 10),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(26),
-                          border:
-                              Border.all(color: cardGradient.first, width: 1.5),
-                        ),
-                        child: Container(
-                          margin: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(23),
-                            gradient: SweepGradient(
-                                center: Alignment.center,
-                                transform: const GradientRotation(pi / 4),
-                                colors: cardGradient),
-                          ),
-                          child: Stack(
-                            children: [
-                              Center(child: logoWidget),
-                              Padding(
-                                padding: const EdgeInsets.all(10.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          sender.senderName,
-                                          style: TextStyle(
-                                              color: textColor,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w600),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        if (subTitle.isNotEmpty)
-                                          Text(
-                                            subTitle,
-                                            style: TextStyle(
-                                                color: textColor.withValues(
-                                                    alpha: 0.7),
-                                                fontSize: 7),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                      ],
-                                    ),
-                                    provider.isBalanceVisible
-                                        ? CurrencyTextWidget(
-                                            amount: senderBalance,
-                                            style: TextStyle(
-                                                color: textColor,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600),
-                                          )
-                                        : Text(
-                                            '****.**',
-                                            style: TextStyle(
-                                                color: textColor,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600),
-                                          ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: -6,
-                        right: -4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$sign${NumberFormat('#,##0').format(totalNet.abs())}',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.normal),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildBannerCarousel(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);

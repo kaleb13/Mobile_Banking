@@ -785,10 +785,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
   Future<int> insertLoanRepaymentRequest(LoanRepaymentRequest req) async {
     final db = await instance.database;
-    // Avoid duplicate pending requests for the same transaction
-    final existing = await db.query('loan_repayment_requests',
-        where: 'transactionId = ? AND status = ?',
-        whereArgs: [req.transactionId, 'pending']);
+    // Block re-queueing for any transactionId that is already pending OR approved.
+    // Only 'rejected' requests allow a new one to be created (user explicitly said no
+    // last time, but a new SMS might legitimately match again in rare edge cases).
+    final existing = await db.query(
+      'loan_repayment_requests',
+      where: 'transactionId = ? AND loanId = ? AND status != ?',
+      whereArgs: [req.transactionId, req.loanId, 'rejected'],
+    );
     if (existing.isNotEmpty) return existing.first['id'] as int;
     return await db.insert('loan_repayment_requests', req.toMap());
   }

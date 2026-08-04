@@ -23,8 +23,9 @@ import '../services/cbe_birr_parser.dart';
 import '../services/ahadu_parser.dart';
 import '../services/bank_senders.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:telephony/telephony.dart';
-import '../services/background_service.dart';
+
+import '../main.dart' show appNavigatorKey;
+import '../widgets/level_up_modal.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppSender> _senders = [];
@@ -87,6 +88,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   int _lastKnownTxCount = 0;
   int _lastKnownNotificationCount = 0;
   bool _isBatchProcessing = false;
+
+  /// The last level the user was shown a level-up modal for.
+  /// Persisted to SharedPreferences so re-launches don't re-show old modals.
+  int _lastSeenLevel = 1;
+
+  /// Guard: prevents firing the modal during the initial load (when we are
+  /// just restoring state, not actually advancing).
+  bool _levelDetectionReady = false;
 
   /// [initialOnboardingComplete] should be read from SharedPreferences in
   /// main() BEFORE runApp() so the first frame is always correct.
@@ -341,7 +350,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _userName = prefs.getString('user_name_v1');
     _hasPermission = await Permission.sms.status.isGranted;
     if (!_hasPermission) return;
-    _setupLiveSmsListener();
 
     final dbSenders = await DatabaseService.instance.getSenders();
     if (dbSenders.isNotEmpty) {
@@ -433,6 +441,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     _calculateStats();
     _isLoading = false;
+
+    _lastSeenLevel = userLevel;
+    await prefs.setInt('last_seen_level', _lastSeenLevel);
+    _levelDetectionReady = true;
+
     notifyListeners();
   }
 
@@ -860,6 +873,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     _isOnboardingComplete = prefs.getBool('is_onboarding_complete_v1') ?? false;
     _userName = prefs.getString('user_name_v1');
+    // Restore the level the user has already been congratulated for, so we
+    // don't re-fire the modal after a cold restart.
+    _lastSeenLevel = prefs.getInt('last_seen_level') ?? 1;
 
     if (!_isOnboardingComplete) {
       _isLoading = false;
@@ -1040,35 +1056,26 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // This catches transactions inserted by the background service isolate.
     _startLightweightDbSync();
 
+    // Sync _lastSeenLevel to current level without firing the modal —
+    // this is a restore, not a new level advance.
+    _lastSeenLevel = userLevel;
+    await SharedPreferences.getInstance().then(
+        (p) => p.setInt('last_seen_level', _lastSeenLevel));
+    _levelDetectionReady = true;
+
     notifyListeners();
   }
 
   /// Lightweight periodic DB sync.
   /// Checks SQLite counts every 4 seconds with minimal overhead to catch background insertions.
   void _startLightweightDbSync() {
-    _setupLiveSmsListener();
     _dbSyncTimer?.cancel();
-    _dbSyncTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+    _dbSyncTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
       await _checkDbForNewTransactions();
     });
   }
 
-  bool _isLiveSmsListening = false;
 
-  void _setupLiveSmsListener() {
-    if (_isLiveSmsListening || !_hasPermission) return;
-    _isLiveSmsListening = true;
-    try {
-      final Telephony telephony = Telephony.instance;
-      telephony.listenIncomingSms(
-        onNewMessage: (SmsMessage message) async {
-          await processBackgroundSms(message);
-          await _reloadFromDatabase();
-        },
-        listenInBackground: false,
-      );
-    } catch (_) {}
-  }
 
   Future<void> _checkDbForNewTransactions() async {
     if (!_hasPermission) return;
@@ -1149,9 +1156,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // The app just came to the foreground. Background service might have
-      // inserted new transactions. Load them from DB.
+      // App came to foreground — reload any transactions the background service
+      // inserted while we were away, then restart the sync timer.
       _reloadFromDatabase();
+      if (!(_dbSyncTimer?.isActive ?? false)) {
+        _startLightweightDbSync();
+      }
+    } else if (state == AppLifecycleState.paused) {
+      // App moved to background — stop the polling timer to save CPU/battery.
+      _dbSyncTimer?.cancel();
     }
   }
 
@@ -1166,6 +1179,34 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _lastKnownNotificationCount = _notifications.length;
     _calculateStats();
     notifyListeners();
+  }
+
+  /// Checks whether the user has crossed into a new level since the last time
+  /// we showed the celebration modal. If so, shows it via the global navigator.
+  Future<void> _maybeFireLevelUpModal() async {
+    if (!_levelDetectionReady || _isBatchProcessing) return;
+    final currentLevel = userLevel;
+    if (currentLevel <= _lastSeenLevel) return; // no level advance
+
+    // Level advance detected! Update persisted value IMMEDIATELY so duplicate triggers are blocked
+    _lastSeenLevel = currentLevel;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('last_seen_level', currentLevel);
+
+    // Schedule on post-frame to ensure current build/layout cycle is finished before opening modal sheet
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navContext = appNavigatorKey.currentContext;
+      if (navContext != null) {
+        showLevelUpModal(
+          navContext,
+          newLevel: currentLevel,
+          newLevelName: userLevelName,
+          newLevelDescription: userLevelDescription,
+          nextLevelName: nextLevelName,
+          nextLevelProgress: nextLevelProgress,
+        );
+      }
+    });
   }
 
   /// Re-scans SMS and ingests any new transactions.
@@ -1226,6 +1267,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await _loadNotifications();
     await _applyRecurringCashExpenses();
     _calculateStats();
+    await _maybeFireLevelUpModal();
     _lastKnownTxCount = await DatabaseService.instance.getTransactionCount();
     _lastKnownNotificationCount = await DatabaseService.instance.getNotificationCount();
     notifyListeners();
@@ -1593,6 +1635,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _percentageChangeOverall = (_netOverall / _totalBalance) * 100;
       _percentageChangeOverall = _percentageChangeOverall.clamp(-100.0, 100.0);
     }
+
+    if (!_isBatchProcessing && _levelDetectionReady) {
+      _maybeFireLevelUpModal();
+    }
   }
 
   Future<void> addSender(AppSender sender) async {
@@ -1640,10 +1686,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             reasonId: autoReason.id, reason: autoReason.name);
       }
     }
-    await DatabaseService.instance.insertTransaction(txToInsert);
+
+    final rowId = await DatabaseService.instance.insertTransaction(txToInsert);
+
+    // rowId == 0 means ConflictAlgorithm.ignore silently skipped the insert
+    // (the transaction already exists in the DB). Do NOT add it to the in-memory
+    // list a second time, and do NOT re-trigger loan-repayment detection — that
+    // would generate duplicate "approval needed" notifications on every refresh.
+    if (rowId == 0) return;
+
     _transactions.insert(0, txToInsert);
 
-    // ─ Auto-detect loan repayment if this is an income SMS ─
+    // ─ Auto-detect loan repayment if this is a NEW income SMS ─
     if (txToInsert.type == 'income') {
       await _checkAndApplyLoanRepayment(txToInsert);
     }
@@ -1655,6 +1709,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       notifyListeners();
     }
   }
+
 
   /// Update a transaction with a reusable reason [reasonId] OR a one-time [customReasonText].
   /// Pass reasonId=null and customReasonText with a value for one-time.

@@ -4,6 +4,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/custom_progress_bar.dart';
+import '../../widgets/interactive_3d_badge.dart';
+import '../../widgets/level_up_modal.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/finance_provider.dart';
 import 'saving_goals_screen.dart';
@@ -122,41 +124,22 @@ class ProfileHubScreen extends StatelessWidget {
 
                         return Column(
                           children: [
-                            // 1. Badge & Level Title
-                            SizedBox(
-                              width: 130,
-                              height: 130,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                clipBehavior: Clip.none,
-                                children: [
-                                  OverflowBox(
-                                    maxWidth: 300,
-                                    maxHeight: 300,
-                                    child: Container(
-                                      width: 300,
-                                      height: 300,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        gradient: RadialGradient(
-                                          colors: [
-                                            glowColor.withValues(alpha: 0.40),
-                                            glowColor.withValues(alpha: 0.18),
-                                            glowColor.withValues(alpha: 0.04),
-                                            Colors.transparent,
-                                          ],
-                                          stops: const [0.0, 0.35, 0.70, 1.0],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  SvgPicture.asset(
-                                    badgePath,
-                                    width: 125,
-                                    height: 125,
-                                    fit: BoxFit.contain,
-                                  ),
-                                ],
+                            // 1. Interactive 3D Level Badge (tap → level-up modal)
+                            GestureDetector(
+                              onTap: () => showLevelUpModal(
+                                context,
+                                newLevel: level,
+                                newLevelName: levelName,
+                                newLevelDescription: levelDesc,
+                                nextLevelName: nextLvName,
+                                nextLevelProgress: progress,
+                              ),
+                              child: Interactive3DBadge(
+                                level: level,
+                                levelName: levelName,
+                                badgePath: badgePath,
+                                glowColor: glowColor,
+                                size: 130,
                               ),
                             ),
                             const SizedBox(height: 10),
