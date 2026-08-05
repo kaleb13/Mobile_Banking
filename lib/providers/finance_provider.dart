@@ -1260,16 +1260,24 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
     _isBatchProcessing = false;
 
-    _transactions = await DatabaseService.instance.getTransactions();
-    _expenseDefinitions =
-        await DatabaseService.instance.getExpenseDefinitions();
-    _cashTransactions = await DatabaseService.instance.getCashTransactions();
-    await _loadNotifications();
-    await _applyRecurringCashExpenses();
+    final results = await Future.wait([
+      DatabaseService.instance.getTransactions(),
+      DatabaseService.instance.getExpenseDefinitions(),
+      DatabaseService.instance.getCashTransactions(),
+      _loadNotifications(),
+      _applyRecurringCashExpenses(),
+      DatabaseService.instance.getTransactionCount(),
+      DatabaseService.instance.getNotificationCount(),
+    ]);
+
+    _transactions = results[0] as List<AppTransaction>;
+    _expenseDefinitions = results[1] as List<ExpenseDefinition>;
+    _cashTransactions = results[2] as List<CashTransaction>;
+    _lastKnownTxCount = results[5] as int;
+    _lastKnownNotificationCount = results[6] as int;
+
     _calculateStats();
     await _maybeFireLevelUpModal();
-    _lastKnownTxCount = await DatabaseService.instance.getTransactionCount();
-    _lastKnownNotificationCount = await DatabaseService.instance.getNotificationCount();
     notifyListeners();
   }
 

@@ -140,7 +140,9 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
               curve: Curves.easeOutCubic,
               height: 38,
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: isRefreshing
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: isRefreshing
                     ? AppColors.positive.withValues(alpha: 0.07)

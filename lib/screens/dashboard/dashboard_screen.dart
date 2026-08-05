@@ -37,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
   late PageController _bannerController;
-  bool _isShowingTodayOnly = false;
+  final bool _isShowingTodayOnly = false;
   Timer? _bannerTimer;
   final int _bannerLoopFactor = 10000;
   bool _isOverallChartVisible = false;
@@ -397,7 +397,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final pctVal = _isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall;
     final bool isPositive = netVal >= 0;
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
       child: Padding(
         padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),

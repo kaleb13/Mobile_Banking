@@ -73,7 +73,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
 
     // Sheet is now FULLY dismissed (animation complete).
-    if (chosen == null || !mounted) return;
+    if (chosen == null || !context.mounted) return;
 
     setState(() {
       _selectedReason = chosen!;
@@ -82,17 +82,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     // Save the reason to the DB first.
     await _save(provider);
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     // ── Always trigger the follow-up modal for special reasons, regardless
     //    of whether the reason changed — the user explicitly hit Save.
     final chosenName = chosen!.name.trim().toLowerCase();
 
     if (chosenName == 'loan' || chosenName.contains('loan')) {
-      if (!mounted) return;
-      final loanCtx = context;
+      if (!context.mounted) return;
       final shouldCreate = await showDialog<bool>(
-        context: loanCtx,
+        context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -123,7 +122,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ],
         ),
       );
-      if (shouldCreate == true && mounted) {
+      if (shouldCreate == true && context.mounted) {
         await showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -140,11 +139,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         );
       }
     } else if (chosenName == 'internal transfer') {
-      if (!mounted) return;
-      final itCtx = context;
+      if (!context.mounted) return;
       if (widget.transaction.linkedTransactionId == null) {
         await showModalBottomSheet(
-          context: itCtx,
+          context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (_) => InternalTransferPickerSheet(
@@ -153,11 +151,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ),
         );
       } else {
-        if (!mounted) return;
-        final itCtx2 = context;
-        final messenger = ScaffoldMessenger.of(itCtx2);
+        if (!context.mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
         final shouldUnlink = await showDialog<bool>(
-          context: itCtx2,
+          context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: AppColors.surface,
             shape:
@@ -188,9 +185,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ],
           ),
         );
-        if (shouldUnlink == true && mounted) {
+        if (shouldUnlink == true && context.mounted) {
           await provider.unlinkInternalTransfer(widget.transaction.id!);
-          if (mounted) {
+          if (context.mounted) {
             messenger.showSnackBar(
               const SnackBar(
                 content: Text('Internal transfer unlinked'),

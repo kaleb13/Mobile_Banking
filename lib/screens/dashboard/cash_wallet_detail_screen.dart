@@ -600,6 +600,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                           await provider.addExpenseDefinition(newDef);
                         }
 
+                        if (!context.mounted) return;
                         Navigator.pop(context);
                       },
                       child: const Text('Deduct Cash',

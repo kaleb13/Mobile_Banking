@@ -113,7 +113,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
           phase: RefreshPhase.done,
           refreshPercent: 100,
         );
-        await Future.delayed(const Duration(milliseconds: 1600));
+        await Future.delayed(const Duration(milliseconds: 300));
         if (mounted) {
           refreshStateNotifier.value = const RefreshState();
           _phase = RefreshPhase.idle;
@@ -224,10 +224,18 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
 
   void _onStateChange() {
     final newState = refreshStateNotifier.value;
+    final phaseChanged = _state.phase != newState.phase;
+    final percentChanged = _state.refreshPercent != newState.refreshPercent;
+    final progressChanged =
+        (_state.dragProgress - newState.dragProgress).abs() >= 0.05;
     final wasIdle = _state.phase == RefreshPhase.idle;
     final isIdle = newState.phase == RefreshPhase.idle;
 
-    setState(() => _state = newState);
+    if (phaseChanged || percentChanged || progressChanged) {
+      setState(() => _state = newState);
+    } else {
+      _state = newState;
+    }
 
     if (wasIdle && !isIdle) {
       _morphCtrl.forward();
@@ -269,16 +277,78 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
   }
 
   Widget _buildRefreshContent() {
+    final double fillRatio;
     switch (_state.phase) {
       case RefreshPhase.dragging:
-        return _buildDraggingContent();
+        fillRatio = _state.dragProgress.clamp(0.0, 1.0);
+        break;
       case RefreshPhase.refreshing:
-        return _buildRefreshingContent();
+        fillRatio = (_state.refreshPercent / 100.0).clamp(0.0, 1.0);
+        break;
       case RefreshPhase.done:
-        return _buildDoneContent();
+        fillRatio = 1.0;
+        break;
       default:
-        return widget.idleChild;
+        fillRatio = 0.0;
     }
+
+    final Widget innerContent;
+    switch (_state.phase) {
+      case RefreshPhase.dragging:
+        innerContent = _buildDraggingContent();
+        break;
+      case RefreshPhase.refreshing:
+        innerContent = _buildRefreshingContent();
+        break;
+      case RefreshPhase.done:
+        innerContent = _buildDoneContent();
+        break;
+      default:
+        innerContent = widget.idleChild;
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      height: double.infinity,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            // The whole section fills as a progress bar
+            if (fillRatio > 0)
+              Positioned.fill(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: fillRatio,
+                    heightFactor: 1.0,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.positive.withValues(alpha: 0.30),
+                            AppColors.positive.withValues(alpha: 0.55),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Centered content (Logo, text, percentage in the center of section)
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Center(
+                  child: innerContent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Dragging phase ──────────────────────────────────────────────────────────
@@ -288,6 +358,8 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
     final isArmed = progress >= 0.85;
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
           width: 22,
@@ -296,43 +368,29 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
             shape: BoxShape.circle,
             color: AppColors.surfaceCard,
             border: Border.all(
-              color: AppColors.positive.withValues(alpha: isArmed ? 0.55 : 0.25),
+              color: AppColors.positive.withValues(alpha: isArmed ? 0.75 : 0.35),
               width: 1.2,
             ),
           ),
           padding: const EdgeInsets.all(4),
           child: Image.asset('assets/images/Shibre Icon.png', fit: BoxFit.contain),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    isArmed ? 'Release to refresh' : 'Pull to refresh',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.82),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '$pct%',
-                    style: TextStyle(
-                      color: AppColors.positive.withValues(alpha: 0.80),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 3),
-              _ThinBar(value: progress, color: AppColors.positive),
-            ],
+        const SizedBox(width: 8),
+        Text(
+          isArmed ? 'Release to refresh' : 'Pull to refresh',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.92),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$pct%',
+          style: const TextStyle(
+            color: AppColors.positive,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -342,7 +400,6 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
   // ── Refreshing phase ────────────────────────────────────────────────────────
   Widget _buildRefreshingContent() {
     final pct = _state.refreshPercent;
-    final barValue = pct / 100.0;
 
     final String label;
     if (pct < 30) {
@@ -354,6 +411,8 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
     }
 
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: 22,
@@ -378,44 +437,30 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
             ],
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 250),
-                    child: Text(
-                      label,
-                      key: ValueKey(label),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 100),
-                    child: Text(
-                      '$pct%',
-                      key: ValueKey(pct),
-                      style: const TextStyle(
-                        color: AppColors.positive,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 3),
-              _ThinBar(value: barValue, color: AppColors.positive),
-            ],
+        const SizedBox(width: 8),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            label,
+            key: ValueKey(label),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.92),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 100),
+          child: Text(
+            '$pct%',
+            key: ValueKey(pct),
+            style: const TextStyle(
+              color: AppColors.positive,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ],
@@ -425,89 +470,41 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
   // ── Done phase ──────────────────────────────────────────────────────────────
   Widget _buildDoneContent() {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
           width: 22,
           height: 22,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.positive.withValues(alpha: 0.18),
+            color: AppColors.positive.withValues(alpha: 0.25),
             border: Border.all(
-              color: AppColors.positive.withValues(alpha: 0.45),
+              color: AppColors.positive,
               width: 1.2,
             ),
           ),
           child: const Icon(Icons.check_rounded, color: AppColors.positive, size: 13),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Up to date',
-                    style: TextStyle(
-                      color: AppColors.positive,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Text(
-                    '100%',
-                    style: TextStyle(
-                      color: AppColors.positive,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 3),
-              _ThinBar(value: 1.0, color: AppColors.positive),
-            ],
+        const SizedBox(width: 8),
+        const Text(
+          'Up to date',
+          style: TextStyle(
+            color: AppColors.positive,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 6),
+        const Text(
+          '100%',
+          style: TextStyle(
+            color: AppColors.positive,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
-    );
-  }
-}
-
-// ── Reusable thin progress bar ─────────────────────────────────────────────────
-
-class _ThinBar extends StatelessWidget {
-  final double value;
-  final Color color;
-
-  const _ThinBar({required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(3),
-      child: Stack(
-        children: [
-          Container(
-            height: 3,
-            color: Colors.white.withValues(alpha: 0.10),
-          ),
-          FractionallySizedBox(
-            widthFactor: value.clamp(0.0, 1.0),
-            child: Container(
-              height: 3,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(3),
-                gradient: LinearGradient(
-                  colors: [color, Color.lerp(color, Colors.white, 0.30)!],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
