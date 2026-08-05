@@ -38,4 +38,30 @@ class BankSenders {
     if (up.contains('AHADU')) return 'Ahadu Bank';
     return null;
   }
+
+  /// Returns true if [body] is a password, PIN, authentication failure, or security
+  /// verification message (e.g. "Sorry, your PIN or password is incorrect", OTP codes,
+  /// PIN reset notifications) that should be auto-ignored and never saved into Shibre.
+  static bool isSecurityOrAuthMessage(String? body) {
+    if (body == null || body.trim().isEmpty) return false;
+    final lower = body.toLowerCase();
+    return lower.contains('password') ||
+        lower.contains('pin or password') ||
+        lower.contains('incorrect pin') ||
+        lower.contains('incorrect password') ||
+        lower.contains('invalid pin') ||
+        lower.contains('invalid password') ||
+        lower.contains('wrong pin') ||
+        lower.contains('wrong password') ||
+        lower.contains('pin is incorrect') ||
+        lower.contains('password is incorrect') ||
+        lower.contains('one-time password') ||
+        lower.contains('verification code') ||
+        lower.contains('otp code') ||
+        lower.contains('pin reset') ||
+        lower.contains('password reset') ||
+        lower.contains('access code') ||
+        lower.contains('security code') ||
+        lower.contains('auth code');
+  }
 }

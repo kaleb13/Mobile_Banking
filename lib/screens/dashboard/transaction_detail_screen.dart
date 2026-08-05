@@ -933,7 +933,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       bankName = 'Ahadu Bank';
       bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
-      iconWidget = Image.asset('assets/images/CBE logo 1.png', width: 24, height: 24);
+      iconWidget = Image.asset('assets/images/CBE logo 1.webp', width: 24, height: 24);
       bankName = 'Commercial Bank of Ethiopia';
       bg = AppColors.slackPurple.withValues(alpha: 0.15);
     } else if (combined.contains('CASH')) {

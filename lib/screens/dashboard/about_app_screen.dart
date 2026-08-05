@@ -73,7 +73,7 @@ class AboutAppScreen extends StatelessWidget {
             ),
             child: const CircleAvatar(
               radius: 30,
-              backgroundImage: AssetImage('assets/images/developer.jpg'),
+              backgroundImage: AssetImage('assets/images/developer.webp'),
             ),
           ),
           const SizedBox(width: 16),

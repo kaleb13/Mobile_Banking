@@ -1,3 +1,4 @@
+import 'bank_senders.dart';
 import '../models/transaction.dart';
 import 'package:intl/intl.dart';
 
@@ -51,6 +52,7 @@ class TelebirrParser {
 
   /// Returns true if [message] looks like a Telebirr credit DISBURSEMENT SMS.
   static bool isCreditDisbursement(String message) {
+    if (BankSenders.isSecurityOrAuthMessage(message)) return false;
     final lower = message.toLowerCase();
     return lower.contains('credit request') &&
         lower.contains('contract number') &&
@@ -59,6 +61,7 @@ class TelebirrParser {
 
   /// Returns true if [message] looks like a Telebirr credit REPAYMENT SMS.
   static bool isCreditRepayment(String message) {
+    if (BankSenders.isSecurityOrAuthMessage(message)) return false;
     final lower = message.toLowerCase();
     return lower.contains('outstanding credit amount') &&
         lower.contains('paid successfully') &&
@@ -169,6 +172,7 @@ class TelebirrParser {
 
   static AppTransaction? parse(String message, DateTime fallbackDate) {
     if (message.isEmpty) return null;
+    if (BankSenders.isSecurityOrAuthMessage(message)) return null;
 
     final lowerMsg = message.toLowerCase();
 

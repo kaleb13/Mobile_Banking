@@ -213,7 +213,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   child: Opacity(
                     opacity: 0.35,
                     child: Image.asset(
-                      'assets/images/launcher_foreground.png',
+                      'assets/images/launcher_foreground.webp',
                       width: 680,
                     ),
                   ),

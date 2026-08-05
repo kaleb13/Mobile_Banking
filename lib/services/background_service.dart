@@ -233,6 +233,9 @@ Future<void> processSmsRaw({
   // Ignore Amharic messages completely
   if (_isAmharicMessage(body)) return;
 
+  // Ignore password, PIN, OTP, and security authentication messages completely
+  if (BankSenders.isSecurityOrAuthMessage(body)) return;
+
   // Ignore non-English banking messages entirely
   if (!_isEnglishBankingMessage(body)) return;
 

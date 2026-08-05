@@ -438,7 +438,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     final nameUp = tx.name.toUpperCase();
     Widget? img;
     if (nameUp == 'CBE') {
-      img = Image.asset('assets/images/CBE logo 1.png', width: 22, height: 22);
+      img = Image.asset('assets/images/CBE logo 1.webp', width: 22, height: 22);
     } else if (nameUp == 'TELEBIRR') {
       img =
           Image.asset('assets/images/Telebirr Logo.png', width: 22, height: 22);

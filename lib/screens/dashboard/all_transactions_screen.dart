@@ -735,7 +735,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     Color bgColor = AppColors.surfaceElevated;
 
     if (nameUp == 'CBE') {
-      img = Image.asset('assets/images/CBE logo 1.png',
+      img = Image.asset('assets/images/CBE logo 1.webp',
           width: 20, height: 20, fit: BoxFit.contain);
       bgColor = const Color(0xFF6B4C9A).withValues(alpha: 0.20);
     } else if (nameUp == 'TELEBIRR') {

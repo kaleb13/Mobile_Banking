@@ -238,7 +238,7 @@ class _WalletCard extends StatelessWidget {
     String imagePath = '';
 
     if (nameUp == 'CBE') {
-      imagePath = 'assets/images/CBE logo 1.png';
+      imagePath = 'assets/images/CBE logo 1.webp';
     } else if (nameUp == 'TELEBIRR') {
       imagePath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {

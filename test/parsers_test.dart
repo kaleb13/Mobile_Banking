@@ -74,5 +74,30 @@ void main() {
       expect(tx.type, equals('income'));
       expect(tx.name, equals('Ahadu Bank'));
     });
+
+    test('parses debit transaction with receipt link ref and date', () {
+      const sms = '''
+Dear Customer,
+A debit of ETB 670.00 from your account XXXXXXXXX0101 on 05-08-2026 . Your Current balance is ETB 17,332.54  (A transaction fee with 15% VAT is applied).
+
+Ahadu Bank
+https://receipt.ahadubank.com/digitalreceipt?es=1008700007948/05-AUG-26/5509
+For Fayda ID Update
+https://verifayda.ahadubank.com/
+''';
+      final fallback = DateTime(2026, 8, 5, 13, 23, 10);
+      final tx = AhaduParser.parse(sms, fallback);
+
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(670.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.totalBalance, equals(17332.54));
+      expect(tx.id, equals('ahadu_ref_1008700007948'));
+      expect(tx.date.year, equals(2026));
+      expect(tx.date.month, equals(8));
+      expect(tx.date.day, equals(5));
+      expect(tx.date.hour, equals(13));
+      expect(tx.date.minute, equals(23));
+    });
   });
 }

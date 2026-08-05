@@ -1311,7 +1311,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           continue;
         }
 
-        // 2. Ignore non-English banking messages
+        // 2. Ignore password, PIN, OTP, and security authentication messages
+        if (BankSenders.isSecurityOrAuthMessage(n.body)) {
+          idsToDelete.add(n.id);
+          continue;
+        }
+
+        // 3. Ignore non-English banking messages
         if (!_isEnglishBankingMessage(n.body)) {
           idsToDelete.add(n.id);
           continue;
@@ -1449,8 +1455,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         sender.startsWith('⚠️') ||
         sender.contains('✅');
 
-    // ── External SMS: ignore Amharic messages & non-financial messages ─────
+    // ── External SMS: ignore Amharic messages, security auth & non-financial messages ─────
     if (!isSystemAlert && _isAmharicMessage(body)) return;
+    if (!isSystemAlert && BankSenders.isSecurityOrAuthMessage(body)) return;
     if (!isSystemAlert && !_isEnglishBankingMessage(body)) return;
 
     // Do NOT add if message is already registered as a transaction in the app

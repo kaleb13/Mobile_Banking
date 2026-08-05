@@ -143,73 +143,75 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: GestureDetector(
-        onHorizontalDragStart: _onHorizontalDragStart,
-        onHorizontalDragUpdate: _onHorizontalDragUpdate,
-        onHorizontalDragEnd: _onHorizontalDragEnd,
-        onVerticalDragStart: _onVerticalDragStart,
-        onVerticalDragUpdate: _onVerticalDragUpdate,
-        onVerticalDragEnd: _onVerticalDragEnd,
-        onTap: _onTap,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              // 1. Ambient Level Radial Glow — static, lives outside AnimatedBuilder
-              //    so it is never rebuilt during drag/animation frames.
-              OverflowBox(
-                maxWidth: widget.size * 2.2,
-                maxHeight: widget.size * 2.2,
-                child: Container(
-                  width: widget.size * 2.2,
-                  height: widget.size * 2.2,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        widget.glowColor.withValues(alpha: 0.40),
-                        widget.glowColor.withValues(alpha: 0.18),
-                        widget.glowColor.withValues(alpha: 0.04),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.35, 0.70, 1.0],
+    return RepaintBoundary(
+      child: Center(
+        child: GestureDetector(
+          onHorizontalDragStart: _onHorizontalDragStart,
+          onHorizontalDragUpdate: _onHorizontalDragUpdate,
+          onHorizontalDragEnd: _onHorizontalDragEnd,
+          onVerticalDragStart: _onVerticalDragStart,
+          onVerticalDragUpdate: _onVerticalDragUpdate,
+          onVerticalDragEnd: _onVerticalDragEnd,
+          onTap: _onTap,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: widget.size,
+            height: widget.size,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                // 1. Ambient Level Radial Glow — static, lives outside AnimatedBuilder
+                //    so it is never rebuilt during drag/animation frames.
+                OverflowBox(
+                  maxWidth: widget.size * 2.2,
+                  maxHeight: widget.size * 2.2,
+                  child: Container(
+                    width: widget.size * 2.2,
+                    height: widget.size * 2.2,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          widget.glowColor.withValues(alpha: 0.40),
+                          widget.glowColor.withValues(alpha: 0.18),
+                          widget.glowColor.withValues(alpha: 0.04),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.35, 0.70, 1.0],
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              // 2. 3D Perspective Matrix — rebuilt only when angles change.
-              AnimatedBuilder(
-                animation:
-                    Listenable.merge([_angleYNotifier, _angleXNotifier]),
-                builder: (context, _) {
-                  final angleY = _angleYNotifier.value;
-                  final angleX = _angleXNotifier.value;
+                // 2. 3D Perspective Matrix — rebuilt only when angles change.
+                AnimatedBuilder(
+                  animation:
+                      Listenable.merge([_angleYNotifier, _angleXNotifier]),
+                  builder: (context, _) {
+                    final angleY = _angleYNotifier.value;
+                    final angleX = _angleXNotifier.value;
 
-                  // Normalize Y angle to [0, 2*pi)
-                  final normalizedY =
-                      (angleY % (2 * math.pi) + 2 * math.pi) % (2 * math.pi);
-                  final isBackFacing = normalizedY > math.pi / 2 &&
-                      normalizedY < 3 * math.pi / 2;
+                    // Normalize Y angle to [0, 2*pi)
+                    final normalizedY =
+                        (angleY % (2 * math.pi) + 2 * math.pi) % (2 * math.pi);
+                    final isBackFacing = normalizedY > math.pi / 2 &&
+                        normalizedY < 3 * math.pi / 2;
 
-                  return Transform(
-                    transform: Matrix4.identity()
-                      ..setEntry(3, 2, 0.0015) // Perspective depth
-                      ..rotateX(angleX)
-                      ..rotateY(angleY),
-                    alignment: Alignment.center,
-                    child: !isBackFacing
-                        ? _buildFrontBadge()
-                        : _buildExactSilverBackBadge(angleY, angleX),
-                  );
-                },
-              ),
-            ],
+                    return Transform(
+                      transform: Matrix4.identity()
+                        ..setEntry(3, 2, 0.0015) // Perspective depth
+                        ..rotateX(angleX)
+                        ..rotateY(angleY),
+                      alignment: Alignment.center,
+                      child: !isBackFacing
+                          ? _buildFrontBadge()
+                          : _buildExactSilverBackBadge(angleY, angleX),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1786,7 +1786,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Color bgColor = AppColors.lightGreyBackground;
 
     if (nameUp == 'CBE') {
-      img = Image.asset('assets/images/CBE logo 1.png', width: 22, height: 22);
+      img = Image.asset('assets/images/CBE logo 1.webp', width: 22, height: 22);
       bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
       img = Image.asset(
@@ -1828,7 +1828,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final nameUp = name.toUpperCase();
     if (nameUp == 'CBE') {
       return Image.asset(
-        'assets/images/CBE logo 1.png',
+        'assets/images/CBE logo 1.webp',
         width: size,
         height: size,
         fit: BoxFit.contain,

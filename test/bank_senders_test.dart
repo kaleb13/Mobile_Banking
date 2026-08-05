@@ -23,5 +23,21 @@ void main() {
       expect(BankSenders.match(''), isNull);
       expect(BankSenders.match(null), isNull);
     });
+
+    test('identifies password, PIN, and auth error messages correctly', () {
+      const msg = '''
+Sorry, your PIN or password is incorrect. please check and try again.
+For any support and information related to telebirr service 
+Send SMS to 126 or Contact us via
+Telegram: https://t.me/telebirr 
+Facebook: https://facebook.com/telebirr or
+Visit our website :https://www.ethiotelecom.et/telebirr/  
+Thank you for using telebirr
+Ethio telecom
+''';
+      expect(BankSenders.isSecurityOrAuthMessage(msg), isTrue);
+      expect(BankSenders.isSecurityOrAuthMessage('Your OTP code is 123456'), isTrue);
+      expect(BankSenders.isSecurityOrAuthMessage('You have received ETB 500.00'), isFalse);
+    });
   });
 }

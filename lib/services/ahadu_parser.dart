@@ -138,7 +138,7 @@ class AhaduParser {
 
     // 4. Extract Reference/Transaction ID — used as the deduplication key.
     // Ahadu format: "with reference number w2b17840409529101436"
-    // Fallback: alphanumeric token near 'reference' or 'ref no'
+    // Fallback: digital receipt URL parameter "digitalreceipt?es=1008700007948/05-AUG-26/5509"
     String? refId;
     final refMatch = RegExp(
             r'(?:reference\s+number|ref(?:erence)?\s*no\.?|ref\.?)\s*([A-Za-z0-9]+)',
@@ -146,6 +146,13 @@ class AhaduParser {
         .firstMatch(message);
     if (refMatch != null) {
       refId = refMatch.group(1)?.trim();
+    } else {
+      final urlRefMatch = RegExp(
+              r'digitalreceipt\?es=([A-Za-z0-9]+)', caseSensitive: false)
+          .firstMatch(message);
+      if (urlRefMatch != null) {
+        refId = urlRefMatch.group(1)?.trim();
+      }
     }
 
     // Build unique transaction ID: prefer reference number, fall back to
@@ -175,6 +182,7 @@ class AhaduParser {
 
   static DateTime _parseAhaduDate(String dateStr, DateTime fallback) {
     try {
+      DateTime parsed;
       if (dateStr.contains('-')) {
         final parts = dateStr.split('-');
         if (parts.length == 3) {
@@ -183,18 +191,25 @@ class AhaduParser {
           var year = parts[2].trim();
           if (year.length == 2) year = '20$year';
 
-          // Detect numeric month (e.g. 02-07-2026 → DD-MM-YYYY)
+          // Detect numeric month (e.g. 05-08-2026 → DD-MM-YYYY)
           final monthAsInt = int.tryParse(rawMonth);
           if (monthAsInt != null) {
-            // All three parts are numeric: DD-MM-YYYY
-            return DateFormat('dd-MM-yyyy')
+            parsed = DateFormat('dd-MM-yyyy')
                 .parse('$day-${rawMonth.padLeft(2,'0')}-$year');
           } else {
             // Month is a word abbreviation: DD-MMM-YY(YY)
             final month = rawMonth[0].toUpperCase() +
                 rawMonth.substring(1).toLowerCase();
-            return DateFormat('dd-MMM-yyyy').parse('$day-$month-$year');
+            parsed = DateFormat('dd-MMM-yyyy').parse('$day-$month-$year');
           }
+          return DateTime(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            fallback.hour,
+            fallback.minute,
+            fallback.second,
+          );
         }
       } else if (dateStr.contains('/')) {
         final parts = dateStr.split('/');
@@ -203,7 +218,15 @@ class AhaduParser {
           final month = parts[1].padLeft(2, '0');
           var year = parts[2];
           if (year.length == 2) year = '20$year';
-          return DateFormat('dd/MM/yyyy').parse('$day/$month/$year');
+          parsed = DateFormat('dd/MM/yyyy').parse('$day/$month/$year');
+          return DateTime(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            fallback.hour,
+            fallback.minute,
+            fallback.second,
+          );
         }
       }
     } catch (_) {}

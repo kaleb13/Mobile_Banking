@@ -19,7 +19,14 @@ class DatabaseService {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('finance_v3.db');
+    await _createIndexes(_database!);
     return _database!;
+  }
+
+  Future<void> _createIndexes(Database db) async {
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions(type)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(date)');
   }
 
   Future<Database> _initDB(String filePath) async {
