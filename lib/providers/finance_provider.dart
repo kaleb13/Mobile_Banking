@@ -646,8 +646,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   // ── Dashboard Banner Helpers ──────────────────
-  Map<String, dynamic>? get mostExpenseToday {
-    final now = DateTime.now();
+
+  Map<String, dynamic>? _cachedMostExpenseToday;
+  Map<String, dynamic>? _cachedMostExpenseThisMonth;
+  Map<String, dynamic>? _cachedTopExpenseHighlight;
+
+  Map<String, dynamic>? get mostExpenseToday => _cachedMostExpenseToday;
+  Map<String, dynamic>? get mostExpenseThisMonth => _cachedMostExpenseThisMonth;
+  Map<String, dynamic>? get topExpenseHighlight => _cachedTopExpenseHighlight;
+
+
+  Map<String, dynamic>? _computeMostExpenseToday(DateTime now) {
     final todayExpenses = _transactions
         .where((tx) =>
             tx.type == 'expense' &&
@@ -678,15 +687,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     return {'reason': topReason, 'amount': maxAmount};
   }
 
-  Map<String, dynamic>? get mostExpenseThisMonth {
-    final now = DateTime.now();
-    final monthExpenses = _transactions
-        .where((tx) =>
-            tx.type == 'expense' &&
-            isDateInMonthOf(tx.date, now) &&
-            tx.resolvedReason?.toLowerCase() != 'bounce' &&
-            tx.resolvedReason?.toLowerCase() != 'internal transfer')
-        .toList();
+  Map<String, dynamic>? _computeMostExpenseThisMonth(DateTime periodStart, DateTime periodEnd) {
+    final monthExpenses = _transactions.where((tx) {
+      if (tx.type != 'expense') return false;
+      if (tx.resolvedReason?.toLowerCase() == 'bounce' ||
+          tx.resolvedReason?.toLowerCase() == 'internal transfer') {
+        return false;
+      }
+
+      final strippedDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      return !strippedDate.isBefore(periodStart) && strippedDate.isBefore(periodEnd);
+    }).toList();
 
     if (monthExpenses.isEmpty) return null;
 
@@ -708,7 +719,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     return {'reason': topReason, 'amount': maxAmount};
   }
 
-  Map<String, dynamic>? get topExpenseHighlight {
+  Map<String, dynamic>? _computeTopExpenseHighlight() {
     if (_transactions.isEmpty) return null;
 
     final expenses = _transactions
@@ -738,6 +749,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   AppSender? get mostAffectedAccount {
+
     if (_senders.isEmpty) return null;
 
     // Logic: Account with highest transaction count or latest transaction
@@ -1534,11 +1546,33 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     double cashInflows = 0;
     double cashOutflows = 0;
 
+    // Cache paused banks logic
+    final Set<String> pausedBanksUpper = _pausedBanks.map((b) => b.toUpperCase()).toSet();
+
+    // Cache current month period
+
+    DateTime periodStart;
+    DateTime periodEnd;
+    if (_customMonthAnchorDate == null) {
+      periodStart = DateTime(now.year, now.month, 1);
+      int nextMonth = now.month == 12 ? 1 : now.month + 1;
+      int nextYear = now.month == 12 ? now.year + 1 : now.year;
+      periodEnd = DateTime(nextYear, nextMonth, 1);
+    } else {
+      final strippedAnchor = DateTime(_customMonthAnchorDate!.year, _customMonthAnchorDate!.month, _customMonthAnchorDate!.day);
+      final strippedNow = DateTime(now.year, now.month, now.day);
+      final int daysSince = strippedNow.difference(strippedAnchor).inDays;
+      final int periodIndex = (daysSince / 30).floor();
+      periodStart = strippedAnchor.add(Duration(days: periodIndex * 30));
+      periodEnd = periodStart.add(const Duration(days: 30));
+    }
+
+
     // Single pass through transactions to collect all necessary data
     for (var tx in _transactions) {
       // Skip transactions from paused banks entirely so they don't affect
       // balance, income/expense totals, or any other aggregation.
-      if (_pausedBanks.any((b) => b.toUpperCase() == tx.name.toUpperCase())) {
+      if (pausedBanksUpper.contains(tx.name.toUpperCase())) {
         continue;
       }
 
@@ -1562,16 +1596,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
               tx.date.month == _selectedDate.month &&
               tx.date.day == _selectedDate.day);
 
-      bool isThisMonth = isDateInMonthOf(tx.date, now);
+      final strippedDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      bool isThisMonth = !strippedDate.isBefore(periodStart) && strippedDate.isBefore(periodEnd);
 
       // 3. Category & Cash Logic
-      bool isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
-          tx.resolvedReason?.toLowerCase() == 'internal transfer';
+      final lowerResolvedReason = tx.resolvedReason?.toLowerCase();
+      bool isBounce = lowerResolvedReason == 'bounce' || lowerResolvedReason == 'internal transfer';
 
-      bool isCashTransfer = tx.reason?.toLowerCase() == 'cash' ||
-          tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash';
-
+      final lowerReason = tx.reason?.toLowerCase();
+      final lowerCustomReason = tx.customReasonText?.toLowerCase();
+      bool isCashTransfer = lowerReason == 'cash' ||
+          lowerCustomReason == 'cash' ||
+          lowerResolvedReason == 'cash';
       if (isCashTransfer) {
         // ATM withdrawal (bank expense) is a CASH INFLOW to the wallet.
         // Cash deposit (bank income) is a CASH OUTFLOW from the wallet.
@@ -1650,6 +1686,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _percentageChangeOverall = (_netOverall / _totalBalance) * 100;
       _percentageChangeOverall = _percentageChangeOverall.clamp(-100.0, 100.0);
     }
+
+
+    // Recompute cached highlights
+    _cachedMostExpenseToday = _computeMostExpenseToday(now);
+    _cachedMostExpenseThisMonth = _computeMostExpenseThisMonth(periodStart, periodEnd);
+    _cachedTopExpenseHighlight = _computeTopExpenseHighlight();
 
     if (!_isBatchProcessing && _levelDetectionReady) {
       _maybeFireLevelUpModal();
