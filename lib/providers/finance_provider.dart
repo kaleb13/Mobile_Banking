@@ -23,6 +23,8 @@ import '../services/cbe_birr_parser.dart';
 import '../services/ahadu_parser.dart';
 import '../services/bank_senders.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:telephony/telephony.dart';
+import '../services/background_service.dart';
 
 import '../main.dart' show appNavigatorKey;
 import '../widgets/level_up_modal.dart';
@@ -66,6 +68,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   DateTime? _customMonthAnchorDate;
   AppCurrency _currentCurrency = AppCurrency.defaultCurrency;
 
+  Map<String, dynamic>? _cachedMostExpenseToday;
+  Map<String, dynamic>? _cachedMostExpenseThisMonth;
+  Map<String, dynamic>? _cachedTopExpenseHighlight;
+
   AppCurrency get currentCurrency => _currentCurrency;
 
   Future<void> setCurrency(String code) async {
@@ -88,6 +94,24 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   int _lastKnownTxCount = 0;
   int _lastKnownNotificationCount = 0;
   bool _isBatchProcessing = false;
+
+  bool _isForegroundListenerInitialized = false;
+
+  void _initForegroundSmsListener() {
+    if (_isForegroundListenerInitialized) return;
+    _isForegroundListenerInitialized = true;
+    try {
+      final Telephony telephony = Telephony.instance;
+      telephony.listenIncomingSms(
+        onNewMessage: (SmsMessage message) async {
+          await processBackgroundSms(message);
+          await _reloadFromDatabase();
+        },
+        onBackgroundMessage: backgroundMessageHandler,
+        listenInBackground: true,
+      );
+    } catch (_) {}
+  }
 
   /// The last level the user was shown a level-up modal for.
   /// Persisted to SharedPreferences so re-launches don't re-show old modals.
@@ -350,6 +374,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _userName = prefs.getString('user_name_v1');
     _hasPermission = await Permission.sms.status.isGranted;
     if (!_hasPermission) return;
+    _initForegroundSmsListener();
 
     final dbSenders = await DatabaseService.instance.getSenders();
     if (dbSenders.isNotEmpty) {
@@ -646,96 +671,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   // ── Dashboard Banner Helpers ──────────────────
-  Map<String, dynamic>? get mostExpenseToday {
-    final now = DateTime.now();
-    final todayExpenses = _transactions
-        .where((tx) =>
-            tx.type == 'expense' &&
-            tx.date.year == now.year &&
-            tx.date.month == now.month &&
-            tx.date.day == now.day &&
-            tx.resolvedReason?.toLowerCase() != 'bounce' &&
-            tx.resolvedReason?.toLowerCase() != 'internal transfer')
-        .toList();
-
-    if (todayExpenses.isEmpty) return null;
-
-    Map<String, double> reasonSubtotals = {};
-    for (var tx in todayExpenses) {
-      final key = tx.resolvedReason ?? 'Other';
-      reasonSubtotals[key] = (reasonSubtotals[key] ?? 0) + tx.amount;
-    }
-
-    String topReason = reasonSubtotals.keys.first;
-    double maxAmount = reasonSubtotals[topReason]!;
-    reasonSubtotals.forEach((key, value) {
-      if (value > maxAmount) {
-        maxAmount = value;
-        topReason = key;
-      }
-    });
-
-    return {'reason': topReason, 'amount': maxAmount};
-  }
-
-  Map<String, dynamic>? get mostExpenseThisMonth {
-    final now = DateTime.now();
-    final monthExpenses = _transactions
-        .where((tx) =>
-            tx.type == 'expense' &&
-            isDateInMonthOf(tx.date, now) &&
-            tx.resolvedReason?.toLowerCase() != 'bounce' &&
-            tx.resolvedReason?.toLowerCase() != 'internal transfer')
-        .toList();
-
-    if (monthExpenses.isEmpty) return null;
-
-    Map<String, double> reasonSubtotals = {};
-    for (var tx in monthExpenses) {
-      final key = tx.resolvedReason ?? 'Other';
-      reasonSubtotals[key] = (reasonSubtotals[key] ?? 0) + tx.amount;
-    }
-
-    String topReason = reasonSubtotals.keys.first;
-    double maxAmount = reasonSubtotals[topReason]!;
-    reasonSubtotals.forEach((key, value) {
-      if (value > maxAmount) {
-        maxAmount = value;
-        topReason = key;
-      }
-    });
-
-    return {'reason': topReason, 'amount': maxAmount};
-  }
-
-  Map<String, dynamic>? get topExpenseHighlight {
-    if (_transactions.isEmpty) return null;
-
-    final expenses = _transactions
-        .where((t) =>
-            t.type == 'expense' &&
-            t.resolvedReason?.toLowerCase() != 'bounce' &&
-            t.resolvedReason?.toLowerCase() != 'internal transfer')
-        .toList();
-    if (expenses.isEmpty) return null;
-
-    Map<String, double> totals = {};
-    for (var tx in expenses) {
-      final key = tx.resolvedReason ?? 'Other';
-      totals[key] = (totals[key] ?? 0) + tx.amount;
-    }
-
-    String topKey = totals.keys.first;
-    double maxVal = totals[topKey]!;
-    totals.forEach((k, v) {
-      if (v > maxVal) {
-        maxVal = v;
-        topKey = k;
-      }
-    });
-
-    return {'reason': topKey, 'amount': maxVal};
-  }
+  Map<String, dynamic>? get mostExpenseToday => _cachedMostExpenseToday;
+  Map<String, dynamic>? get mostExpenseThisMonth => _cachedMostExpenseThisMonth;
+  Map<String, dynamic>? get topExpenseHighlight => _cachedTopExpenseHighlight;
 
   AppSender? get mostAffectedAccount {
     if (_senders.isEmpty) return null;
@@ -803,6 +741,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   Future<void> requestPermission() async {
     _hasPermission = await SmsService().requestPermission();
     if (_hasPermission) {
+      _initForegroundSmsListener();
       // Re-init when permission is granted
       await init();
     } else {
@@ -890,6 +829,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       notifyListeners();
       return;
     }
+    _initForegroundSmsListener();
 
     // Load senders from DB or seed defaults
     final dbSenders = await DatabaseService.instance.getSenders();
@@ -1070,7 +1010,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// Checks SQLite counts every 4 seconds with minimal overhead to catch background insertions.
   void _startLightweightDbSync() {
     _dbSyncTimer?.cancel();
-    _dbSyncTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+    _dbSyncTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
       await _checkDbForNewTransactions();
     });
   }
@@ -1396,48 +1336,87 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// banking keyword at all are dropped.
   static bool _isEnglishBankingMessage(String msg) {
     const keywords = [
+      // --- Deposit & Credit Actions ---
+      'deposit',
+      'deposited',
+      'credited',
+      'credit',
+      'topup',
+      'top-up',
+      'top up',
+      'recharge',
+      'recharged',
       'received',
+      'receive',
+      'inward',
+
+      // --- Transfer & Send Actions ---
+      'transfer',
+      'transferred',
       'sent',
       'send',
-      'transferred',
-      'transfer',
+      'remittance',
+      'p2p',
+
+      // --- Debit & Payment Actions ---
       'paid',
       'pay',
       'payment',
-      'credited',
-      'credit',
       'debited',
       'debit',
-      'deposited',
-      'deposit',
       'withdrawn',
       'withdrawal',
       'withdraw',
+      'purchase',
+      'purchased',
+      'spent',
+      'spend',
+      'outward',
+      'charged',
+      'charge',
+      'fee',
+      'deducted',
+      'deduction',
+
+      // --- Balance & Account Terms ---
       'balance',
-      'account',
+      'bal',
+      'avail',
       'available',
       'remaining',
-      'amount',
-      'total',
+      'rem bal',
+      'account',
+      'acct',
+      'acc',
+      'wallet',
+
+      // --- Currencies & Numbers ---
       'birr',
       'etb',
       'usd',
+      'amount',
+      'total',
+      'sum',
+
+      // --- Loan & Credit Line Terms ---
       'loan',
       'repay',
+      'repayment',
+      'borrow',
+      'borrowed',
+      'disbursed',
+      'disbursement',
       'due',
+      'overdue',
+      'installment',
+
+      // --- Transaction Reference IDs ---
       'transaction',
       'txn',
-      'ref no',
+      'txnd',
+      'ref',
       'reference',
-      'purchase',
-      'charged',
-      'fee',
-      'bank',
-      'wallet',
-      'mobile money',
-      'telebirr',
-      'cbe',
-      'ahadu',
+      'receipt',
     ];
 
     final lower = msg.toLowerCase();
@@ -1516,6 +1495,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
+  Map<String, dynamic>? _computeTopReasonMap(Map<String, double> totals) {
+    if (totals.isEmpty) return null;
+    String topReason = totals.keys.first;
+    double maxAmount = totals[topReason]!;
+    totals.forEach((key, value) {
+      if (value > maxAmount) {
+        maxAmount = value;
+        topReason = key;
+      }
+    });
+    return {'reason': topReason, 'amount': maxAmount};
+  }
+
   void _calculateStats() {
     _totalBalance = 0;
     _cashBalance = 0;
@@ -1534,11 +1526,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     double cashInflows = 0;
     double cashOutflows = 0;
 
+    final pausedUpper = _pausedBanks.map((b) => b.toUpperCase()).toSet();
+    final Map<String, double> todayReasonTotals = {};
+    final Map<String, double> monthReasonTotals = {};
+    final Map<String, double> overallReasonTotals = {};
+
     // Single pass through transactions to collect all necessary data
     for (var tx in _transactions) {
       // Skip transactions from paused banks entirely so they don't affect
       // balance, income/expense totals, or any other aggregation.
-      if (_pausedBanks.any((b) => b.toUpperCase() == tx.name.toUpperCase())) {
+      if (pausedUpper.contains(tx.name.toUpperCase())) {
         continue;
       }
 
@@ -1565,12 +1562,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       bool isThisMonth = isDateInMonthOf(tx.date, now);
 
       // 3. Category & Cash Logic
-      bool isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
-          tx.resolvedReason?.toLowerCase() == 'internal transfer';
+      final resolvedReasonLower = tx.resolvedReason?.toLowerCase();
+      bool isBounce = resolvedReasonLower == 'bounce' ||
+          resolvedReasonLower == 'internal transfer';
 
       bool isCashTransfer = tx.reason?.toLowerCase() == 'cash' ||
           tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash';
+          resolvedReasonLower == 'cash';
 
       if (isCashTransfer) {
         // ATM withdrawal (bank expense) is a CASH INFLOW to the wallet.
@@ -1605,8 +1603,22 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         if (!isCashTransfer) {
           _netOverall -= tx.amount;
         }
+
+        // Track expense reason totals for dashboard banner cards
+        final key = tx.resolvedReason ?? 'Other';
+        if (isToday) {
+          todayReasonTotals[key] = (todayReasonTotals[key] ?? 0) + tx.amount;
+        }
+        if (isThisMonth) {
+          monthReasonTotals[key] = (monthReasonTotals[key] ?? 0) + tx.amount;
+        }
+        overallReasonTotals[key] = (overallReasonTotals[key] ?? 0) + tx.amount;
       }
     }
+
+    _cachedMostExpenseToday = _computeTopReasonMap(todayReasonTotals);
+    _cachedMostExpenseThisMonth = _computeTopReasonMap(monthReasonTotals);
+    _cachedTopExpenseHighlight = _computeTopReasonMap(overallReasonTotals);
 
     // Process latest bank balances
     _latestBalancesMap = Map.from(latestBalances);
@@ -1766,6 +1778,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     );
     await DatabaseService.instance.updateTransaction(newTx);
     _transactions[index] = newTx;
+    _calculateStats();
     notifyListeners();
   }
 

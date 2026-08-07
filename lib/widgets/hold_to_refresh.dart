@@ -146,10 +146,8 @@ class _HoldToRefreshState extends State<HoldToRefresh>
       refreshStateNotifier.value = const RefreshState();
     }
 
-    // Fire immediately when threshold reached while holding
-    if (_pointerDown && _pull >= widget.triggerDistance) {
-      _triggerRefresh();
-    }
+    // Visual feedback only — actual trigger happens in _onRelease
+    // to avoid the race where the scroll peak arrives after pointer-up
 
     return false;
   }
@@ -157,9 +155,15 @@ class _HoldToRefreshState extends State<HoldToRefresh>
   void _onRelease() {
     _pointerDown = false;
     if (_phase == RefreshPhase.dragging) {
-      _phase = RefreshPhase.idle;
-      _pull = 0;
-      refreshStateNotifier.value = const RefreshState();
+      if (_pull >= widget.triggerDistance) {
+        // User pulled far enough — fire refresh on release
+        _triggerRefresh();
+      } else {
+        // Not far enough — cancel and go back to idle
+        _phase = RefreshPhase.idle;
+        _pull = 0;
+        refreshStateNotifier.value = const RefreshState();
+      }
     }
   }
 
