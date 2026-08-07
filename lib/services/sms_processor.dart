@@ -1,8 +1,6 @@
-import 'dart:async';
-import 'dart:ui';
-import 'package:flutter_background_service/flutter_background_service.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:telephony/telephony.dart';
 import '../models/transaction.dart';
 import '../models/loan_record.dart';
 import '../models/sender.dart';
@@ -14,144 +12,9 @@ import 'cbe_birr_parser.dart';
 import 'ahadu_parser.dart';
 import 'bank_senders.dart';
 
-Future<void> initializeBackgroundService() async {
-  final service = FlutterBackgroundService();
-  final showPersistent = await _getPersistentNotificationPref();
-
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'my_foreground',
-    'Mobile Banking Service',
-    description: 'Running in background to monitor SMS.',
-    importance: Importance.low,
-  );
-
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-
-  await service.configure(
-    androidConfiguration: AndroidConfiguration(
-      onStart: onStart,
-      autoStart: true,
-      isForegroundMode: showPersistent,
-      notificationChannelId: 'my_foreground',
-      initialNotificationTitle: 'Shibre is Active',
-      initialNotificationContent: 'Looking for transaction SMS',
-      foregroundServiceNotificationId: 888,
-    ),
-    iosConfiguration: IosConfiguration(),
-  );
-
-  service.startService();
-}
-
-@pragma('vm:entry-point')
-void onStart(ServiceInstance service) async {
-  DartPluginRegistrant.ensureInitialized();
-
-  if (service is AndroidServiceInstance) {
-    service.on('setAsForeground').listen((event) {
-      service.setAsForegroundService();
-    });
-    service.on('setAsBackground').listen((event) {
-      service.setAsBackgroundService();
-    });
-    service.on('stopService').listen((event) {
-      service.stopSelf();
-    });
-
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
-
-    // Fix for "leaf icon": Must initialize explicitly in this isolate
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('ic_notification');
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
-    await flutterLocalNotificationsPlugin.initialize(
-        settings: initializationSettings);
-
-    // Initial sync
-    _syncNotificationMode(service, flutterLocalNotificationsPlugin);
-
-    // Sync on request from UI
-    service.on('syncNotification').listen((event) {
-      _syncNotificationMode(service, flutterLocalNotificationsPlugin);
-    });
-  }
-
-  // Set up telephony SMS listening
-  final Telephony telephony = Telephony.instance;
-  telephony.listenIncomingSms(
-    onNewMessage: (SmsMessage message) async {
-      await processBackgroundSms(message);
-    },
-    onBackgroundMessage: backgroundMessageHandler,
-    listenInBackground: true,
-  );
-}
-
-/// Toggles between foreground (visible) and background (hidden) modes.
-Future<void> _syncNotificationMode(AndroidServiceInstance service,
-    FlutterLocalNotificationsPlugin plugin) async {
-  final showPersistent = await _getPersistentNotificationPref();
-
-  if (showPersistent) {
-    await service.setAsForegroundService();
-    // Explicitly show/update the notification to ensure ic_notification is used
-    await plugin.show(
-      id: 888,
-      title: 'Shibre is Active',
-      body: 'Looking for transaction SMS',
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'my_foreground',
-          'Mobile Banking Service',
-          icon: 'ic_notification',
-          ongoing: true,
-          autoCancel: false,
-          priority: Priority.min,
-          importance: Importance.low,
-          playSound: false,
-          enableVibration: false,
-          showWhen: false,
-        ),
-      ),
-    );
-  } else {
-    await service.setAsBackgroundService();
-    try {
-      await plugin.cancel(id: 888);
-    } catch (_) {}
-  }
-}
-
-/// Reads the persistent notification preference from the app database.
-/// Defaults to false (hidden) when not yet set.
-Future<bool> _getPersistentNotificationPref() async {
-  try {
-    final pref = await DatabaseService.instance
-        .getSetting('show_persistent_notification');
-    if (pref == null) return false; // default OFF
-    return pref == '1';
-  } catch (_) {
-    return false; // default OFF
-  }
-}
-
-@pragma('vm:entry-point')
-Future<void> backgroundMessageHandler(SmsMessage message) async {
-  DartPluginRegistrant.ensureInitialized();
-  await processBackgroundSms(message);
-}
-
 /// Returns true if [msg] looks like a banking message (contains an English
 /// banking keyword). Bilingual messages that mix Amharic with English
-/// transaction text (e.g. CBE Birr) are kept \u2014 only messages with no English
+/// transaction text (e.g. CBE Birr) are kept — only messages with no English
 /// banking keyword at all are dropped.
 bool _isEnglishBankingMessage(String msg) {
   const keywords = [
@@ -212,6 +75,7 @@ Future<void> processSmsRaw({
   required String senderAddress,
   required String body,
   required DateTime date,
+  String? initialReason,
 }) async {
   // ── Sender Allowlist Guard (first and most important gate) ────────────────
   // Only process messages from:
@@ -297,7 +161,7 @@ Future<void> processSmsRaw({
 
       if (hasDeposit && !hasExpense) {
         tx = AppTransaction(
-          id: '${senderAddress}_${date.millisecondsSinceEpoch}',
+          id: sha256.convert(utf8.encode('${senderAddress}|${date.millisecondsSinceEpoch}|$body')).toString(),
           name: matchedSender.senderName,
           amount: amount,
           type: 'income',
@@ -309,7 +173,7 @@ Future<void> processSmsRaw({
         );
       } else if (hasExpense && !hasDeposit) {
         tx = AppTransaction(
-          id: '${senderAddress}_${date.millisecondsSinceEpoch}',
+          id: sha256.convert(utf8.encode('${senderAddress}|${date.millisecondsSinceEpoch}|$body')).toString(),
           name: matchedSender.senderName,
           amount: amount,
           type: 'expense',
@@ -326,7 +190,36 @@ Future<void> processSmsRaw({
   // 2. If the message was parsed into an auto-detected transaction, insert it into
   // transactions and do NOT pollute the unregistered notifications list.
   if (tx != null) {
-    await DatabaseService.instance.insertTransaction(tx);
+    String? resolvedReasonName;
+    int? resolvedReasonId;
+
+    if (initialReason != null && initialReason.isNotEmpty) {
+      final reasons = await DatabaseService.instance.getReasons();
+      final matchedReason = reasons.cast<dynamic>().firstWhere(
+        (r) => (r.name as String).toLowerCase() == initialReason.toLowerCase(),
+        orElse: () => null,
+      );
+      resolvedReasonName = matchedReason?.name as String? ?? initialReason;
+      resolvedReasonId = matchedReason?.id as int?;
+      tx = tx.copyWith(
+        reason: resolvedReasonName,
+        reasonId: resolvedReasonId,
+      );
+    }
+
+    final insertResult = await DatabaseService.instance.insertTransaction(tx);
+
+    // INSERT OR IGNORE returns 0 if the transaction already existed.
+    // If we have a reason to attach, UPDATE the existing row's reason.
+    if (insertResult == 0 &&
+        resolvedReasonName != null &&
+        tx.id != null) {
+      await DatabaseService.instance.updateTransactionReason(
+        tx.id!,
+        resolvedReasonName,
+        resolvedReasonId,
+      );
+    }
 
     // Trigger OS system notification banner for auto-detected transaction
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -345,12 +238,13 @@ Future<void> processSmsRaw({
         ),
       ),
     );
+
     return;
   }
 
   // 3. ONLY if the message was NOT parsed (tx == null), insert an In-App Notification
   // so it appears in the top Notification Panel as an UNREGISTERED message for manual setup!
-  final notificationId = '${senderAddress}_${date.millisecondsSinceEpoch}';
+  final notificationId = sha256.convert(utf8.encode('${senderAddress}|${date.millisecondsSinceEpoch}|$body')).toString();
   final notification = AppNotification(
     id: notificationId,
     sender: bank ?? senderAddress,
@@ -375,18 +269,6 @@ Future<void> processSmsRaw({
         priority: Priority.high,
       ),
     ),
-  );
-}
-
-Future<void> processBackgroundSms(SmsMessage message) async {
-  if (message.address == null || message.body == null) return;
-  final date = DateTime.fromMillisecondsSinceEpoch(
-      message.date ?? DateTime.now().millisecondsSinceEpoch);
-
-  await processSmsRaw(
-    senderAddress: message.address!,
-    body: message.body!,
-    date: date,
   );
 }
 

@@ -7,7 +7,6 @@ import 'theme/app_theme.dart';
 import 'screens/shell/main_shell.dart';
 import 'screens/intro/onboarding_screen.dart';
 import 'screens/privacy/app_lock_screen.dart';
-import 'services/background_service.dart';
 import 'services/pin_service.dart';
 
 /// Global navigator key — allows non-widget code (e.g. FinanceProvider) to
@@ -17,7 +16,9 @@ final GlobalKey<NavigatorState> appNavigatorKey =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeBackgroundService();
+
+  // SMS handling is now done natively by SmsBroadcastReceiver.kt —
+  // no Dart-side background service startup needed.
 
   final prefs = await SharedPreferences.getInstance();
   final bool onboardingDone =

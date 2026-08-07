@@ -23,9 +23,15 @@ import android.net.Uri
 class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.shibre/ussd"
     private val EVENT_CHANNEL = "com.shibre/ussd_events"
+    private val SMS_EVENT_CHANNEL = "com.shibre/sms_events"
+    private val DEEP_LINK_CHANNEL = "com.shibre/deep_link"
+
+    private var pendingTxId: String? = null
+    private var deepLinkMethodChannel: MethodChannel? = null
 
     companion object {
         var instance: MainActivity? = null
+        var smsEventSink: EventChannel.EventSink? = null
 
         fun bringToFront(context: Context) {
             val intent = Intent(context, MainActivity::class.java)
@@ -39,15 +45,43 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(saved: android.os.Bundle?) {
         super.onCreate(saved)
         instance = this
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val txId = intent?.getStringExtra("open_tx_id")
+        if (!txId.isNullOrEmpty()) {
+            pendingTxId = txId
+            deepLinkMethodChannel?.invokeMethod("openTransactionDetail", txId)
+        }
     }
 
     override fun onDestroy() {
         instance = null
+        deepLinkMethodChannel = null
         super.onDestroy()
     }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        deepLinkMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEEP_LINK_CHANNEL).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getInitialTxId" -> {
+                        result.success(pendingTxId)
+                        pendingTxId = null
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -93,6 +127,27 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }
         )
+
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, SMS_EVENT_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    smsEventSink = events
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    smsEventSink = null
+                }
+            }
+        )
+
+        // If pendingTxId was set before Flutter Engine finished setup, dispatch it now
+        if (pendingTxId != null) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                pendingTxId?.let { txId ->
+                    deepLinkMethodChannel?.invokeMethod("openTransactionDetail", txId)
+                }
+            }, 500)
+        }
     }
 
     private fun isAccessibilityServiceEnabled(context: Context, service: Class<out AccessibilityService>): Boolean {
@@ -114,14 +169,10 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun sendUssdRequest(code: String, result: MethodChannel.Result) {
         try {
-            // Using fromParts is the safest way to handle special characters like * and # in phone URIs
             val ussdUri = Uri.fromParts("tel", code, null)
-            
-            // Start the dialer
             val callIntent = Intent(Intent.ACTION_CALL, ussdUri)
             startActivity(callIntent)
             
-            // Give the system dialer 300ms to initialize the USSD session before we cover it
             Handler(Looper.getMainLooper()).postDelayed({
                 bringToFront(this)
             }, 300)

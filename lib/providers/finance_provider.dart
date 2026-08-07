@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -22,12 +24,13 @@ import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
 import '../services/ahadu_parser.dart';
 import '../services/bank_senders.dart';
+import '../services/sms_processor.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:telephony/telephony.dart';
-import '../services/background_service.dart';
 
 import '../main.dart' show appNavigatorKey;
 import '../widgets/level_up_modal.dart';
+import '../screens/dashboard/transaction_detail_screen.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppSender> _senders = [];
@@ -90,28 +93,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   int _currentScreenIndex = 0;
   double _pageOffset = 0.0;
   String? _userName;
-  Timer? _dbSyncTimer;
-  int _lastKnownTxCount = 0;
-  int _lastKnownNotificationCount = 0;
+  StreamSubscription? _bgServiceSubscription;
   bool _isBatchProcessing = false;
 
-  bool _isForegroundListenerInitialized = false;
 
-  void _initForegroundSmsListener() {
-    if (_isForegroundListenerInitialized) return;
-    _isForegroundListenerInitialized = true;
-    try {
-      final Telephony telephony = Telephony.instance;
-      telephony.listenIncomingSms(
-        onNewMessage: (SmsMessage message) async {
-          await processBackgroundSms(message);
-          await _reloadFromDatabase();
-        },
-        onBackgroundMessage: backgroundMessageHandler,
-        listenInBackground: true,
-      );
-    } catch (_) {}
-  }
 
   /// The last level the user was shown a level-up modal for.
   /// Persisted to SharedPreferences so re-launches don't re-show old modals.
@@ -374,7 +359,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _userName = prefs.getString('user_name_v1');
     _hasPermission = await Permission.sms.status.isGranted;
     if (!_hasPermission) return;
-    _initForegroundSmsListener();
+
 
     final dbSenders = await DatabaseService.instance.getSenders();
     if (dbSenders.isNotEmpty) {
@@ -741,8 +726,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   Future<void> requestPermission() async {
     _hasPermission = await SmsService().requestPermission();
     if (_hasPermission) {
-      _initForegroundSmsListener();
-      // Re-init when permission is granted
+      // Native SmsBroadcastReceiver handles SMS automatically once
+      // permission is granted — no Dart-side service init needed.
       await init();
     } else {
       notifyListeners();
@@ -761,7 +746,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // If startBackgroundInit() already loaded the data (_isLoading == false),
     // we just flip onboardingComplete and start the sync — no need to re-scan.
     if (!_isLoading && _transactions.isNotEmpty) {
-      _startLightweightDbSync();
+      _listenForBackgroundEvents();
       notifyListeners();
       return;
     }
@@ -829,7 +814,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       notifyListeners();
       return;
     }
-    _initForegroundSmsListener();
+
 
     // Load senders from DB or seed defaults
     final dbSenders = await DatabaseService.instance.getSenders();
@@ -980,21 +965,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _transactions = await DatabaseService.instance.getTransactions();
     await _loadNotifications();
 
-    // NOTE: We do NOT set up a duplicate SMS listener here.
-    // The background service (background_service.dart) already listens for
-    // incoming SMS via Telephony and writes new transactions to the DB.
-    // Running a second listener would cause double processing, double CPU,
-    // and double battery drain.
+    // NOTE: Real-time SMS listening is handled by SmsBroadcastReceiver.kt
+    // (native Android BroadcastReceiver). It inserts into the notifications
+    // table and pushes an event via EventChannel — no Dart-side listener needed.
 
     _calculateStats();
     _isLoading = false;
 
     // Track current transaction count for lightweight DB sync
-    _lastKnownTxCount = _transactions.length;
 
-    // Start a lightweight DB sync that checks for new rows periodically.
-    // This catches transactions inserted by the background service isolate.
-    _startLightweightDbSync();
+    // Listen for real-time events from the background service.
+    _listenForBackgroundEvents();
 
     // Sync _lastSeenLevel to current level without firing the modal —
     // this is a restore, not a new level advance.
@@ -1006,29 +987,61 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// Lightweight periodic DB sync.
-  /// Checks SQLite counts every 4 seconds with minimal overhead to catch background insertions.
-  void _startLightweightDbSync() {
-    _dbSyncTimer?.cancel();
-    _dbSyncTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
-      await _checkDbForNewTransactions();
+  /// Listens for 'newTransaction' events pushed by the native
+  /// SmsBroadcastReceiver via EventChannel after it inserts a notification
+  /// into SQLite. Replaces the old FlutterBackgroundService IPC approach.
+  void _listenForBackgroundEvents() {
+    _bgServiceSubscription?.cancel();
+    const channel = EventChannel('com.shibre/sms_events');
+    _bgServiceSubscription = channel.receiveBroadcastStream().listen((_) {
+      _reloadFromDatabase();
     });
+
+    _setupDeepLinkListener();
   }
 
+  void _setupDeepLinkListener() {
+    const deepLinkChannel = MethodChannel('com.shibre/deep_link');
+    deepLinkChannel.setMethodCallHandler((call) async {
+      if (call.method == 'openTransactionDetail') {
+        final txId = call.arguments as String?;
+        if (txId != null && txId.isNotEmpty) {
+          await navigateToTransactionDetail(txId);
+        }
+      }
+    });
 
+    deepLinkChannel.invokeMethod<String>('getInitialTxId').then((txId) {
+      if (txId != null && txId.isNotEmpty) {
+        navigateToTransactionDetail(txId);
+      }
+    }).catchError((_) {});
+  }
 
-  Future<void> _checkDbForNewTransactions() async {
-    if (!_hasPermission) return;
+  Future<void> navigateToTransactionDetail(String txId) async {
+    await _reloadFromDatabase();
+    final tx = _transactions.firstWhere(
+      (t) => t.id == txId,
+      orElse: () => AppTransaction(
+        id: txId,
+        name: 'Transaction',
+        amount: 0.0,
+        type: 'expense',
+        date: DateTime.now(),
+        sender: 'Bank',
+        category: 'Auto',
+        rawMessage: '',
+        isAutoDetected: true,
+      ),
+    );
 
-    // Quick count query — near-zero CPU cost
-    final currentTxCount = await DatabaseService.instance.getTransactionCount();
-    final currentNotifCount =
-        await DatabaseService.instance.getNotificationCount();
-
-    if (currentTxCount != _lastKnownTxCount ||
-        currentNotifCount != _lastKnownNotificationCount) {
-      // Background service inserted new transactions or notifications — reload
-      await _reloadFromDatabase();
+    final navContext = appNavigatorKey.currentContext;
+    if (navContext != null) {
+      Navigator.of(navContext).push(
+        MaterialPageRoute(
+          builder: (_) => TransactionDetailScreen(transaction: tx),
+        ),
+      );
     }
   }
 
@@ -1046,6 +1059,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     if (index != -1) {
       _senders[index] = sender;
     }
+    notifyListeners();
+  }
+
+  Future<void> deleteTransaction(String id) async {
+    await DatabaseService.instance.deleteTransaction(id);
+    _transactions.removeWhere((t) => t.id == id);
+    _calculateStats();
     notifyListeners();
   }
 
@@ -1088,7 +1108,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _dbSyncTimer?.cancel();
+    _bgServiceSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -1096,29 +1116,55 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // App came to foreground — reload any transactions the background service
-      // inserted while we were away, then restart the sync timer.
-      _reloadFromDatabase();
-      if (!(_dbSyncTimer?.isActive ?? false)) {
-        _startLightweightDbSync();
-      }
-    } else if (state == AppLifecycleState.paused) {
-      // App moved to background — stop the polling timer to save CPU/battery.
-      _dbSyncTimer?.cancel();
+      // App came to foreground — only reload if the native receiver
+      // inserted rows while Flutter was backgrounded.
+      _reconcileOnResume();
     }
   }
 
   Future<void> _reloadFromDatabase() async {
+    // IMPORTANT: Load transactions FIRST so that _loadNotifications() can
+    // deduplicate against the latest transaction list (not stale in-memory data).
     _transactions = await DatabaseService.instance.getTransactions();
+    await _loadNotifications();
     _expenseDefinitions =
         await DatabaseService.instance.getExpenseDefinitions();
     _cashTransactions = await DatabaseService.instance.getCashTransactions();
-    await _loadNotifications();
     await _applyRecurringCashExpenses();
-    _lastKnownTxCount = _transactions.length;
-    _lastKnownNotificationCount = _notifications.length;
     _calculateStats();
     notifyListeners();
+  }
+
+  /// Lightweight reconciliation on app resume: compares in-memory counts
+  /// against SQLite counts and only reloads if they differ.
+  /// Also checks a SharedPreferences dirty flag set by NotificationActionReceiver
+  /// when a reason was updated (UPDATE doesn't change counts, so this flag
+  /// ensures the UI still refreshes).
+  Future<void> _reconcileOnResume() async {
+    if (!_hasPermission) return;
+    try {
+      // Check the dirty flag set by NotificationActionReceiver
+      final prefs = await SharedPreferences.getInstance();
+      final reasonUpdatePending =
+          prefs.getBool('reason_update_pending') ?? false;
+
+      if (reasonUpdatePending) {
+        // Clear the flag and force a full reload
+        await prefs.setBool('reason_update_pending', false);
+        await _reloadFromDatabase();
+        return;
+      }
+
+      final dbTxCount = await DatabaseService.instance.getTransactionCount();
+      final dbNotifCount = await DatabaseService.instance.getNotificationCount();
+      if (dbTxCount != _transactions.length ||
+          dbNotifCount != _notifications.length) {
+        await _reloadFromDatabase();
+      }
+    } catch (_) {
+      // If the count query fails, fall back to a full reload.
+      await _reloadFromDatabase();
+    }
   }
 
   /// Checks whether the user has crossed into a new level since the last time
@@ -1206,15 +1252,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       DatabaseService.instance.getCashTransactions(),
       _loadNotifications(),
       _applyRecurringCashExpenses(),
-      DatabaseService.instance.getTransactionCount(),
-      DatabaseService.instance.getNotificationCount(),
     ]);
 
     _transactions = results[0] as List<AppTransaction>;
     _expenseDefinitions = results[1] as List<ExpenseDefinition>;
     _cashTransactions = results[2] as List<CashTransaction>;
-    _lastKnownTxCount = results[5] as int;
-    _lastKnownNotificationCount = results[6] as int;
 
     _calculateStats();
     await _maybeFireLevelUpModal();
@@ -1269,13 +1311,20 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           continue;
         }
 
-        // 4. Ignore messages that CAN be auto-parsed into transactions
-        if (TelebirrParser.parse(n.body, n.date) != null ||
+        // 4. Ingest raw banking notifications into transactions table so they display on Shibre home screen
+        if (BankSenders.match(n.sender) != null ||
+            TelebirrParser.parse(n.body, n.date) != null ||
             TelebirrParser.isCreditDisbursement(n.body) ||
             TelebirrParser.isCreditRepayment(n.body) ||
             CbeParser.parse(n.body, n.date) != null ||
             CbeBirrParser.parse(n.body, n.date) != null ||
             AhaduParser.parse(n.body, n.date) != null) {
+          await processSmsRaw(
+            senderAddress: n.sender,
+            body: n.body,
+            date: n.date,
+            initialReason: n.reason,
+          );
           idsToDelete.add(n.id);
           continue;
         }
@@ -1291,7 +1340,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     _notifications = filtered;
     _unreadNotificationCount = _notifications.where((n) => !n.isRead).length;
-    _lastKnownNotificationCount = _notifications.length;
   }
 
   Future<void> markNotificationsRead() async {
@@ -2443,7 +2491,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     if (hasDeposit && !hasExpense) {
       await addTransaction(
         AppTransaction(
-          id: '${sender}_${date.millisecondsSinceEpoch}',
+          id: sha256.convert(utf8.encode('$sender|${date.millisecondsSinceEpoch}|$message')).toString(),
           name: matchedSender.senderName,
           amount: amount,
           type: 'income',
@@ -2457,7 +2505,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     } else if (hasExpense && !hasDeposit) {
       await addTransaction(
         AppTransaction(
-          id: '${sender}_${date.millisecondsSinceEpoch}',
+          id: sha256.convert(utf8.encode('$sender|${date.millisecondsSinceEpoch}|$message')).toString(),
           name: matchedSender.senderName,
           amount: amount,
           type: 'expense',

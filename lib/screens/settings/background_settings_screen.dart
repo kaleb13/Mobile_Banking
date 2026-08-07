@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
-import '../../services/database_service.dart';
 
 class BackgroundSettingsScreen extends StatefulWidget {
   const BackgroundSettingsScreen({super.key});
@@ -18,7 +16,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
     with WidgetsBindingObserver {
   bool _isCheckingStatus = true;
   bool _isBatteryIgnored = false;
-  bool _showPersistentNotification = false;
   int _selectedOemIndex = 0;
 
   final List<Map<String, dynamic>> _oemGuides = [
@@ -92,10 +89,7 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
   }
 
   Future<void> _loadAllSettings() async {
-    await Future.wait([
-      _checkBatteryOptimizationStatus(),
-      _loadNotificationPref(),
-    ]);
+    await _checkBatteryOptimizationStatus();
   }
 
   Future<void> _checkBatteryOptimizationStatus() async {
@@ -118,28 +112,7 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
     }
   }
 
-  Future<void> _loadNotificationPref() async {
-    final val = await DatabaseService.instance
-        .getSetting('show_persistent_notification');
-    if (mounted) {
-      setState(() {
-        _showPersistentNotification = val == '1';
-      });
-    }
-  }
 
-  Future<void> _setNotificationPref(bool value) async {
-    await DatabaseService.instance
-        .setSetting('show_persistent_notification', value ? '1' : '0');
-    if (mounted) setState(() => _showPersistentNotification = value);
-
-    try {
-      final service = FlutterBackgroundService();
-      if (await service.isRunning()) {
-        service.invoke('syncNotification');
-      }
-    } catch (_) {}
-  }
 
   Future<void> _requestIgnoreBatteryOptimization() async {
     final status = await Permission.ignoreBatteryOptimizations.request();
@@ -239,17 +212,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
                               'Enable Autostart & background permissions manually',
                           trailingText: 'Open',
                           onTap: openAppSettings,
-                        ),
-                        const Divider(height: 1, color: AppColors.border),
-                        _toggleTile(
-                          icon: Icons.notifications_active_outlined,
-                          iconColor: AppColors.gold,
-                          title: 'Persistent Status Bar Service',
-                          subtitle: _showPersistentNotification
-                              ? 'Foreground service visible in status bar'
-                              : 'Recommended if system kills background processes',
-                          value: _showPersistentNotification,
-                          onChanged: _setNotificationPref,
                         ),
                       ]),
 

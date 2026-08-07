@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
 import '../../models/reason.dart';
 import '../../models/loan_record.dart';
+import '../../models/sender.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
@@ -12,6 +13,7 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
+import 'sender_detail_screen.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
@@ -231,10 +233,56 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         ),
       );
     }
-    // NOTE: Loan / Internal Transfer follow-up modals are now handled
-    // in _showReasonPicker() directly after this method returns, so that
-    // they ALWAYS appear when the user saves one of those special reasons —
-    // regardless of whether the reason was already set to the same value.
+  }
+
+  Future<void> _confirmDeleteTransaction(
+      BuildContext context, FinanceProvider provider) async {
+    if (widget.transaction.id == null) return;
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline_rounded, color: AppColors.negative, size: 22),
+            SizedBox(width: 10),
+            Text('Delete Transaction?',
+                style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to delete this transaction? This action cannot be undone.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete',
+                style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true && context.mounted) {
+      await provider.deleteTransaction(widget.transaction.id!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction deleted'),
+            backgroundColor: AppColors.negative,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    }
   }
 
   @override
@@ -312,6 +360,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: const AppBackButton(),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
+              tooltip: 'Delete Transaction',
+              onPressed: () => _confirmDeleteTransaction(context, provider),
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
         body: SingleChildScrollView(
           child: Column(
@@ -396,77 +452,104 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         const SizedBox(height: 18),
 
                         // ── Prominent Bank / Provider Branding Card ──────
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 20),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceCard, // Color(0xFF111821)
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.08),
+                        InkWell(
+                          onTap: () {
+                            final matchedSender = provider.senders.firstWhere(
+                              (s) =>
+                                  s.senderName.toLowerCase() ==
+                                  widget.transaction.sender.toLowerCase(),
+                              orElse: () => AppSender(
+                                senderName: widget.transaction.sender,
+                                depositKeywords: [],
+                                expenseKeywords: [],
+                              ),
+                            );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    SenderDetailScreen(sender: matchedSender),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 20),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceCard, // Color(0xFF111821)
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: bankInfo.bgColor,
-                                  shape: BoxShape.circle,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: bankInfo.bgColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(child: bankInfo.icon),
                                 ),
-                                child: Center(child: bankInfo.icon),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      bankInfo.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    if (bankInfo.subtitle.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        bankInfo.subtitle,
+                                        bankInfo.name,
                                         style: const TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 12,
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
+                                      if (bankInfo.subtitle.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          bankInfo.subtitle,
+                                          style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 12,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: AppColors.positive.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                      color: AppColors.positive.withValues(alpha: 0.2)),
-                                ),
-                                child: const Text(
-                                  'SUCCESS',
-                                  style: TextStyle(
-                                    color: AppColors.positive,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.8,
                                   ),
                                 ),
-                              ),
-                            ],
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.positive
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    'SUCCESS',
+                                    style: TextStyle(
+                                      color: AppColors.positive,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: AppColors.textSecondary,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+
 
                         if (linkedLoan != null) ...[
                           const SizedBox(height: 16),
@@ -985,7 +1068,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       decoration: BoxDecoration(
         color: AppColors.surfaceCard, // Color(0xFF111821)
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         children: children,

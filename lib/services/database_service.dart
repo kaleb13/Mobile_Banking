@@ -77,7 +77,8 @@ CREATE TABLE notifications (
   sender TEXT NOT NULL,
   body TEXT NOT NULL,
   date TEXT NOT NULL,
-  isRead INTEGER NOT NULL DEFAULT 0
+  isRead INTEGER NOT NULL DEFAULT 0,
+  reason TEXT
 )
 ''');
 
@@ -388,6 +389,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
       'Airtime',
       'Cash',
       'Bounce',
+      'Goods',
       'Internal Transfer',
     ];
     for (final name in systemReasons) {
@@ -397,7 +399,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
   }
 
   Future<void> _addNewSystemReasons(Database db) async {
-    const newReasons = ['Airtime', 'Cash', 'Bounce'];
+    const newReasons = ['Airtime', 'Cash', 'Bounce', 'Goods'];
     for (final name in newReasons) {
       await db.insert('reasons', {'name': name, 'isSystem': 1},
           conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -447,6 +449,38 @@ CREATE TABLE IF NOT EXISTS app_settings (
     final db = await instance.database;
     return await db.update('transactions', transaction.toMap(),
         where: 'id = ?', whereArgs: [transaction.id]);
+  }
+
+  Future<int> deleteTransaction(String id) async {
+    final db = await instance.database;
+    return await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Updates ONLY the reason/reasonId on an existing transaction by its ID.
+  /// Returns the number of rows affected (0 or 1).
+  Future<int> updateTransactionReason(
+      String id, String reason, int? reasonId) async {
+    final db = await instance.database;
+    return await db.update(
+      'transactions',
+      {'reason': reason, 'reasonId': reasonId},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Finds a transaction whose rawMessage matches [rawMessage] and updates
+  /// its reason/reasonId. Returns the number of rows affected.
+  /// Used when the notification's SHA-256 ID doesn't match the parser's bank-extracted ID.
+  Future<int> updateTransactionReasonByRawMessage(
+      String rawMessage, String reason, int? reasonId) async {
+    final db = await instance.database;
+    return await db.update(
+      'transactions',
+      {'reason': reason, 'reasonId': reasonId},
+      where: 'rawMessage = ? AND rawMessage != \'\'',
+      whereArgs: [rawMessage],
+    );
   }
 
   Future<List<AppTransaction>> getTransactions() async {

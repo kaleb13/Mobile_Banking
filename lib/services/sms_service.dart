@@ -26,6 +26,7 @@ class SmsService {
 
     List<SmsMessage> messages = await query.querySms(
       kinds: [SmsQueryKind.inbox],
+      count: 300,
     );
 
     // Sort newest messages first so index 0 is always the latest SMS

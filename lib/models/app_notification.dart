@@ -4,6 +4,7 @@ class AppNotification {
   final String body;
   final DateTime date;
   final bool isRead;
+  final String? reason;
 
   AppNotification({
     required this.id,
@@ -11,6 +12,7 @@ class AppNotification {
     required this.body,
     required this.date,
     this.isRead = false,
+    this.reason,
   });
 
   Map<String, dynamic> toMap() => {
@@ -19,6 +21,7 @@ class AppNotification {
         'body': body,
         'date': date.toIso8601String(),
         'isRead': isRead ? 1 : 0,
+        'reason': reason,
       };
 
   factory AppNotification.fromMap(Map<String, dynamic> map) => AppNotification(
@@ -27,5 +30,6 @@ class AppNotification {
         body: map['body'] as String,
         date: DateTime.parse(map['date'] as String),
         isRead: (map['isRead'] as int) == 1,
+        reason: map['reason'] as String?,
       );
 }

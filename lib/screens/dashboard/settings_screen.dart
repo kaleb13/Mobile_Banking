@@ -1,4 +1,3 @@
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
@@ -26,38 +25,13 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final bool _isResetting = false;
-  bool _showPersistentNotification = false; // default OFF
 
   @override
   void initState() {
     super.initState();
-    _loadNotificationPref();
   }
 
-  Future<void> _loadNotificationPref() async {
-    final val = await DatabaseService.instance
-        .getSetting('show_persistent_notification');
-    if (mounted) {
-      setState(() {
-        // null = not yet set → default false (OFF)
-        _showPersistentNotification = val == '1';
-      });
-    }
-  }
 
-  Future<void> _setNotificationPref(bool value) async {
-    await DatabaseService.instance
-        .setSetting('show_persistent_notification', value ? '1' : '0');
-    if (mounted) setState(() => _showPersistentNotification = value);
-
-    // Tell the background service to sync its mode immediately
-    try {
-      final service = FlutterBackgroundService();
-      if (await service.isRunning()) {
-        service.invoke('syncNotification');
-      }
-    } catch (_) {}
-  }
 
   Widget _buildCardBase(List<Widget> children) {
     return Container(
@@ -261,16 +235,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                         showDivider: true,
-                      ),
-                      _toggleTile(
-                        icon: Icons.notifications_outlined,
-                        iconColor: AppColors.amber,
-                        label: 'Status Bar Notification',
-                        subtitle: _showPersistentNotification
-                            ? 'Shown in status bar'
-                            : 'Hidden while active',
-                        value: _showPersistentNotification,
-                        onChanged: _setNotificationPref,
                       ),
                     ]),
 

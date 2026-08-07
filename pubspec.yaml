@@ -18,9 +18,7 @@ dependencies:
   shared_preferences: any
   permission_handler: any # For SMS permissions
   path: any
-  flutter_background_service: ^5.1.0
   flutter_local_notifications: ^20.1.0
-  telephony: ^0.2.0
   flutter_svg: any
   fl_chart: ^1.1.1
   file_picker: any
