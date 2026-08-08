@@ -1157,6 +1157,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // IMPORTANT: Load transactions FIRST so that _loadNotifications() can
     // deduplicate against the latest transaction list (not stale in-memory data).
     _transactions = await DatabaseService.instance.getTransactions();
+    // Ensure _reasons is fresh before _loadNotifications() — the reason-transfer
+    // code inside it needs to look up "Food"/"Goods" by name to resolve reasonId.
+    _reasons = await DatabaseService.instance.getReasons();
     await _loadNotifications();
     // Re-query after _loadNotifications(): it may have ingested a new notification
     // as a transaction, or transferred a notification-banner reason (Food/Goods)
@@ -1359,14 +1362,22 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             if (txIndex != -1) {
               final existingTx = _transactions[txIndex];
               if (existingTx.reason == null || existingTx.reason!.isEmpty) {
-                final matchedReason = _reasons.cast<AppReason?>().firstWhere(
+                // Use fresh _reasons (reloaded above). If still empty, fetch
+                // directly from DB as a safety net.
+                final reasonsList = _reasons.isNotEmpty
+                    ? _reasons
+                    : await DatabaseService.instance.getReasons();
+                final matchedReason = reasonsList.cast<AppReason?>().firstWhere(
                   (r) => r?.name.toLowerCase() == n.reason!.toLowerCase(),
                   orElse: () => null,
                 );
-                await updateTransactionReason(
+                // Write directly to SQLite — bypasses the provider-level method
+                // which depends on the stale in-memory _transactions list.
+                final resolvedName = matchedReason?.name ?? n.reason!;
+                await DatabaseService.instance.updateTransactionReason(
                   existingTx.id!,
-                  reasonId: matchedReason?.id,
-                  customReasonText: matchedReason == null ? n.reason : null,
+                  resolvedName,
+                  matchedReason?.id,
                 );
               }
             }

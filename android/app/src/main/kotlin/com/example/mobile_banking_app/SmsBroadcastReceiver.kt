@@ -226,7 +226,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Checks SQLite database to see if the sender or message has a linked reason.
+     * Checks SQLite database to see if the message or counterparty has a linked reason.
+     * Only returns a valid reason name from the `reasons` / `reason_links` tables.
+     * System bank names (e.g. "CBE", "Telebirr") are NEVER returned as attached reasons.
      */
     private fun checkAttachedReasonInDb(context: Context, sender: String, body: String): String? {
         return try {
@@ -241,22 +243,33 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             var reason: String? = null
 
-            // Check Telebirr credit/loan auto-reasons
+            // 1. Check Telebirr credit/loan auto-reasons
             val lower = body.lowercase()
-            if (lower.contains("credit loan") || lower.contains("loan disbursement")) {
+            if (lower.contains("credit loan") || lower.contains("loan disbursement") || lower.contains("credit request")) {
                 reason = "Loan"
             }
 
-            // Check custom senders table
+            // 2. Check reason_links table joined with reasons table
             if (reason == null) {
-                val cursor = db.rawQuery(
-                    "SELECT senderName FROM senders WHERE LOWER(senderName) = LOWER(?) LIMIT 1",
-                    arrayOf(sender)
-                )
-                if (cursor.moveToFirst()) {
-                    reason = cursor.getString(0)
+                try {
+                    val cursor = db.rawQuery("""
+                        SELECT r.name, rl.linkedName
+                        FROM reason_links rl
+                        JOIN reasons r ON rl.reasonId = r.id
+                    """.trimIndent(), null)
+
+                    while (cursor.moveToNext()) {
+                        val rName = cursor.getString(0)
+                        val linkedName = cursor.getString(1) ?: ""
+                        if (linkedName.isNotBlank() && lower.contains(linkedName.lowercase())) {
+                            reason = rName
+                            break
+                        }
+                    }
+                    cursor.close()
+                } catch (_: Exception) {
+                    // Table reason_links or reasons might not exist yet on fresh install
                 }
-                cursor.close()
             }
 
             db.close()
@@ -333,11 +346,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             builder.addAction(0, "OK", okPendingIntent)
             builder.addAction(0, "Change Reason", openPendingIntent)
         } else {
-            // Uncategorized Case: 3 Action Buttons [ Food ], [ Utilities ], and [ Open ]
+            // Uncategorized Case: 3 Action Buttons [ Food ], [ Goods ], and [ Open ]
             val foodIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_SET_REASON
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
                 putExtra(NotificationActionReceiver.EXTRA_TX_ID, txId)
+                putExtra(NotificationActionReceiver.EXTRA_SMS_BODY, body)
                 putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, "Food")
             }
             val foodPendingIntent = PendingIntent.getBroadcast(
@@ -351,6 +365,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 action = NotificationActionReceiver.ACTION_SET_REASON
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
                 putExtra(NotificationActionReceiver.EXTRA_TX_ID, txId)
+                putExtra(NotificationActionReceiver.EXTRA_SMS_BODY, body)
                 putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, "Goods")
             }
             val goodsPendingIntent = PendingIntent.getBroadcast(

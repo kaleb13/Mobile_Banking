@@ -34,6 +34,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_TX_ID = "extra_tx_id"
+        const val EXTRA_SMS_BODY = "extra_sms_body"
         const val EXTRA_REASON_NAME = "extra_reason_name"
 
         private const val DB_NAME = "finance_v3.db"
@@ -59,9 +60,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
             }
             ACTION_SET_REASON -> {
                 val txId = intent.getStringExtra(EXTRA_TX_ID) ?: return
+                val smsBody = intent.getStringExtra(EXTRA_SMS_BODY)
                 val reasonName = intent.getStringExtra(EXTRA_REASON_NAME) ?: return
 
-                val updated = setTransactionReasonOnRealTransaction(context, txId, reasonName)
+                val updated = setTransactionReasonOnRealTransaction(context, txId, smsBody, reasonName)
                 if (updated) {
                     // Set a dirty flag so Flutter's _reconcileOnResume() knows to
                     // force-reload even when row counts haven't changed.
@@ -94,12 +96,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
      *
      * Strategy:
      *   1. Look up reasonId from the reasons table
-     *   2. Read the raw SMS body from notifications table (using SHA-256 txId)
+     *   2. Use intentSmsBody if provided, fallback to notifications table lookup (using SHA-256 txId)
      *   3. Search transactions table by rawMessage match (primary) or id match (fallback)
-     *   4. If found: UPDATE reason on the real transaction
-     *   5. If not found: UPDATE reason on the notifications row (Dart will attach it later)
+     *   4. If found: UPDATE reason on the real transaction using ContentValues
+     *   5. ALWAYS update notifications table row as well if it still exists
      */
-    private fun setTransactionReasonOnRealTransaction(context: Context, txId: String, reasonName: String): Boolean {
+    private fun setTransactionReasonOnRealTransaction(
+        context: Context,
+        txId: String,
+        intentSmsBody: String?,
+        reasonName: String
+    ): Boolean {
         return try {
             val dbPath = File(context.getDatabasePath(DB_NAME).path)
             if (!dbPath.exists()) return false
@@ -118,16 +125,27 @@ class NotificationActionReceiver : BroadcastReceiver() {
             }
             cursorReason.close()
 
-            // 2. Read raw SMS body from notifications table for txId
-            var notifBody: String? = null
-            val cursorNotif = db.rawQuery("SELECT body FROM notifications WHERE id = ? LIMIT 1", arrayOf(txId))
-            if (cursorNotif.moveToFirst()) {
-                notifBody = cursorNotif.getString(0)
+            // 2. Read raw SMS body: prefer intentSmsBody, fallback to notifications table query
+            var notifBody: String? = intentSmsBody
+            if (notifBody.isNullOrBlank()) {
+                val cursorNotif = db.rawQuery("SELECT body FROM notifications WHERE id = ? LIMIT 1", arrayOf(txId))
+                if (cursorNotif.moveToFirst()) {
+                    notifBody = cursorNotif.getString(0)
+                }
+                cursorNotif.close()
             }
-            cursorNotif.close()
 
             // 3. Search transactions table — PRIORITIZE rawMessage matching
             var realTxFound = false
+
+            val values = android.content.ContentValues().apply {
+                put("reason", reasonName)
+                if (reasonId != null) {
+                    put("reasonId", reasonId)
+                } else {
+                    putNull("reasonId")
+                }
+            }
 
             // 3a. Primary: match by rawMessage (normalized whitespace to bridge \r\n vs \n differences)
             if (!notifBody.isNullOrBlank()) {
@@ -138,10 +156,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val txRawMsg = cursorTx.getString(1) ?: ""
                     val normalizedTxMsg = txRawMsg.replace(Regex("\\s+"), " ").trim()
                     if (normalizedTxMsg == normalizedNotifBody) {
-                        db.execSQL(
-                            "UPDATE transactions SET reason = ?, reasonId = ? WHERE id = ?",
-                            arrayOf(reasonName, reasonId, realId)
-                        )
+                        db.update("transactions", values, "id = ?", arrayOf(realId))
                         realTxFound = true
                         break
                     }
@@ -157,40 +172,36 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 )
                 if (cursorById.moveToFirst()) {
                     cursorById.close()
-                    db.execSQL(
-                        "UPDATE transactions SET reason = ?, reasonId = ? WHERE id = ?",
-                        arrayOf(reasonName, reasonId, txId)
-                    )
+                    db.update("transactions", values, "id = ?", arrayOf(txId))
                     realTxFound = true
                 } else {
                     cursorById.close()
                 }
             }
 
-            // 4. If transaction hasn't been parsed yet, store reason in notifications
-            //    so Dart's processSmsRaw attaches it when the app loads.
+            // 4. ALWAYS store reason in notifications row so Dart's
+            //    _loadNotifications() can reliably transfer it even if the
+            //    transaction match above succeeded (belt-and-suspenders).
             //    Guard: check the reason column exists before updating (old DBs
             //    that haven't run migration v22 may not have it).
-            if (!realTxFound) {
-                try {
-                    val colCheck = db.rawQuery(
-                        "SELECT COUNT(*) FROM pragma_table_info('notifications') WHERE name='reason'",
-                        null
-                    )
-                    val hasReasonCol = colCheck.moveToFirst() && colCheck.getInt(0) > 0
-                    colCheck.close()
+            try {
+                val colCheck = db.rawQuery(
+                    "SELECT COUNT(*) FROM pragma_table_info('notifications') WHERE name='reason'",
+                    null
+                )
+                val hasReasonCol = colCheck.moveToFirst() && colCheck.getInt(0) > 0
+                colCheck.close()
 
-                    if (hasReasonCol) {
-                        db.execSQL(
-                            "UPDATE notifications SET reason = ? WHERE id = ?",
-                            arrayOf(reasonName, txId)
-                        )
-                    } else {
-                        Log.w(TAG, "notifications.reason column missing — skipping reason update for notif $txId")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to update notification reason for $txId", e)
+                if (hasReasonCol) {
+                    db.execSQL(
+                        "UPDATE notifications SET reason = ? WHERE id = ?",
+                        arrayOf(reasonName, txId)
+                    )
+                } else {
+                    Log.w(TAG, "notifications.reason column missing — skipping reason update for notif $txId")
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to update notification reason for $txId", e)
             }
 
             db.close()

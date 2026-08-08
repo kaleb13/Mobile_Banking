@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/transaction.dart';
 import '../models/loan_record.dart';
 import '../models/sender.dart';
@@ -221,24 +220,6 @@ Future<void> processSmsRaw({
       );
     }
 
-    // Trigger OS system notification banner for auto-detected transaction
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
-    await flutterLocalNotificationsPlugin.show(
-      id: date.millisecondsSinceEpoch ~/ 1000,
-      title: 'Transaction Auto-Detected',
-      body: '${tx.type == 'income' ? 'Received' : 'Paid'} ETB ${tx.amount.toStringAsFixed(2)} via ${tx.name}',
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'my_foreground',
-          'Mobile Banking Service',
-          icon: 'ic_notification',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
-    );
-
     return;
   }
 
@@ -252,24 +233,6 @@ Future<void> processSmsRaw({
     date: date,
   );
   await DatabaseService.instance.insertNotification(notification);
-
-  // Trigger OS system notification banner for unparsed message
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-  await flutterLocalNotificationsPlugin.show(
-    id: date.millisecondsSinceEpoch ~/ 1000,
-    title: 'Unregistered Banking SMS',
-    body: 'Tap to view notification & register transaction for ${bank ?? senderAddress}',
-    notificationDetails: const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'my_foreground',
-        'Mobile Banking Service',
-        icon: 'ic_notification',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-    ),
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
