@@ -41,6 +41,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<LoanRecord> _loanRecords = [];
   Map<int, List<LoanPayment>> _loanPayments = {}; // keyed by loanId
   List<LoanRepaymentRequest> _pendingRepaymentRequests = [];
+  final Map<String, String> _notifIdToBodyMap = {};
 
   // Cash Wallet & Expenses
   List<ExpenseDefinition> _expenseDefinitions = [];
@@ -1020,29 +1021,59 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   Future<void> navigateToTransactionDetail(String txId) async {
     await _reloadFromDatabase();
-    final tx = _transactions.firstWhere(
-      (t) => t.id == txId,
-      orElse: () => AppTransaction(
-        id: txId,
-        name: 'Transaction',
-        amount: 0.0,
-        type: 'expense',
-        date: DateTime.now(),
-        sender: 'Bank',
-        category: 'Auto',
-        rawMessage: '',
-        isAutoDetected: true,
-      ),
-    );
 
-    final navContext = appNavigatorKey.currentContext;
-    if (navContext != null) {
-      Navigator.of(navContext).push(
-        MaterialPageRoute(
-          builder: (_) => TransactionDetailScreen(transaction: tx),
-        ),
-      );
+    // Strategy 1: Direct ID match (works when notification ID == transaction ID)
+    AppTransaction? tx;
+    try {
+      tx = _transactions.firstWhere((t) => t.id == txId);
+    } catch (_) {}
+
+    // Strategy 2: Look up the notification's raw SMS body from memory or DB, then find
+    // the transaction with the same rawMessage. This bridges the ID mismatch
+    // between the SHA-256 notification key and the bank-reference transaction ID.
+    if (tx == null) {
+      String? notifBody = _notifIdToBodyMap[txId];
+      if (notifBody == null) {
+        final notifications = await DatabaseService.instance.getNotifications();
+        try {
+          final notif = notifications.firstWhere((n) => n.id == txId);
+          notifBody = notif.body;
+        } catch (_) {}
+      }
+
+      if (notifBody != null && notifBody.isNotEmpty) {
+        final normalised = notifBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+        try {
+          tx = _transactions.firstWhere(
+            (t) => t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() == normalised,
+          );
+        } catch (_) {}
+      }
     }
+
+    // Schedule navigation on the next frame to avoid using BuildContext
+    // across async gaps (lint: use_build_context_synchronously).
+    final resolvedTx = tx;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navContext = appNavigatorKey.currentContext;
+      if (navContext == null) return;
+
+      if (resolvedTx != null) {
+        Navigator.of(navContext).push(
+          MaterialPageRoute(
+            builder: (_) => TransactionDetailScreen(transaction: resolvedTx),
+          ),
+        );
+      } else {
+        // Never create a fake zero-balance demo transaction. Show a snackbar instead.
+        ScaffoldMessenger.of(navContext).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction is still being processed. Please try again shortly.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
   }
 
   Future<void> loadSenders() async {
@@ -1127,6 +1158,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // deduplicate against the latest transaction list (not stale in-memory data).
     _transactions = await DatabaseService.instance.getTransactions();
     await _loadNotifications();
+    // Re-query after _loadNotifications(): it may have ingested a new notification
+    // as a transaction, or transferred a notification-banner reason (Food/Goods)
+    // onto an existing transaction row. Without this second fetch the in-memory
+    // list would be stale and the reason would be invisible in the UI.
+    _transactions = await DatabaseService.instance.getTransactions();
     _expenseDefinitions =
         await DatabaseService.instance.getExpenseDefinitions();
     _cashTransactions = await DatabaseService.instance.getCashTransactions();
@@ -1254,9 +1290,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _applyRecurringCashExpenses(),
     ]);
 
-    _transactions = results[0] as List<AppTransaction>;
     _expenseDefinitions = results[1] as List<ExpenseDefinition>;
     _cashTransactions = results[2] as List<CashTransaction>;
+    // _loadNotifications() ran in parallel with getTransactions() above, so
+    // results[0] may predate any reason-transfers _loadNotifications() wrote.
+    // One targeted re-fetch ensures reasons are always visible immediately.
+    _transactions = await DatabaseService.instance.getTransactions();
 
     _calculateStats();
     await _maybeFireLevelUpModal();
@@ -1270,8 +1309,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   Future<void> _loadNotifications() async {
     final all = await DatabaseService.instance.getNotifications();
+    // Normalise whitespace so invisible differences (e.g. \r\n vs \n,
+    // double spaces) between the native receiver and flutter_sms_inbox
+    // don't bypass the deduplication check.
     final Set<String> registeredMessages = _transactions
-        .map((t) => t.rawMessage.trim())
+        .map((t) => t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim())
         .where((msg) => msg.isNotEmpty)
         .toSet();
 
@@ -1279,13 +1321,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final List<String> idsToDelete = [];
 
     for (final n in all) {
+      _notifIdToBodyMap[n.id] = n.body;
+
       final isSystemAlert = n.sender.startsWith('Loan') ||
           n.sender.startsWith('System') ||
           n.sender.startsWith('⚠️') ||
           n.sender.contains('✅');
 
       if (!isSystemAlert) {
-        final bodyTrimmed = n.body.trim();
+        final bodyNormalised = n.body.replaceAll(RegExp(r'\s+'), ' ').trim();
 
         // 1. Ignore Amharic messages completely
         if (_isAmharicMessage(n.body)) {
@@ -1305,8 +1349,28 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           continue;
         }
 
-        // 3. Ignore messages that are ALREADY registered as transactions in the app
-        if (registeredMessages.contains(bodyTrimmed)) {
+        // 4. Ignore messages that are ALREADY registered as transactions in the app.
+        // If the notification has a reason attached (e.g. from user tapping Food/Goods
+        // on the notification banner), transfer that reason to the transaction BEFORE deleting!
+        if (registeredMessages.contains(bodyNormalised)) {
+          if (n.reason != null && n.reason!.isNotEmpty) {
+            final txIndex = _transactions.indexWhere((t) =>
+                t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() == bodyNormalised);
+            if (txIndex != -1) {
+              final existingTx = _transactions[txIndex];
+              if (existingTx.reason == null || existingTx.reason!.isEmpty) {
+                final matchedReason = _reasons.cast<AppReason?>().firstWhere(
+                  (r) => r?.name.toLowerCase() == n.reason!.toLowerCase(),
+                  orElse: () => null,
+                );
+                await updateTransactionReason(
+                  existingTx.id!,
+                  reasonId: matchedReason?.id,
+                  customReasonText: matchedReason == null ? n.reason : null,
+                );
+              }
+            }
+          }
           idsToDelete.add(n.id);
           continue;
         }
@@ -1489,7 +1553,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     // Do NOT add if message is already registered as a transaction in the app
     if (!isSystemAlert &&
-        _transactions.any((tx) => tx.rawMessage.trim() == body.trim())) {
+        _transactions.any((tx) =>
+            tx.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() ==
+            body.replaceAll(RegExp(r'\s+'), ' ').trim())) {
       return;
     }
 

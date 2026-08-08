@@ -16,6 +16,8 @@ class AppTransaction {
   final String? reason; // legacy / convenience resolved name
   final String?
       linkedTransactionId; // points to another transaction for internal transfers
+  final String?
+      bankReference; // original reference number from the bank SMS
 
   AppTransaction({
     this.id,
@@ -32,6 +34,7 @@ class AppTransaction {
     this.customReasonText,
     this.reason,
     this.linkedTransactionId,
+    this.bankReference,
   });
 
   /// Resolved display label: prefer reason name from `reason` field (pre-resolved),
@@ -66,6 +69,7 @@ class AppTransaction {
       // Keep legacy 'reason' column in sync for backward compat
       'reason': reason ?? customReasonText,
       'linkedTransactionId': linkedTransactionId,
+      'bankReference': bankReference,
     };
   }
 
@@ -85,6 +89,7 @@ class AppTransaction {
       customReasonText: map['customReasonText'] as String?,
       reason: map['reason'] as String?,
       linkedTransactionId: map['linkedTransactionId'] as String?,
+      bankReference: map['bankReference'] as String?,
     );
   }
 
@@ -98,6 +103,8 @@ class AppTransaction {
     String? linkedTransactionId,
     bool clearLinkedTransactionId = false,
     double? totalBalance,
+    String? bankReference,
+    bool clearBankReference = false,
   }) {
     return AppTransaction(
       id: id,
@@ -118,6 +125,9 @@ class AppTransaction {
       linkedTransactionId: clearLinkedTransactionId
           ? null
           : (linkedTransactionId ?? this.linkedTransactionId),
+      bankReference: clearBankReference
+          ? null
+          : (bankReference ?? this.bankReference),
     );
   }
 }

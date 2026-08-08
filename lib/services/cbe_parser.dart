@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import '../models/transaction.dart';
 import 'package:intl/intl.dart';
 
@@ -173,9 +175,15 @@ class CbeParser {
     }
 
     // Since ATM withdrawals don't have a transaction ID in the text,
-    // we generate a unique fallback ID using the date/message hash.
-    id ??=
-        'CBE-ATM-${fallbackDate.millisecondsSinceEpoch}-${message.hashCode.abs()}';
+    // we generate a stable fallback ID by normalising the SMS body and
+    // hashing it.  This produces the SAME key regardless of whether the
+    // SMS was read via the native BroadcastReceiver or flutter_sms_inbox,
+    // preventing duplicate transactions.
+    if (id == null) {
+      final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final hash = sha256.convert(utf8.encode(normalised)).toString();
+      id = 'CBE-${hash.substring(0, 16)}';
+    }
 
     // Extract Balance
     double totalBalance = 0.0;

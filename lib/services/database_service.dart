@@ -34,7 +34,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 21, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 22, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -67,7 +67,8 @@ CREATE TABLE transactions (
   reason TEXT,
   reasonId INTEGER,
   customReasonText TEXT,
-  linkedTransactionId TEXT
+  linkedTransactionId TEXT,
+  bankReference TEXT
 )
 ''');
 
@@ -78,7 +79,8 @@ CREATE TABLE notifications (
   body TEXT NOT NULL,
   date TEXT NOT NULL,
   isRead INTEGER NOT NULL DEFAULT 0,
-  reason TEXT
+  reason TEXT,
+  transactionId TEXT
 )
 ''');
 
@@ -358,6 +360,25 @@ CREATE TABLE IF NOT EXISTS app_settings (
       try {
         await db.execute(
             'ALTER TABLE loan_records ADD COLUMN contractNumber TEXT;');
+      } catch (_) {}
+    }
+    if (oldVersion < 22) {
+      // Add bankReference column to transactions table.
+      try {
+        await db.execute(
+            'ALTER TABLE transactions ADD COLUMN bankReference TEXT;');
+      } catch (_) {}
+      // Safety net: add reason column to notifications for users who
+      // installed before this column existed in _createDB.
+      try {
+        await db.execute(
+            'ALTER TABLE notifications ADD COLUMN reason TEXT;');
+      } catch (_) {}
+      // Add transactionId column to notifications so we can link a
+      // notification directly to the parsed transaction row.
+      try {
+        await db.execute(
+            'ALTER TABLE notifications ADD COLUMN transactionId TEXT;');
       } catch (_) {}
     }
   }
