@@ -141,9 +141,18 @@ class _WalletsScreenState extends State<WalletsScreen> {
                             }
 
                             final sender = senders[index];
-                            final senderTxs = txs
-                                .where((t) => t.name == sender.senderName)
-                                .toList();
+                            final sNameUp = sender.senderName.toUpperCase();
+                            final senderTxs = txs.where((t) {
+                              final tNameUp = t.name.toUpperCase();
+                              final tSenderUp = t.sender.toUpperCase();
+                              if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
+                                return tNameUp == 'BOA' ||
+                                    tSenderUp == 'BOA' ||
+                                    tNameUp.contains('ABYSSINIA') ||
+                                    tSenderUp.contains('ABYSSINIA');
+                              }
+                              return tNameUp == sNameUp || tSenderUp == sNameUp;
+                            }).toList();
 
                             double balance = 0;
                             final withBal =

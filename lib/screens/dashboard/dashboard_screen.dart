@@ -18,6 +18,7 @@ import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_badges.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -1800,6 +1801,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (nameUp.contains('AHADU')) {
       img = Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
       bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.10);
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 22, height: 22, fit: BoxFit.contain);
+      bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else {
       img = Text(
         bankName.substring(0, min(1, bankName.length)).toUpperCase(),
@@ -1858,6 +1862,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         fit: BoxFit.contain,
         color: overrideColor,
         colorBlendMode: overrideColor != null ? BlendMode.srcIn : null,
+      );
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      return SvgPicture.asset(
+        'assets/images/Bank_of_Abyssinia_Icon.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
       );
     }
     return Icon(Icons.account_balance, color: overrideColor ?? Colors.white, size: size);

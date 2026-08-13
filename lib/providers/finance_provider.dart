@@ -510,6 +510,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             }
             AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
             if (tx != null) { await addTransaction(tx); }
+          } else if (bank == 'BOA') {
+            if (_userName == null) {
+              final name = BoaParser.extractOwnerName(msg.body!);
+              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
+            }
+            AppTransaction? tx = BoaParser.parse(msg.body!, msgDate);
+            if (tx != null) { await addTransaction(tx); }
           }
         }
       }
@@ -1008,12 +1015,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.insertSender(ahadu);
         _senders.add(ahadu);
       }
+      if (!_senders.any((s) => s.senderName.toUpperCase() == 'BOA' || s.senderName.toUpperCase().contains('ABYSSINIA'))) {
+        final boa = AppSender(id: '5', senderName: 'BOA');
+        await DatabaseService.instance.insertSender(boa);
+        _senders.add(boa);
+      }
     } else {
       _senders = [
         AppSender(id: '1', senderName: 'Telebirr'),
         AppSender(id: '2', senderName: 'CBE'),
         AppSender(id: '3', senderName: 'CBE Birr'),
         AppSender(id: '4', senderName: 'Ahadu Bank'),
+        AppSender(id: '5', senderName: 'BOA'),
       ];
       // Seed them into DB for future persistent updates
       for (var s in _senders) {
@@ -1036,7 +1049,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await _applyRecurringCashExpenses();
 
     // 2. Discover last fetch time & Install state
-    bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
+    bool isFirstBoot = prefs.getBool('is_first_boot_v6') ?? true;
 
     final anchorIso = prefs.getString('custom_month_anchor_date');
     if (anchorIso != null) {
@@ -1066,19 +1079,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     DateTime? lastTxDate =
         await DatabaseService.instance.getLastTransactionDate();
 
-    if (isFirstBoot && lastTxDate == null) {
+    if (isFirstBoot || lastTxDate == null) {
       // First boot: fetch messages within the 30-day window before install.
       final installAnchor = DateTime.now().subtract(const Duration(days: 30));
       List<sms_inbox.SmsMessage> allMessages =
           await SmsService().getAllMessages(since: installAnchor);
 
-      // Sort newest first so we pick the most recent message per bank
+      // Sort newest first
       allMessages.sort((a, b) {
         if (a.date == null || b.date == null) return 0;
         return b.date!.compareTo(a.date!);
       });
 
-      Set<String> processedSenders = {};
       _isBatchProcessing = true;
       for (var msg in allMessages) {
         if (msg.sender != null && msg.body != null && msg.date != null) {
@@ -1088,21 +1100,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
           final bank = BankSenders.match(msg.sender);
 
-          if (bank == 'Telebirr' && !processedSenders.contains('Telebirr')) {
+          if (bank == 'Telebirr') {
             AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
-              processedSenders.add('Telebirr');
             }
-          } else if (bank == 'CBE Birr' &&
-              !processedSenders.contains('CBE Birr')) {
+          } else if (bank == 'CBE Birr') {
             AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
-              processedSenders.add('CBE Birr');
             }
-          } else if (bank == 'CBE' && !processedSenders.contains('CBE')) {
-            // Try to extract name from ANY CBE message during first scan
+          } else if (bank == 'CBE') {
             if (_userName == null) {
               final name = CbeParser.extractOwnerName(msg.body!);
               if (name != null) {
@@ -1113,10 +1121,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
-              processedSenders.add('CBE');
             }
-          } else if (bank == 'Ahadu Bank' &&
-              !processedSenders.contains('Ahadu Bank')) {
+          } else if (bank == 'Ahadu Bank') {
             if (_userName == null) {
               final name = AhaduParser.extractOwnerName(msg.body!);
               if (name != null) {
@@ -1127,19 +1133,24 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
             if (tx != null) {
               await addTransaction(tx);
-              processedSenders.add('Ahadu Bank');
+            }
+          } else if (bank == 'BOA') {
+            if (_userName == null) {
+              final name = BoaParser.extractOwnerName(msg.body!);
+              if (name != null) {
+                _userName = name;
+                await prefs.setString('user_name_v1', name);
+              }
+            }
+            AppTransaction? tx = BoaParser.parse(msg.body!, msgDate);
+            if (tx != null) {
+              await addTransaction(tx);
             }
           }
         }
-        if (processedSenders.contains('Telebirr') &&
-            processedSenders.contains('CBE') &&
-            processedSenders.contains('CBE Birr') &&
-            processedSenders.contains('Ahadu Bank')) {
-          break;
-        }
       }
       _isBatchProcessing = false;
-      await prefs.setBool('is_first_boot_v5', false);
+      await prefs.setBool('is_first_boot_v6', false);
     }
     // On subsequent opens we do NOT rescan SMS — the background service
     // keeps the database up to date silently. We just load from DB below.
@@ -1574,7 +1585,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             TelebirrParser.isCreditRepayment(n.body) ||
             CbeParser.parse(n.body, n.date) != null ||
             CbeBirrParser.parse(n.body, n.date) != null ||
-            AhaduParser.parse(n.body, n.date) != null) {
+            AhaduParser.parse(n.body, n.date) != null ||
+            BoaParser.parse(n.body, n.date) != null) {
           await processSmsRaw(
             senderAddress: n.sender,
             body: n.body,
@@ -1767,7 +1779,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           TelebirrParser.isCreditRepayment(body) ||
           CbeParser.parse(body, date) != null ||
           CbeBirrParser.parse(body, date) != null ||
-          AhaduParser.parse(body, date) != null) {
+          AhaduParser.parse(body, date) != null ||
+          BoaParser.parse(body, date) != null) {
         return;
       }
     }
@@ -2869,9 +2882,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     String message,
     DateTime date,
   ) async {
-    // If name is not yet captured, try to get it from CBE message
-    if (_userName == null && sender.toUpperCase().contains('CBE')) {
-      final name = CbeParser.extractOwnerName(message);
+    // If name is not yet captured, try to extract from bank messages
+    if (_userName == null) {
+      final name = CbeParser.extractOwnerName(message) ??
+          AhaduParser.extractOwnerName(message) ??
+          BoaParser.extractOwnerName(message);
       if (name != null) {
         _userName = name;
         final prefs = await SharedPreferences.getInstance();
@@ -2934,6 +2949,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       AppTransaction? ahaduTx = AhaduParser.parse(message, date);
       if (ahaduTx != null) {
         await addTransaction(ahaduTx);
+      } else {
+        await addUnrecognizedNotification(
+            sender: sender, body: message, date: date);
+      }
+      return;
+    } else if (bank == 'BOA') {
+      AppTransaction? boaTx = BoaParser.parse(message, date);
+      if (boaTx != null) {
+        await addTransaction(boaTx);
       } else {
         await addUnrecognizedNotification(
             sender: sender, body: message, date: date);
@@ -3273,6 +3297,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         parsed = CbeParser.parse(body, msgDate);
       } else if (bank == 'Ahadu Bank') {
         parsed = AhaduParser.parse(body, msgDate);
+      } else if (bank == 'BOA') {
+        parsed = BoaParser.parse(body, msgDate);
       }
 
       if (parsed == null || parsed.id == null) continue;

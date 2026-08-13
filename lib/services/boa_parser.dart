@@ -22,12 +22,16 @@ class BoaParser {
     final lower = message.toLowerCase();
 
     // Ignore Token numbers
-    if (lower.contains('token number for today')) return true;
+    if (lower.contains('token number for today')) {
+      return true;
+    }
 
     // Ignore OTP / auth codes
     if (lower.contains('use otp') ||
         lower.contains('otp code') ||
-        lower.contains('boa_kyc')) return true;
+        lower.contains('boa_kyc')) {
+      return true;
+    }
 
     // Ignore promotions, holidays, Fayda info, and security alerts
     if (lower.contains('ለጥምቀት') ||
@@ -49,8 +53,7 @@ class BoaParser {
     }
 
     // Must contain actual transaction keywords
-    if (!lower.contains('was debited with') &&
-        !lower.contains('was credited with')) {
+    if (!lower.contains('debited') && !lower.contains('credited')) {
       return true;
     }
 
@@ -91,7 +94,7 @@ class BoaParser {
 
     // Extract Total Available Balance
     final balMatch = RegExp(
-      r'Available\s+Balance:\s*ETB\s*([0-9,.]+)',
+      r'Available\s+Balance:\s*(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
       caseSensitive: false,
     ).firstMatch(message);
     if (balMatch != null) {
@@ -103,18 +106,18 @@ class BoaParser {
     }
 
     // 1. Expense / Debit parsing
-    if (lowerMsg.contains('was debited with')) {
+    if (lowerMsg.contains('debited')) {
       type = 'expense';
       category = 'Transferred';
 
       amount = extractAmount(RegExp(
-        r'was\s+debited\s+with\s+ETB\s*([0-9,.]+)',
+        r'debited\s+(?:with\s+)?(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
         caseSensitive: false,
       ));
 
       // Extract recipient name if present (e.g. "to ...")
       final toMatch = RegExp(
-        r'to\s+(.*?)\s+(?:on\s+|\.|\n|Available)',
+        r'to\s+(.*?)\s+(?:on\s+|\.|\n|Available|Receipt|Link|Feedback)',
         caseSensitive: false,
       ).firstMatch(message);
       if (toMatch != null) {
@@ -125,18 +128,18 @@ class BoaParser {
       }
     }
     // 2. Income / Credit parsing
-    else if (lowerMsg.contains('was credited with')) {
+    else if (lowerMsg.contains('credited')) {
       type = 'income';
       category = 'Deposit';
 
       amount = extractAmount(RegExp(
-        r'was\s+credited\s+with\s+ETB\s*([0-9,.]+)',
+        r'credited\s+(?:with\s+)?(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
         caseSensitive: false,
       ));
 
       // Extract sender/payer name after "by" (e.g., "by Yohannes Bizuneh . Available")
       final byMatch = RegExp(
-        r'by\s+(.*?)(?:\s*\.|\n|Available)',
+        r'by\s+(.*?)(?:\s*\.|\n|Available|Receipt|Link|Feedback)',
         caseSensitive: false,
       ).firstMatch(message);
       if (byMatch != null) {
@@ -157,7 +160,7 @@ class BoaParser {
 
     return AppTransaction(
       id: id,
-      name: recipientOrSender,
+      name: senderName,
       amount: amount,
       type: type,
       date: txDate,

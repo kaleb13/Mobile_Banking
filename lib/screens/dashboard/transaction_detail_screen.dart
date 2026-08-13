@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
@@ -666,6 +667,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       bankName = 'Ahadu Bank';
       shortName = 'Ahadu';
       bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
+    } else if (combined.contains('ABYSSINIA') || combined.contains('BOA')) {
+      iconWidget = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 24, height: 24, fit: BoxFit.contain);
+      bankName = 'Bank of Abyssinia S.C.';
+      shortName = 'BOA';
+      bg = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
       iconWidget = Image.asset('assets/images/CBE logo 1.webp', width: 24, height: 24);
       bankName = 'Commercial Bank of Ethiopia';

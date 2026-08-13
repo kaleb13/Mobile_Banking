@@ -10,6 +10,8 @@ import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/bank_card_widget.dart';
+import '../../widgets/daily_net_heatmap_widget.dart';
 import 'all_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
@@ -28,6 +30,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
   int _selectedSubPeriodIndex = 0;
   late PageController _subPeriodScrollController;
+
+  DateTime _selectedHeatmapMonth = DateTime.now();
+  DateTime? _selectedHeatmapDay;
 
   int? _selectedArcIndex;
   AppReason? _drilledCategory;
@@ -489,6 +494,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   bool _matchesFilter(DateTime date, DateTime now, int year) {
+    if (_selectedHeatmapDay != null) {
+      return date.year == _selectedHeatmapDay!.year &&
+          date.month == _selectedHeatmapDay!.month &&
+          date.day == _selectedHeatmapDay!.day;
+    }
+
     final subItems = _getSubPeriodItems();
     final int subIndex = _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
 
@@ -711,7 +722,31 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       _buildSubPeriodSelectorTabs(),
                       const SizedBox(height: 24),
 
-                      // ── 4. Prominent Inflow / Outflow & Net Cash Flow Summary Section ─────────────────────
+                      // ── 4. Daily Net Calendar Heatmap Grid Section ───────
+                      DailyNetHeatmapWidget(
+                        bankTransactions: provider.transactions,
+                        cashTransactions: provider.cashTransactions,
+                        selectedMonth: _selectedHeatmapMonth,
+                        onMonthChanged: (newMonth) {
+                          _changeFilter(() {
+                            _selectedHeatmapMonth = newMonth;
+                            _selectedHeatmapDay = null;
+                          });
+                        },
+                        selectedDay: _selectedHeatmapDay,
+                        onDaySelected: (day) {
+                          _changeFilter(() {
+                            _selectedHeatmapDay = day;
+                          });
+                        },
+                        isBalanceVisible: provider.isBalanceVisible,
+                        userLevel: provider.userLevel,
+                      ),
+                      if (_selectedHeatmapDay != null)
+                        _buildActiveDayFilterBanner(),
+                      const SizedBox(height: 24),
+
+                      // ── 5. Prominent Inflow / Outflow & Net Cash Flow Summary Section ─────────────────────
                       _buildRedesignedInflowOutflowNetSection(
                         data.totalIncome,
                         data.totalExpense,
@@ -770,6 +805,49 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActiveDayFilterBanner() {
+    if (_selectedHeatmapDay == null) return const SizedBox.shrink();
+    final fmtDate = DateFormat('EEEE, MMM d, yyyy').format(_selectedHeatmapDay!);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_rounded, color: AppColors.textPrimary, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Filtered for $fmtDate',
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              _changeFilter(() {
+                _selectedHeatmapDay = null;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 18),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1846,7 +1924,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         const Text(
           'Bank Performance',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
             letterSpacing: -0.3,
@@ -1854,25 +1932,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
         const SizedBox(height: 14),
 
-        // Individual Bank Performance Breakdown Cards
+        // High-contrast, clean monochrome performance cards
         Column(
           children: bankBreakdown.map((bank) {
             final isPositive = bank.net >= 0;
             final maxVolume = max(bank.income, bank.expense);
             final ratio = maxVolume > 0 ? (bank.expense / maxVolume).clamp(0.1, 1.0) : 0.5;
-
-            Color bankColor;
-            if (bank.name == 'CBE') {
-              bankColor = const Color(0xFF6B4C9A);
-            } else if (bank.name == 'Telebirr') {
-              bankColor = AppColors.telebirrGreen;
-            } else if (bank.name == 'CBE Birr') {
-              bankColor = const Color(0xFFE91E63);
-            } else if (bank.name == 'Ahadu') {
-              bankColor = const Color(0xFFFF9800);
-            } else {
-              bankColor = AppColors.cardGrayMid;
-            }
 
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -1880,24 +1945,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               decoration: BoxDecoration(
                 color: AppColors.surfaceCard,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.border,
+                  width: 1,
+                ),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: bankColor,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
+                      // Official Bank Logo / Icon
+                      BankCardWidget.bankLogo(bank.name, 22, AppColors.textPrimary),
+                      const SizedBox(width: 10),
                       Text(
                         bank.name,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1914,10 +1977,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               ),
                               customFormattedStr: fmt.format(bank.net.abs()),
                             )
-                          : Text(
+                          : const Text(
                               '****',
                               style: TextStyle(
-                                color: isPositive ? AppColors.positive : AppColors.negative,
+                                color: AppColors.textSecondary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1925,14 +1988,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // Progress bar
+                  // Clean, high-contrast monochrome progress track (no heavy colors)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: ratio,
                       minHeight: 4,
-                      backgroundColor: Colors.white10,
-                      valueColor: AlwaysStoppedAnimation<Color>(bankColor),
+                      backgroundColor: AppColors.border,
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.textSoft),
                     ),
                   ),
                 ],

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../screens/wallets/freeze_account_sheet.dart';
@@ -27,7 +28,7 @@ class BankCardWidget extends StatelessWidget {
     this.animationFactor = 1.0,
   });
 
-  static Widget bankLogo(String name, [double size = 34.0]) {
+  static Widget bankLogo(String name, [double size = 34.0, Color? iconColor]) {
     final nameUp = name.toUpperCase();
     String imagePath = '';
 
@@ -39,8 +40,16 @@ class BankCardWidget extends StatelessWidget {
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
       imagePath = 'assets/images/Ahadu_Logo.png';
-    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA') {
-      imagePath = 'assets/images/BOA_Logo.png';
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      return SvgPicture.asset(
+        'assets/images/Bank_of_Abyssinia_Icon.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: iconColor != null
+            ? ColorFilter.mode(iconColor, BlendMode.srcIn)
+            : null,
+      );
     }
 
     if (imagePath.isNotEmpty) {
@@ -147,7 +156,7 @@ class BankCardWidget extends StatelessWidget {
         isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
     final Color textColorSub = isDarkTextTheme
         ? AppColors.darkCharcoal.withValues(alpha: 0.6)
-        : Colors.white.withValues(alpha: 0.6);
+        : Colors.white.withValues(alpha: 0.8);
 
     // Early, smooth gradual fading as card moves between Home (t=0.0) and Wallet (t=1.0)
     final logoOpacity = (t / 0.15).clamp(0.0, 1.0);
@@ -225,7 +234,7 @@ class BankCardWidget extends StatelessWidget {
                       children: [
                         Opacity(
                           opacity: logoOpacity,
-                          child: bankLogo(senderName, logoSize),
+                          child: bankLogo(senderName, logoSize, isDarkTextTheme ? AppColors.darkCharcoal : Colors.white),
                         ),
                         const SizedBox(width: 10),
                         Expanded(

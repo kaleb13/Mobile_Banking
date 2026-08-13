@@ -43,6 +43,12 @@ class SmsBroadcastReceiverTest {
     }
 
     @Test
+    fun `matches BOA sender`() {
+        assertEquals("BOA", SmsBroadcastReceiver.matchBankSender("BOA"))
+        assertEquals("BOA", SmsBroadcastReceiver.matchBankSender("ABYSSINIA"))
+    }
+
+    @Test
     fun `case insensitive sender matching`() {
         assertEquals("CBE", SmsBroadcastReceiver.matchBankSender("cbe"))
         assertEquals("Telebirr", SmsBroadcastReceiver.matchBankSender("Telebirr"))

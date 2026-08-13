@@ -43,6 +43,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             "CBE BIRR" to "CBE Birr",
             "CBE" to "CBE",
             "AHADU" to "Ahadu Bank",
+            "BOA" to "BOA",
+            "ABYSSINIA" to "BOA",
         )
 
         /**

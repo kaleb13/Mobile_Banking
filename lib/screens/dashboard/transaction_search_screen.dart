@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
@@ -448,6 +449,9 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     } else if (nameUp.contains('AHADU')) {
       img =
           Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      img =
+          SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 22, height: 22, fit: BoxFit.contain);
     }
 
     return Container(

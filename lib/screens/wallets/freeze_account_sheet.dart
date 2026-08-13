@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
@@ -390,6 +391,13 @@ class __InteractiveFrozenCardPreviewState
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
       imagePath = 'assets/images/Ahadu_Logo.png';
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      return SvgPicture.asset(
+        'assets/images/Bank_of_Abyssinia_Icon.svg',
+        width: 36,
+        height: 36,
+        fit: BoxFit.contain,
+      );
     }
 
     if (imagePath.isNotEmpty) {

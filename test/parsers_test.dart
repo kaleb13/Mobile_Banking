@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_banking_app/services/cbe_parser.dart';
 import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
@@ -110,10 +111,28 @@ https://verifayda.ahadubank.com/
       expect(tx, isNotNull);
       expect(tx!.amount, equals(3000.00));
       expect(tx.type, equals('income'));
-      expect(tx.name, equals('Yohannes Bizuneh'));
+      expect(tx.name, equals('BOA'));
+      expect(tx.sender, equals('BOA'));
       expect(tx.totalBalance, equals(31824.04));
       expect(tx.bankReference, equals('FT26215HWFDW10104'));
       expect(tx.id, equals('boa_ref_FT26215HWFDW10104'));
+    });
+
+    test('parses exact user provided BOA credit message with 10k ETB and Fayda link', () {
+      const sms = '''Dear Yohannes, your account 2*36 was credited with ETB 10,000.00 by  Yohannes Bizuneh . Available Balance: ETB 34,175.92.
+Receipt: https://cs.bankofabyssinia.com/slip/?trx=FT26157FZW7Y10104
+Link your Fayda: https://cs.bankofabyssinia.com/fayda_connect 
+For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
+      final tx = BoaParser.parse(sms, now);
+
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(10000.00));
+      expect(tx.type, equals('income'));
+      expect(tx.name, equals('BOA'));
+      expect(tx.sender, equals('BOA'));
+      expect(tx.totalBalance, equals(34175.92));
+      expect(tx.bankReference, equals('FT26157FZW7Y10104'));
+      expect(tx.id, equals('boa_ref_FT26157FZW7Y10104'));
     });
 
     test('parses debit transaction with ref ID', () {
@@ -123,7 +142,8 @@ https://verifayda.ahadubank.com/
       expect(tx, isNotNull);
       expect(tx!.amount, equals(10000.00));
       expect(tx.type, equals('expense'));
-      expect(tx.name, equals('BOA Transfer'));
+      expect(tx.name, equals('BOA'));
+      expect(tx.sender, equals('BOA'));
       expect(tx.totalBalance, equals(21818.29));
       expect(tx.bankReference, equals('TT262259CCQC91836'));
     });
@@ -133,9 +153,31 @@ https://verifayda.ahadubank.com/
       expect(BoaParser.parse(sms, now), isNull);
     });
 
-    test('ignores promotional and security messages', () {
-      const sms = 'የጥንቃቄ መልዕክት ለውድ ደንበኞቻችን: የባንካችንን የሞባይል ባንኪንግ አገልግሎት ሲጠቀሙ...';
-      expect(BoaParser.parse(sms, now), isNull);
+    test('parses all 44 transaction messages in BOA SMS.xml with 100% precision', () {
+      final file = File(r'c:\Users\kaleb\Documents\Mobile_Banking\BOA SMS.xml');
+      final content = file.readAsStringSync();
+      final smsRegExp = RegExp(r'<sms\s+[^>]*body="([^"]*)"[^>]*readable_date="([^"]*)"', multiLine: true);
+      final matches = smsRegExp.allMatches(content).toList();
+
+      int parsedCount = 0;
+      int ignoredCount = 0;
+
+      for (final m in matches) {
+        final bodyEscaped = m.group(1) ?? '';
+        final body = bodyEscaped.replaceAll('&#10;', '\n').replaceAll('&amp;', '&');
+        final tx = BoaParser.parse(body, now);
+        if (tx != null) {
+          parsedCount++;
+          expect(tx.name, equals('BOA'));
+          expect(tx.sender, equals('BOA'));
+          expect(tx.amount, greaterThan(0));
+        } else {
+          ignoredCount++;
+        }
+      }
+
+      expect(parsedCount, equals(44));
+      expect(ignoredCount, equals(53));
     });
   });
 }

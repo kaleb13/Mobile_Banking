@@ -46,6 +46,13 @@ class AppColors {
   static const Color levelGlow4 = Color(0xFFF87171);
   static const Color levelGlow5 = Color(0xFFFBBF24);
 
+  // ── Daily Net Heatmap Palette ─────────────────────────────────────────────
+  static const Color heatmapHeavyGreen  = Color(0xFF34D399); // Vibrant emerald for high positive daily net
+  static const Color heatmapSubtleGreen = Color(0xFF0F5234); // Deep forest green for moderate positive daily net
+  static const Color heatmapNeutral     = Color(0xFF1B2431); // Dark charcoal for zero/no transaction days
+  static const Color heatmapSubtleRed   = Color(0xFF4A1D24); // Deep burgundy for moderate negative daily net
+  static const Color heatmapHeavyRed    = Color(0xFFF87171); // Vibrant coral red for high negative daily net
+
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFFFFFFFF); // Primary text on dark
   static const Color textSecondary = Color(0xFF9CA3AF); // Secondary / muted text

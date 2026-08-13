@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -136,9 +137,18 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     final isLinked =
         currentSender.accountNumber != null && currentSender.pin != null;
 
-    final allTxForSender = provider.transactions
-        .where((tx) => tx.name == widget.sender.senderName)
-        .toList();
+    final sNameUp = widget.sender.senderName.toUpperCase();
+    final allTxForSender = provider.transactions.where((tx) {
+      final tNameUp = tx.name.toUpperCase();
+      final tSenderUp = tx.sender.toUpperCase();
+      if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
+        return tNameUp == 'BOA' ||
+            tSenderUp == 'BOA' ||
+            tNameUp.contains('ABYSSINIA') ||
+            tSenderUp.contains('ABYSSINIA');
+      }
+      return tNameUp == sNameUp || tSenderUp == sNameUp;
+    }).toList();
 
     // Chart date filter
     DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
@@ -353,6 +363,14 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
       imagePath = 'assets/images/Ahadu_Logo.png';
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      return SvgPicture.asset(
+        'assets/images/Bank_of_Abyssinia_Icon.svg',
+        width: 38,
+        height: 38,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+      );
     }
 
     if (imagePath.isNotEmpty) {
