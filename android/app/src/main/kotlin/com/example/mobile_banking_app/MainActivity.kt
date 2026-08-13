@@ -83,6 +83,20 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.shibre/quick_edit").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "cancelPhoneNotification" -> {
+                    val notifIdStr = call.argument<String>("id") ?: ""
+                    if (notifIdStr.isNotBlank()) {
+                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                        notificationManager?.cancel(notifIdStr.hashCode())
+                    }
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "sendUssd" -> {

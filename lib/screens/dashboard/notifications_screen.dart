@@ -563,13 +563,6 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final provider = Provider.of<FinanceProvider>(context, listen: false);
-      if (provider.unreadNotificationCount > 0) {
-        provider.markNotificationsRead();
-      }
-    });
   }
 
   @override

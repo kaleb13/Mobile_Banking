@@ -322,7 +322,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val notifId = (System.currentTimeMillis() / 1000).toInt()
+        val notifId = txId.hashCode()
 
         val directionLine = getDirectionHeader(bankName, body)
         val amountLine = extractAmount(body)

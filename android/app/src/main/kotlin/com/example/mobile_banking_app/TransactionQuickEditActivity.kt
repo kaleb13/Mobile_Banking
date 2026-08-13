@@ -92,7 +92,9 @@ class TransactionQuickEditActivity : FlutterActivity() {
                         if (saved) {
                             setReasonUpdatePending()
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
-                            notificationManager?.cancelAll()
+                            if (txId.isNotBlank()) {
+                                notificationManager?.cancel(txId.hashCode())
+                            }
                             try {
                                 MainActivity.smsEventSink?.success("reasonUpdated")
                             } catch (_: Exception) {}

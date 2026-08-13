@@ -1489,14 +1489,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   Future<void> _loadNotifications() async {
     final all = await DatabaseService.instance.getNotifications();
-    // Normalise whitespace so invisible differences (e.g. \r\n vs \n,
-    // double spaces) between the native receiver and flutter_sms_inbox
-    // don't bypass the deduplication check.
-    final Set<String> registeredMessages = _transactions
-        .map((t) => t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim())
-        .where((msg) => msg.isNotEmpty)
-        .toSet();
-
     final List<AppNotification> filtered = [];
     final List<String> idsToDelete = [];
 
@@ -1529,41 +1521,46 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           continue;
         }
 
-        // 4. Ignore messages that are ALREADY registered as transactions in the app.
-        // If the notification has a reason attached (e.g. from user tapping Food/Goods
-        // on the notification banner), transfer that reason to the transaction BEFORE deleting!
-        if (registeredMessages.contains(bodyNormalised)) {
+        // 4. Ignore messages that are ALREADY registered as transactions ONLY if categorized.
+        final txIndex = _transactions.indexWhere((t) =>
+            t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() == bodyNormalised);
+
+        if (txIndex != -1) {
+          final existingTx = _transactions[txIndex];
           if (n.reason != null && n.reason!.isNotEmpty) {
-            final txIndex = _transactions.indexWhere((t) =>
-                t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() == bodyNormalised);
-            if (txIndex != -1) {
-              final existingTx = _transactions[txIndex];
-              if (existingTx.reason == null || existingTx.reason!.isEmpty) {
-                // Use fresh _reasons (reloaded above). If still empty, fetch
-                // directly from DB as a safety net.
-                final reasonsList = _reasons.isNotEmpty
-                    ? _reasons
-                    : await DatabaseService.instance.getReasons();
-                final matchedReason = reasonsList.cast<AppReason?>().firstWhere(
-                  (r) => r?.name.toLowerCase() == n.reason!.toLowerCase(),
-                  orElse: () => null,
-                );
-                // Write directly to SQLite — bypasses the provider-level method
-                // which depends on the stale in-memory _transactions list.
-                final resolvedName = matchedReason?.name ?? n.reason!;
-                await DatabaseService.instance.updateTransactionReason(
-                  existingTx.id!,
-                  resolvedName,
-                  matchedReason?.id,
-                );
-              }
+            if (existingTx.reason == null || existingTx.reason!.isEmpty) {
+              final reasonsList = _reasons.isNotEmpty
+                  ? _reasons
+                  : await DatabaseService.instance.getReasons();
+              final matchedReason = reasonsList.cast<AppReason?>().firstWhere(
+                (r) => r?.name.toLowerCase() == n.reason!.toLowerCase(),
+                orElse: () => null,
+              );
+              final resolvedName = matchedReason?.name ?? n.reason!;
+              await DatabaseService.instance.updateTransactionReason(
+                existingTx.id!,
+                resolvedName,
+                matchedReason?.id,
+              );
             }
+            idsToDelete.add(n.id);
+            continue;
           }
-          idsToDelete.add(n.id);
+
+          // If the existing transaction ALREADY has a category assigned by the user:
+          if (existingTx.reason != null &&
+              existingTx.reason!.isNotEmpty &&
+              existingTx.reason!.toLowerCase() != 'uncategorized') {
+            idsToDelete.add(n.id);
+            continue;
+          }
+
+          // Transaction exists but is STILL UNCATEGORIZED -> Keep in notifications section!
+          filtered.add(n);
           continue;
         }
 
-        // 4. Ingest raw banking notifications into transactions table so they display on Shibre home screen
+        // 5. Ingest raw banking notifications into transactions table so they display on Shibre home screen
         if (BankSenders.match(n.sender) != null ||
             TelebirrParser.parse(n.body, n.date) != null ||
             TelebirrParser.isCreditDisbursement(n.body) ||
@@ -1577,7 +1574,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             date: n.date,
             initialReason: n.reason,
           );
-          idsToDelete.add(n.id);
+          if (n.reason != null && n.reason!.isNotEmpty) {
+            idsToDelete.add(n.id);
+            continue;
+          }
+          // Uncategorized -> Keep in notifications section!
+          filtered.add(n);
           continue;
         }
       }
@@ -1614,6 +1616,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _notifications.removeWhere((n) => n.id == id);
     _unreadNotificationCount =
         await DatabaseService.instance.getUnreadNotificationCount();
+    try {
+      const MethodChannel('com.shibre/quick_edit')
+          .invokeMethod('cancelPhoneNotification', {'id': id});
+    } catch (_) {}
     notifyListeners();
   }
 
