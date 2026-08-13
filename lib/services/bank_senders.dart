@@ -80,7 +80,9 @@ class BankSenders {
     if (lower.contains('auth code')) return true;
     // "verification code" only when it looks like a code delivery (has digits nearby)
     if (lower.contains('verification code') &&
-        RegExp(r'\d{4,8}').hasMatch(lower)) return true;
+        RegExp(r'\d{4,8}').hasMatch(lower)) {
+      return true;
+    }
     // "access code" / "security code" — only when paired with OTP context
     if ((lower.contains('access code') || lower.contains('security code')) &&
         (lower.contains('use') || lower.contains('enter') || lower.contains('otp'))) {

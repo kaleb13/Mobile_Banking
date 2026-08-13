@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
 import '../models/loan_record.dart';
 import '../models/sender.dart';
@@ -76,6 +77,12 @@ Future<void> processSmsRaw({
   required DateTime date,
   String? initialReason,
 }) async {
+  // ── Global Active SMS Listening Guard ──────────────────────────────────────
+  final prefs = await SharedPreferences.getInstance();
+  final isSmsListeningEnabled = prefs.getBool('is_sms_listening_enabled') ?? true;
+  if (!isSmsListeningEnabled) {
+    return; // User turned off active real-time SMS listening in Settings
+  }
   // ── Sender Allowlist Guard (first and most important gate) ────────────────
   // Only process messages from:
   //   1. Known registered bank senders (CBE, Telebirr, CBE Birr, Ahadu Bank)
@@ -160,7 +167,7 @@ Future<void> processSmsRaw({
 
       if (hasDeposit && !hasExpense) {
         tx = AppTransaction(
-          id: sha256.convert(utf8.encode('${senderAddress}|${date.millisecondsSinceEpoch}|$body')).toString(),
+          id: sha256.convert(utf8.encode('$senderAddress|${date.millisecondsSinceEpoch}|$body')).toString(),
           name: matchedSender.senderName,
           amount: amount,
           type: 'income',
@@ -172,7 +179,7 @@ Future<void> processSmsRaw({
         );
       } else if (hasExpense && !hasDeposit) {
         tx = AppTransaction(
-          id: sha256.convert(utf8.encode('${senderAddress}|${date.millisecondsSinceEpoch}|$body')).toString(),
+          id: sha256.convert(utf8.encode('$senderAddress|${date.millisecondsSinceEpoch}|$body')).toString(),
           name: matchedSender.senderName,
           amount: amount,
           type: 'expense',
@@ -225,7 +232,7 @@ Future<void> processSmsRaw({
 
   // 3. ONLY if the message was NOT parsed (tx == null), insert an In-App Notification
   // so it appears in the top Notification Panel as an UNREGISTERED message for manual setup!
-  final notificationId = sha256.convert(utf8.encode('${senderAddress}|${date.millisecondsSinceEpoch}|$body')).toString();
+  final notificationId = sha256.convert(utf8.encode('$senderAddress|${date.millisecondsSinceEpoch}|$body')).toString();
   final notification = AppNotification(
     id: notificationId,
     sender: bank ?? senderAddress,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// An interactive drag handle pill indicator.
 /// Responds to touch/drag by increasing width slightly and switching to a strong active color.
@@ -33,7 +34,7 @@ class _InteractiveDragHandleState extends State<InteractiveDragHandle> {
   Widget build(BuildContext context) {
     final inactiveColor = widget.color ?? Colors.white.withValues(alpha: 0.25);
     final bool isDarkHandle = (widget.color?.computeLuminance() ?? 0.5) < 0.3;
-    final Color activeColor = isDarkHandle ? const Color(0xFF0F172A) : Colors.white;
+    final Color activeColor = isDarkHandle ? AppColors.dragHandleDark : Colors.white;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

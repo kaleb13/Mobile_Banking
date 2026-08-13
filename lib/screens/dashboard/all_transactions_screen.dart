@@ -373,7 +373,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             ),
             const SizedBox(width: 4),
             Icon(
-              Icons.keyboard_arrow_down_rounded,
+              Icons.unfold_more_rounded,
               size: 16,
               color: isSelected ? AppColors.telebirrGreen : AppColors.textSecondary,
             ),

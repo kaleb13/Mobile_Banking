@@ -295,7 +295,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           value: value,
           icon: Padding(
             padding: const EdgeInsets.only(left: 4.0),
-            child: Icon(Icons.keyboard_arrow_down_rounded,
+            child: Icon(Icons.unfold_more_rounded,
                 color: isDefault ? AppColors.textSoft : Colors.white,
                 size: 16),
           ),

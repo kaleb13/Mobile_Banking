@@ -279,6 +279,28 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun extractPersonName(body: String): String? {
+        val pattern = java.util.regex.Pattern.compile("(?:from|to|by)\\s+([A-Za-z]+(?:\\s+[A-Za-z]+){0,4})", java.util.regex.Pattern.CASE_INSENSITIVE)
+        val matcher = pattern.matcher(body)
+        if (matcher.find()) {
+            val rawName = matcher.group(1)?.trim() ?: return null
+            val nonPersonKeywords = setOf("cbe", "telebirr", "ahadu", "bank", "account", "mobile", "service", "ethiopia", "atm")
+            if (!nonPersonKeywords.contains(rawName.lowercase(java.util.Locale.US))) {
+                return limitPersonNameWords(rawName)
+            }
+        }
+        return null
+    }
+
+    private fun limitPersonNameWords(name: String): String {
+        val words = name.trim().split("\\s+".toRegex()).filter { it.isNotEmpty() }
+        return when {
+            words.isEmpty() -> name
+            words.size == 1 -> words[0]
+            else -> "${words[0]} ${words[1]}" // Max 2 words! (1 shows 1, 3 shows 2)
+        }
+    }
+
     private fun showNotification(
         context: Context,
         txId: String,
@@ -306,13 +328,23 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         val amountLine = extractAmount(body)
         val reasonLine = if (!attachedReason.isNullOrBlank()) attachedReason else "Uncategorized"
 
-        val bigText = "$directionLine\nAmount: $amountLine\nReason: $reasonLine"
-        val title = "Banking SMS from $bankName"
+        val personName = extractPersonName(body)
+        val title = if (!personName.isNullOrBlank()) {
+            "Transaction with $personName"
+        } else {
+            "Banking SMS from $bankName"
+        }
 
-        // Create PendingIntent to launch MainActivity (Open / Change Reason)
-        val openIntent = Intent(context, MainActivity::class.java).apply {
+        val bigText = "$directionLine\nAmount: $amountLine\nReason: $reasonLine"
+
+        // Create PendingIntent to launch the transparent quick-edit dialog
+        val openIntent = Intent(context, TransactionQuickEditActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("open_tx_id", txId)
+            putExtra(TransactionQuickEditActivity.EXTRA_TX_ID, txId)
+            putExtra(TransactionQuickEditActivity.EXTRA_SMS_BODY, body)
+            putExtra(TransactionQuickEditActivity.EXTRA_BANK_NAME, bankName)
+            putExtra(TransactionQuickEditActivity.EXTRA_AMOUNT, amountLine)
+            putExtra(TransactionQuickEditActivity.EXTRA_DIRECTION, directionLine)
         }
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -346,7 +378,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             builder.addAction(0, "OK", okPendingIntent)
             builder.addAction(0, "Change Reason", openPendingIntent)
         } else {
-            // Uncategorized Case: 3 Action Buttons [ Food ], [ Goods ], and [ Open ]
+            // Uncategorized Case: 3 Action Buttons [ Food ], [ Goods ], and [ Categorize ]
             val foodIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_SET_REASON
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
@@ -377,7 +409,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             builder.addAction(0, "Food", foodPendingIntent)
             builder.addAction(0, "Goods", goodsPendingIntent)
-            builder.addAction(0, "Open", openPendingIntent)
+            builder.addAction(0, "Categorize", openPendingIntent)
         }
 
         notificationManager.notify(notifId, builder.build())

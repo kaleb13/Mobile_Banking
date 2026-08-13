@@ -24,12 +24,16 @@ class DynamicNotificationPill extends StatefulWidget {
 }
 
 class _DynamicNotificationPillState extends State<DynamicNotificationPill>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final GlobalKey _pillKey = GlobalKey();
   OverlayEntry? _overlayEntry;
   late AnimationController _animController;
   late Animation<double> _expandAnim;
   late Animation<double> _fadeAnim;
+
+  late AnimationController _unfurlCtrl;
+  late Animation<double> _unfurlAnim;
+  bool _isCircle = false;
 
   @override
   void initState() {
@@ -47,23 +51,62 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
       parent: _animController,
       curve: const Interval(0.3, 1.0, curve: Curves.easeIn),
     );
+
+    _unfurlCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    );
+    _unfurlAnim = CurvedAnimation(
+      parent: _unfurlCtrl,
+      curve: Curves.easeInOutCubic,
+    );
+
+    _triggerUnfurlAnimation();
+  }
+
+  void _triggerUnfurlAnimation() async {
+    if (!mounted) return;
+    setState(() {
+      _isCircle = true;
+    });
+    _unfurlCtrl.reset();
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (mounted) {
+      _unfurlCtrl.forward().then((_) {
+        if (mounted) {
+          setState(() {
+            _isCircle = false;
+          });
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _removeOverlay();
     _animController.dispose();
+    _unfurlCtrl.dispose();
     super.dispose();
   }
 
   void _openPanel() {
-    final RenderBox renderBox =
-        _pillKey.currentContext!.findRenderObject() as RenderBox;
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    if (!provider.hasPermission) {
+      provider.requestPermission();
+      return;
+    }
+    _unfurlCtrl.stop();
+    _isCircle = false;
+
+    final RenderBox? renderBox =
+        _pillKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+
     final Offset pillOffset = renderBox.localToGlobal(Offset.zero);
     final double pillWidth = renderBox.size.width;
     final double pillTop = pillOffset.dy;
     final double screenHeight = MediaQuery.of(context).size.height;
-    // Stop before the bottom nav bar: safe-area bottom + nav bar (~80dp) + extra gap (16dp)
     final double bottomInset =
         MediaQuery.of(context).viewPadding.bottom + 80 + 16;
     final double expandedHeight = screenHeight - pillTop - bottomInset;
@@ -85,10 +128,6 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
           _animController.value = newVal;
         },
         onDragEnd: (velocityY) {
-          // If height is reduced by 40% or more (controller value <= 0.60) OR swiped upward:
-          // Morphs back to island pill.
-          // Otherwise (if changed by < 40%, e.g. 10%, 20%, 30%):
-          // Springs back to 100% fully opened panel!
           if (_animController.value <= 0.60 || velocityY < -150) {
             _closePanel();
           } else {
@@ -106,6 +145,7 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
   void _closePanel() async {
     await _animController.reverse();
     _removeOverlay();
+    _triggerUnfurlAnimation();
   }
 
   void _removeOverlay() {
@@ -119,7 +159,7 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
     final provider = Provider.of<FinanceProvider>(context);
 
     return AnimatedBuilder(
-      animation: _expandAnim,
+      animation: Listenable.merge([_expandAnim, _unfurlAnim]),
       builder: (context, child) {
         final double pillOpacity = (1.0 - _expandAnim.value).clamp(0.0, 1.0);
         return Opacity(
@@ -131,23 +171,51 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
         valueListenable: refreshStateNotifier,
         builder: (context, refreshState, _) {
           final isRefreshing = refreshState.phase != RefreshPhase.idle;
+          final double maxPillWidth = MediaQuery.of(context).size.width - 32.0;
+          final double idlePillWidth = !provider.hasPermission
+              ? 210.0
+              : provider.unreadNotificationCount > 0
+                  ? 195.0
+                  : 180.0;
+
+          final double baseWidth;
+          if (_isCircle || _unfurlCtrl.isAnimating) {
+            baseWidth = lerpDouble(38.0, idlePillWidth, _unfurlAnim.value) ??
+                idlePillWidth;
+          } else {
+            baseWidth = idlePillWidth;
+          }
+
+          final double targetWidth;
+          if (refreshState.phase == RefreshPhase.idle) {
+            targetWidth = baseWidth;
+          } else if (refreshState.phase == RefreshPhase.dragging) {
+            targetWidth = lerpDouble(
+                  baseWidth,
+                  maxPillWidth,
+                  refreshState.dragProgress,
+                ) ??
+                baseWidth;
+          } else {
+            targetWidth = maxPillWidth;
+          }
+
           return GestureDetector(
             key: _pillKey,
-            // Disable tap-to-open while refresh is active
             onTap: isRefreshing ? null : _openPanel,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
               height: 38,
-              width: double.infinity,
-              padding: isRefreshing
+              width: targetWidth,
+              padding: (isRefreshing || _isCircle || targetWidth < 60.0)
                   ? EdgeInsets.zero
                   : const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: isRefreshing
                     ? AppColors.positive.withValues(alpha: 0.07)
                     : Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(19),
                 border: Border.all(
                   color: isRefreshing
                       ? AppColors.positive.withValues(alpha: 0.22)
@@ -155,50 +223,108 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
                   width: 1,
                 ),
               ),
-              child: RefreshAwarePillContent(
-                idleChild: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(
-                          Icons.notifications,
-                          color: AppColors.textSoft,
-                          size: 16,
-                        ),
-                        if (provider.unreadNotificationCount > 0)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                color: AppColors.gold,
-                                shape: BoxShape.circle,
+              child: SizedBox(
+                width: targetWidth,
+                height: 38,
+                child: RefreshAwarePillContent(
+                  idleChild: ClipRRect(
+                    borderRadius: BorderRadius.circular(19),
+                    child: ClipRect(
+                      child: Center(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const NeverScrollableScrollPhysics(),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 38,
+                                child: Center(
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    alignment: Alignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.notifications,
+                                        color: AppColors.textSoft,
+                                        size: 16,
+                                      ),
+                                      if (provider.unreadNotificationCount > 0)
+                                        Positioned(
+                                          right: 0,
+                                          top: 2,
+                                          child: Container(
+                                            width: 6,
+                                            height: 6,
+                                            decoration: const BoxDecoration(
+                                              color: AppColors.gold,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
+                              AnimatedBuilder(
+                                animation: _unfurlAnim,
+                                builder: (context, _) {
+                                  if (targetWidth < 60.0) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  final double textOpacity;
+                                  if (_isCircle || _unfurlCtrl.isAnimating) {
+                                    final double unfurlT = _unfurlAnim.value;
+                                    if (unfurlT < 0.25) {
+                                      textOpacity = 0.0;
+                                    } else {
+                                      textOpacity = ((unfurlT - 0.25) / 0.75)
+                                          .clamp(0.0, 1.0);
+                                    }
+                                  } else {
+                                    textOpacity = 1.0;
+                                  }
+
+                                  return Opacity(
+                                    opacity: textOpacity,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          !provider.hasPermission
+                                              ? 'Tap to enable SMS tracking'
+                                              : provider.unreadNotificationCount > 0
+                                                  ? '${provider.unreadNotificationCount} unread notification${provider.unreadNotificationCount > 1 ? 's' : ''}'
+                                                  : 'No new notifications',
+                                          style: TextStyle(
+                                            color: !provider.hasPermission
+                                                ? AppColors.positive
+                                                : AppColors.textSoft,
+                                            fontSize: 12,
+                                            fontWeight: !provider.hasPermission
+                                                ? FontWeight.w600
+                                                : FontWeight.w400,
+                                            letterSpacing: -0.1,
+                                          ),
+                                          maxLines: 1,
+                                          softWrap: false,
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
-                      ],
-                    ),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        provider.unreadNotificationCount > 0
-                            ? '${provider.unreadNotificationCount} unread notification${provider.unreadNotificationCount > 1 ? 's' : ''}'
-                            : 'No new notifications',
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: -0.1,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -236,20 +362,27 @@ class _MorphingPanelOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
+    final double screenWidth = MediaQuery.of(context).size.width;
+    const double targetLeft = 16.0;
+    final double targetWidth = screenWidth - 32.0;
 
     return AnimatedBuilder(
       animation: expandAnim,
       builder: (context, child) {
         final double currentHeight =
             38.0 + (expandedHeight - 38.0) * expandAnim.value;
-        const double currentRadius = 20.0; // Same border radius as island pill
+        final double currentWidth =
+            pillWidth + (targetWidth - pillWidth) * expandAnim.value;
+        final double currentLeft =
+            pillLeft + (targetLeft - pillLeft) * expandAnim.value;
+        const double currentRadius = 24.0;
 
         // Morph fraction between 0.0 (top 0%) and 0.30 (top 30%)
         final double morphT = (expandAnim.value / 0.30).clamp(0.0, 1.0);
 
         final Color currentBg = Color.lerp(
-          Colors.white.withValues(alpha: 0.06),
-          const Color(0xFF141419),
+          Colors.white.withValues(alpha: 0.08),
+          AppColors.surfaceCard,
           morphT,
         )!;
 
@@ -262,22 +395,22 @@ class _MorphingPanelOverlay extends StatelessWidget {
                   onTap: onClose,
                   child: BackdropFilter(
                     filter: ImageFilter.blur(
-                      sigmaX: 16 * expandAnim.value,
-                      sigmaY: 16 * expandAnim.value,
+                      sigmaX: 18 * expandAnim.value,
+                      sigmaY: 18 * expandAnim.value,
                     ),
                     child: Container(
                       color: Colors.black
-                          .withValues(alpha: 0.55 * expandAnim.value),
+                          .withValues(alpha: 0.60 * expandAnim.value),
                     ),
                   ),
                 ),
               ),
 
-            // The single dynamic morphing panel
+            // Morphing Dynamic Island panel expanding sideways & downwards
             Positioned(
               top: pillTop,
-              left: pillLeft,
-              width: pillWidth,
+              left: currentLeft,
+              width: currentWidth,
               child: Material(
                 type: MaterialType.transparency,
                 child: GestureDetector(
@@ -297,17 +430,24 @@ class _MorphingPanelOverlay extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: currentBg,
                       borderRadius:
-                          const BorderRadius.all(Radius.circular(currentRadius)),
+                          BorderRadius.circular(currentRadius),
                       border: Border.all(
                         color: Colors.white
-                            .withValues(alpha: 0.08 * (1.0 - morphT)),
+                            .withValues(alpha: 0.12 * (1.0 - morphT) + 0.04 * morphT),
                         width: 1,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35 * expandAnim.value),
+                          blurRadius: 20 * expandAnim.value,
+                          offset: Offset(0, 8 * expandAnim.value),
+                        ),
+                      ],
                     ),
                     clipBehavior: Clip.hardEdge,
                     child: OverflowBox(
-                      minWidth: pillWidth,
-                      maxWidth: pillWidth,
+                      minWidth: currentWidth,
+                      maxWidth: currentWidth,
                       minHeight: 0,
                       maxHeight: expandedHeight,
                       alignment: Alignment.topCenter,
@@ -337,12 +477,13 @@ class _MorphingPanelOverlay extends StatelessWidget {
                                       horizontal: 16),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Stack(
                                         clipBehavior: Clip.none,
                                         children: [
                                           const Icon(
-                                            Icons.notifications,
+                                            Icons.notifications_rounded,
                                             color: AppColors.textSoft,
                                             size: 16,
                                           ),
@@ -362,7 +503,7 @@ class _MorphingPanelOverlay extends StatelessWidget {
                                             ),
                                         ],
                                       ),
-                                      const SizedBox(width: 10),
+                                      const SizedBox(width: 8),
                                       Flexible(
                                         child: Text(
                                           provider.unreadNotificationCount > 0
@@ -371,7 +512,7 @@ class _MorphingPanelOverlay extends StatelessWidget {
                                           style: const TextStyle(
                                             color: AppColors.textSoft,
                                             fontSize: 12,
-                                            fontWeight: FontWeight.w400,
+                                            fontWeight: FontWeight.w500,
                                             letterSpacing: -0.1,
                                           ),
                                           maxLines: 1,

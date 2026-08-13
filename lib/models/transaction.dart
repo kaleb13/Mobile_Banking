@@ -1,3 +1,5 @@
+import 'transaction_attachment.dart';
+
 class AppTransaction {
   final String? id;
   final String name;
@@ -10,14 +12,17 @@ class AppTransaction {
   final bool isAutoDetected;
   final double totalBalance;
 
-  // Reason system
+  // Reason & Hierarchy system
   final int? reasonId; // points to reasons table (reusable)
+  final int? categoryId; // points to top-level category in reasons table
+  final int? subcategoryId; // points to subcategory in reasons table
   final String? customReasonText; // one-time text, stored only on transaction
   final String? reason; // legacy / convenience resolved name
-  final String?
-      linkedTransactionId; // points to another transaction for internal transfers
-  final String?
-      bankReference; // original reference number from the bank SMS
+  final String? note; // free-text context note
+  final List<TransactionAttachment> attachments;
+
+  final String? linkedTransactionId; // points to another transaction for internal transfers
+  final String? bankReference; // original reference number from the bank SMS
 
   AppTransaction({
     this.id,
@@ -31,8 +36,12 @@ class AppTransaction {
     required this.isAutoDetected,
     this.totalBalance = 0.0,
     this.reasonId,
+    this.categoryId,
+    this.subcategoryId,
     this.customReasonText,
     this.reason,
+    this.note,
+    this.attachments = const [],
     this.linkedTransactionId,
     this.bankReference,
   });
@@ -65,15 +74,21 @@ class AppTransaction {
       'isAutoDetected': isAutoDetected ? 1 : 0,
       'totalBalance': totalBalance,
       'reasonId': reasonId,
+      'categoryId': categoryId,
+      'subcategoryId': subcategoryId,
       'customReasonText': customReasonText,
       // Keep legacy 'reason' column in sync for backward compat
       'reason': reason ?? customReasonText,
+      'note': note,
       'linkedTransactionId': linkedTransactionId,
       'bankReference': bankReference,
     };
   }
 
-  factory AppTransaction.fromMap(Map<String, dynamic> map) {
+  factory AppTransaction.fromMap(
+    Map<String, dynamic> map, {
+    List<TransactionAttachment> attachments = const [],
+  }) {
     return AppTransaction(
       id: map['id']?.toString(),
       name: map['name'] ?? 'Unknown',
@@ -86,8 +101,12 @@ class AppTransaction {
       isAutoDetected: map['isAutoDetected'] == 1,
       totalBalance: (map['totalBalance'] as num?)?.toDouble() ?? 0.0,
       reasonId: map['reasonId'] as int?,
+      categoryId: map['categoryId'] as int?,
+      subcategoryId: map['subcategoryId'] as int?,
       customReasonText: map['customReasonText'] as String?,
       reason: map['reason'] as String?,
+      note: map['note'] as String?,
+      attachments: attachments,
       linkedTransactionId: map['linkedTransactionId'] as String?,
       bankReference: map['bankReference'] as String?,
     );
@@ -96,10 +115,17 @@ class AppTransaction {
   AppTransaction copyWith({
     int? reasonId,
     bool clearReasonId = false,
+    int? categoryId,
+    bool clearCategoryId = false,
+    int? subcategoryId,
+    bool clearSubcategoryId = false,
     String? customReasonText,
     bool clearCustomReason = false,
     String? reason,
     bool clearReason = false,
+    String? note,
+    bool clearNote = false,
+    List<TransactionAttachment>? attachments,
     String? linkedTransactionId,
     bool clearLinkedTransactionId = false,
     double? totalBalance,
@@ -118,10 +144,14 @@ class AppTransaction {
       isAutoDetected: isAutoDetected,
       totalBalance: totalBalance ?? this.totalBalance,
       reasonId: clearReasonId ? null : (reasonId ?? this.reasonId),
+      categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
+      subcategoryId: clearSubcategoryId ? null : (subcategoryId ?? this.subcategoryId),
       customReasonText: clearCustomReason
           ? null
           : (customReasonText ?? this.customReasonText),
       reason: clearReason ? null : (reason ?? this.reason),
+      note: clearNote ? null : (note ?? this.note),
+      attachments: attachments ?? this.attachments,
       linkedTransactionId: clearLinkedTransactionId
           ? null
           : (linkedTransactionId ?? this.linkedTransactionId),

@@ -39,6 +39,13 @@ class AppColors {
   static const Color statusWarningBg = Color(0xFF3A240F); // Deep amber background for warning status
   static const Color previewCardBg   = Color(0xFF141D2B); // Dark navy tint for notification preview card
 
+  // ── Tier Level Glows ──────────────────────────────────────────────────────
+  static const Color levelGlow1 = Color(0xFF8B9DFF);
+  static const Color levelGlow2 = Color(0xFF38BDF8);
+  static const Color levelGlow3 = Color(0xFFAC58FE);
+  static const Color levelGlow4 = Color(0xFFF87171);
+  static const Color levelGlow5 = Color(0xFFFBBF24);
+
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFFFFFFFF); // Primary text on dark
   static const Color textSecondary = Color(0xFF9CA3AF); // Secondary / muted text
@@ -125,6 +132,31 @@ class AppColors {
   static const Color pausedCardMid      = Color(0xFF4A4A4A);
   /// Glow / shadow color for paused card.
   static const Color pausedCardGlow     = Color(0xFF888888);
+
+  // ── Central UI Palette Additions ─────────────────────────────────────────
+  static const Color dragHandleDark     = Color(0xFF0F172A);
+  static const Color navyDark           = Color(0xFF0F172A);
+  static const Color navyCard           = Color(0xFF161F2C);
+  static const Color deepNavy           = Color(0xFF0E1520);
+  static const Color darkSheetBg        = Color(0xFF141419);
+  static const Color darkTileBg         = Color(0xFF16181D);
+  static const Color midnightBlack      = Color(0xFF09090D);
+  static const Color slatePanel         = Color(0xFF1E293B);
+  static const Color slateBorder        = Color(0xFF334155);
+  static const Color slateMuted         = Color(0xFF64748B);
+  static const Color slateLight         = Color(0xFFCBD5E1);
+  static const Color slateSurface       = Color(0xFFF1F5F9);
+  static const Color whiterGlow         = Color(0xFFF8FAFC);
+  static const Color emeraldDeep        = Color(0xFF00875A);
+  static const Color emeraldBright      = Color(0xFF00A86B);
+  static const Color amberDark          = Color(0xFFFFA000);
+  static const Color softRed            = Color(0xFFFF6B6B);
+  static const Color grayLight          = Color(0xFFE5E7EB);
+  static const Color grayDarkText       = Color(0xFF374151);
+  static const Color grayMuted          = Color(0xFF8E95A2);
+  static const Color skyBlue            = Color(0xFF0284C7);
+  static const Color onboardingDark     = Color(0xFF071410);
+  static const Color onboardingDeep     = Color(0xFF060D0A);
 
 
   // ── Gradients ─────────────────────────────────────────────────────────────

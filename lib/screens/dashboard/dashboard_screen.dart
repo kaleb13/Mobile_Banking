@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/material.dart' as m;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +15,7 @@ import '../../models/cash_transaction.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_badges.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -36,6 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isFilterExpanded = false;
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
+  final ScrollController _topScrollController = ScrollController();
   late PageController _bannerController;
   final bool _isShowingTodayOnly = false;
   Timer? _bannerTimer;
@@ -45,6 +48,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double? _touchedX;
   final GlobalKey _topSectionKey = GlobalKey();
   double? _measuredTopSectionHeight;
+  double _lastDynamicRestSize = 0.55;
+  int _lastOverdueCount = -1;
 
   @override
   void initState() {
@@ -52,13 +57,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Start PageController at a large central value for "infinite" scroll
     _bannerController = PageController(initialPage: _bannerLoopFactor ~/ 2);
     _startAutoScroll();
-    // Measure the top section height exactly once after the first frame.
-    // We do NOT call this inside build() to avoid scheduling a postFrameCallback
-    // on every single rebuild (which was causing a recursive setState loop).
+    _sheetController.addListener(_onSheetScroll);
+    _topScrollController.addListener(_onTopScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateTopSectionHeight());
   }
 
+  void _onTopScroll() {
+    if (!mounted) return;
+    Provider.of<FinanceProvider>(context, listen: false)
+        .setHomeTopScrollOffset(_topScrollController.hasClients ? _topScrollController.offset : 0.0);
+  }
 
+  void _onSheetScroll() {
+    if (!mounted || !_sheetController.isAttached) return;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final sheetTopY = screenHeight * (1.0 - _sheetController.size);
+    Provider.of<FinanceProvider>(context, listen: false).setHomeSheetTopY(sheetTopY);
+  }
 
   void _startAutoScroll() {
     _bannerTimer?.cancel();
@@ -75,6 +90,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _sheetController.removeListener(_onSheetScroll);
+    _topScrollController.removeListener(_onTopScroll);
+    _topScrollController.dispose();
     _bannerTimer?.cancel();
     _bannerController.dispose();
     _searchController.dispose();
@@ -141,84 +159,92 @@ class _DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 20,
-                offset: Offset(0, -5),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCard.withValues(alpha: 0.35), // Fully transparent glass background
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border(
+                  top: BorderSide(
                     color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(2),
+                    width: 1.0,
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  isToday ? "Today's PNL" : "Overall PNL",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 25,
+                    offset: const Offset(0, -5),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  isToday
-                      ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\n\nIt represents your net increase or decrease in wealth today."
-                      : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\n\nThis shows your cumulative financial progress since using the app.",
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.gold,
-                    foregroundColor: AppColors.background,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title Row: Star/sparkle icon inline with white title text
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.white,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isToday ? "Today's PNL" : "Overall PNL",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ],
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text(
-                    "OK",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                    const SizedBox(height: 8),
+
+                    // Description: Smaller, clean text directly below title
+                    Text(
+                      isToday
+                          ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\nIt represents your net increase or decrease in wealth today."
+                          : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\nThis shows your cumulative financial progress since using the app.",
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.70),
+                        fontSize: 11.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+
+                    // Got It button — uses canvas.saveLayer to correctly apply
+                    // BlendMode.overlay strictly to the text label against the
+                    // button background (the ONLY correct Flutter approach).
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: CustomPaint(
+                          painter: _OverlayButtonPainter(
+                            backgroundColor: AppColors.positive,
+                            label: "Got It",
+                            borderRadius: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         );
       },
@@ -226,88 +252,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   IconData _getReasonIcon(String? reason) {
-    if (reason == null) {
-      return Icons.help_outline;
-    }
-    final r = reason.toLowerCase();
-    if (r.contains('airtime') || r.contains('phone')) {
-      return Icons.phone_android;
-    }
-    if (r.contains('food') || r.contains('restaurant')) {
-      return Icons.restaurant;
-    }
-    if (r.contains('transport') || r.contains('taxi')) {
-      return Icons.directions_car;
-    }
-    if (r.contains('shopping')) {
-      return Icons.shopping_bag;
-    }
-    if (r.contains('utility') || r.contains('bill')) {
-      return Icons.receipt_long;
-    }
-    if (r.contains('loan') || r.contains('debt')) {
-      return Icons.handshake;
-    }
-    if (r.contains('gift')) {
-      return Icons.redeem;
-    }
-    if (r.contains('salary') || r.contains('deposit')) {
-      return Icons.account_balance_wallet;
-    }
-    if (r.contains('internet')) {
-      return Icons.language;
-    }
+    if (reason == null) return Icons.category_outlined;
+    final r = reason.toLowerCase().trim();
+    if (r.contains('food')) return Icons.restaurant;
+    if (r.contains('drink')) return Icons.local_cafe;
+    if (r.contains('transport')) return Icons.directions_car;
+    if (r.contains('housing') || r.contains('rent')) return Icons.home;
+    if (r.contains('utility') || r.contains('light')) return Icons.lightbulb;
+    if (r.contains('goods') || r.contains('shopping')) return Icons.shopping_bag;
+    if (r.contains('entertainment') || r.contains('movie')) return Icons.movie;
+    if (r.contains('health') || r.contains('medical')) return Icons.medical_services;
+    if (r.contains('education') || r.contains('school')) return Icons.school;
+    if (r.contains('loan') || r.contains('debt')) return Icons.handshake_outlined;
+    if (r.contains('cash')) return Icons.payments_outlined;
+    if (r.contains('bounce')) return Icons.replay_rounded;
+    if (r.contains('internal transfer')) return Icons.swap_horiz_rounded;
+    if (r.contains('mobile') || r.contains('internet') || r.contains('airtime') || r.contains('phone')) return Icons.phone_android;
+    if (r.contains('investment') || r.contains('saving') || r.contains('stock')) return Icons.trending_up;
+    if (r.contains('salary')) return Icons.account_balance_wallet;
     return Icons.category_outlined;
   }
 
 
 
-  void _updateTopSectionHeight() {
+  void _updateTopSectionHeight({bool forceAnimate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final RenderBox? box =
           _topSectionKey.currentContext?.findRenderObject() as RenderBox?;
       if (box != null && box.hasSize) {
         final newHeight = box.size.height;
-        if (_measuredTopSectionHeight != newHeight) {
-          setState(() {
-            _measuredTopSectionHeight = newHeight;
-          });
+        final mediaQuery = MediaQuery.of(context);
+        final screenHeight = mediaQuery.size.height;
+        final topPadding = mediaQuery.padding.top;
+        double newRestSize = (screenHeight - (newHeight + topPadding)) / screenHeight;
+        newRestSize = newRestSize.clamp(0.20, 0.75);
+
+        if (_measuredTopSectionHeight != newHeight || forceAnimate) {
+          if (_measuredTopSectionHeight != newHeight) {
+            setState(() {
+              _measuredTopSectionHeight = newHeight;
+            });
+          }
+          if (_sheetController.isAttached) {
+            final currentSize = _sheetController.size;
+            if (forceAnimate || (currentSize - _lastDynamicRestSize).abs() < 0.15 || currentSize <= 0.60) {
+              _sheetController.animateTo(
+                newRestSize,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+              );
+            }
+          }
+          _lastDynamicRestSize = newRestSize;
         }
       }
+      _onSheetScroll();
     });
   }
 
   Widget _buildMainDashboardLayout(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    return HoldToRefresh(
-      onRefresh: () => provider.refreshData(lastDays: 7),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SafeArea(
-              bottom: false,
-              child: Column(
-                key: _topSectionKey,
-                children: [
-                  if (provider.overdueLoans.isNotEmpty)
-                    _buildOverdueLoanBanner(context),
-                  const SizedBox(height: 8),
-                  _buildHeader(context),
-                  const SizedBox(height: 10),
-                  _buildBalanceCard(context),
-                  _buildOverallChartSection(context),
-                  const SizedBox(height: 10),
-                  _buildBannerCarousel(context),
-                  const SizedBox(height: 14),
-                ],
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final currentOverdueCount = provider.overdueLoanCount;
+    if (_lastOverdueCount != currentOverdueCount) {
+      _lastOverdueCount = currentOverdueCount;
+      _updateTopSectionHeight(forceAnimate: true);
+    }
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification notification) {
+        if (notification.metrics.axis == Axis.vertical) {
+          provider.setHomeTopScrollOffset(notification.metrics.pixels);
+        }
+        return false;
+      },
+      child: HoldToRefresh(
+        onRefresh: () => provider.refreshData(lastDays: 7),
+        child: SingleChildScrollView(
+          controller: _topScrollController,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SafeArea(
+                bottom: false,
+                child: Column(
+                  key: _topSectionKey,
+                  children: [
+                    if (provider.overdueLoans.isNotEmpty)
+                      _buildOverdueLoanBanner(context),
+                    const SizedBox(height: 8),
+                    _buildHeader(context),
+                    const SizedBox(height: 10),
+                    _buildBalanceCard(context),
+                    _buildOverallChartSection(context),
+                    const SizedBox(height: 10),
+                    _buildBannerCarousel(context),
+                    const SizedBox(height: 14),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 60), // Decoy Section below carousel banner
+            ],
+          ),
         ),
       ),
     );
@@ -322,7 +371,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return GestureDetector(
       onTap: () {
-        provider.setScreenIndex(3);
+        final targetTab = firstOverdue.loanType == 'borrowed' ? 1 : 0;
+        provider.setLoanTabIndex(targetTab);
+        provider.animateToTab(3);
       },
       child: Container(
         width: double.infinity,
@@ -378,7 +429,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildHeader(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.0),
-      child: DynamicNotificationPill(),
+      child: Center(
+        child: DynamicNotificationPill(),
+      ),
     );
   }
 
@@ -526,6 +579,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             setState(() {
                               _isOverallChartVisible = !_isOverallChartVisible;
                             });
+                            _updateTopSectionHeight(forceAnimate: true);
+                            Future.delayed(const Duration(milliseconds: 100), () {
+                              if (mounted) _updateTopSectionHeight(forceAnimate: true);
+                            });
                           },
                           behavior: HitTestBehavior.opaque,
                           child: Row(
@@ -591,139 +648,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildStackedCardsDeck(BuildContext context, FinanceProvider provider) {
-    final t = (provider.pageOffset).clamp(0.0, 1.0);
+    final senders = provider.senders;
+    final t = provider.pageOffset.clamp(0.0, 1.0);
 
-    // Hide static deck when swiping so physical flying overlay in MainShell handles screen flight
-    if (t > 0.001 && t < 0.999) {
-      return const SizedBox(width: 65, height: 185);
+    // If swiping page transition is active (t > 0.05), let MainShell flying overlay handle it
+    if (senders.isEmpty || t > 0.05) {
+      return GestureDetector(
+        onTap: () => provider.animateToTab(1),
+        behavior: HitTestBehavior.opaque,
+        child: const SizedBox(width: 105, height: 185),
+      );
     }
 
-    final opacity = (1.0 - t * 1.5).clamp(0.0, 1.0);
+    // Render native stacked cards in-tree on Home Page for 100% synchronous scroll/pull
+    const double baseLeftOffset = -42.0;
+    const double leftStep = 22.0;
+    const double homeW = 100.0;
+    const double homeH = 185.0;
+
+    final int totalCards = senders.length + 1;
+    final List<Widget> cardWidgets = [];
+
+    for (int i = 0; i < totalCards; i++) {
+      final bool isCashWallet = i == senders.length;
+      final String cardName =
+          isCashWallet ? 'Cash Wallet' : senders[i].senderName;
+      final bool isVisibleOnHome = !isCashWallet && i < 3;
+      if (!isVisibleOnHome) continue;
+
+      final int deckIndex = i;
+      final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
+
+      final senderTxs = provider.transactions
+          .where((tx) =>
+              tx.name.trim().toUpperCase() == cardName.trim().toUpperCase())
+          .toList();
+
+      double balance = 0;
+      final withBal = senderTxs.where((tx) => tx.totalBalance > 0);
+      if (withBal.isNotEmpty) {
+        balance = withBal.first.totalBalance;
+      }
+
+      final isPaused = provider.isTrackingPaused(cardName);
+
+      final Widget card = BankCardWidget(
+        senderName: cardName,
+        balance: balance,
+        txCount: senderTxs.length,
+        isBalanceVisible: provider.isBalanceVisible,
+        isPaused: isPaused,
+        animationFactor: 0.0,
+      );
+
+      cardWidgets.add(
+        Positioned(
+          left: deckLeftOffset + 42.0,
+          top: 0,
+          width: homeW,
+          height: homeH,
+          child: card,
+        ),
+      );
+    }
 
     return GestureDetector(
-      onTap: () {
-        provider.setScreenIndex(1); // Navigate to My Wallets screen
-      },
+      onTap: () => provider.animateToTab(1),
       behavior: HitTestBehavior.opaque,
-      child: Opacity(
-        opacity: opacity,
-        child: SizedBox(
-          height: 185,
-          width: 65,
-          child: Stack(
-            alignment: Alignment.centerRight,
-            clipBehavior: Clip.none,
-            children: [
-              // Layer 1: Bottom (Green Telebirr card)
-              Positioned(
-                right: lerpDouble(18, -120, t)!,
-                top: lerpDouble(0, 100, t)!,
-                bottom: 0,
-                width: lerpDouble(95, 260, t)!,
-                child: Hero(
-                  tag: 'hero_card_TELEBIRR',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppColors.telebirrGreen,
-                          AppColors.cardLime,
-                        ],
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(lerpDouble(24, 22, t)!),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.telebirrGreen.withValues(alpha: 0.3),
-                          blurRadius: 16,
-                          offset: const Offset(-4, 0),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Layer 2: Middle (Brown CBE card)
-              Positioned(
-                right: lerpDouble(-6, -60, t)!,
-                top: lerpDouble(0, 220, t)!,
-                bottom: 0,
-                width: lerpDouble(95, 260, t)!,
-                child: Hero(
-                  tag: 'hero_card_CBE',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppColors.cardBrownMid,
-                          AppColors.cardBrownDark,
-                        ],
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(lerpDouble(24, 22, t)!),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.cardBrownDark.withValues(alpha: 0.4),
-                          blurRadius: 12,
-                          offset: const Offset(-3, 0),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Layer 3: Top (White CBE Birr card)
-              Positioned(
-                right: lerpDouble(-30, 0, t)!,
-                top: lerpDouble(0, 340, t)!,
-                bottom: 0,
-                width: lerpDouble(95, 260, t)!,
-                child: Hero(
-                  tag: 'hero_card_CBE BIRR',
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppColors.cardCbeBirrSilver,
-                          AppColors.cardCbeBirrWhite,
-                        ],
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(lerpDouble(24, 22, t)!),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          blurRadius: 16,
-                          offset: const Offset(-4, 2),
-                        ),
-                      ],
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
-                          colors: [
-                            Colors.white.withValues(alpha: 0.6),
-                            Colors.white.withValues(alpha: 0.0),
-                          ],
-                        ),
-                        borderRadius:
-                            BorderRadius.circular(lerpDouble(24, 22, t)!),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+      child: SizedBox(
+        width: 105,
+        height: 185,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: cardWidgets,
         ),
       ),
     );
@@ -1386,6 +1383,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final double estimatedTopContent =
         (provider.overdueLoans.isNotEmpty ? 54.0 : 0.0) +
+            (_isOverallChartVisible ? 220.0 : 0.0) +
             (345.0 * textScale.clamp(1.0, 1.4));
 
     double dynamicRestSize;
@@ -1404,8 +1402,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       initialChildSize: dynamicRestSize,
       minChildSize: dynamicRestSize,
       maxChildSize: 0.95,
-      snap: true,
-      snapSizes: [dynamicRestSize, 0.95],
+      snap: false,
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
@@ -1889,4 +1886,73 @@ class DashedUnderlinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
+/// Correctly applies BlendMode.overlay to text against a pill button background.
+/// Uses canvas.saveLayer so both background and text share the same composited
+/// GPU buffer — the only way BlendMode.overlay works correctly against a colored
+/// background in Flutter's rendering pipeline.
+class _OverlayButtonPainter extends CustomPainter {
+  final Color backgroundColor;
+  final String label;
+  final double borderRadius;
+
+  _OverlayButtonPainter({
+    required this.backgroundColor,
+    required this.label,
+    required this.borderRadius,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(borderRadius),
+    );
+
+    // Step 1: Draw the solid button background pill
+    canvas.drawRRect(rrect, Paint()..color = backgroundColor);
+
+    // Step 2: Open a new compositing layer over the button area.
+    // When canvas.restore() is called, this layer is composited back
+    // onto the background using BlendMode.overlay.
+    canvas.saveLayer(
+      rect,
+      Paint()..blendMode = BlendMode.overlay,
+    );
+
+    // Step 3: Draw the label text inside the saved layer.
+    // The text is drawn in white — the overlay blend mode then blends
+    // these white pixels against the green background underneath,
+    // producing the correct overlay effect.
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'Got It',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          letterSpacing: 0.3,
+        ),
+      ),
+      textDirection: m.TextDirection.ltr,
+    )..layout();
+
+    final textOffset = Offset(
+      (size.width - textPainter.width) / 2,
+      (size.height - textPainter.height) / 2,
+    );
+    textPainter.paint(canvas, textOffset);
+
+    // Step 4: Restore triggers the GPU to composite the text layer
+    // back onto the green background using BlendMode.overlay.
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _OverlayButtonPainter old) =>
+      old.backgroundColor != backgroundColor ||
+      old.label != label ||
+      old.borderRadius != borderRadius;
 }

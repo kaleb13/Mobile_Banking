@@ -15,6 +15,7 @@ import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
 import '../models/saving_goal.dart';
 import '../models/goal_feasibility.dart';
+import '../models/transaction_attachment.dart';
 import '../services/database_service.dart';
 import '../services/sms_service.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as sms_inbox;
@@ -91,8 +92,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isBalanceVisible = true;
   bool _isShowingAll = false;
   bool _isMenuOpen = false;
+  bool _isSmsListeningEnabled = true;
+  bool _isPushNotificationsEnabled = false; // OFF by default as requested!
+  bool _isDailyReportEnabled = true;
+  bool _isWeeklyReportEnabled = true;
+  bool _isMonthlyReportEnabled = true;
   int _currentScreenIndex = 0;
   double _pageOffset = 0.0;
+  double? _homeSheetTopY;
+  double _homeTopScrollOffset = 0.0;
   String? _userName;
   StreamSubscription? _bgServiceSubscription;
   bool _isBatchProcessing = false;
@@ -234,10 +242,68 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool get isBalanceVisible => _isBalanceVisible;
   bool get isShowingAll => _isShowingAll;
   bool get isMenuOpen => _isMenuOpen;
+  bool get isSmsListeningEnabled => _isSmsListeningEnabled;
   DateTime get selectedDate => _selectedDate;
   DateTime? get customMonthAnchorDate => _customMonthAnchorDate;
+
+  Future<void> setSmsListeningEnabled(bool value) async {
+    _isSmsListeningEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_sms_listening_enabled', value);
+    notifyListeners();
+  }
+
+  bool get isPushNotificationsEnabled => _isPushNotificationsEnabled;
+  bool get isDailyReportEnabled => _isDailyReportEnabled;
+  bool get isWeeklyReportEnabled => _isWeeklyReportEnabled;
+  bool get isMonthlyReportEnabled => _isMonthlyReportEnabled;
+
+  Future<void> setPushNotificationsEnabled(bool value) async {
+    _isPushNotificationsEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_push_notifications_enabled', value);
+    notifyListeners();
+  }
+
+  Future<void> setDailyReportEnabled(bool value) async {
+    _isDailyReportEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('report_daily_enabled', value);
+    notifyListeners();
+  }
+
+  Future<void> setWeeklyReportEnabled(bool value) async {
+    _isWeeklyReportEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('report_weekly_enabled', value);
+    notifyListeners();
+  }
+
+  Future<void> setMonthlyReportEnabled(bool value) async {
+    _isMonthlyReportEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('report_monthly_enabled', value);
+    notifyListeners();
+  }
   int get currentScreenIndex => _currentScreenIndex;
   double get pageOffset => _pageOffset;
+  double? get homeSheetTopY => _homeSheetTopY;
+  double get homeTopScrollOffset => _homeTopScrollOffset;
+
+  void setHomeSheetTopY(double y) {
+    if ((_homeSheetTopY ?? -1.0) != y) {
+      _homeSheetTopY = y;
+      notifyListeners();
+    }
+  }
+
+  void setHomeTopScrollOffset(double offset) {
+    final clamped = offset < 0 ? 0.0 : offset;
+    if ((_homeTopScrollOffset - clamped).abs() > 0.5) {
+      _homeTopScrollOffset = clamped;
+      notifyListeners();
+    }
+  }
 
   void setPageOffset(double offset) {
     if ((_pageOffset - offset).abs() > 0.001) {
@@ -411,39 +477,34 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         if (a.date == null || b.date == null) return 0;
         return b.date!.compareTo(a.date!);
       });
-      Set<String> processedSenders = {};
       _isBatchProcessing = true;
       for (var msg in allMessages) {
         if (msg.sender != null && msg.body != null && msg.date != null) {
           final msgDate = msg.date!;
           if (!_isEnglishBankingMessage(msg.body!)) continue;
           final bank = BankSenders.match(msg.sender);
-          if (bank == 'Telebirr' && !processedSenders.contains('Telebirr')) {
+          if (bank == 'Telebirr') {
             AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); processedSenders.add('Telebirr'); }
-          } else if (bank == 'CBE Birr' && !processedSenders.contains('CBE Birr')) {
+            if (tx != null) { await addTransaction(tx); }
+          } else if (bank == 'CBE Birr') {
             AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); processedSenders.add('CBE Birr'); }
-          } else if (bank == 'CBE' && !processedSenders.contains('CBE')) {
+            if (tx != null) { await addTransaction(tx); }
+          } else if (bank == 'CBE') {
             if (_userName == null) {
               final name = CbeParser.extractOwnerName(msg.body!);
               if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
             }
             AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); processedSenders.add('CBE'); }
-          } else if (bank == 'Ahadu Bank' && !processedSenders.contains('Ahadu Bank')) {
+            if (tx != null) { await addTransaction(tx); }
+          } else if (bank == 'Ahadu Bank') {
             if (_userName == null) {
               final name = AhaduParser.extractOwnerName(msg.body!);
               if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
             }
             AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); processedSenders.add('Ahadu Bank'); }
+            if (tx != null) { await addTransaction(tx); }
           }
         }
-        if (processedSenders.contains('Telebirr') &&
-            processedSenders.contains('CBE') &&
-            processedSenders.contains('CBE Birr') &&
-            processedSenders.contains('Ahadu Bank')) { break; }
       }
       _isBatchProcessing = false;
       await prefs.setBool('is_first_boot_v5', false);
@@ -472,6 +533,78 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<AppNotification> get notifications => _notifications;
   int get unreadNotificationCount => _unreadNotificationCount;
   List<AppReason> get reasons => _reasons;
+
+  /// Resolves the parent top-level category or special reason for any reason parameters.
+  AppReason? resolveTopLevelCategory({
+    int? reasonId,
+    int? categoryId,
+    int? subcategoryId,
+    String? reasonName,
+  }) {
+    // 1. Check ID hierarchy (subcategoryId, reasonId, categoryId)
+    final idsToCheck = [subcategoryId, reasonId, categoryId].whereType<int>();
+    for (final id in idsToCheck) {
+      final r = _reasons.cast<AppReason?>().firstWhere(
+            (item) => item?.id == id,
+            orElse: () => null,
+          );
+      if (r != null) {
+        if (r.parentId != null) {
+          final parent = _reasons.cast<AppReason?>().firstWhere(
+                (p) => p?.id == r.parentId,
+                orElse: () => r,
+              );
+          return parent;
+        }
+        return r;
+      }
+    }
+
+    // 2. Check name text matching against DB reasons (exact or substring)
+    final rawName = (reasonName ?? '').trim().toLowerCase();
+    if (rawName.isNotEmpty) {
+      // First pass: exact name match
+      for (final r in _reasons) {
+        if (r.name.trim().toLowerCase() == rawName) {
+          if (r.parentId != null) {
+            final parent = _reasons.cast<AppReason?>().firstWhere(
+                  (p) => p?.id == r.parentId,
+                  orElse: () => r,
+                );
+            return parent;
+          }
+          return r;
+        }
+      }
+      // Second pass: substring match (e.g. "Coffee with friend" contains "Coffee")
+      for (final r in _reasons) {
+        final rName = r.name.trim().toLowerCase();
+        if (rName.isNotEmpty && (rawName.contains(rName) || rName.contains(rawName))) {
+          if (r.parentId != null) {
+            final parent = _reasons.cast<AppReason?>().firstWhere(
+                  (p) => p?.id == r.parentId,
+                  orElse: () => r,
+                );
+            return parent;
+          }
+          return r;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Resolves the parent top-level category or special reason for any transaction.
+  AppReason? resolveTopLevelCategoryFor(AppTransaction tx) {
+    return resolveTopLevelCategory(
+      reasonId: tx.reasonId,
+      categoryId: tx.categoryId,
+      subcategoryId: tx.subcategoryId,
+      reasonName: tx.reason ?? tx.customReasonText ?? tx.resolvedReason,
+    );
+  }
+
   List<AppReasonLink> get reasonLinks => _reasonLinks;
   List<LoanRecord> get loanRecords => _loanRecords;
   List<LoanPayment> paymentsForLoan(int loanId) => _loanPayments[loanId] ?? [];
@@ -482,6 +615,34 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   List<CashTransaction> get cashTransactions => _cashTransactions;
   double get cashBalance => _cashBalance;
   List<SavingGoal> get savingGoals => _savingGoals;
+
+  /// Returns all cash deduction transactions linked to a specific bank withdrawal transaction ID.
+  List<CashTransaction> spendingsForTransaction(String transactionId) {
+    return _cashTransactions
+        .where((ctx) => ctx.linkedTransactionId == transactionId)
+        .toList();
+  }
+
+  /// Total cash spent out of a specific bank cash withdrawal.
+  double getCashWithdrawalSpentAmount(String transactionId) {
+    return spendingsForTransaction(transactionId)
+        .fold(0.0, (sum, ctx) => sum + ctx.amount);
+  }
+
+  /// Remaining unspent cash for a specific bank cash withdrawal.
+  double getCashWithdrawalRemainingAmount(String transactionId, double originalAmount) {
+    final spent = getCashWithdrawalSpentAmount(transactionId);
+    return (originalAmount - spent).clamp(0.0, double.infinity);
+  }
+
+  /// Returns recent bank cash withdrawal transactions (bank expenses with reason 'Cash').
+  List<AppTransaction> get activeBankCashWithdrawals {
+    return _transactions.where((t) {
+      if (t.type != 'expense') return false;
+      final reasonStr = (t.reason ?? t.customReasonText ?? t.resolvedReason ?? '').toLowerCase().trim();
+      return reasonStr == 'cash';
+    }).toList();
+  }
 
   /// Live balance per detected bank account, e.g. {'CBE': 12500.0, 'Telebirr': 3200.0}.
   Map<String, double> get latestBalancesMap => Map.unmodifiable(_latestBalancesMap);
@@ -542,9 +703,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       conflictWarning: conflicts.join(' · '),
     );
   }
-
-  // Stub for cash spending tracking (not yet implemented in DB)
-  List<dynamic> spendingsForTransaction(String transactionId) => [];
 
   // ── Loan convenience getters ──────────────────
   List<LoanRecord> get activeLoans =>
@@ -756,10 +914,26 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await init();
   }
 
+  final ValueNotifier<int?> tabNavigationNotifier = ValueNotifier<int?>(null);
+
   void setScreenIndex(int index) {
     if (_currentScreenIndex == index) return;
     _currentScreenIndex = index;
     notifyListeners();
+  }
+
+  int _activeLoanTabIndex = 0;
+  int get activeLoanTabIndex => _activeLoanTabIndex;
+
+  void setLoanTabIndex(int index) {
+    if (_activeLoanTabIndex == index) return;
+    _activeLoanTabIndex = index;
+    notifyListeners();
+  }
+
+  void animateToTab(int index) {
+    setScreenIndex(index);
+    tabNavigationNotifier.value = index;
   }
 
   void toggleIsMenuOpen() {
@@ -798,6 +972,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     _isOnboardingComplete = prefs.getBool('is_onboarding_complete_v1') ?? false;
     _userName = prefs.getString('user_name_v1');
+    _isSmsListeningEnabled = prefs.getBool('is_sms_listening_enabled') ?? true;
     // Restore the level the user has already been congratulated for, so we
     // don't re-fire the modal after a cold restart.
     _lastSeenLevel = prefs.getInt('last_seen_level') ?? 1;
@@ -995,7 +1170,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _bgServiceSubscription?.cancel();
     const channel = EventChannel('com.shibre/sms_events');
     _bgServiceSubscription = channel.receiveBroadcastStream().listen((_) {
-      _reloadFromDatabase();
+      if (_isSmsListeningEnabled) {
+        _reloadFromDatabase();
+      }
     });
 
     _setupDeepLinkListener();
@@ -1729,8 +1906,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           _netOverall -= tx.amount;
         }
 
-        // Track expense reason totals for dashboard banner cards
-        final key = tx.resolvedReason ?? 'Other';
+        // Track expense reason totals for dashboard banner cards — ONLY top-level categories & Loan
+        final key = getTopLevelCategoryForTransaction(tx);
         if (isToday) {
           todayReasonTotals[key] = (todayReasonTotals[key] ?? 0) + tx.amount;
         }
@@ -1791,6 +1968,59 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     if (!_isBatchProcessing && _levelDetectionReady) {
       _maybeFireLevelUpModal();
     }
+  }
+
+  /// Resolves the top-level category name (or 'Loan') for expense statistics cards
+  String getTopLevelCategoryForTransaction(AppTransaction tx) {
+    if (tx.reasonId != null) {
+      final r = _reasons.cast<AppReason?>().firstWhere(
+            (item) => item?.id == tx.reasonId,
+            orElse: () => null,
+          );
+      if (r != null) {
+        if (r.isSpecial || r.name.toLowerCase() == 'loan') return r.name;
+        if (r.isSubcategory && r.parentId != null) {
+          final parent = _reasons.cast<AppReason?>().firstWhere(
+                (p) => p?.id == r.parentId,
+                orElse: () => null,
+              );
+          if (parent != null) return parent.name;
+        }
+        if (r.isTopLevelCategory) return r.name;
+      }
+    }
+
+    if (tx.categoryId != null) {
+      final cat = _reasons.cast<AppReason?>().firstWhere(
+            (c) => c?.id == tx.categoryId,
+            orElse: () => null,
+          );
+      if (cat != null) return cat.name;
+    }
+
+    final reasonStr = tx.resolvedReason?.trim();
+    if (reasonStr != null && reasonStr.isNotEmpty) {
+      final matchedReason = _reasons.cast<AppReason?>().firstWhere(
+            (r) => r?.name.toLowerCase() == reasonStr.toLowerCase(),
+            orElse: () => null,
+          );
+      if (matchedReason != null) {
+        if (matchedReason.isSpecial || matchedReason.name.toLowerCase() == 'loan') {
+          return matchedReason.name;
+        }
+        if (matchedReason.isSubcategory && matchedReason.parentId != null) {
+          final parent = _reasons.cast<AppReason?>().firstWhere(
+                (p) => p?.id == matchedReason.parentId,
+                orElse: () => null,
+              );
+          if (parent != null) return parent.name;
+        }
+        if (matchedReason.isTopLevelCategory) return matchedReason.name;
+      }
+      return reasonStr;
+    }
+
+    return 'Other';
   }
 
   Future<void> addSender(AppSender sender) async {
@@ -1863,48 +2093,202 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
 
-  /// Update a transaction with a reusable reason [reasonId] OR a one-time [customReasonText].
-  /// Pass reasonId=null and customReasonText with a value for one-time.
-  /// Pass reasonId with a value for a saved reason.
+  List<AppReason> get specialReasons => _reasons
+      .where((r) =>
+          r.isSpecial ||
+          ['bounce', 'cash', 'internal transfer', 'loan']
+              .contains(r.name.toLowerCase()))
+      .toList();
+
+  List<AppReason> get topLevelCategories => _reasons
+      .where((r) =>
+          r.parentId == null &&
+          !r.isSpecial &&
+          !['bounce', 'cash', 'internal transfer', 'loan']
+              .contains(r.name.trim().toLowerCase()))
+      .toList();
+
+  List<AppReason> subcategoriesFor(int categoryId) {
+    AppReason? parent;
+    for (final r in _reasons) {
+      if (r.id == categoryId) {
+        parent = r;
+        break;
+      }
+    }
+    final parentName = parent?.name.toLowerCase() ?? '';
+    return _reasons.where((r) {
+      if (r.parentId != categoryId) return false;
+      final rName = r.name.toLowerCase();
+      if ((parentName.contains('food') || parentName.contains('drink')) &&
+          (rName.contains('loan') || rName.contains('borrow') || rName.contains('lend'))) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Future<AppReason> addTopLevelCategory(String name, {String? icon, String? color}) async {
+    final reason = AppReason(
+      name: name,
+      isSystem: false,
+      isSpecial: false,
+      icon: icon,
+      color: color,
+    );
+    final id = await DatabaseService.instance.insertReason(reason);
+    // Give it proper ID from insert
+    final insertedCat = AppReason(
+      id: id,
+      name: name,
+      isSystem: false,
+      isSpecial: false,
+      icon: icon,
+      color: color,
+    );
+    _reasons.add(insertedCat);
+    notifyListeners();
+    return insertedCat;
+  }
+
+  Future<AppReason> addSubcategory(int parentId, String name) async {
+    final sub = AppReason(
+      name: name,
+      parentId: parentId,
+      isSystem: false,
+      isSpecial: false,
+    );
+    final id = await DatabaseService.instance.insertReason(sub);
+    final insertedSub = AppReason(
+      id: id,
+      name: name,
+      parentId: parentId,
+      isSystem: false,
+      isSpecial: false,
+    );
+    _reasons.add(insertedSub);
+    notifyListeners();
+    return insertedSub;
+  }
+
+  Future<void> updateCategory(int id, String newName) async {
+    final idx = _reasons.indexWhere((r) => r.id == id);
+    if (idx == -1) return;
+    final updated = _reasons[idx].copyWith(name: newName);
+    await DatabaseService.instance.updateReason(updated);
+    _reasons[idx] = updated;
+    notifyListeners();
+  }
+
+  Future<void> deleteCategory(int id) async {
+    await DatabaseService.instance.deleteReason(id);
+    _reasons.removeWhere((r) => r.id == id || r.parentId == id);
+    notifyListeners();
+  }
+
+  /// Update a transaction with a reusable reason [reasonId] OR a one-time [customReasonText],
+  /// plus optional [categoryId], [subcategoryId], and [note].
   Future<void> updateTransactionReason(
     String transactionId, {
     int? reasonId,
+    int? categoryId,
+    int? subcategoryId,
     String? customReasonText,
+    String? note,
   }) async {
     final index = _transactions.indexWhere((t) => t.id == transactionId);
     if (index == -1) return;
     final oldTx = _transactions[index];
 
     String? resolvedName;
+    int? resolvedCatId = categoryId ?? oldTx.categoryId;
+    int? resolvedSubCatId = subcategoryId ?? oldTx.subcategoryId;
+
     if (reasonId != null) {
       final r = _reasons.firstWhere((r) => r.id == reasonId,
           orElse: () => AppReason(name: ''));
       resolvedName = r.name.isNotEmpty ? r.name : null;
+      if (r.isSubcategory) {
+        resolvedSubCatId = r.id;
+        resolvedCatId = r.parentId;
+      } else if (r.isTopLevelCategory) {
+        resolvedCatId = r.id;
+      }
     }
 
-    final newTx = AppTransaction(
-      id: oldTx.id,
-      name: oldTx.name,
-      amount: oldTx.amount,
-      type: oldTx.type,
-      date: oldTx.date,
-      sender: oldTx.sender,
-      category: oldTx.category,
-      rawMessage: oldTx.rawMessage,
-      isAutoDetected: oldTx.isAutoDetected,
-      totalBalance: oldTx.totalBalance,
+    final newTx = oldTx.copyWith(
       reasonId: reasonId,
-      customReasonText:
-          (customReasonText != null && customReasonText.isNotEmpty)
-              ? customReasonText
-              : null,
-      reason: resolvedName,
-      linkedTransactionId: oldTx.linkedTransactionId,
+      categoryId: resolvedCatId,
+      subcategoryId: resolvedSubCatId,
+      customReasonText: (customReasonText != null && customReasonText.isNotEmpty)
+          ? customReasonText
+          : oldTx.customReasonText,
+      reason: resolvedName ?? oldTx.reason,
+      note: note ?? oldTx.note,
     );
+
     await DatabaseService.instance.updateTransaction(newTx);
     _transactions[index] = newTx;
     _calculateStats();
     notifyListeners();
+  }
+
+  Future<void> updateTransactionNote(String transactionId, String? note) async {
+    final index = _transactions.indexWhere((t) => t.id == transactionId);
+    if (index == -1) return;
+    final oldTx = _transactions[index];
+    final newTx = oldTx.copyWith(note: note, clearNote: note == null || note.isEmpty);
+    await DatabaseService.instance.updateTransaction(newTx);
+    _transactions[index] = newTx;
+    notifyListeners();
+  }
+
+  Future<void> addAttachment(
+    String transactionId,
+    String filePath,
+    String fileType, {
+    String? fileName,
+    int? fileSize,
+  }) async {
+    final attachment = TransactionAttachment(
+      id: '${transactionId}_${DateTime.now().millisecondsSinceEpoch}',
+      transactionId: transactionId,
+      filePath: filePath,
+      fileType: fileType,
+      fileName: fileName,
+      fileSize: fileSize,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+
+    await DatabaseService.instance.insertAttachment(attachment);
+    final idx = _transactions.indexWhere((t) => t.id == transactionId);
+    if (idx != -1) {
+      final oldTx = _transactions[idx];
+      final newAttachments = [...oldTx.attachments, attachment];
+      _transactions[idx] = oldTx.copyWith(attachments: newAttachments);
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteAttachment(String transactionId, String attachmentId) async {
+    await DatabaseService.instance.deleteAttachment(attachmentId);
+    final idx = _transactions.indexWhere((t) => t.id == transactionId);
+    if (idx != -1) {
+      final oldTx = _transactions[idx];
+      final newAttachments = oldTx.attachments.where((a) => a.id != attachmentId).toList();
+      _transactions[idx] = oldTx.copyWith(attachments: newAttachments);
+      notifyListeners();
+    }
+  }
+
+  Future<List<TransactionAttachment>> loadAttachmentsForTransaction(String transactionId) async {
+    final attachments = await DatabaseService.instance.getAttachmentsForTransaction(transactionId);
+    final idx = _transactions.indexWhere((t) => t.id == transactionId);
+    if (idx != -1) {
+      _transactions[idx] = _transactions[idx].copyWith(attachments: attachments);
+      notifyListeners();
+    }
+    return attachments;
   }
 
   Future<void> linkAsInternalTransfer(String txId1, String txId2) async {

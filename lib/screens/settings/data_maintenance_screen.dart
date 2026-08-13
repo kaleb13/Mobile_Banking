@@ -213,7 +213,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
             'Data Maintenance',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 28,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               letterSpacing: -0.5,
             ),

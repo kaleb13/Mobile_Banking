@@ -8,6 +8,7 @@ import 'screens/shell/main_shell.dart';
 import 'screens/intro/onboarding_screen.dart';
 import 'screens/privacy/app_lock_screen.dart';
 import 'services/pin_service.dart';
+import 'screens/dashboard/quick_edit_overlay.dart';
 
 /// Global navigator key — allows non-widget code (e.g. FinanceProvider) to
 /// push routes or show modals without needing a BuildContext.
@@ -99,3 +100,31 @@ class _MobileBankingAppState extends State<MobileBankingApp> {
     );
   }
 }
+
+// ─── Quick Edit Overlay Entry Point ──────────────────────────────────────────
+// Separate Dart entry point for TransactionQuickEditActivity.
+// Must live in main.dart so the AOT compiler includes it in the release snapshot.
+// The @pragma prevents tree-shaking since nothing in main() calls this.
+
+@pragma('vm:entry-point')
+void quickEditMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Colors.transparent,
+      ),
+      home: const QuickEditOverlay(),
+    ),
+  );
+}
+

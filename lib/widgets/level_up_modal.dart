@@ -7,12 +7,12 @@ import '../widgets/custom_progress_bar.dart';
 // ── Glow colors per level (mirrors profile_hub_screen.dart) ──────────────────
 Color _levelGlowColor(int level) {
   switch (level) {
-    case 1: return const Color(0xFF8B9DFF);
-    case 2: return const Color(0xFF38BDF8);
-    case 3: return const Color(0xFFAC58FE);
-    case 4: return const Color(0xFFF87171);
-    case 5: return const Color(0xFFFBBF24);
-    default: return const Color(0xFF8B9DFF);
+    case 1: return AppColors.levelGlow1;
+    case 2: return AppColors.levelGlow2;
+    case 3: return AppColors.levelGlow3;
+    case 4: return AppColors.levelGlow4;
+    case 5: return AppColors.levelGlow5;
+    default: return AppColors.levelGlow1;
   }
 }
 
@@ -477,7 +477,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
         height: 52,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [AppColors.positive, Color(0xFF2CA070)],
+            colors: [AppColors.positive, AppColors.success],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),

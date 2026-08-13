@@ -19,12 +19,12 @@ class OnboardingScreen extends StatefulWidget {
 
 Color _levelGlowColor(int level) {
   switch (level) {
-    case 1: return const Color(0xFF8B9DFF); // LV1 Indigo / Blue
-    case 2: return const Color(0xFF38BDF8); // LV2 Silver Cyan / Sky Blue
-    case 3: return const Color(0xFFAC58FE); // LV3 Royal Purple / Violet
-    case 4: return const Color(0xFFF87171); // LV4 Red / Coral
-    case 5: return const Color(0xFFFBBF24); // LV5 Gold / Amber
-    default: return const Color(0xFF8B9DFF);
+    case 1: return AppColors.levelGlow1; // LV1 Indigo / Blue
+    case 2: return AppColors.levelGlow2; // LV2 Silver Cyan / Sky Blue
+    case 3: return AppColors.levelGlow3; // LV3 Royal Purple / Violet
+    case 4: return AppColors.levelGlow4; // LV4 Red / Coral
+    case 5: return AppColors.levelGlow5; // LV5 Gold / Amber
+    default: return AppColors.levelGlow1;
   }
 }
 
@@ -172,7 +172,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF071410), Color(0xFF050C16), Color(0xFF060D0A)],
+              colors: [AppColors.onboardingDark, AppColors.background, AppColors.onboardingDeep],
               stops: [0.0, 0.5, 1.0],
             ),
           ),
@@ -245,7 +245,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Color(0xFF050C16)],
+                colors: [Colors.transparent, AppColors.background],
               ),
             ),
           ),

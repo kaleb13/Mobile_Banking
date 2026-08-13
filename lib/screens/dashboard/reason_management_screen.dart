@@ -6,14 +6,26 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 
-class ReasonManagementScreen extends StatefulWidget {
-  const ReasonManagementScreen({super.key});
+class CategoryManagementScreen extends StatefulWidget {
+  const CategoryManagementScreen({super.key});
 
   @override
-  State<ReasonManagementScreen> createState() => _ReasonManagementScreenState();
+  State<CategoryManagementScreen> createState() => _CategoryManagementScreenState();
 }
 
-class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
+// Alias for backwards compatibility with existing imports
+typedef ReasonManagementScreen = CategoryManagementScreen;
+
+class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
+  int? _expandedCategoryId;
+
+  static const Map<String, String> _specialReasonDescriptions = {
+    'loan': 'Track loans, credit lines & debt repayments',
+    'internal transfer': 'Transfer money between your accounts',
+    'cash': 'Cash wallet & manual cash expenses',
+    'bounce': 'Bounced, reversed & failed transactions',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -22,10 +34,16 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
     });
   }
 
-  // ── Add / Edit reason ──────────────────────────────────────────
-  void _showAddEditDialog(BuildContext context, FinanceProvider provider,
-      {AppReason? existing}) {
+  bool _isSpecial(AppReason r) {
+    if (r.isSpecial) return true;
+    final nameLower = r.name.trim().toLowerCase();
+    return _specialReasonDescriptions.containsKey(nameLower);
+  }
+
+  void _showAddCategoryDialog(BuildContext context, FinanceProvider provider, {AppReason? parentCategory, AppReason? existing}) {
     final ctrl = TextEditingController(text: existing?.name ?? '');
+    final isSubcategory = parentCategory != null || (existing != null && existing.isSubcategory);
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -33,114 +51,77 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
         return StatefulBuilder(builder: (ctx, setInner) {
           return AlertDialog(
             backgroundColor: AppColors.bgMid,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(existing == null ? 'New Reason' : 'Edit Reason',
-                style: const TextStyle(color: AppColors.textPrimary)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              existing == null
+                  ? (isSubcategory ? 'New Subcategory' : 'New Category')
+                  : (isSubcategory ? 'Edit Subcategory' : 'Edit Category'),
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (parentCategory != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Parent: ${parentCategory.name}',
+                      style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 TextField(
                   controller: ctrl,
                   autofocus: true,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: const TextStyle(color: Colors.white),
                   onChanged: (_) {
                     if (errorMsg != null) setInner(() => errorMsg = null);
                   },
                   decoration: InputDecoration(
-                    hintText: 'Reason name…',
-                    hintStyle: TextStyle(
-                        color: AppColors.textSecondary.withValues(alpha: 0.6)),
+                    hintText: isSubcategory ? 'Subcategory name...' : 'Category name...',
+                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
                     filled: true,
-                    fillColor: AppColors.surfaceCard.withValues(alpha: 0.1),
+                    fillColor: Colors.white.withValues(alpha: 0.05),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: errorMsg != null
-                          ? BorderSide(
-                              color: AppColors.negative.withValues(alpha: 0.7))
-                          : BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: errorMsg != null
-                          ? BorderSide(
-                              color: AppColors.negative.withValues(alpha: 0.7))
-                          : BorderSide.none,
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: errorMsg != null
-                          ? const BorderSide(color: AppColors.negative)
-                          : BorderSide(
-                              color:
-                                  AppColors.textPrimary.withValues(alpha: 0.5)),
+                      borderSide: const BorderSide(color: AppColors.positive),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
                   ),
                 ),
                 if (errorMsg != null) ...[
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.error_outline,
-                          color: AppColors.negative, size: 14),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          errorMsg!,
-                          style: const TextStyle(
-                              color: AppColors.negative, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
+                  Text(errorMsg!, style: const TextStyle(color: AppColors.negative, fontSize: 12)),
                 ],
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
               ),
-              TextButton(
+              ElevatedButton(
                 onPressed: () async {
                   final name = ctrl.text.trim();
                   if (name.isEmpty) return;
 
-                  // Block if name matches a system reason (case-insensitive)
-                  final conflictsSystem = provider.reasons
-                      .where((r) => r.isSystem)
-                      .any((r) => r.name.toLowerCase() == name.toLowerCase());
-                  if (conflictsSystem) {
-                    setInner(() => errorMsg =
-                        '"$name" is a system reason and cannot be duplicated.');
-                    return;
-                  }
-
-                  // Block duplicate custom reasons (allow same name when editing itself)
-                  final conflictsUser = provider.reasons
-                      .where((r) => !r.isSystem)
-                      .any((r) =>
-                          r.name.toLowerCase() == name.toLowerCase() &&
-                          r.id != existing?.id);
-                  if (conflictsUser) {
-                    setInner(() => errorMsg =
-                        'You already have a custom reason called "$name".');
-                    return;
-                  }
-
-                  if (existing == null) {
-                    await provider.addReason(name);
+                  if (existing != null) {
+                    await provider.updateCategory(existing.id!, name);
+                  } else if (parentCategory != null) {
+                    await provider.addSubcategory(parentCategory.id!, name);
                   } else {
-                    await provider.editReason(existing, name);
+                    await provider.addTopLevelCategory(name);
                   }
-                  if (ctx.mounted) Navigator.pop(ctx);
+
+                  if (context.mounted) {
+                    Navigator.pop(ctx);
+                  }
                 },
-                child: Text(existing == null ? 'Add' : 'Save',
-                    style: const TextStyle(color: AppColors.gold)),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.positive),
+                child: const Text('Save'),
               ),
             ],
           );
@@ -149,257 +130,106 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
     );
   }
 
-  // ── Link dialog ─────────────────────────────────────────────────
-  void _showLinkDialog(
-      BuildContext context, FinanceProvider provider, AppReason reason) {
-    final nameCtrl = TextEditingController();
-    String linkType = 'sender';
-
+  void _confirmDeleteCategory(BuildContext context, FinanceProvider provider, AppReason reason) {
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setInner) {
-          final existingLinks = provider.linksForReason(reason.id!);
-          return Dialog(
-            alignment: Alignment.topCenter,
-            backgroundColor: AppColors.surface,
-            insetPadding:
-                const EdgeInsets.only(top: 80, left: 16, right: 16, bottom: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text('Links for "${reason.name}"',
-                            style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(ctx),
-                        child: const Icon(Icons.close,
-                            color: AppColors.textSecondary, size: 20),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          reason.isSubcategory ? 'Delete Subcategory?' : 'Delete Category?',
+          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          reason.isSubcategory
+              ? 'Are you sure you want to delete "${reason.name}"?'
+              : 'Are you sure you want to delete "${reason.name}" and all of its subcategories?',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await provider.deleteCategory(reason.id!);
+              if (context.mounted) {
+                Navigator.pop(ctx);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.negative),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  // Existing links
-                  if (existingLinks.isNotEmpty) ...[
-                    const Text('Current links',
-                        style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ...existingLinks.map((link) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: Row(
-                            children: [
-                              Icon(
-                                link.linkType == 'sender'
-                                    ? Icons.upload_outlined
-                                    : Icons.download_outlined,
-                                color:
-                                    AppColors.textPrimary.withValues(alpha: 0.5),
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '${link.linkType == 'sender' ? 'Sender' : 'Receiver'}: ${link.linkedName}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: AppColors.textPrimary, fontSize: 13),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () async {
-                                  await provider.deleteReasonLink(link.id!);
-                                  setInner(() {});
-                                },
-                                child: const Icon(Icons.close,
-                                    color: AppColors.negative, size: 18),
-                              ),
-                            ],
-                          ),
-                        )),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Add new link
-                  const Text('Add new link',
-                      style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      // Type toggle
-                      GestureDetector(
-                        onTap: () => setInner(() {
-                          linkType =
-                              linkType == 'sender' ? 'receiver' : 'sender';
-                        }),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AppColors.textPrimary.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color:
-                                    AppColors.textPrimary.withValues(alpha: 0.1)),
-                          ),
-                          child: Text(
-                            linkType == 'sender' ? '↑ Sender' : '↓ Receiver',
-                            style: TextStyle(
-                                color:
-                                    AppColors.textPrimary.withValues(alpha: 0.8),
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Autocomplete<String>(
-                          optionsBuilder: (TextEditingValue textEditingValue) {
-                            if (textEditingValue.text.isEmpty) {
-                              return const Iterable<String>.empty();
-                            }
-                            final options = provider.transactions
-                                .map((t) => t.sender)
-                                .toSet()
-                                .toList();
-                            return options.where((String option) {
-                              return option.toLowerCase().contains(
-                                  textEditingValue.text.toLowerCase());
-                            });
-                          },
-                          onSelected: (String selection) {
-                            nameCtrl.text = selection;
-                          },
-                          optionsViewBuilder: (ctx, onSelected, options) {
-                            return Align(
-                              alignment: Alignment.topLeft,
-                              child: Material(
-                                color: Colors.transparent,
-                                child: Container(
-                                  margin: const EdgeInsets.only(top: 4),
-                                  width: MediaQuery.of(ctx).size.width * 0.5,
-                                  constraints:
-                                      const BoxConstraints(maxHeight: 200),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceCard,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                        color: AppColors.surfaceCard
-                                            .withValues(alpha: 0.3)),
-                                  ),
-                                  child: ListView.builder(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    itemCount: options.length,
-                                    itemBuilder: (context, i) {
-                                      final option = options.elementAt(i);
-                                      return InkWell(
-                                        onTap: () => onSelected(option),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 16, vertical: 12),
-                                          child: Text(option,
-                                              style: const TextStyle(
-                                                  color: AppColors.textPrimary,
-                                                  fontSize: 14)),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                          fieldViewBuilder: (context, controller, focusNode,
-                              onEditingComplete) {
-                            // Keep the parent nameCtrl synced
-                            controller.addListener(() {
-                              nameCtrl.text = controller.text;
-                            });
-                            return TextField(
-                              controller: controller,
-                              focusNode: focusNode,
-                              style: const TextStyle(
-                                  color: AppColors.textPrimary, fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: 'Search or type name…',
-                                hintStyle: TextStyle(
-                                    color: AppColors.textSecondary
-                                        .withValues(alpha: 0.6),
-                                    fontSize: 13),
-                                filled: true,
-                                fillColor: AppColors.surfaceCard
-                                    .withValues(alpha: 0.1),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                      color: AppColors.textPrimary
-                                          .withValues(alpha: 0.5)),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 10),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      GestureDetector(
-                        onTap: () async {
-                          final name = nameCtrl.text.trim();
-                          if (name.isEmpty) return;
-                          await provider.addReasonLink(
-                            reasonId: reason.id!,
-                            linkedName: name,
-                            linkType: linkType,
-                          );
-                          nameCtrl.clear();
-                          setInner(() {});
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.textPrimary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(Icons.add,
-                              color: AppColors.textPrimary.withValues(alpha: 0.9),
-                              size: 20),
-                        ),
-                      ),
-                    ],
+  void _showCategoryOptionsModal(BuildContext context, FinanceProvider provider, AppReason reason) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          decoration: const BoxDecoration(
+            color: AppColors.bgMid,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                ],
+                ),
               ),
-            ),
-          );
-        });
+              const SizedBox(height: 16),
+              Text(
+                reason.name,
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                reason.isSubcategory ? 'Subcategory Options' : 'Category Options',
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: Colors.white70),
+                title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _showAddCategoryDialog(context, provider, existing: reason);
+                },
+              ),
+              if (reason.isTopLevelCategory)
+                ListTile(
+                  leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
+                  title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _showAddCategoryDialog(context, provider, parentCategory: reason);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
+                title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _confirmDeleteCategory(context, provider, reason);
+                },
+              ),
+            ],
+          ),
+        );
       },
     );
   }
@@ -408,24 +238,19 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
 
-    const specialNames = {
-      'loan',
-      'internal transfer',
-      'bounce',
-      'cash',
-      'airtime',
-    };
-
-    bool isSpecial(AppReason r) {
-      final nameLower = r.name.trim().toLowerCase();
-      return specialNames.contains(nameLower) || nameLower.contains('loan');
+    final specialReasonsMap = <String, AppReason>{};
+    for (var r in provider.reasons.where(_isSpecial)) {
+      specialReasonsMap.putIfAbsent(r.name.trim().toLowerCase(), () => r);
     }
+    final specialReasons = specialReasonsMap.values.toList();
 
-    final specialReasons = provider.reasons.where(isSpecial).toList();
-    final systemReasons =
-        provider.reasons.where((r) => r.isSystem && !isSpecial(r)).toList();
-    final userReasons =
-        provider.reasons.where((r) => !r.isSystem && !isSpecial(r)).toList();
+    final topCategoriesMap = <String, AppReason>{};
+    for (var r in provider.topLevelCategories) {
+      if (!_isSpecial(r)) {
+        topCategoriesMap.putIfAbsent(r.name.trim().toLowerCase(), () => r);
+      }
+    }
+    final topCategories = topCategoriesMap.values.toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -436,51 +261,19 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        extendBody: true,
-        bottomNavigationBar: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-          child: Row(
-            children: [
-              AppBackButton(onPressed: () => Navigator.pop(context)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _showAddEditDialog(context, provider),
-                  child: Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppColors.positive.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                          color: AppColors.positive.withValues(alpha: 0.35)),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_rounded,
-                            color: AppColors.positive, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Add Reason',
-                          style: TextStyle(
-                            color: AppColors.positive,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: AppColors.positive,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          shape: const CircleBorder(),
+          onPressed: () => _showAddCategoryDialog(context, provider),
+          child: const Icon(Icons.add_rounded, size: 28),
         ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: SafeArea(
           bottom: false,
           child: ListView(
-            padding: const EdgeInsets.only(
-                left: 20, right: 20, top: 16, bottom: 120),
+            padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 100),
             children: [
               // ── Header ───────────────────────────────────────────
               Padding(
@@ -488,12 +281,12 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                 child: Row(
                   children: [
                     const AppBackButton(),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     const Text(
-                      'Reason Management',
+                      'Category Management',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 28,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         letterSpacing: -0.5,
                       ),
@@ -502,81 +295,25 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
                 ),
               ),
 
-              // ── Special Reasons ──────────────────────────────────
+              // ── Special Reasons (Read-only System Core) ─────────
               if (specialReasons.isNotEmpty) ...[
-                _sectionHeader('Special Reasons', Icons.star_outline_rounded,
-                    AppColors.positive),
+                _sectionHeader('SPECIAL REASONS', Icons.star_outline_rounded),
                 const SizedBox(height: 10),
-                ...specialReasons.map((r) => _ReasonTile(
-                      reason: r,
-                      onLinkTap: () => _showLinkDialog(context, provider, r),
-                      provider: provider,
-                    )),
+                ...specialReasons.map((r) => _buildSpecialReasonCard(r)),
                 const SizedBox(height: 24),
               ],
 
-              // ── System Reasons ───────────────────────────────────
-              _sectionHeader('System Reasons', Icons.verified_outlined,
-                  AppColors.textPrimary),
+              // ── Top-Level Categories & Subcategories ─────────────
+              _sectionHeader('CATEGORIES & SUBCATEGORIES', Icons.category_outlined),
               const SizedBox(height: 10),
-              ...systemReasons.map((r) => _ReasonTile(
-                    reason: r,
-                    onLinkTap: () => _showLinkDialog(context, provider, r),
-                    provider: provider,
-                  )),
-
-              const SizedBox(height: 24),
-
-              // ── User Reasons ─────────────────────────────────────
-              _sectionHeader(
-                  'My Reasons', Icons.person_outline, AppColors.textPrimary),
-              const SizedBox(height: 10),
-              if (userReasons.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 16),
-                  child: Text('No custom reasons yet. Tap + to add one.',
-                      style: TextStyle(
-                          color: AppColors.textSecondary.withValues(alpha: 0.7),
-                          fontSize: 13)),
+              if (topCategories.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text('No categories created yet.', style: TextStyle(color: AppColors.textSoft, fontSize: 13)),
+                  ),
                 ),
-              ...userReasons.map((r) => _ReasonTile(
-                    reason: r,
-                    onLinkTap: () => _showLinkDialog(context, provider, r),
-                    provider: provider,
-                    onEditTap: () =>
-                        _showAddEditDialog(context, provider, existing: r),
-                    onDeleteTap: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: AppColors.surface,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          title: const Text('Delete Reason?',
-                              style: TextStyle(color: AppColors.textPrimary)),
-                          content: Text(
-                              'Delete "${r.name}"? Any links will also be removed.',
-                              style:
-                                  const TextStyle(color: AppColors.textSecondary)),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel',
-                                  style: TextStyle(color: AppColors.textSecondary)),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Delete',
-                                  style: TextStyle(color: AppColors.negative)),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        await provider.deleteReason(r.id!);
-                      }
-                    },
-                  )),
+              ...topCategories.map((cat) => _buildCategoryCard(context, provider, cat)),
             ],
           ),
         ),
@@ -584,188 +321,164 @@ class _ReasonManagementScreenState extends State<ReasonManagementScreen> {
     );
   }
 
-  Widget _sectionHeader(String label, IconData icon, Color color) {
+  Widget _sectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, color: color.withValues(alpha: 0.5), size: 16),
-        const SizedBox(width: 8),
-        Text(label,
-            style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5)),
+        Icon(icon, color: AppColors.positive, size: 14),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.textSoft,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
       ],
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────
-class _ReasonTile extends StatelessWidget {
-  final AppReason reason;
-  final FinanceProvider provider;
-  final VoidCallback onLinkTap;
-  final VoidCallback? onEditTap;
-  final VoidCallback? onDeleteTap;
+  Widget _buildSpecialReasonCard(AppReason reason) {
+    final nameLower = reason.name.trim().toLowerCase();
+    final descText = _specialReasonDescriptions[nameLower] ?? 'Core System Reason';
 
-  const _ReasonTile({
-    required this.reason,
-    required this.provider,
-    required this.onLinkTap,
-    this.onEditTap,
-    this.onDeleteTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final links = provider.linksForReason(reason.id!);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.02)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              if (reason.isSystem)
-                Icon(Icons.verified_outlined,
-                    size: 14,
-                    color: AppColors.textPrimary.withValues(alpha: 0.7)),
-              if (reason.isSystem) const SizedBox(width: 6),
-              Expanded(
-                child: Text(reason.name,
-                    style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600)),
-              ),
-              // Link icon — always shown
-              GestureDetector(
-                onTap: onLinkTap,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.link,
-                      color: AppColors.textPrimary.withValues(alpha: 0.9),
-                      size: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reason.name,
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  descText,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.positive.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'System',
+              style: TextStyle(color: AppColors.positive, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryCard(BuildContext context, FinanceProvider provider, AppReason category) {
+    final subcategories = provider.subcategoriesFor(category.id!);
+    final isExpanded = _expandedCategoryId == category.id;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              title: Text(
+                category.name,
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
               ),
-              if (reason.name.toLowerCase() == 'loan') ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    provider.setScreenIndex(3);
-                    Navigator.popUntil(context, (route) => route.isFirst);
-                  },
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.positive.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color:
-                              AppColors.positive.withValues(alpha: 0.3)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.handshake_outlined,
-                            color: AppColors.positive, size: 14),
-                        SizedBox(width: 4),
-                        Text(
-                          'Manage',
-                          style: TextStyle(
-                            color: AppColors.positive,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+              subtitle: Text(
+                '${subcategories.length} subcategories',
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+              trailing: Icon(
+                isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded,
+                color: Colors.white54,
+                size: 20,
+              ),
+              onTap: () {
+                setState(() {
+                  _expandedCategoryId = isExpanded ? null : category.id;
+                });
+              },
+              onLongPress: () {
+                _showCategoryOptionsModal(context, provider, category);
+              },
+            ),
+            if (isExpanded)
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                child: Column(
+                  children: [
+                    const Divider(color: Colors.white10, height: 1),
+                    const SizedBox(height: 6),
+                    ...subcategories.map((sub) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.02),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onLongPress: () => _showCategoryOptionsModal(context, provider, sub),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      sub.name,
+                                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              if (!reason.isSystem) ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onEditTap,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceCard.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.edit_outlined,
-                        color: AppColors.textSecondary, size: 16),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onDeleteTap,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppColors.negative.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.delete_outline,
-                        color: AppColors.negative, size: 16),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (links.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: links.map((l) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: AppColors.textPrimary.withValues(alpha: 0.1)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        l.linkType == 'sender'
-                            ? Icons.upload_outlined
-                            : Icons.download_outlined,
-                        size: 11,
-                        color: AppColors.textPrimary.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          l.linkedName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: AppColors.textPrimary.withValues(alpha: 0.8),
-                              fontSize: 11),
+                      );
+                    }),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => _showAddCategoryDialog(context, provider, parentCategory: category),
+                        icon: const Icon(Icons.add, color: AppColors.positive, size: 14),
+                        label: Text(
+                          'Add Subcategory under ${category.name}',
+                          style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                       ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+                    ),
+                  ],
+                ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }

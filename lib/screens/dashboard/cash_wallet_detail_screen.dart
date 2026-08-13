@@ -6,6 +6,7 @@ import '../../providers/finance_provider.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/expense_definition.dart';
 import '../../models/reason.dart';
+import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../settings/expense_definitions_screen.dart';
@@ -168,14 +169,14 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           tx.customReasonText?.toLowerCase() == 'cash' ||
           tx.resolvedReason?.toLowerCase() == 'cash');
       if (isCash) {
+        final isWithdrawal = tx.type == 'expense'; // Bank withdrawal = physical cash IN into wallet (+)
         allTxs.add({
           'appTransaction': tx,
           'date': tx.date,
-          'title': 'Bank SMS Injection',
+          'title': isWithdrawal ? 'Bank Cash Withdrawal' : 'Bank Cash Deposit',
           'subtitle': tx.name, // Bank name
           'amount': tx.amount,
-          'isPositive':
-              true, // Cash withdrawn from bank -> added to cash wallet
+          'isPositive': isWithdrawal,
           'isCashTx': false,
         });
       }
@@ -306,7 +307,9 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     final noteController = TextEditingController();
     AppReason? selectedReason;
     ExpenseDefinition? selectedTemplate;
+    AppTransaction? selectedWithdrawal;
     bool isRecurring = false;
+    final fmtShort = NumberFormat('#,##0.00');
 
     showModalBottomSheet(
       context: context,
@@ -522,7 +525,83 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // Bank Cash Withdrawal Linkage Selector
+                  if (provider.activeBankCashWithdrawals.isNotEmpty) ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      child: PopupMenuButton<AppTransaction?>(
+                        initialValue: selectedWithdrawal,
+                        onSelected: (tx) {
+                          setModalState(() {
+                            selectedWithdrawal = tx;
+                          });
+                        },
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        color: AppColors.surfaceCard,
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem<AppTransaction?>(
+                            value: null,
+                            child: Text('General Cash Wallet (No specific withdrawal link)',
+                                style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          ),
+                          ...provider.activeBankCashWithdrawals.map((w) {
+                            final rem = provider.getCashWithdrawalRemainingAmount(w.id!, w.amount);
+                            return PopupMenuItem<AppTransaction?>(
+                              value: w,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${w.name} Withdrawal (${fmtShort.format(w.amount)} ETB)',
+                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                                  Text('${fmtShort.format(rem)} ETB remaining · ${DateFormat('MMM d').format(w.date)}',
+                                      style: const TextStyle(color: AppColors.positive, fontSize: 11)),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.link_rounded, color: AppColors.positive, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      selectedWithdrawal != null
+                                          ? '${selectedWithdrawal!.name} (${fmtShort.format(selectedWithdrawal!.amount)} ETB)'
+                                          : 'Source Bank Withdrawal (Optional)',
+                                      style: TextStyle(
+                                        color: selectedWithdrawal != null ? Colors.white : AppColors.textSoft,
+                                        fontSize: 13,
+                                        fontWeight: selectedWithdrawal != null ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                    if (selectedWithdrawal != null)
+                                      Text(
+                                        '${fmtShort.format(provider.getCashWithdrawalRemainingAmount(selectedWithdrawal!.id!, selectedWithdrawal!.amount))} ETB remaining',
+                                        style: const TextStyle(color: AppColors.positive, fontSize: 10),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down, color: AppColors.textSoft),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Recurring Toggle
                   Row(
@@ -581,6 +660,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                           reasonId: selectedReason?.id,
                           reasonName: selectedReason?.name,
                           expenseDefinitionId: selectedTemplate?.id,
+                          linkedTransactionId: selectedWithdrawal?.id,
                         );
 
                         await provider.addCashTransaction(tx);

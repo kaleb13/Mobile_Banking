@@ -9,6 +9,7 @@ import '../models/loan_repayment_request.dart';
 import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
 import '../models/saving_goal.dart';
+import '../models/transaction_attachment.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -20,6 +21,7 @@ class DatabaseService {
     if (_database != null) return _database!;
     _database = await _initDB('finance_v3.db');
     await _createIndexes(_database!);
+    await _seedHierarchicalCategories(_database!);
     return _database!;
   }
 
@@ -34,7 +36,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 22, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 25, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -66,7 +68,10 @@ CREATE TABLE transactions (
   totalBalance REAL NOT NULL,
   reason TEXT,
   reasonId INTEGER,
+  categoryId INTEGER,
+  subcategoryId INTEGER,
   customReasonText TEXT,
+  note TEXT,
   linkedTransactionId TEXT,
   bankReference TEXT
 )
@@ -88,7 +93,11 @@ CREATE TABLE notifications (
 CREATE TABLE reasons (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  isSystem INTEGER NOT NULL DEFAULT 0
+  isSystem INTEGER NOT NULL DEFAULT 0,
+  parentId INTEGER REFERENCES reasons(id),
+  isSpecial INTEGER NOT NULL DEFAULT 0,
+  icon TEXT,
+  color TEXT
 )
 ''');
 
@@ -101,8 +110,27 @@ CREATE TABLE reason_links (
 )
 ''');
 
-    // Seed system-defined reasons
-    await _seedSystemReasons(db);
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS transaction_attachments (
+  id TEXT PRIMARY KEY,
+  transactionId TEXT NOT NULL,
+  filePath TEXT NOT NULL,
+  fileType TEXT NOT NULL,
+  fileName TEXT,
+  fileSize INTEGER,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY(transactionId) REFERENCES transactions(id) ON DELETE CASCADE
+)
+''');
+
+    // Seed 4 core special reasons
+    const specialReasonNames = ['Bounce', 'Cash', 'Internal Transfer', 'Loan'];
+    for (final name in specialReasonNames) {
+      await db.insert('reasons', {'name': name, 'isSystem': 1, 'isSpecial': 1});
+    }
+
+    // Seed Top-Level Categories & Subcategories
+    await _seedHierarchicalCategories(db);
 
     // Loan tables
     await _createLoanTables(db);
@@ -150,6 +178,7 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   expenseDefinitionId INTEGER,
   reasonId INTEGER,
   reasonName TEXT,
+  linkedTransactionId TEXT,
   FOREIGN KEY(expenseDefinitionId) REFERENCES expense_definitions(id) ON DELETE SET NULL
 )
 ''');
@@ -381,6 +410,154 @@ CREATE TABLE IF NOT EXISTS app_settings (
             'ALTER TABLE notifications ADD COLUMN transactionId TEXT;');
       } catch (_) {}
     }
+    if (oldVersion < 24) {
+      await _upgradeToVersion23(db);
+    }
+    if (oldVersion < 25) {
+      try {
+        await db.execute('ALTER TABLE cash_transactions ADD COLUMN linkedTransactionId TEXT;');
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _upgradeToVersion23(Database db) async {
+    try {
+      await db.execute('ALTER TABLE reasons ADD COLUMN parentId INTEGER REFERENCES reasons(id);');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE reasons ADD COLUMN isSpecial INTEGER NOT NULL DEFAULT 0;');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE reasons ADD COLUMN icon TEXT;');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE reasons ADD COLUMN color TEXT;');
+    } catch (_) {}
+
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN categoryId INTEGER;');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN subcategoryId INTEGER;');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN note TEXT;');
+    } catch (_) {}
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS transaction_attachments (
+  id TEXT PRIMARY KEY,
+  transactionId TEXT NOT NULL,
+  filePath TEXT NOT NULL,
+  fileType TEXT NOT NULL,
+  fileName TEXT,
+  fileSize INTEGER,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY(transactionId) REFERENCES transactions(id) ON DELETE CASCADE
+)
+''');
+
+    // Mark 4 core special reasons
+    const specialReasonNames = ['Bounce', 'Cash', 'Internal Transfer', 'Loan'];
+    for (final name in specialReasonNames) {
+      final existing = await db.query('reasons', where: 'LOWER(name) = ?', whereArgs: [name.toLowerCase()]);
+      if (existing.isEmpty) {
+        await db.insert('reasons', {'name': name, 'isSystem': 1, 'isSpecial': 1});
+      } else {
+        await db.update('reasons', {'isSpecial': 1, 'isSystem': 1},
+            where: 'id = ?', whereArgs: [existing.first['id']]);
+      }
+    }
+
+    // Seed Top-Level Categories & Subcategories Templates
+    await _seedHierarchicalCategories(db);
+  }
+
+  Future<void> _seedHierarchicalCategories(Database db) async {
+    final Map<String, Map<String, dynamic>> topLevel = {
+      'Food': {'icon': 'restaurant', 'color': '#FF9800', 'subs': ['Breakfast', 'Lunch', 'Dinner', 'Bakery', 'Snacks']},
+      'Drink': {'icon': 'local_cafe', 'color': '#06B6D4', 'subs': ['Coffee', 'Tea', 'Keshir', 'Beer & Alcohol', 'Soft Drinks', 'Juices']},
+      'Transportation': {'icon': 'directions_car', 'color': '#3B82F6', 'subs': ['Fuel & Gas', 'Taxi & Rideshare', 'Public Transit', 'Parking & Tolls', 'Vehicle Maintenance']},
+      'Housing': {'icon': 'home', 'color': '#6366F1', 'subs': ['Rent', 'Mortgage', 'Property Tax', 'Home Repairs', 'Furniture']},
+      'Utilities': {'icon': 'lightbulb', 'color': '#F59E0B', 'subs': ['Electricity', 'Water', 'Gas', 'Garbage & Sewer']},
+      'Mobile & Internet': {'icon': 'phone_android', 'color': '#8B5CF6', 'subs': ['Airtime', 'Internet', 'Wifi', 'Data Bundles']},
+      'Goods': {'icon': 'shopping_bag', 'color': '#EC4899', 'subs': ['Clothing & Apparel', 'Electronics', 'Household Supplies', 'Supermarket Goods', 'Gifts']},
+      'Entertainment': {'icon': 'movie', 'color': '#8B5CF6', 'subs': ['Movies', 'Gaming', 'Streaming & Subscriptions', 'Events & Concerts', 'Hobbies']},
+      'Health & Personal Care': {'icon': 'medical_services', 'color': '#14B8A6', 'subs': ['Pharmacy & Medicine', 'Doctor & Hospital', 'Salon & Spa', 'Fitness & Gym']},
+      'Education': {'icon': 'school', 'color': '#2563EB', 'subs': ['Tuition', 'Books & Stationary', 'Online Courses']},
+      'Investment & Savings': {'icon': 'trending_up', 'color': '#10B981', 'subs': ['Stocks & Crypto', 'Fixed Deposit', 'Personal Savings']},
+      'Salary': {'icon': 'account_balance_wallet', 'color': '#10B981', 'subs': ['Primary Salary', 'Bonus & Commission', 'Freelance']},
+    };
+
+    // Remove legacy food subcategories
+    await db.delete('reasons',
+        where: 'LOWER(name) IN (?, ?, ?) AND parentId IS NOT NULL',
+        whereArgs: ['restaurants', 'fast food', 'groceries']);
+
+    // Remove any erroneous loan/financial subcategory links under Food or Drink
+    await db.execute('''
+      DELETE FROM reasons 
+      WHERE (LOWER(name) LIKE '%loan%' OR LOWER(name) LIKE '%borrow%' OR LOWER(name) LIKE '%lend%') 
+      AND parentId IN (SELECT id FROM reasons WHERE LOWER(name) IN ('food', 'drink'));
+    ''');
+
+    // Delete legacy unparented flat system reasons (Gift, Investment, Fuel, Medical, Rent, Shopping, Transport, etc.)
+    await db.delete('reasons',
+        where: '(parentId IS NULL OR parentId = 0) AND (isSpecial IS NULL OR isSpecial = 0) AND LOWER(name) NOT IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        whereArgs: [
+          'food',
+          'drink',
+          'transportation',
+          'housing',
+          'utilities',
+          'mobile & internet',
+          'goods',
+          'entertainment',
+          'health & personal care',
+          'education',
+          'investment & savings',
+          'salary',
+        ]);
+
+    for (final entry in topLevel.entries) {
+      final catName = entry.key;
+      final info = entry.value;
+      int catId;
+
+      final existing = await db.query('reasons', where: 'LOWER(name) = ?', whereArgs: [catName.toLowerCase()]);
+      if (existing.isNotEmpty) {
+        catId = existing.first['id'] as int;
+        await db.update('reasons', {
+          'isSpecial': 0,
+          'isSystem': 1,
+          'icon': info['icon'],
+          'color': info['color'],
+        }, where: 'id = ?', whereArgs: [catId]);
+      } else {
+        catId = await db.insert('reasons', {
+          'name': catName,
+          'isSystem': 1,
+          'isSpecial': 0,
+          'icon': info['icon'],
+          'color': info['color'],
+        });
+      }
+
+      final List<String> subs = List<String>.from(info['subs']);
+      for (final subName in subs) {
+        final existingSub = await db.query('reasons',
+            where: 'LOWER(name) = ? AND parentId = ?',
+            whereArgs: [subName.toLowerCase(), catId]);
+        if (existingSub.isEmpty) {
+          await db.insert('reasons', {
+            'name': subName,
+            'parentId': catId,
+            'isSystem': 1,
+            'isSpecial': 0,
+          });
+        }
+      }
+    }
   }
 
   Future<void> _addNewSystemReasons2(Database db) async {
@@ -603,25 +780,49 @@ CREATE TABLE IF NOT EXISTS app_settings (
   // ──────────────────────────────────────────────
   Future<List<AppReason>> getReasons() async {
     final db = await instance.database;
-    final maps = await db.query('reasons', orderBy: 'isSystem DESC, name ASC');
-    var list = maps.map((m) => AppReason.fromMap(m)).toList();
 
-    // Auto-inject missing system reasons
-    bool injected = false;
-    for (final name in ['Bounce', 'Internal Transfer']) {
-      if (!list.any((r) => r.name.toLowerCase() == name.toLowerCase())) {
-        await insertReason(AppReason(name: name, isSystem: true));
-        injected = true;
+    // 1. Delete legacy unparented flat system reasons that duplicate modern categories
+    await db.execute('''
+      DELETE FROM reasons 
+      WHERE (parentId IS NULL OR parentId = 0) 
+        AND (isSpecial IS NULL OR isSpecial = 0) 
+        AND LOWER(TRIM(name)) IN ('transport', 'rent', 'shopping', 'internet', 'fuel', 'medical', 'gift', 'investment', 'airtime');
+    ''');
+
+    // 2. Deduplicate reasons with identical (name, parentId, isSpecial)
+    await db.execute('''
+      DELETE FROM reasons 
+      WHERE id NOT IN (
+        SELECT MIN(id) 
+        FROM reasons 
+        GROUP BY LOWER(TRIM(name)), COALESCE(parentId, -1), COALESCE(isSpecial, 0)
+      );
+    ''');
+
+    // 3. Ensure 4 core special reasons exist with isSpecial = 1 and isSystem = 1
+    const specialNames = ['Loan', 'Cash', 'Internal Transfer', 'Bounce'];
+    for (final name in specialNames) {
+      final existing = await db.query('reasons',
+          where: 'LOWER(name) = ?', whereArgs: [name.toLowerCase()]);
+      if (existing.isEmpty) {
+        await db.insert('reasons', {'name': name, 'isSystem': 1, 'isSpecial': 1});
+      } else if ((existing.first['isSpecial'] as int?) != 1) {
+        await db.update('reasons', {'isSpecial': 1, 'isSystem': 1},
+            where: 'id = ?', whereArgs: [existing.first['id']]);
       }
     }
 
-    if (injected) {
-      final newMaps =
-          await db.query('reasons', orderBy: 'isSystem DESC, name ASC');
-      list = newMaps.map((m) => AppReason.fromMap(m)).toList();
+    // 4. Ensure top-level categories and subcategories exist if DB has no subcategories
+    final countRes = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM reasons WHERE parentId IS NOT NULL');
+    final subCount = (countRes.first['count'] as int?) ?? 0;
+    if (subCount == 0) {
+      await _seedHierarchicalCategories(db);
     }
 
-    return list;
+    final maps = await db.query('reasons',
+        orderBy: 'isSpecial DESC, isSystem DESC, name ASC');
+    return maps.map((m) => AppReason.fromMap(m)).toList();
   }
 
   Future<AppReason?> getReasonById(int id) async {
@@ -639,15 +840,16 @@ CREATE TABLE IF NOT EXISTS app_settings (
   Future<int> updateReason(AppReason reason) async {
     final db = await instance.database;
     return await db.update('reasons', reason.toMap(),
-        where: 'id = ? AND isSystem = 0', whereArgs: [reason.id]);
+        where: 'id = ? AND isSpecial = 0', whereArgs: [reason.id]);
   }
 
   Future<int> deleteReason(int id) async {
     final db = await instance.database;
-    // Also delete links
+    // Also delete links and subcategories
     await db.delete('reason_links', where: 'reasonId = ?', whereArgs: [id]);
+    await db.delete('reasons', where: 'parentId = ?', whereArgs: [id]);
     return await db
-        .delete('reasons', where: 'id = ? AND isSystem = 0', whereArgs: [id]);
+        .delete('reasons', where: 'id = ? AND isSpecial = 0', whereArgs: [id]);
   }
 
   // ──────────────────────────────────────────────
@@ -1074,5 +1276,27 @@ CREATE TABLE IF NOT EXISTS saving_goals (
   Future<int> deleteSavingGoal(String id) async {
     final db = await instance.database;
     return await db.delete('saving_goals', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ──────────────────────────────────────────────
+  // Transaction Attachment Methods
+  // ──────────────────────────────────────────────
+  Future<int> insertAttachment(TransactionAttachment attachment) async {
+    final db = await instance.database;
+    return await db.insert('transaction_attachments', attachment.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<TransactionAttachment>> getAttachmentsForTransaction(String transactionId) async {
+    final db = await instance.database;
+    final maps = await db.query('transaction_attachments',
+        where: 'transactionId = ?', whereArgs: [transactionId], orderBy: 'createdAt ASC');
+    return maps.map((m) => TransactionAttachment.fromMap(m)).toList();
+  }
+
+  Future<int> deleteAttachment(String attachmentId) async {
+    final db = await instance.database;
+    return await db.delete('transaction_attachments',
+        where: 'id = ?', whereArgs: [attachmentId]);
   }
 }

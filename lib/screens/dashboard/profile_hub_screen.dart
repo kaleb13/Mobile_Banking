@@ -61,7 +61,7 @@ class ProfileHubScreen extends StatelessWidget {
                           'Profile Hub',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 26,
+                            fontSize: 22,
                             fontWeight: FontWeight.bold,
                             letterSpacing: -0.5,
                           ),

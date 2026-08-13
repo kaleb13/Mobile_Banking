@@ -4,7 +4,6 @@ import '../../theme/app_theme.dart';
 import 'backup_restore_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
-import '../../services/database_service.dart';
 import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
 import '../../widgets/app_back_button.dart';
@@ -15,6 +14,7 @@ import '../../widgets/currency_symbol_widget.dart';
 import 'privacy_policy_screen.dart';
 import '../privacy/privacy_settings_screen.dart';
 import '../settings/background_settings_screen.dart';
+import '../settings/notification_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -82,7 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             'Settings',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5,
                             ),
@@ -113,8 +113,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context,
                         icon: Icons.category_outlined,
                         iconColor: AppColors.violet, // Purple
-                        label: 'Reason Management',
-                        subtitle: 'Manage transaction reasons and bank links',
+                        label: 'Category Management',
+                        subtitle: 'Manage categories and subcategories',
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -224,6 +224,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildCardBase([
                       _settingsTile(
                         context,
+                        icon: Icons.notifications_active_rounded,
+                        iconColor: AppColors.positive,
+                        label: 'Notification Settings',
+                        subtitle: 'Active listening, push notifications & summary reports',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationSettingsScreen(),
+                          ),
+                        ),
+                        showDivider: true,
+                      ),
+                      _settingsTile(
+                        context,
                         icon: Icons.battery_saver_rounded,
                         iconColor: AppColors.positive,
                         label: 'Background & Battery Settings',
@@ -234,7 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             builder: (_) => const BackgroundSettingsScreen(),
                           ),
                         ),
-                        showDivider: true,
+                        showDivider: false,
                       ),
                     ]),
 
@@ -471,49 +485,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _toggleTile({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.35),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AppSwitch(
-            value: value,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _comingSoon() {
     return Container(

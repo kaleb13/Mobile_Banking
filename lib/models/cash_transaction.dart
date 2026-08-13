@@ -7,6 +7,7 @@ class CashTransaction {
   final int? expenseDefinitionId;
   final int? reasonId;
   final String? reasonName;
+  final String? linkedTransactionId;
 
   CashTransaction({
     this.id,
@@ -17,6 +18,7 @@ class CashTransaction {
     this.expenseDefinitionId,
     this.reasonId,
     this.reasonName,
+    this.linkedTransactionId,
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class CashTransaction {
       'expenseDefinitionId': expenseDefinitionId,
       'reasonId': reasonId,
       'reasonName': reasonName,
+      'linkedTransactionId': linkedTransactionId,
     };
   }
 
@@ -42,6 +45,7 @@ class CashTransaction {
       expenseDefinitionId: map['expenseDefinitionId'] as int?,
       reasonId: map['reasonId'] as int?,
       reasonName: map['reasonName'] as String?,
+      linkedTransactionId: map['linkedTransactionId'] as String?,
     );
   }
 
@@ -53,6 +57,7 @@ class CashTransaction {
     int? expenseDefinitionId,
     int? reasonId,
     String? reasonName,
+    String? linkedTransactionId,
   }) {
     return CashTransaction(
       id: id,
@@ -63,6 +68,7 @@ class CashTransaction {
       expenseDefinitionId: expenseDefinitionId ?? this.expenseDefinitionId,
       reasonId: reasonId ?? this.reasonId,
       reasonName: reasonName ?? this.reasonName,
+      linkedTransactionId: linkedTransactionId ?? this.linkedTransactionId,
     );
   }
 }

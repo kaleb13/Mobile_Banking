@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../theme/app_theme.dart';
 
 /// An interactive 3D Level Badge widget that reacts to swipe / drag gestures.
 ///
@@ -248,13 +249,13 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
               shaderCallback: (bounds) => LinearGradient(
                 begin: Alignment(-1.2 + (sheenOffset * 0.65), -1.2 + (sheenOffset * 0.2)),
                 end: Alignment(1.2 + (sheenOffset * 0.65), 1.2 + (sheenOffset * 0.2)),
-                colors: const [
-                  Color(0xFFE2E8F0), // Platinum silver base
-                  Color(0xFF94A3B8), // Steel silver shadow
-                  Color(0xFFF8FAFC), // Concentrated specular shine streak
-                  Color(0xFFFFFFFF), // Pure liquid chrome glare
-                  Color(0xFFCBD5E1), // Mid metallic chrome
-                  Color(0xFF64748B), // Outer dark silver edge
+                colors: [
+                  AppColors.cardCbeBirrSilver, // Platinum silver base
+                  AppColors.slateMuted,        // Steel silver shadow
+                  AppColors.whiterGlow,        // Concentrated specular shine streak
+                  AppColors.textPrimary,       // Pure liquid chrome glare
+                  AppColors.slateLight,        // Mid metallic chrome
+                  AppColors.slateMuted,        // Outer dark silver edge
                 ],
                 stops: const [0.0, 0.25, 0.46, 0.54, 0.75, 1.0],
               ).createShader(bounds),
@@ -283,7 +284,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF0F172A).withValues(alpha: 0.88),
+                      color: AppColors.navyDark.withValues(alpha: 0.88),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.white.withValues(alpha: 0.70),
@@ -295,7 +296,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     ),
                     child: Icon(
                       Icons.star_rounded,
-                      color: const Color(0xFFF1F5F9),
+                      color: AppColors.slateSurface,
                       size: widget.size * 0.20,
                     ),
                   ),
@@ -307,7 +308,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     'LEVEL ${widget.level}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: const Color(0xFF0F172A),
+                      color: AppColors.navyDark,
                       fontSize: widget.size * 0.105,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.0,
@@ -328,7 +329,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     widget.levelName.toUpperCase(),
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: const Color(0xFF334155),
+                      color: AppColors.slateBorder,
                       fontSize: widget.size * 0.07,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.8,

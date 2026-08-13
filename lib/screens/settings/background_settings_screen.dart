@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 
@@ -190,6 +192,65 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
                       _sectionTitle('Quick Setup Actions'),
                       const SizedBox(height: 8),
                       _buildCardGroup([
+                        Consumer<FinanceProvider>(
+                          builder: (context, provider, _) {
+                            final isEnabled = provider.isSmsListeningEnabled;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: (isEnabled ? AppColors.positive : AppColors.textSoft)
+                                          .withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      isEnabled
+                                          ? Icons.notifications_active_rounded
+                                          : Icons.notifications_off_rounded,
+                                      color: isEnabled ? AppColors.positive : AppColors.textSoft,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Active SMS Listening',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          isEnabled
+                                              ? 'Capturing bank SMS & auto-refreshing in real time'
+                                              : 'Real-time SMS detection & notifications are turned off',
+                                          style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 11.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  AppSwitch(
+                                    value: isEnabled,
+                                    onChanged: (val) => provider.setSmsListeningEnabled(val),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1, color: AppColors.border),
                         _actionTile(
                           icon: Icons.battery_saver_rounded,
                           iconColor: _isBatteryIgnored
@@ -449,60 +510,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _toggleTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          AppSwitch(
-            value: value,
-            onChanged: onChanged,
-          ),
-        ],
       ),
     );
   }

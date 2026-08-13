@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// Reusable Progress Bar Component
 /// Supports custom height, track color, gradient/solid filled bar,
@@ -58,7 +59,7 @@ class CustomProgressBar extends StatelessWidget {
                       height: height,
                       decoration: BoxDecoration(
                         color: progressGradient == null
-                            ? (progressColor ?? const Color(0xFF00A86B))
+                            ? (progressColor ?? AppColors.positive)
                             : null,
                         gradient: progressGradient,
                         borderRadius: effectiveRadius,

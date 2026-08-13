@@ -50,7 +50,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                         'Saving Goals',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.5,
                         ),

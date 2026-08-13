@@ -24,7 +24,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     'Privacy Policy',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 28,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.5,
                     ),

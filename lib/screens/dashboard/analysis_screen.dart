@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
+import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/currency_symbol_widget.dart';
@@ -27,6 +28,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
   int _selectedSubPeriodIndex = 0;
   late PageController _subPeriodScrollController;
+
+  int? _selectedArcIndex;
+  AppReason? _drilledCategory;
 
   late AnimationController _morphCtrl;
   late Animation<double> _morphAnim;
@@ -270,8 +274,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     List<CashTransaction> filteredCashTxs = [];
 
     for (var tx in provider.transactions) {
-      if (tx.resolvedReason?.toLowerCase() == 'bounce' ||
-          tx.resolvedReason?.toLowerCase() == 'internal transfer') {
+      final reasonStr = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? '').trim().toLowerCase();
+      if (reasonStr == 'bounce' ||
+          reasonStr == 'internal transfer' ||
+          reasonStr == 'cash') {
         continue;
       }
       if (_matchesFilter(tx.date, now, year)) {
@@ -285,30 +291,109 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
 
-    // Aggregate category expenses/income based on _selectedAnalysisType
-    final Map<String, double> categorySums = {};
+    // Separate gross category expenses and income
+    final Map<String, double> categoryExpenses = {};
+    final Map<String, double> categoryIncome = {};
 
-    for (var tx in filteredBankTxs) {
-      final isExpense = tx.type == 'expense';
-      final isIncome = tx.type == 'income';
-      if ((_selectedAnalysisType == 'Expenses' && isExpense) ||
-          (_selectedAnalysisType == 'Income' && isIncome) ||
-          (_selectedAnalysisType == 'All' && (isExpense || isIncome))) {
-        final category = tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'Other';
-        final normalized = _normalizeCategoryName(category);
-        categorySums[normalized] = (categorySums[normalized] ?? 0) + tx.amount;
+    if (_drilledCategory == null) {
+      // Level 1: Top-Level Categories ONLY
+      for (var tx in filteredBankTxs) {
+        final parentReason = provider.resolveTopLevelCategoryFor(tx);
+        final String categoryLabel;
+        if (parentReason != null) {
+          categoryLabel = parentReason.name;
+        } else {
+          final rawCat = tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'Other';
+          categoryLabel = _normalizeCategoryName(rawCat);
+        }
+
+        if (tx.type == 'expense') {
+          categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
+        } else if (tx.type == 'income') {
+          categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
+        }
+      }
+
+      for (var tx in filteredCashTxs) {
+        final parentReason = provider.resolveTopLevelCategory(
+          reasonId: tx.reasonId,
+          reasonName: tx.reasonName ?? tx.description,
+        );
+        final String categoryLabel;
+        if (parentReason != null) {
+          categoryLabel = parentReason.name;
+        } else {
+          final rawCat = tx.reasonName ?? tx.description ?? 'Other';
+          categoryLabel = _normalizeCategoryName(rawCat);
+        }
+
+        if (tx.type == 'expense') {
+          categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
+        } else if (tx.type == 'addition') {
+          categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
+        }
+      }
+    } else {
+      // Level 2: Subcategories inside _drilledCategory
+      final categoryName = _drilledCategory!.name.toLowerCase();
+      for (var tx in filteredBankTxs) {
+        final parentReason = provider.resolveTopLevelCategoryFor(tx);
+        final matchesParent = (parentReason != null && parentReason.id == _drilledCategory!.id) ||
+            (parentReason != null && parentReason.name.toLowerCase() == categoryName) ||
+            tx.categoryId == _drilledCategory!.id;
+
+        if (matchesParent) {
+          String subName = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'General').trim();
+          if (subName.toLowerCase() == categoryName) {
+            subName = 'General';
+          }
+          if (tx.type == 'expense') {
+            categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
+          } else if (tx.type == 'income') {
+            categoryIncome[subName] = (categoryIncome[subName] ?? 0) + tx.amount;
+          }
+        }
+      }
+
+      for (var tx in filteredCashTxs) {
+        final parentReason = provider.resolveTopLevelCategory(
+          reasonId: tx.reasonId,
+          reasonName: tx.reasonName ?? tx.description,
+        );
+        final matchesParent = (parentReason != null && parentReason.id == _drilledCategory!.id) ||
+            (parentReason != null && parentReason.name.toLowerCase() == categoryName) ||
+            tx.reasonId == _drilledCategory!.id;
+
+        if (matchesParent) {
+          String subName = (tx.reasonName ?? tx.description ?? 'General').trim();
+          if (subName.toLowerCase() == categoryName) {
+            subName = 'General';
+          }
+          if (tx.type == 'expense') {
+            categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
+          } else if (tx.type == 'addition') {
+            categoryIncome[subName] = (categoryIncome[subName] ?? 0) + tx.amount;
+          }
+        }
       }
     }
 
-    for (var tx in filteredCashTxs) {
-      final isExpense = tx.type == 'expense';
-      final isIncome = tx.type == 'addition';
-      if ((_selectedAnalysisType == 'Expenses' && isExpense) ||
-          (_selectedAnalysisType == 'Income' && isIncome) ||
-          (_selectedAnalysisType == 'All' && (isExpense || isIncome))) {
-        final category = tx.reasonName ?? tx.description ?? 'Other';
-        final normalized = _normalizeCategoryName(category);
-        categorySums[normalized] = (categorySums[normalized] ?? 0) + tx.amount;
+    final Map<String, double> categorySums = {};
+
+    if (_selectedAnalysisType == 'Expenses') {
+      categorySums.addAll(categoryExpenses);
+    } else if (_selectedAnalysisType == 'Income') {
+      categorySums.addAll(categoryIncome);
+    } else {
+      // 'All' mode -> Net Spending mode: Gross Expense minus Matching Category Income
+      final allCategories = {...categoryExpenses.keys, ...categoryIncome.keys};
+      for (final cat in allCategories) {
+        final exp = categoryExpenses[cat] ?? 0.0;
+        final inc = categoryIncome[cat] ?? 0.0;
+        final net = exp - inc;
+        if (net > 0) {
+          categorySums[cat] = net;
+        }
       }
     }
 
@@ -340,7 +425,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (_selectedAnalysisType == 'Income') {
       chartTotal = totalIncome;
     } else if (_selectedAnalysisType == 'All') {
-      chartTotal = totalExpense + totalIncome;
+      chartTotal = categorySums.values.fold(0.0, (sum, val) => sum + val);
     }
 
     // Bank Performance Breakdown
@@ -381,8 +466,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     }
 
     final bankBreakdown = bankMap.entries.map((e) {
-      final inV = e.value.inVal > 0 ? e.value.inVal : totalIncome * 0.25;
-      final outV = e.value.outVal > 0 ? e.value.outVal : totalExpense * 0.20;
+      final inV = e.value.inVal;
+      final outV = e.value.outVal;
       return (
         name: e.key,
         income: inV,
@@ -437,27 +522,140 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   String _normalizeCategoryName(String raw) {
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) return 'Other';
-    final r = trimmed.toLowerCase();
-    if (r.contains('home') || r.contains('rent')) return 'Rent';
-    if (r.contains('food') || r.contains('restaurant')) return 'Food';
-    if (r.contains('education') || r.contains('school')) return 'Education';
-    if (r.contains('entertain') || r.contains('movie')) return 'Entertainment';
-    if (r.contains('service') || r.contains('utility')) return 'Utilities';
-    if (r.contains('health') || r.contains('pharmacy') || r.contains('medical')) return 'Medical';
-    if (r.contains('clothes') || r.contains('shopping')) return 'Shopping';
-    if (r.contains('transport') || r.contains('taxi')) return 'Transport';
-    if (r.contains('fuel') || r.contains('gas')) return 'Fuel';
-    if (r.contains('internet') || r.contains('wifi')) return 'Internet';
-    if (r.contains('airtime')) return 'Airtime';
-    if (r.contains('salary')) return 'Salary';
-    if (r.contains('gift')) return 'Gift';
-    if (r.contains('loan')) return 'Loan';
-    if (r.contains('investment')) return 'Investment';
-    if (r.contains('cash')) return 'Cash';
+    if (trimmed.isEmpty) return 'Uncategorized';
 
-    if (trimmed.length <= 12) return trimmed;
-    return '${trimmed.substring(0, 10)}..';
+    final r = trimmed.toLowerCase();
+
+    // Food
+    if (r.contains('food') ||
+        r.contains('restaurant') ||
+        r.contains('grocer') ||
+        r.contains('lunch') ||
+        r.contains('breakfast') ||
+        r.contains('dinner') ||
+        r.contains('bakery') ||
+        r.contains('snack') ||
+        r.contains('meal')) {
+      return 'Food';
+    }
+
+    // Drink
+    if (r.contains('drink') ||
+        r.contains('coffee') ||
+        r.contains('tea') ||
+        r.contains('keshir') ||
+        r.contains('cafe') ||
+        r.contains('beer') ||
+        r.contains('alcohol') ||
+        r.contains('soda') ||
+        r.contains('juice')) {
+      return 'Drink';
+    }
+
+    // Transportation
+    if (r.contains('transport') ||
+        r.contains('taxi') ||
+        r.contains('uber') ||
+        r.contains('ride') ||
+        r.contains('fuel') ||
+        r.contains('gas') ||
+        r.contains('bus') ||
+        r.contains('parking') ||
+        r.contains('transit')) {
+      return 'Transportation';
+    }
+
+    // Utilities
+    if (r.contains('utilities') ||
+        r.contains('water') ||
+        r.contains('electric') ||
+        r.contains('garbage') ||
+        r.contains('sewer')) {
+      return 'Utilities';
+    }
+
+    // Housing
+    if (r.contains('housing') ||
+        r.contains('rent') ||
+        r.contains('mortgage') ||
+        r.contains('home')) {
+      return 'Housing';
+    }
+
+    // Mobile & Internet
+    if (r.contains('mobile') ||
+        r.contains('internet') ||
+        r.contains('wifi') ||
+        r.contains('airtime') ||
+        r.contains('data')) {
+      return 'Mobile & Internet';
+    }
+
+    // Health & Personal Care
+    if (r.contains('health') ||
+        r.contains('pharmacy') ||
+        r.contains('medical') ||
+        r.contains('doctor') ||
+        r.contains('hospital') ||
+        r.contains('medicine') ||
+        r.contains('salon') ||
+        r.contains('spa') ||
+        r.contains('gym')) {
+      return 'Health & Personal Care';
+    }
+
+    // Goods
+    if (r.contains('goods') ||
+        r.contains('clothes') ||
+        r.contains('clothing') ||
+        r.contains('shopping') ||
+        r.contains('gift') ||
+        r.contains('supermarket') ||
+        r.contains('electronics')) {
+      return 'Goods';
+    }
+
+    // Entertainment
+    if (r.contains('entertainment') ||
+        r.contains('movie') ||
+        r.contains('game') ||
+        r.contains('event') ||
+        r.contains('cinema') ||
+        r.contains('concert')) {
+      return 'Entertainment';
+    }
+
+    // Education
+    if (r.contains('education') ||
+        r.contains('school') ||
+        r.contains('tuition') ||
+        r.contains('course') ||
+        r.contains('book')) {
+      return 'Education';
+    }
+
+    // Investment & Savings
+    if (r.contains('investment') ||
+        r.contains('savings') ||
+        r.contains('stock') ||
+        r.contains('crypto')) {
+      return 'Investment & Savings';
+    }
+
+    // Salary
+    if (r.contains('salary') ||
+        r.contains('wage') ||
+        r.contains('payroll') ||
+        r.contains('bonus') ||
+        r.contains('commission')) {
+      return 'Salary';
+    }
+
+    // Loan
+    if (r.contains('loan')) return 'Loan';
+
+    if (trimmed.length <= 16) return trimmed;
+    return '${trimmed.substring(0, 14)}..';
   }
 
   String _formatShortCurrency(double amount) {
@@ -566,7 +764,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           'Spending Charts',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 28,
+            fontSize: 22,
             fontWeight: FontWeight.bold,
             letterSpacing: -0.5,
           ),
@@ -578,15 +776,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   String _getAnalysisTypeLabel(String type) {
     if (type == 'Expenses') return 'Transferred';
     if (type == 'Income') return 'Deposit';
-    return 'All';
+    return 'Net';
   }
 
   // ── 2. Full-Width Period Filter Row & Redesigned Dropdown Menu ────────────
   Widget _buildPeriodFilterRow() {
-    final filterOptions = [
-      (value: 'All', label: 'All Transactions', icon: Icons.layers_rounded, color: AppColors.positive),
-      (value: 'Expenses', label: 'Transferred', icon: Icons.arrow_upward_rounded, color: AppColors.negative),
-      (value: 'Income', label: 'Deposit', icon: Icons.arrow_downward_rounded, color: AppColors.positive),
+    final periodOptions = [
+      (value: PeriodFilter.day, label: 'Day'),
+      (value: PeriodFilter.week, label: 'Week'),
+      (value: PeriodFilter.month, label: 'Month'),
+      (value: PeriodFilter.quarter, label: 'Quarter'),
+      (value: PeriodFilter.year, label: 'Year'),
     ];
 
     final sharedFilterDecoration = BoxDecoration(
@@ -595,10 +795,18 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
     );
 
+    final selectedPeriodLabel = _selectedPeriod.name[0].toUpperCase() + _selectedPeriod.name.substring(1);
+
+    final analysisTypeIndex = switch (_selectedAnalysisType) {
+      'Expenses' => 1,
+      'Income' => 2,
+      _ => 0, // 'All' / Net
+    };
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Category / Type Dropdown Pill matching top filter row UI
+        // 1. Period Dropdown Menu (Left) - Month selected by default
         Theme(
           data: Theme.of(context).copyWith(
             splashColor: Colors.transparent,
@@ -606,13 +814,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             hoverColor: Colors.transparent,
             focusColor: Colors.transparent,
           ),
-          child: PopupMenuButton<String>(
+          child: PopupMenuButton<PeriodFilter>(
             offset: const Offset(0, 38),
-            onSelected: (String value) {
-              if (_selectedAnalysisType == value) return;
-              _changeFilter(() {
-                _selectedAnalysisType = value;
-              });
+            onSelected: (PeriodFilter value) {
+              _onPeriodChanged(value);
             },
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -621,15 +826,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             color: AppColors.bgMid,
             elevation: 10,
             itemBuilder: (BuildContext context) {
-              return filterOptions.map((opt) {
-                final isSelected = _selectedAnalysisType == opt.value;
-                return PopupMenuItem<String>(
+              return periodOptions.map((opt) {
+                final isSelected = _selectedPeriod == opt.value;
+                return PopupMenuItem<PeriodFilter>(
                   value: opt.value,
                   height: 42,
                   child: Row(
                     children: [
-                      Icon(opt.icon, color: opt.color, size: 16),
-                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           opt.label,
@@ -654,7 +857,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _getAnalysisTypeLabel(_selectedAnalysisType),
+                    selectedPeriodLabel,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
@@ -662,7 +865,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 14),
+                  const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 16),
                 ],
               ),
             ),
@@ -670,15 +873,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
         const SizedBox(width: 10),
 
-        // Period Pills: Week, Month, Quarter, Year (Expanded full-width)
+        // 2. Analysis Type Capsule Tab Bar (Right) - Net, Transferred, Deposit
         Expanded(
           child: AppCapsuleTabBar(
-            tabs: PeriodFilter.values
-                .map((p) => p.name[0].toUpperCase() + p.name.substring(1))
-                .toList(),
-            selectedIndex: PeriodFilter.values.indexOf(_selectedPeriod),
-            onTabChanged: (index) =>
-                _onPeriodChanged(PeriodFilter.values[index]),
+            tabs: const ['Net', 'Transferred', 'Deposit'],
+            selectedIndex: analysisTypeIndex,
+            onTabChanged: (index) {
+              final newType = switch (index) {
+                1 => 'Expenses',
+                2 => 'Income',
+                _ => 'All',
+              };
+              if (_selectedAnalysisType == newType) return;
+              _changeFilter(() {
+                _selectedAnalysisType = newType;
+              });
+            },
             height: 38,
             fontSize: 11,
             borderRadius: 22,
@@ -955,47 +1165,210 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final progress = _morphAnim.value;
         final currentTotal = _previousTotal + (targetTotal - _previousTotal) * progress;
 
-        return CustomPaint(
-          size: const Size(220, 220),
-          painter: MorphingRingPainter(
-            oldItems: _previousCategories,
-            newItems: targetCategories,
-            oldTotal: _previousTotal,
-            newTotal: targetTotal,
-            progress: progress,
-          ),
-          child: SizedBox(
-            width: 220,
-            height: 220,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _selectedAnalysisType.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
+        final isCategorySelected =
+            _selectedArcIndex != null && _selectedArcIndex! < targetCategories.length;
+        final selectedItem = isCategorySelected ? targetCategories[_selectedArcIndex!] : null;
+
+        final displayTotal = selectedItem != null ? selectedItem.amount : currentTotal;
+        final displayLabel = selectedItem != null
+            ? selectedItem.label
+            : (_drilledCategory != null
+                ? _drilledCategory!.name
+                : _getAnalysisTypeLabel(_selectedAnalysisType).toUpperCase());
+
+        return Column(
+          children: [
+            if (_drilledCategory != null)
+              GestureDetector(
+                onTap: () {
+                  _changeFilter(() {
+                    _drilledCategory = null;
+                    _selectedArcIndex = null;
+                  });
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.positive.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.positive.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_back_rounded, color: AppColors.positive, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        '← Top Categories (${_drilledCategory!.name})',
+                        style: const TextStyle(
+                          color: AppColors.positive,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            GestureDetector(
+              onTapUp: (details) {
+                if (targetCategories.isEmpty) return;
+                final dx = details.localPosition.dx - 110;
+                final dy = details.localPosition.dy - 110;
+                final dist = sqrt(dx * dx + dy * dy);
+                if (dist < 40 || dist > 110) {
+                  // Center tap or outside ring tap -> reset selection
+                  setState(() => _selectedArcIndex = null);
+                  return;
+                }
+
+                var angle = atan2(dy, dx);
+                if (angle < -pi / 2) {
+                  angle += 2 * pi;
+                }
+
+                double startAngle = -pi / 2;
+                final totalAmt = targetCategories.fold(0.0, (s, c) => s + c.amount);
+                if (totalAmt <= 0) return;
+
+                int clickedIndex = -1;
+                for (int i = 0; i < targetCategories.length; i++) {
+                  final sweep = (targetCategories[i].amount / totalAmt) * (2 * pi);
+                  if (angle >= startAngle && angle <= startAngle + sweep) {
+                    clickedIndex = i;
+                    break;
+                  }
+                  startAngle += sweep;
+                }
+
+                setState(() {
+                  _selectedArcIndex = (clickedIndex == _selectedArcIndex) ? null : clickedIndex;
+                });
+              },
+              child: CustomPaint(
+                size: const Size(220, 220),
+                painter: MorphingRingPainter(
+                  oldItems: _previousCategories,
+                  newItems: targetCategories,
+                  oldTotal: _previousTotal,
+                  newTotal: targetTotal,
+                  progress: progress,
+                  selectedIndex: _selectedArcIndex,
+                ),
+                child: SizedBox(
+                  width: 220,
+                  height: 220,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          displayLabel,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: selectedItem != null ? selectedItem.color : Colors.white54,
+                            fontSize: selectedItem != null ? 12 : 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        CurrencyTextWidget(
+                          amount: displayTotal,
+                          customFormattedStr: _formatShortCurrency(displayTotal),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                          ),
+                          iconSize: 18,
+                        ),
+                        if (selectedItem != null && _drilledCategory == null) Builder(
+                          builder: (ctx) {
+                            final provider = Provider.of<FinanceProvider>(ctx, listen: false);
+                            final labelLower = selectedItem.label.toLowerCase();
+
+                            final isSpecial = ['loan', 'bounce', 'internal transfer', 'cash'].contains(labelLower) ||
+                                provider.specialReasons.any((r) => r.name.toLowerCase() == labelLower);
+
+                            if (isSpecial) return const SizedBox.shrink();
+
+                            final foundReason = provider.topLevelCategories.firstWhere(
+                              (r) => r.name.toLowerCase() == labelLower,
+                              orElse: () => AppReason(name: selectedItem.label),
+                            );
+
+                            final hasSubcategories = foundReason.id != null &&
+                                provider.subcategoriesFor(foundReason.id!).isNotEmpty;
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: GestureDetector(
+                                onTap: () {
+                                  if (!hasSubcategories) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('No subcategories found for this category'),
+                                        backgroundColor: AppColors.warning,
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  _changeFilter(() {
+                                    _drilledCategory = foundReason;
+                                    _selectedArcIndex = null;
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: hasSubcategories
+                                        ? AppColors.positive
+                                        : Colors.white.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: hasSubcategories
+                                          ? AppColors.positive
+                                          : Colors.white.withValues(alpha: 0.2),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Go Deeper',
+                                        style: TextStyle(
+                                          color: hasSubcategories ? Colors.white : Colors.white38,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: hasSubcategories ? Colors.white : Colors.white38,
+                                        size: 14,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  CurrencyTextWidget(
-                    amount: currentTotal,
-                    customFormattedStr: _formatShortCurrency(currentTotal),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                    iconSize: 20,
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         );
       },
     );
@@ -1039,51 +1412,71 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       ),
       itemBuilder: (context, index) {
         final item = categories[index];
-        return Row(
-          children: [
-            // Rounded color dot
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: item.color,
-                shape: BoxShape.circle,
+        final isSelected = _selectedArcIndex == index;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            setState(() {
+              _selectedArcIndex = (_selectedArcIndex == index) ? null : index;
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: isSelected ? item.color.withValues(alpha: 0.18) : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? item.color.withValues(alpha: 0.5) : Colors.transparent,
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                item.label,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            isBalanceVisible
-                ? CurrencyTextWidget(
-                    amount: item.amount,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.2,
-                    ),
-                    customFormattedStr: fmt.format(item.amount),
-                  )
-                : const Text(
-                    '****',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.2,
-                    ),
+            child: Row(
+              children: [
+                // Rounded color dot
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: item.color,
+                    shape: BoxShape.circle,
                   ),
-          ],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white70,
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                isBalanceVisible
+                    ? CurrencyTextWidget(
+                        amount: item.amount,
+                        style: TextStyle(
+                          color: isSelected ? AppColors.positive : Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.2,
+                        ),
+                        customFormattedStr: fmt.format(item.amount),
+                      )
+                    : const Text(
+                        '****',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -1571,6 +1964,7 @@ class MorphingRingPainter extends CustomPainter {
   final double oldTotal;
   final double newTotal;
   final double progress; // 0.0 to 1.0 morphing animation value
+  final int? selectedIndex;
 
   MorphingRingPainter({
     required this.oldItems,
@@ -1578,24 +1972,20 @@ class MorphingRingPainter extends CustomPainter {
     required this.oldTotal,
     required this.newTotal,
     required this.progress,
+    this.selectedIndex,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = min(size.width, size.height) / 2 - 20;
-    const strokeWidth = 24.0;
-
-    final basePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
+    final baseRadius = min(size.width, size.height) / 2 - 20;
 
     final Map<String, CategoryArcItem> oldMap = {for (var item in oldItems) item.label: item};
     final Map<String, CategoryArcItem> newMap = {for (var item in newItems) item.label: item};
     final Set<String> allLabels = {...oldMap.keys, ...newMap.keys};
 
-    final capAngularExtension = strokeWidth / radius;
+    const normalStrokeWidth = 24.0;
+    final capAngularExtension = normalStrokeWidth / baseRadius;
     const desiredGapAngle = 0.035;
     final fullSegmentGap = capAngularExtension + desiredGapAngle;
 
@@ -1614,7 +2004,6 @@ class MorphingRingPainter extends CustomPainter {
       final oldW = oldAmt > 0 ? 1.0 : 0.0;
       final newW = newAmt > 0 ? 1.0 : 0.0;
 
-      // Continuous presence weight lerp from 0.0 to 1.0 (prevents discrete gap pops)
       final weight = oldW + (newW - oldW) * progress;
       final currentAmt = oldAmt + (newAmt - oldAmt) * progress;
       final color = newItem?.color ?? oldItem?.color ?? Colors.grey;
@@ -1636,26 +2025,39 @@ class MorphingRingPainter extends CustomPainter {
     }
 
     if (totalInterpolatedAmount <= 0) {
-      basePaint.color = Colors.white.withValues(alpha: 0.1);
-      canvas.drawCircle(center, radius, basePaint);
+      final basePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = normalStrokeWidth
+        ..color = Colors.white.withValues(alpha: 0.1);
+      canvas.drawCircle(center, baseRadius, basePaint);
       return;
     }
 
     final availableAngle = max(0.0, (2 * pi) - totalGapAngle);
     double startAngle = -pi / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    for (var item in activeSegments) {
+    for (int i = 0; i < activeSegments.length; i++) {
+      final item = activeSegments[i];
       if (item.amount <= 0 && item.weight <= 0) continue;
 
       final targetSweep = (item.amount / totalInterpolatedAmount) * availableAngle;
       final sweepAngle = max(0.0, targetSweep);
 
-      basePaint.color = item.color;
+      final isSelected = selectedIndex == i;
+      final currentStrokeWidth = isSelected ? 30.0 : normalStrokeWidth;
+      final currentRadius = isSelected ? baseRadius + 4.0 : baseRadius;
+
+      final arcPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = currentStrokeWidth
+        ..strokeCap = StrokeCap.round
+        ..color = item.color;
+
+      final rect = Rect.fromCircle(center: center, radius: currentRadius);
 
       if (sweepAngle > 0.0001) {
         final drawStartAngle = startAngle + (activeSegments.length > 1 ? capAngularExtension / 2 : 0.0);
-        canvas.drawArc(rect, drawStartAngle, sweepAngle, false, basePaint);
+        canvas.drawArc(rect, drawStartAngle, sweepAngle, false, arcPaint);
       }
 
       final gapForThisSegment = activeSegments.length > 1 ? item.weight * fullSegmentGap : 0.0;
@@ -1669,7 +2071,8 @@ class MorphingRingPainter extends CustomPainter {
         oldDelegate.oldItems != oldItems ||
         oldDelegate.newItems != newItems ||
         oldDelegate.oldTotal != oldTotal ||
-        oldDelegate.newTotal != newTotal;
+        oldDelegate.newTotal != newTotal ||
+        oldDelegate.selectedIndex != selectedIndex;
   }
 }
 

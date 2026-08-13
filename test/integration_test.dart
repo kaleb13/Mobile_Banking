@@ -37,6 +37,7 @@ void main() {
 
       final bankName = BankSenders.match(fakeSender);
       expect(bankName, isNull);
+      expect(fakeSms.isNotEmpty, isTrue);
     });
 
     test('detects Telebirr credit loan disbursement pipeline', () {

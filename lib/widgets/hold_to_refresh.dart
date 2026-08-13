@@ -60,7 +60,6 @@ class HoldToRefresh extends StatefulWidget {
 
 class _HoldToRefreshState extends State<HoldToRefresh>
     with SingleTickerProviderStateMixin {
-  // Drives 0 → 0.95 over 6 seconds with eased curve
   late final AnimationController _progressCtrl = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 6),
@@ -72,7 +71,9 @@ class _HoldToRefreshState extends State<HoldToRefresh>
   );
 
   double _pull = 0;
-  bool _pointerDown = false;
+  double _startY = 0;
+  bool _trackingTouch = false;
+  bool _isAtTop = true;
   RefreshPhase _phase = RefreshPhase.idle;
   bool _refreshTriggered = false;
 
@@ -119,6 +120,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
           _phase = RefreshPhase.idle;
           _refreshTriggered = false;
           _pull = 0;
+          _trackingTouch = false;
         }
       }
     }
@@ -126,40 +128,74 @@ class _HoldToRefreshState extends State<HoldToRefresh>
 
   bool _onScroll(ScrollNotification n) {
     if (n.metrics.axis != Axis.vertical) return false;
+    _isAtTop = n.metrics.pixels <= 1.0;
+
+    // While dragging or when pull progress is active, lock scroll view at 0,0
+    if (_phase == RefreshPhase.dragging || _pull > 0) {
+      return true;
+    }
+
     if (_phase == RefreshPhase.refreshing || _phase == RefreshPhase.done) {
       return false;
     }
 
-    final over = n.metrics.minScrollExtent - n.metrics.pixels;
-    _pull = over > 0 ? over : 0;
+    if (!_trackingTouch) {
+      final over = n.metrics.minScrollExtent - n.metrics.pixels;
+      _pull = over > 0 ? over : 0;
+      _updateProgress();
+    }
 
+    return false;
+  }
+
+  void _onPointerDown(PointerDownEvent e) {
+    if (_phase == RefreshPhase.refreshing || _phase == RefreshPhase.done) return;
+    if (_isAtTop) {
+      _startY = e.position.dy;
+      _trackingTouch = true;
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    if (!_trackingTouch ||
+        _phase == RefreshPhase.refreshing ||
+        _phase == RefreshPhase.done) {
+      return;
+    }
+    final dy = e.position.dy - _startY;
+    if (dy > 0) {
+      _pull = dy;
+      _updateProgress();
+    } else {
+      if (_pull > 0) {
+        _pull = 0;
+        _updateProgress();
+      }
+    }
+  }
+
+  void _updateProgress() {
     final dragProgress = (_pull / widget.triggerDistance).clamp(0.0, 1.0);
-
-    if (_pull > 4) {
+    if (_pull > 0.5) {
       _phase = RefreshPhase.dragging;
       refreshStateNotifier.value = RefreshState(
         phase: RefreshPhase.dragging,
         dragProgress: dragProgress,
       );
     } else {
-      _phase = RefreshPhase.idle;
-      refreshStateNotifier.value = const RefreshState();
+      if (_phase == RefreshPhase.dragging) {
+        _phase = RefreshPhase.idle;
+        refreshStateNotifier.value = const RefreshState();
+      }
     }
-
-    // Visual feedback only — actual trigger happens in _onRelease
-    // to avoid the race where the scroll peak arrives after pointer-up
-
-    return false;
   }
 
   void _onRelease() {
-    _pointerDown = false;
+    _trackingTouch = false;
     if (_phase == RefreshPhase.dragging) {
       if (_pull >= widget.triggerDistance) {
-        // User pulled far enough — fire refresh on release
         _triggerRefresh();
       } else {
-        // Not far enough — cancel and go back to idle
         _phase = RefreshPhase.idle;
         _pull = 0;
         refreshStateNotifier.value = const RefreshState();
@@ -170,7 +206,8 @@ class _HoldToRefreshState extends State<HoldToRefresh>
   @override
   Widget build(BuildContext context) {
     return Listener(
-      onPointerDown: (_) => _pointerDown = true,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
       onPointerUp: (_) => _onRelease(),
       onPointerCancel: (_) => _onRelease(),
       child: NotificationListener<ScrollNotification>(
@@ -231,7 +268,7 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
     final phaseChanged = _state.phase != newState.phase;
     final percentChanged = _state.refreshPercent != newState.refreshPercent;
     final progressChanged =
-        (_state.dragProgress - newState.dragProgress).abs() >= 0.05;
+        (_state.dragProgress - newState.dragProgress).abs() >= 0.005;
     final wasIdle = _state.phase == RefreshPhase.idle;
     final isIdle = newState.phase == RefreshPhase.idle;
 
@@ -256,16 +293,19 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
         final t = _morphAnim.value;
 
         if (_state.phase == RefreshPhase.idle && t < 0.01) {
-          return widget.idleChild;
+          return Center(child: widget.idleChild);
         }
 
         return Stack(
+          alignment: Alignment.center,
           children: [
             // Idle content fades out
             if (t < 0.99)
-              Opacity(
-                opacity: (1.0 - t).clamp(0.0, 1.0),
-                child: widget.idleChild,
+              Center(
+                child: Opacity(
+                  opacity: (1.0 - t).clamp(0.0, 1.0),
+                  child: widget.idleChild,
+                ),
               ),
 
             // Refresh content fades in
