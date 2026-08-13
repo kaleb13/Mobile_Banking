@@ -10,6 +10,7 @@ import 'telebirr_parser.dart';
 import 'cbe_parser.dart';
 import 'cbe_birr_parser.dart';
 import 'ahadu_parser.dart';
+import 'boa_parser.dart';
 import 'bank_senders.dart';
 
 /// Returns true if [msg] looks like a banking message (contains an English
@@ -143,6 +144,8 @@ Future<void> processSmsRaw({
     }
   } else if (bank == 'Ahadu Bank') {
     tx = AhaduParser.parse(body, date);
+  } else if (bank == 'BOA') {
+    tx = BoaParser.parse(body, date);
   } else {
     // Custom Senders matching
     final senders = await DatabaseService.instance.getSenders();

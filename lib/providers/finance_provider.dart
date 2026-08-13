@@ -24,6 +24,7 @@ import '../services/telebirr_parser.dart';
 import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
 import '../services/ahadu_parser.dart';
+import '../services/boa_parser.dart';
 import '../services/bank_senders.dart';
 import '../services/sms_processor.dart';
 import 'package:flutter/services.dart';
@@ -436,12 +437,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.insertSender(ahadu);
         _senders.add(ahadu);
       }
+      if (!_senders.any((s) => s.senderName.toUpperCase() == 'BOA' || s.senderName.toUpperCase().contains('ABYSSINIA'))) {
+        final boa = AppSender(id: '5', senderName: 'BOA');
+        await DatabaseService.instance.insertSender(boa);
+        _senders.add(boa);
+      }
     } else {
       _senders = [
         AppSender(id: '1', senderName: 'Telebirr'),
         AppSender(id: '2', senderName: 'CBE'),
         AppSender(id: '3', senderName: 'CBE Birr'),
         AppSender(id: '4', senderName: 'Ahadu Bank'),
+        AppSender(id: '5', senderName: 'BOA'),
       ];
       for (var s in _senders) {
         await DatabaseService.instance.insertSender(s);

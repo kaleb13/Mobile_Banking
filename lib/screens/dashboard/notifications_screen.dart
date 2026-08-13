@@ -151,7 +151,6 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
   void _removeOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    if (mounted) setState(() {});
   }
 
   @override

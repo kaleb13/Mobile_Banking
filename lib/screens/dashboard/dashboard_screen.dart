@@ -1089,9 +1089,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'main': mostExpenseMonth != null
             ? mostExpenseMonth['reason'] as String
             : 'No Transactions',
-        'bgColor': AppColors.cardBoaBg,
-        'darkIconColor': AppColors.cardBoaDarkIcon,
-        'titleColor': AppColors.cardBoaTitle,
+        'bgColor': AppColors.statCardExpenseMonthBg,
+        'darkIconColor': AppColors.statCardExpenseMonthDarkIcon,
+        'titleColor': AppColors.statCardExpenseMonthTitle,
         'iconData': _getReasonIcon(mostExpenseMonth?['reason']),
         'isBankIcon': false,
         'bankName': null,

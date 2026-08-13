@@ -3,6 +3,7 @@ import 'package:mobile_banking_app/services/cbe_parser.dart';
 import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
 import 'package:mobile_banking_app/services/telebirr_parser.dart';
 import 'package:mobile_banking_app/services/ahadu_parser.dart';
+import 'package:mobile_banking_app/services/boa_parser.dart';
 
 void main() {
   final now = DateTime.now();
@@ -98,6 +99,43 @@ https://verifayda.ahadubank.com/
       expect(tx.date.day, equals(5));
       expect(tx.date.hour, equals(13));
       expect(tx.date.minute, equals(23));
+    });
+  });
+
+  group('BoaParser', () {
+    test('parses credit transaction with payer name and ref ID', () {
+      const sms = 'Dear Yohannes, your account 2*****36 was credited with ETB 3,000.00 by  Yohannes Bizuneh . Available Balance: ETB 31,824.04.\nReceipt: https://cs.bankofabyssinia.com/slip/?trx=FT26215HWFDW10104\nFeedback: https://cs.bankofabyssinia.com/cs/?trx=CFT26215HWFDW';
+      final tx = BoaParser.parse(sms, now);
+
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(3000.00));
+      expect(tx.type, equals('income'));
+      expect(tx.name, equals('Yohannes Bizuneh'));
+      expect(tx.totalBalance, equals(31824.04));
+      expect(tx.bankReference, equals('FT26215HWFDW10104'));
+      expect(tx.id, equals('boa_ref_FT26215HWFDW10104'));
+    });
+
+    test('parses debit transaction with ref ID', () {
+      const sms = 'Dear Yohannes, your account 2*****36 was debited with ETB 10,000.00. Available Balance: ETB 21,818.29.\nReceipt: https://cs.bankofabyssinia.com/slip/?trx=TT262259CCQC91836';
+      final tx = BoaParser.parse(sms, now);
+
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(10000.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.name, equals('BOA Transfer'));
+      expect(tx.totalBalance, equals(21818.29));
+      expect(tx.bankReference, equals('TT262259CCQC91836'));
+    });
+
+    test('ignores queue token messages', () {
+      const sms = 'Your token number for today is C0064. Please wait for your token to be called. Thanks for choosing BOA.';
+      expect(BoaParser.parse(sms, now), isNull);
+    });
+
+    test('ignores promotional and security messages', () {
+      const sms = 'የጥንቃቄ መልዕክት ለውድ ደንበኞቻችን: የባንካችንን የሞባይል ባንኪንግ አገልግሎት ሲጠቀሙ...';
+      expect(BoaParser.parse(sms, now), isNull);
     });
   });
 }

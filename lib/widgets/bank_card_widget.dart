@@ -39,6 +39,8 @@ class BankCardWidget extends StatelessWidget {
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
       imagePath = 'assets/images/Ahadu_Logo.png';
+    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA') {
+      imagePath = 'assets/images/BOA_Logo.png';
     }
 
     if (imagePath.isNotEmpty) {
@@ -71,6 +73,7 @@ class BankCardWidget extends StatelessWidget {
     if (n == 'CBE') return 'Commercial Bank of Ethiopia';
     if (n == 'CBE BIRR' || n == 'CBEBIRR') return 'CBE Birr Mobile Wallet';
     if (n.contains('AHADU')) return 'Ahadu Bank S.C.';
+    if (n.contains('ABYSSINIA') || n == 'BOA') return 'Bank of Abyssinia S.C.';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     return 'Bank Account';
   }

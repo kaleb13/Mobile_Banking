@@ -90,15 +90,22 @@ class AppColors {
   static const Color cardCbeBg        = Color(0xFF1B5E4B);
   static const Color cardCbeDarkIcon  = Color(0xFF0F3A2E);
   static const Color cardCbeTitle     = Color(0xFF88C9B8);
-  static const Color cardBoaBg        = Color(0xFF9E4B2D);
-  static const Color cardBoaDarkIcon  = Color(0xFF542412);
-  static const Color cardBoaTitle     = Color(0xFFE8BDB0);
+  static const Color cardBoaBg        = Color(0xFFFFB800); // BOA Golden Yellow
+  static const Color cardBoaDarkIcon  = Color(0xFFC68000); // BOA Deep Amber
+  static const Color cardBoaTitle     = Color(0xFF1D1302); // BOA Dark Bronze Text
+  static const Color cardBoaObsidianDark = Color(0xFF181510); // BOA Dark Obsidian
+  static const Color cardBoaObsidianLight = Color(0xFF2C2010); // BOA Dark Bronze Gradient
+  static const Color cardBoaWhite     = Color(0xFFFFFFFF); // BOA Crisp White
   static const Color cardDashenBg     = Color(0xFFF9B825);
   static const Color cardDashenDarkIcon = Color(0xFF805A04);
   static const Color cardDashenTitle  = Color(0xFFFFF1C6);
   static const Color cardCoopBg       = Color(0xFF5E35B1);
   static const Color cardCoopDarkIcon = Color(0xFF2E175B);
   static const Color cardCoopTitle    = Color(0xFFD1C4E9);
+  // ── Stat Cards Palette (Dashboard Analytics) ────────────────────────────────
+  static const Color statCardExpenseMonthBg        = Color(0xFF9E4B2D); // Terracotta reddish-brown
+  static const Color statCardExpenseMonthDarkIcon  = Color(0xFF542412);
+  static const Color statCardExpenseMonthTitle     = Color(0xFFE8BDB0);
 
   // ── Service & Provider Tints ──────────────────────────────────────────────
   static const Color slackPurple       = Color(0xFF4A154B);
