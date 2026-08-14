@@ -49,15 +49,14 @@ class CustomBottomNavBar extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.bottomNavBg,
+              color: context.isLightMode
+                  ? AppColors.surfaceLight
+                  : AppColors.bottomNavBg,
               borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                color: AppColors.textPrimary.withValues(alpha: 0.12),
-                width: 1,
-              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
+                  color: Colors.black
+                      .withValues(alpha: context.isLightMode ? 0.08 : 0.35),
                   blurRadius: 20,
                   offset: const Offset(0, 6),
                 ),
@@ -174,8 +173,8 @@ class _NavItem extends StatelessWidget {
     final containerWidth = lerpDouble(inactiveWidth, activeWidth, curved)!;
 
     final iconColor = Color.lerp(
-      AppColors.textSecondary,
-      AppColors.textPrimary,
+      context.themeTextSecondary,
+      context.themeTextPrimary,
       curved,
     )!;
 
@@ -215,8 +214,8 @@ class _NavItem extends StatelessWidget {
                       padding: const EdgeInsets.only(right: 6),
                       child: Text(
                         label,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.themeTextPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           letterSpacing: -0.3,

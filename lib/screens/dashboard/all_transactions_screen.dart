@@ -8,6 +8,8 @@ import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -28,6 +30,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   String _selectedType = 'All';
   int _searchLabelIndex = 0;
   Timer? _searchLabelTimer;
+  bool _isSenderMenuOpen = false;
+  bool _isTypeMenuOpen = false;
 
   @override
   void initState() {
@@ -156,25 +160,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: Clean Back Arrow (No background shape/stroke) + Title + Clear Button (No border)
+          // Header Row: Clean Back Arrow + Title + Clear Button
           Row(
             children: [
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Center(
-                    child: SvgPicture.asset(
-                      'assets/images/BackForNav.svg',
-                      colorFilter: const ColorFilter.mode(AppColors.textPrimary, BlendMode.srcIn),
-                      width: 20,
-                      height: 20,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
+              const AppBackButton(),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -203,8 +193,13 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 ),
               ),
               if (_searchQuery.isNotEmpty || _selectedSender != 'All' || _selectedType != 'All' || _selectedDateRange != null)
-                GestureDetector(
-                  onTap: () {
+                AppButton.destructive(
+                  text: 'Clear',
+                  fullWidth: false,
+                  height: 28,
+                  fontSize: 11,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  onPressed: () {
                     setState(() {
                       _searchQuery = '';
                       _searchController.clear();
@@ -213,21 +208,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       _selectedDateRange = null;
                     });
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'Clear',
-                      style: TextStyle(
-                        color: AppColors.negative,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ),
             ],
           ),
@@ -237,7 +217,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           Container(
             height: 48,
             decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(28),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -288,7 +268,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(
-                        color: AppColors.surfaceElevated,
+                        color: AppColors.buttonSecondary,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 14),
@@ -299,34 +279,17 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           ),
           const SizedBox(height: 14),
 
-          // ── Selection Filter Chips (Drop-down selections keep subtle outline for clarity) ──
+          // ── Selection Filter Chips ──
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
-                _buildFilterChip(
-                  label: _selectedDateRange == null
-                      ? 'Date'
-                      : '${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
-                  icon: Icons.calendar_today_rounded,
-                  isSelected: _selectedDateRange != null,
-                  onTap: _pickDateRange,
-                ),
+                _buildDateFilterChip(),
                 const SizedBox(width: 8),
-                _buildFilterChip(
-                  label: _selectedSender == 'All' ? 'Wallet' : _selectedSender,
-                  icon: Icons.account_balance_wallet_rounded,
-                  isSelected: _selectedSender != 'All',
-                  onTap: () => _showSenderPicker(senderNames),
-                ),
+                _buildSenderDropdown(senderNames),
                 const SizedBox(width: 8),
-                _buildFilterChip(
-                  label: _selectedType == 'All' ? 'Type' : _selectedType,
-                  icon: Icons.swap_vert_rounded,
-                  isSelected: _selectedType != 'All',
-                  onTap: _showTypePicker,
-                ),
+                _buildTypeDropdown(),
               ],
             ),
           ),
@@ -335,49 +298,207 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildFilterChip({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.telebirrGreen.withValues(alpha: 0.15)
-              : AppColors.surfaceCard,
-          borderRadius: BorderRadius.circular(24),
-          border: isSelected
-              ? Border.all(color: AppColors.telebirrGreen)
-              : Border.all(color: Colors.white.withValues(alpha: 0.06)),
+  Widget _buildDateFilterChip() {
+    final bool isSelected = _selectedDateRange != null;
+    final String dateText = _selectedDateRange == null
+        ? 'Date'
+        : '${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}';
+
+    return AppButton.pill(
+      text: dateText,
+      icon: Icons.calendar_today_rounded,
+      trailingIcon: Icons.keyboard_arrow_down_rounded,
+      isSelected: isSelected,
+      onPressed: _pickDateRange,
+    );
+  }
+
+  Widget _buildSenderDropdown(List<String> senderNames) {
+    final bool isSelected = _selectedSender != 'All';
+    final bool isActive = isSelected || _isSenderMenuOpen;
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashColor: Colors.white.withValues(alpha: 0.15),
+        highlightColor: Colors.white.withValues(alpha: 0.12),
+      ),
+      child: PopupMenuButton<String>(
+        onOpened: () => setState(() => _isSenderMenuOpen = true),
+        onCanceled: () => setState(() => _isSenderMenuOpen = false),
+        offset: const Offset(0, 38),
+        constraints: const BoxConstraints(minWidth: 150, maxWidth: 220),
+        borderRadius: BorderRadius.circular(100),
+        padding: EdgeInsets.zero,
+        color: AppColors.surface,
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isSelected ? AppColors.telebirrGreen : AppColors.textSecondary,
+        onSelected: (name) => setState(() {
+          _isSenderMenuOpen = false;
+          _selectedSender = name;
+        }),
+        itemBuilder: (context) => senderNames.map((name) {
+          final isItemSel = _selectedSender == name;
+          return PopupMenuItem<String>(
+            value: name,
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      color: isItemSel ? Colors.white : AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight:
+                          isItemSel ? FontWeight.bold : FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isItemSel)
+                  const Icon(Icons.check_rounded,
+                      color: AppColors.positive, size: 16),
+              ],
             ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          );
+        }).toList(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : AppColors.buttonSecondary,
+            borderRadius: BorderRadius.circular(100),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_balance_wallet_rounded,
+                size: 14,
+                color: isActive
+                    ? AppColors.buttonPrimaryText
+                    : AppColors.textSecondary,
               ),
+              const SizedBox(width: 5),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 110),
+                child: Text(
+                  _selectedSender == 'All' ? 'Wallet' : _selectedSender,
+                  style: TextStyle(
+                    color: isActive
+                        ? AppColors.buttonPrimaryText
+                        : AppColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 15,
+                color: isActive
+                    ? AppColors.buttonPrimaryText
+                    : AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeDropdown() {
+    final bool isSelected = _selectedType != 'All';
+    final bool isActive = isSelected || _isTypeMenuOpen;
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashColor: Colors.white.withValues(alpha: 0.15),
+        highlightColor: Colors.white.withValues(alpha: 0.12),
+      ),
+      child: PopupMenuButton<String>(
+        onOpened: () => setState(() => _isTypeMenuOpen = true),
+        onCanceled: () => setState(() => _isTypeMenuOpen = false),
+        offset: const Offset(0, 38),
+        constraints: const BoxConstraints(minWidth: 130, maxWidth: 180),
+        borderRadius: BorderRadius.circular(100),
+        padding: EdgeInsets.zero,
+        color: AppColors.surface,
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        onSelected: (type) => setState(() {
+          _isTypeMenuOpen = false;
+          _selectedType = type;
+        }),
+        itemBuilder: (context) => ['All', 'Income', 'Expense'].map((type) {
+          final isItemSel = _selectedType == type;
+          return PopupMenuItem<String>(
+            value: type,
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    type,
+                    style: TextStyle(
+                      color: isItemSel ? Colors.white : AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight:
+                          isItemSel ? FontWeight.bold : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (isItemSel)
+                  const Icon(Icons.check_rounded,
+                      color: AppColors.positive, size: 16),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.unfold_more_rounded,
-              size: 16,
-              color: isSelected ? AppColors.telebirrGreen : AppColors.textSecondary,
-            ),
-          ],
+          );
+        }).toList(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : AppColors.buttonSecondary,
+            borderRadius: BorderRadius.circular(100),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.swap_vert_rounded,
+                size: 14,
+                color: isActive
+                    ? AppColors.buttonPrimaryText
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                _selectedType == 'All' ? 'Type' : _selectedType,
+                style: TextStyle(
+                  color: isActive
+                      ? AppColors.buttonPrimaryText
+                      : AppColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 15,
+                color: isActive
+                    ? AppColors.buttonPrimaryText
+                    : AppColors.textSecondary,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -474,7 +595,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceCard,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Row(
@@ -521,84 +642,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       onTap: () {
         setState(() => _selectedDateRange = range);
         Navigator.pop(context);
-      },
-    );
-  }
-
-  void _showSenderPicker(List<String> senderNames) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.bgMid,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Select Wallet',
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              ...senderNames.map((name) => ListTile(
-                    title:
-                        Text(name, style: const TextStyle(color: AppColors.textPrimary)),
-                    trailing: _selectedSender == name
-                        ? const Icon(Icons.check, color: AppColors.gold)
-                        : null,
-                    onTap: () {
-                      setState(() => _selectedSender = name);
-                      Navigator.pop(context);
-                    },
-                  )),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showTypePicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.bgMid,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Transaction Type',
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              ...['All', 'Income', 'Expense'].map((type) => ListTile(
-                    title:
-                        Text(type, style: const TextStyle(color: AppColors.textPrimary)),
-                    trailing: _selectedType == type
-                        ? const Icon(Icons.check, color: AppColors.gold)
-                        : null,
-                    onTap: () {
-                      setState(() => _selectedType = type);
-                      Navigator.pop(context);
-                    },
-                  )),
-            ],
-          ),
-        );
       },
     );
   }
@@ -732,7 +775,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildDarkBankAvatar(String bankName) {
     final nameUp = bankName.toUpperCase();
     Widget img;
-    Color bgColor = AppColors.surfaceElevated;
+    Color bgColor = AppColors.buttonSecondary;
 
     if (nameUp == 'CBE') {
       img = Image.asset('assets/images/CBE logo 1.webp',

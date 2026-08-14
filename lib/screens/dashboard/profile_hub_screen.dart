@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/interactive_3d_badge.dart';
 import '../../widgets/level_up_modal.dart';
+import '../../widgets/app_button.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/finance_provider.dart';
 import 'saving_goals_screen.dart';
@@ -66,40 +67,13 @@ class ProfileHubScreen extends StatelessWidget {
                             letterSpacing: -0.5,
                           ),
                         ),
-                        InkWell(
-                          onTap: () {
-                            _showLevelsInfoDialog(context);
-                          },
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Levels',
-                                  style: TextStyle(
-                                    color: AppColors.background,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(width: 4),
-                                Icon(
-                                  Icons.arrow_forward_ios_rounded,
-                                  color: AppColors.background,
-                                  size: 11,
-                                ),
-                              ],
-                            ),
-                          ),
+                        AppButton.secondary(
+                          text: 'Levels',
+                          trailingIcon: Icons.arrow_forward_ios_rounded,
+                          fullWidth: false,
+                          height: 32,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          onPressed: () => _showLevelsInfoDialog(context),
                         ),
                       ],
                     ),
@@ -168,13 +142,9 @@ class ProfileHubScreen extends StatelessWidget {
                               width: double.infinity,
                               padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceCard, // Defined card surface #111821
+                                color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  width: 1,
-                                ),
-                              ),
+                                                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -375,7 +345,7 @@ class ProfileHubScreen extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFF111821),
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -479,12 +449,9 @@ class ProfileHubScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
-                      ),
-                    ),
+                                          ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -517,11 +484,7 @@ class ProfileHubScreen extends StatelessWidget {
                                         decoration: BoxDecoration(
                                           color: AppColors.positive.withValues(alpha: 0.2),
                                           borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(
-                                            color: AppColors.positive.withValues(alpha: 0.4),
-                                            width: 1,
-                                          ),
-                                        ),
+                                                                                  ),
                                         child: const Text(
                                           'CURRENT',
                                           style: TextStyle(
@@ -591,12 +554,6 @@ class ProfileHubScreen extends StatelessWidget {
                             ? Colors.white.withValues(alpha: 0.08)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(14),
-                        border: isCurrent
-                            ? Border.all(
-                                color: Colors.white.withValues(alpha: 0.25),
-                                width: 1,
-                              )
-                            : null,
                       ),
                       child: Row(
                         children: [
@@ -631,17 +588,18 @@ class ProfileHubScreen extends StatelessWidget {
                           if (isCurrent)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                  horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.positive,
-                                borderRadius: BorderRadius.circular(8),
+                                color: AppColors.positive.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Text(
-                                'Current',
+                                'CURRENT',
                                 style: TextStyle(
-                                  color: AppColors.background,
-                                  fontSize: 10,
+                                  color: AppColors.positive,
+                                  fontSize: 9,
                                   fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.3,
                                 ),
                               ),
                             ),
@@ -651,25 +609,11 @@ class ProfileHubScreen extends StatelessWidget {
                   }),
                   const SizedBox(height: 20),
 
-                  // Got it Action Button (Primary Green)
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx),
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: AppColors.positive, // Primary green
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Text(
-                        'Got it',
-                        style: TextStyle(
-                          color: AppColors.background,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                  // Got It Action Button — standardized primary pill
+                  AppButton.primary(
+                    text: 'Got It',
+                    height: 48,
+                    onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
               ),

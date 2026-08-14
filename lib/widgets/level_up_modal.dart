@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/interactive_3d_badge.dart';
 import '../widgets/custom_progress_bar.dart';
+import '../widgets/app_button.dart';
 
 // ── Glow colors per level (mirrors profile_hub_screen.dart) ──────────────────
 Color _levelGlowColor(int level) {
@@ -146,7 +147,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
         constraints: BoxConstraints(maxHeight: screenH * 0.82),
         child: Container(
           decoration: const BoxDecoration(
-            color: AppColors.surfaceCard,
+            color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
           child: Stack(
@@ -223,12 +224,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
                               color:
                                   AppColors.positive.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: AppColors.positive
-                                    .withValues(alpha: 0.35),
-                                width: 1,
-                              ),
-                            ),
+                                                          ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -343,9 +339,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
         decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-              color: glowColor.withValues(alpha: 0.22), width: 1),
-        ),
+                  ),
         child: Row(
           children: [
             Container(
@@ -393,9 +387,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: Colors.white.withValues(alpha: 0.07), width: 1),
-      ),
+              ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -470,43 +462,11 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
   // ── CTA button ──────────────────────────────────────────────────────────────
 
   Widget _buildCTAButton() {
-    return GestureDetector(
-      onTap: _dismiss,
-      child: Container(
-        width: double.infinity,
-        height: 52,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.positive, AppColors.success],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.positive.withValues(alpha: 0.32),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Claim Badge & Continue',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.1,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
-          ],
-        ),
-      ),
+    return AppButton.primary(
+      text: 'Claim Badge & Continue',
+      trailingIcon: Icons.arrow_forward_rounded,
+      height: 52,
+      onPressed: _dismiss,
     );
   }
 }

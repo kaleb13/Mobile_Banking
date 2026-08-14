@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// A reusable capsule-style TabBar / Segmented Control styled with
-/// hex color #191F28 (AppColors.tabBackground), zero border/stroke,
+/// hex color #111821 (AppColors.surface), zero border/stroke,
 /// a white pill indicator for active tab, and crisp white inactive text.
 class AppCapsuleTabBar extends StatelessWidget {
   final List<String> tabs;
@@ -35,8 +35,17 @@ class AppCapsuleTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final capsuleBg = context.themeSurface;
+    final activeTextColor = context.isLightMode
+        ? AppColors.textPrimaryLight
+        : AppColors.surface;
+    final inactiveTextColor = context.isLightMode
+        ? AppColors.textSecondaryLight
+        : Colors.white;
+    final activePillColor = Colors.white;
+
     final decoration = BoxDecoration(
-      color: AppColors.tabBackground,
+      color: capsuleBg,
       borderRadius: BorderRadius.circular(borderRadius),
     );
 
@@ -51,12 +60,21 @@ class AppCapsuleTabBar extends StatelessWidget {
           controller: controller,
           indicatorSize: TabBarIndicatorSize.tab,
           indicator: BoxDecoration(
-            color: Colors.white,
+            color: activePillColor,
             borderRadius: BorderRadius.circular(indicatorRadius),
+            boxShadow: context.isLightMode
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    )
+                  ]
+                : null,
           ),
           dividerColor: Colors.transparent,
-          labelColor: AppColors.tabBackground,
-          unselectedLabelColor: Colors.white,
+          labelColor: activeTextColor,
+          unselectedLabelColor: inactiveTextColor,
           labelStyle: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.bold,
@@ -98,8 +116,17 @@ class AppCapsuleTabBar extends StatelessWidget {
                   ? EdgeInsets.zero
                   : const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: isSelected ? Colors.white : Colors.transparent,
+                color: isSelected ? activePillColor : Colors.transparent,
                 borderRadius: BorderRadius.circular(indicatorRadius),
+                boxShadow: isSelected && context.isLightMode
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        )
+                      ]
+                    : null,
               ),
               child: Text(
                 tabs[index],
@@ -107,7 +134,7 @@ class AppCapsuleTabBar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: isSelected ? AppColors.tabBackground : Colors.white,
+                  color: isSelected ? activeTextColor : inactiveTextColor,
                   fontSize: fontSize,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                 ),

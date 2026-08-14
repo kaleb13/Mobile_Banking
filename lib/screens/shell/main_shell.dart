@@ -130,11 +130,13 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
+        statusBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
+        systemNavigationBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
       ),
       child: Consumer<FinanceProvider>(
         builder: (context, provider, child) {
@@ -151,7 +153,7 @@ class _MainShellState extends State<MainShell> {
               }
             },
             child: Scaffold(
-              backgroundColor: AppColors.background,
+              backgroundColor: context.themeBackground,
               extendBody: true,
               // PageView gives us free horizontal swipe + clean slide transition
               body: Stack(

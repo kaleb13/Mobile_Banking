@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/app_button.dart';
 import 'transaction_detail_screen.dart';
 import 'manage_bank_screen.dart';
 
@@ -99,24 +100,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                child: ElevatedButton(
+                child: AppButton.primary(
+                  text: "OK",
+                  height: 48,
                   onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.gold,
-                    foregroundColor: AppColors.background,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text(
-                    "OK",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -216,7 +203,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         backgroundColor: AppColors.background,
         extendBody: true,
         extendBodyBehindAppBar: true,
-        floatingActionButton: FloatingActionButton(
+        floatingActionButton: AppButton.primary(
+          text: 'Add Transaction',
+          icon: Icons.add_rounded,
+          fullWidth: false,
+          height: 48,
+          elevation: 6.0,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           onPressed: () {
             showModalBottomSheet(
               context: context,
@@ -228,11 +221,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               ),
             );
           },
-          backgroundColor: AppColors.gold,
-          foregroundColor: AppColors.brownDark,
-          elevation: 6,
-          shape: const CircleBorder(),
-          child: const Icon(Icons.add_rounded, size: 28),
         ),
         body: Stack(
           children: [
@@ -288,7 +276,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             child: Container(
               height: 42,
               decoration: BoxDecoration(
-                color: AppColors.tabBackground,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Row(
@@ -793,8 +781,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               decoration: BoxDecoration(
                 color: AppColors.overlay.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
+                              ),
               child: Row(
                 children: [
                   Icon(icon, color: Colors.white, size: 22),
@@ -1051,8 +1038,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     ? Colors.white.withValues(alpha: 0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.transparent),
-              ),
+                              ),
               child: Text(
                 f,
                 style: TextStyle(
@@ -1204,7 +1190,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.tabBackground, // Loan card background (#191F28)
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(

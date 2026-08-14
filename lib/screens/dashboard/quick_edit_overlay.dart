@@ -243,7 +243,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
       width: double.infinity,
       constraints: BoxConstraints(maxHeight: threeQuarterHeight),
       decoration: const BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
@@ -336,10 +336,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.06),
-                    ),
-                  ),
+                                      ),
                   child: Row(
                     children: [
                       Container(
@@ -460,10 +457,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                         decoration: BoxDecoration(
                           color: AppColors.positive.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(23),
-                          border: Border.all(
-                            color: AppColors.positive.withValues(alpha: 0.35),
-                          ),
-                        ),
+                                                  ),
                         child: const Row(
                           children: [
                             Text(
@@ -506,12 +500,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
             ? AppColors.positive.withValues(alpha: 0.12)
             : Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isParentSelected
-              ? AppColors.positive.withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.07),
-        ),
-      ),
+              ),
       child: Column(
         children: [
           // Parent Category Tile
@@ -608,12 +597,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                             ? AppColors.positive.withValues(alpha: 0.20)
                             : Colors.white.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSubSelected
-                              ? AppColors.positive.withValues(alpha: 0.5)
-                              : Colors.white.withValues(alpha: 0.08),
-                        ),
-                      ),
+                                              ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

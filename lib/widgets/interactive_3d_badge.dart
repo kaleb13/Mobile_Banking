@@ -284,7 +284,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.navyDark.withValues(alpha: 0.88),
+                      color: AppColors.dragHandleDark.withValues(alpha: 0.88),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.white.withValues(alpha: 0.70),
@@ -308,7 +308,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     'LEVEL ${widget.level}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppColors.navyDark,
+                      color: AppColors.dragHandleDark,
                       fontSize: widget.size * 0.105,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.0,

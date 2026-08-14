@@ -9,6 +9,7 @@ import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/daily_net_heatmap_widget.dart';
@@ -816,9 +817,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -867,12 +867,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       (value: PeriodFilter.year, label: 'Year'),
     ];
 
-    final sharedFilterDecoration = BoxDecoration(
-      color: AppColors.surfaceCard,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-    );
-
     final selectedPeriodLabel = _selectedPeriod.name[0].toUpperCase() + _selectedPeriod.name.substring(1);
 
     final analysisTypeIndex = switch (_selectedAnalysisType) {
@@ -899,8 +893,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             },
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-            ),
+                          ),
             color: AppColors.bgMid,
             elevation: 10,
             itemBuilder: (BuildContext context) {
@@ -928,24 +921,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 );
               }).toList();
             },
-            child: Container(
+            child: AppButton.pill(
+              text: selectedPeriodLabel,
+              trailingIcon: Icons.unfold_more_rounded,
+              isSelected: false,
+              height: 38,
+              fontSize: 11,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: sharedFilterDecoration,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    selectedPeriodLabel,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.unfold_more_rounded, color: Colors.white70, size: 16),
-                ],
-              ),
+              onPressed: null,
             ),
           ),
         ),
@@ -1028,7 +1011,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -1079,10 +1062,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 decoration: BoxDecoration(
                   color: (isPositiveNet ? AppColors.positive : AppColors.negative).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: (isPositiveNet ? AppColors.positive : AppColors.negative).withValues(alpha: 0.3),
-                  ),
-                ),
+                                  ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1270,7 +1250,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   decoration: BoxDecoration(
                     color: AppColors.positive.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.positive.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1410,11 +1389,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                         ? AppColors.positive
                                         : Colors.white.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: hasSubcategories
-                                          ? AppColors.positive
-                                          : Colors.white.withValues(alpha: 0.2),
-                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -1504,9 +1478,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             decoration: BoxDecoration(
               color: isSelected ? item.color.withValues(alpha: 0.18) : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isSelected ? item.color.withValues(alpha: 0.5) : Colors.transparent,
-              ),
             ),
             child: Row(
               children: [
@@ -1625,7 +1596,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
         decoration: BoxDecoration(
-          color: AppColors.surfaceCard,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
@@ -1688,7 +1659,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             decoration: BoxDecoration(
               color: AppColors.positive.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.positive.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -1736,7 +1706,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceCard,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -1748,10 +1718,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         decoration: BoxDecoration(
                           color: color.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: color.withValues(alpha: 0.4),
-                            width: 1.2,
-                          ),
                         ),
                         child: Center(
                           child: Text(
@@ -1943,12 +1909,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.border,
-                  width: 1,
-                ),
               ),
               child: Column(
                 children: [

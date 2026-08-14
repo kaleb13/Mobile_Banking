@@ -9,7 +9,9 @@ import '../../models/goal_feasibility.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_progress_bar.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/currency_symbol_widget.dart';
 
 class SavingGoalsScreen extends StatefulWidget {
@@ -56,31 +58,15 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                         ),
                       ),
                       const Spacer(),
-                      GestureDetector(
-                        onTap: () => _showAddGoalSheet(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.add, color: AppColors.background, size: 16),
-                              SizedBox(width: 4),
-                              Text(
-                                'New Goal',
-                                style: TextStyle(
-                                  color: AppColors.background,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      AppButton.primary(
+                        text: 'New Goal',
+                        icon: Icons.add_rounded,
+                        fullWidth: false,
+                        height: 28,
+                        fontSize: 11.5,
+                        iconSize: 13,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        onPressed: () => _showAddGoalSheet(context),
                       ),
                     ],
                   ),
@@ -247,7 +233,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
             // ── Top Info Box — Dark background ──────────────
             Container(
               width: double.infinity,
-              color: AppColors.tabBackground,
+              color: AppColors.surface,
               padding: const EdgeInsets.all(12),
               child: Stack(
                 children: [
@@ -784,33 +770,19 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
 
   void _confirmDeleteGoal(
       BuildContext context, SavingGoal goal, FinanceProvider provider) {
-    showDialog(
+    AppConfirmDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF111821),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Saving Goal',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text(
+      title: 'Delete Saving Goal',
+      icon: Icons.delete_outline_rounded,
+      iconColor: AppColors.negative,
+      message:
           'Are you sure you want to delete "${goal.title}"? This action cannot be undone.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () {
-              provider.deleteSavingGoal(goal.id);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Delete',
-                style: TextStyle(
-                    color: Color(0xFFFF5252), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      onConfirm: () {
+        provider.deleteSavingGoal(goal.id);
+      },
     );
   }
 
@@ -1083,9 +1055,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF111821),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1302,13 +1271,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(6),
-                                                          border: Border.all(
-                                                            color: isSelected
-                                                                ? AppColors
-                                                                    .savingProgressGradStart
-                                                                : Colors.white38,
-                                                            width: 1.5,
-                                                          ),
                                                         ),
                                                         child: isSelected
                                                             ? const Icon(
@@ -1424,9 +1386,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF111821),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
                 ),
                 child: Row(
                   children: [
@@ -1525,9 +1484,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                     decoration: BoxDecoration(
                                       color: Colors.white.withValues(alpha: 0.06),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.1),
-                                      ),
                                     ),
                                     child: const Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1664,10 +1620,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                     end: Alignment.bottomRight,
                     colors: theme.gradientColors,
                   ),
-                  border: Border.all(
-                    color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.1),
-                    width: isSelected ? 2.5 : 1,
-                  ),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
@@ -1709,12 +1661,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
               ? AppColors.savingProgressGradStart.withValues(alpha: 0.18)
               : Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? AppColors.savingProgressGradStart
-                : Colors.white.withValues(alpha: 0.1),
-            width: selected ? 1.5 : 1,
-          ),
         ),
         child: Text(
           label,
@@ -1760,12 +1706,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                   ? AppColors.gold.withValues(alpha: 0.15)
                   : Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? AppColors.gold
-                    : Colors.white.withValues(alpha: 0.06),
-                width: isSelected ? 1.5 : 1,
-              ),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -161,9 +161,6 @@ class NotificationSettingsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.positive.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: AppColors.positive.withValues(alpha: 0.18),
-                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -212,11 +209,8 @@ class NotificationSettingsScreen extends StatelessWidget {
   Widget _buildCard(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
-        ),
       ),
       child: Column(
         children: children,

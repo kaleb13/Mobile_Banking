@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/carousel_page_indicator.dart';
 import '../../widgets/interactive_3d_badge.dart';
 
@@ -333,13 +334,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 16),
 
-            // Scrollable Bounded Terms Card using loan card background color (AppColors.tabBackground)
+            // Scrollable Bounded Terms Card using surface color (AppColors.surface)
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: AppColors.tabBackground,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
@@ -390,14 +390,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 decoration: BoxDecoration(
                   color: _isTermsAccepted
-                      ? AppColors.telebirrGreen.withValues(alpha: 0.12)
-                      : AppColors.tabBackground,
+                      ? AppColors.brandGreen.withValues(alpha: 0.12)
+                      : AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _isTermsAccepted
-                        ? AppColors.telebirrGreen.withValues(alpha: 0.40)
-                        : Colors.white.withValues(alpha: 0.08),
-                  ),
                 ),
                 child: Row(
                   children: [
@@ -406,13 +401,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       height: 24,
                       child: Checkbox(
                         value: _isTermsAccepted,
-                        activeColor: AppColors.telebirrGreen,
+                        activeColor: AppColors.brandGreen,
                         checkColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.50),
-                          width: 1.5,
-                        ),
-                        shape: RoundedRectangleBorder(
+                                                shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
                         onChanged: (val) {
@@ -493,11 +484,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.telebirrGreen.withValues(alpha: 0.12),
-                        border: Border.all(
-                          color: AppColors.telebirrGreen.withValues(alpha: 0.35),
-                          width: 2,
-                        ),
-                        boxShadow: [
+                                                boxShadow: [
                           BoxShadow(
                             color: AppColors.telebirrGreen.withValues(alpha: 0.20),
                             blurRadius: 30,
@@ -615,9 +602,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: AppColors.tabBackground,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,17 +705,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(32),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
+                        const SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.telebirrGreen),
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.brandGreen),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -786,48 +771,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     bool enabled = true,
   }) {
     final bool isClickable = enabled && onTap != null;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      width: double.infinity,
-      height: 58,
-      decoration: BoxDecoration(
-        color: isClickable
-            ? AppColors.telebirrGreen
-            : AppColors.telebirrGreen.withValues(alpha: 0.30),
-        borderRadius: BorderRadius.circular(32),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isClickable
-              ? () {
-                  HapticFeedback.lightImpact();
-                  onTap();
-                }
-              : null,
-          borderRadius: BorderRadius.circular(32),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: isClickable
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.40),
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              if (isClickable) ...[
-                const SizedBox(width: 10),
-                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-              ],
-            ],
-          ),
-        ),
-      ),
+    return AppButton.primary(
+      text: label,
+      trailingIcon: isClickable ? Icons.arrow_forward_rounded : null,
+      height: 54,
+      onPressed: isClickable ? onTap : null,
     );
   }
 

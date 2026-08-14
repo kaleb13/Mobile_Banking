@@ -337,7 +337,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(children: children),
@@ -364,11 +363,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
                 ],
         ),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isActive
-              ? AppColors.positive.withValues(alpha: 0.4)
-              : AppColors.amber.withValues(alpha: 0.4),
-        ),
       ),
       child: Row(
         children: [
@@ -493,11 +487,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
                     ? AppColors.positive.withValues(alpha: 0.15)
                     : AppColors.gold.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isPositive
-                      ? AppColors.positive.withValues(alpha: 0.3)
-                      : AppColors.gold.withValues(alpha: 0.3),
-                ),
               ),
               child: Text(
                 trailingText,
@@ -520,7 +509,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
       decoration: BoxDecoration(
         color: AppColors.previewCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.positive.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -626,11 +614,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
                     ? AppColors.gold
                     : AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.gold
-                      : AppColors.border,
-                ),
               ),
               child: Row(
                 children: [
@@ -667,7 +650,6 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

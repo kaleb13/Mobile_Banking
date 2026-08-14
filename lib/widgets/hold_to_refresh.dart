@@ -410,12 +410,8 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
           height: 22,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.surfaceCard,
-            border: Border.all(
-              color: AppColors.positive.withValues(alpha: isArmed ? 0.75 : 0.35),
-              width: 1.2,
-            ),
-          ),
+            color: AppColors.surface,
+                      ),
           padding: const EdgeInsets.all(4),
           child: Image.asset('assets/images/Shibre Icon.png', fit: BoxFit.contain),
         ),
@@ -473,7 +469,7 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
                 height: 16,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.surfaceCard,
+                  color: AppColors.surface,
                 ),
                 padding: const EdgeInsets.all(3),
                 child: Image.asset('assets/images/Shibre Icon.png', fit: BoxFit.contain),
@@ -523,11 +519,7 @@ class _RefreshAwarePillContentState extends State<RefreshAwarePillContent>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.positive.withValues(alpha: 0.25),
-            border: Border.all(
-              color: AppColors.positive,
-              width: 1.2,
-            ),
-          ),
+                      ),
           child: const Icon(Icons.check_rounded, color: AppColors.positive, size: 13),
         ),
         const SizedBox(width: 8),

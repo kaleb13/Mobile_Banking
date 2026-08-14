@@ -45,8 +45,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.035),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-                      ),
+                                              ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -178,10 +177,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.gold.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: AppColors.gold.withValues(alpha: 0.2),
-                    width: 1),
-              ),
+                              ),
               child: Text(
                 'For questions or concerns about this Privacy Policy, contact the developer directly via Telegram: @Shibre_Plus',
                 style: TextStyle(
@@ -216,8 +212,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.035),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-        ),
+                  ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

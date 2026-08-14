@@ -89,12 +89,9 @@ class ReasonTransactionsScreen extends StatelessWidget {
               margin: const EdgeInsets.fromLTRB(16, 8, 16, 14),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.07),
-                ),
-              ),
+                              ),
               child: Row(
                 children: [
                   Container(
@@ -209,12 +206,9 @@ class ReasonTransactionsScreen extends StatelessWidget {
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceCard,
+                              color: AppColors.surface,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.05),
-                              ),
-                            ),
+                                                          ),
                             child: Row(
                               children: [
                                 Container(

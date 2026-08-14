@@ -7,6 +7,7 @@ import '../../models/sender.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/app_button.dart';
 
 class ManualTransactionSheet extends StatefulWidget {
   final AppNotification? notification;
@@ -143,7 +144,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.tabBackground,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Stack(
@@ -173,7 +174,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: const BoxDecoration(
-                          color: AppColors.surfaceElevated,
+                          color: AppColors.buttonSecondary,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.close_rounded,
@@ -192,10 +193,6 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                       decoration: BoxDecoration(
                         color: AppColors.telebirrGreen.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.telebirrGreen.withValues(alpha: 0.4),
-                          width: 1,
-                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -219,7 +216,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceElevated,
+                        color: AppColors.buttonSecondary,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -259,7 +256,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceCard,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -304,7 +301,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceCard,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -337,7 +334,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
@@ -388,44 +385,14 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                 ),
                 const SizedBox(height: 24),
 
-                // Save Action Button (Unclipped, clean padding & FittedBox)
-                SizedBox(
-                  width: double.infinity,
+                // Save Action Button (Standardized Fully Rounded Pill)
+                AppButton.primary(
+                  text: 'Save Transaction',
+                  isLoading: _isSaving,
                   height: 52,
-                  child: ElevatedButton(
-                    onPressed: (_isSaving ||
-                            _amountController.text.isEmpty ||
-                            _selectedSender == null)
-                        ? null
-                        : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: activeColor,
-                      disabledBackgroundColor: activeColor.withValues(alpha: 0.3),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(26),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                color: AppColors.textPrimary, strokeWidth: 2),
-                          )
-                        : const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              'Save Transaction',
-                              style: TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                  ),
+                  onPressed: (_amountController.text.isEmpty || _selectedSender == null)
+                      ? null
+                      : _save,
                 ),
               ],
             ),
@@ -435,7 +402,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
           if (_isSelectingReason)
             Positioned.fill(
               child: Container(
-                color: AppColors.tabBackground,
+                color: AppColors.surface,
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
+import '../../widgets/app_button.dart';
 
 class FreezeAccountBottomSheet extends StatefulWidget {
   final String initialSenderName;
@@ -60,9 +61,9 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
     final bool isPaused = provider.isTrackingPaused(activeSenderName);
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface, // Color(0xFF0F141C)
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.themeBackground,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(
         20,
@@ -77,7 +78,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           // Top Drag Handle
           Center(
             child: InteractiveDragHandle(
-              color: AppColors.textSecondary.withValues(alpha: 0.4),
+              color: context.themeBorder,
               onTap: () => Navigator.pop(context),
               padding: const EdgeInsets.only(bottom: 12),
             ),
@@ -89,8 +90,8 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
               isPaused
                   ? '$activeSenderName Tracking Paused'
                   : 'Pause Tracking for $activeSenderName',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.themeTextPrimary,
                 fontSize: 19,
                 fontWeight: FontWeight.bold,
                 letterSpacing: -0.3,
@@ -108,8 +109,8 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                   ? 'Tracking is currently paused for this bank. Tap "Resume Tracking" to re-enable SMS detection and recalculate balances.'
                   : 'Temporarily pause SMS transaction detection and automatic balance updates for this bank account.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
+              style: TextStyle(
+                color: context.themeTextSecondary,
                 fontSize: 11.5,
                 height: 1.35,
               ),
@@ -131,12 +132,9 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surfaceCard, // Color(0xFF111821)
+              color: context.themeSurface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            ),
+                          ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -145,7 +143,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: (isPaused ? Colors.amber : AppColors.positive)
+                        color: (isPaused ? AppColors.brandGreen : AppColors.brandGreen)
                             .withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
@@ -153,15 +151,15 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                         isPaused
                             ? Icons.pause_circle_outline_rounded
                             : Icons.info_outline_rounded,
-                        color: isPaused ? Colors.amber : AppColors.positive,
+                        color: AppColors.brandGreen,
                         size: 16,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Text(
                       isPaused ? 'Currently paused' : 'What happens when paused?',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.themeTextPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
@@ -170,18 +168,21 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                 ),
                 const SizedBox(height: 12),
                 _buildInfoBullet(
+                    context,
                     isPaused
                         ? 'New bank SMS messages from $activeSenderName are currently being ignored.'
                         : 'Incoming bank SMS messages will not be parsed into transactions.'),
                 const SizedBox(height: 6),
                 _buildInfoBullet(
+                    context,
                     isPaused
                         ? '$activeSenderName balance and transactions are excluded from all totals.'
                         : 'Balance updates and spending analytics will temporarily pause.'),
                 const SizedBox(height: 6),
-                _buildInfoBullet('All existing transactions and history remain 100% safe & untouched.'),
+                _buildInfoBullet(context, 'All existing transactions and history remain 100% safe & untouched.'),
                 const SizedBox(height: 6),
                 _buildInfoBullet(
+                    context,
                     isPaused
                         ? 'Tap "Resume Tracking" to bring $activeSenderName back into calculations.'
                         : 'You can resume tracking at any time with a single tap.'),
@@ -190,9 +191,16 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           ),
           const SizedBox(height: 18),
 
-          // Section 5: Primary Action Button (No Drop Shadow!)
-          GestureDetector(
-            onTap: () async {
+          // Section 5: Primary Action Button (Standardized Fully Rounded AppButton)
+          AppButton.primary(
+            text: isPaused
+                ? 'Resume Tracking ($activeSenderName)'
+                : 'Pause Tracking ($activeSenderName)',
+            icon: isPaused
+                ? Icons.play_circle_rounded
+                : Icons.pause_circle_rounded,
+            height: 52,
+            onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               final String name = activeSenderName;
               final bool wasPaused = isPaused;
@@ -205,7 +213,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text('$name tracking resumed'),
-                    backgroundColor: AppColors.positive,
+                    backgroundColor: AppColors.brandGreen,
                     behavior: SnackBarBehavior.floating,
                     duration: const Duration(seconds: 2),
                   ),
@@ -222,44 +230,13 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
                 );
               }
             },
-            child: Container(
-              width: double.infinity,
-              height: 52,
-              decoration: BoxDecoration(
-                color: isPaused ? AppColors.pausedBadge : AppColors.positive,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isPaused
-                        ? Icons.play_circle_rounded
-                        : Icons.pause_circle_rounded,
-                    color: AppColors.background,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    isPaused
-                        ? 'Resume Tracking ($activeSenderName)'
-                        : 'Pause Tracking ($activeSenderName)',
-                    style: const TextStyle(
-                      color: AppColors.background,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoBullet(String text) {
+  Widget _buildInfoBullet(BuildContext context, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -267,8 +244,8 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           margin: const EdgeInsets.only(top: 6),
           width: 5,
           height: 5,
-          decoration: const BoxDecoration(
-            color: AppColors.textSecondary,
+          decoration: BoxDecoration(
+            color: context.themeTextSecondary,
             shape: BoxShape.circle,
           ),
         ),
@@ -276,8 +253,8 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: context.themeTextSecondary,
               fontSize: 12,
               height: 1.35,
             ),
@@ -507,12 +484,6 @@ class __InteractiveFrozenCardPreviewState
                         ],
                         stops: const [0.0, 0.5, 1.0],
                       ),
-                      border: widget.isPaused
-                          ? Border.all(
-                              color: Colors.amber.withValues(alpha: 0.7),
-                              width: 2,
-                            )
-                          : null,
                       boxShadow: [
                         BoxShadow(
                           color: (widget.isPaused

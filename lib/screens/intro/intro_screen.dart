@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_button.dart';
 
 class IntroScreen extends StatelessWidget {
   const IntroScreen({super.key});
@@ -41,37 +42,21 @@ class IntroScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 48),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    await provider.requestPermission();
-                    if (!provider.hasPermission && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Permission denied. The app requires SMS access to function.'),
-                          backgroundColor: Colors.redAccent,
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.gold,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Grant SMS Permission',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+              AppButton.primary(
+                text: 'Grant SMS Permission',
+                height: 52,
+                onPressed: () async {
+                  await provider.requestPermission();
+                  if (!provider.hasPermission && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Permission denied. The app requires SMS access to function.'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),

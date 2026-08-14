@@ -7,7 +7,9 @@ import '../../providers/finance_provider.dart';
 import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Backup & Restore Screen
@@ -202,56 +204,22 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   Widget _buildActionBar() {
     final isExportTab = _tabController.index == 0;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-      child: Row(
-        children: [
-          // Back button
-          AppBackButton(onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 12),
-          // Action button
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (isExportTab) {
-                  if (!_isExporting) _runExport();
-                } else {
-                  if (!_isImporting) _pickAndRestore();
-                }
-              },
-              child: Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.positive.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                      color: AppColors.positive.withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isExportTab
-                          ? Icons.backup_outlined
-                          : Icons.folder_open_rounded,
-                      color: AppColors.positive,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isExportTab ? 'Create Backup' : 'Browse & Pick File',
-                      style: const TextStyle(
-                        color: AppColors.positive,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: AppButton.primary(
+          text: isExportTab ? 'Create Backup' : 'Browse & Pick File',
+          icon: isExportTab ? Icons.backup_outlined : Icons.folder_open_rounded,
+          height: 50,
+          isLoading: isExportTab ? _isExporting : _isImporting,
+          onPressed: () {
+            if (isExportTab) {
+              if (!_isExporting) _runExport();
+            } else {
+              if (!_isImporting) _pickAndRestore();
+            }
+          },
+        ),
       ),
     );
   }
@@ -348,9 +316,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       decoration: BoxDecoration(
         color: AppColors.positive.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: AppColors.positive.withValues(alpha: 0.3), width: 1),
-      ),
+              ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -400,9 +366,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       decoration: BoxDecoration(
         color: AppColors.negative.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: AppColors.negative.withValues(alpha: 0.3), width: 1),
-      ),
+              ),
       child: Row(
         children: [
           const Icon(Icons.error_outline, color: AppColors.negative, size: 22),
@@ -430,8 +394,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       decoration: BoxDecoration(
         color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
+              ),
       child: Row(
         children: [
           Container(
@@ -604,8 +567,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         decoration: BoxDecoration(
           color: AppColors.overlay.withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
+                  ),
         child: Row(
           children: [
             Container(
@@ -654,81 +616,14 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   // ─── Confirm dialog ──────────────────────────────────────────────────────
   Future<void> _confirmRestore(File file) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AppConfirmDialog.show(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: AppColors.overlay,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.restore_outlined,
-                  color: AppColors.gold, size: 40),
-              const SizedBox(height: 16),
-              const Text(
-                'Restore Backup?',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'This will import all data from the selected file. '
-                'Existing records that match imported ones will be skipped; nothing will be deleted.',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx, false),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.07),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(ctx, true),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: AppColors.gold.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'Restore',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      title: 'Restore Backup?',
+      message:
+          'This will import all data from the selected file. Existing records that match imported ones will be skipped; nothing will be deleted.',
+      confirmText: 'Restore',
+      cancelText: 'Cancel',
+      onConfirm: () {},
     );
 
     if (confirmed == true) {
@@ -751,8 +646,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           decoration: BoxDecoration(
             color: AppColors.overlay.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
+                      ),
           child: Row(
             children: [
               _statBadge(
@@ -798,9 +692,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
               decoration: BoxDecoration(
                 color: AppColors.positive.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: AppColors.positive.withValues(alpha: 0.2)),
-              ),
+                              ),
               child: const Row(
                 children: [
                   Icon(Icons.check_circle_outline,
@@ -867,8 +759,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       decoration: BoxDecoration(
         color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
+              ),
       child: Row(
         children: [
           Icon(
@@ -952,8 +843,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
-      ),
+              ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

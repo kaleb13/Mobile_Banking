@@ -275,8 +275,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   decoration: BoxDecoration(
                                     color: AppColors.positive.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppColors.positive.withValues(alpha: 0.2)),
-                                  ),
+                                                                      ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -492,8 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
+              ),
       child: const Text(
         'Soon',
         style: TextStyle(
@@ -569,12 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ? AppColors.positive.withValues(alpha: 0.15)
                                 : Colors.white.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.positive
-                                  : Colors.white.withValues(alpha: 0.05),
-                            ),
-                          ),
+                                                      ),
                           child: Row(
                             children: [
                               Container(

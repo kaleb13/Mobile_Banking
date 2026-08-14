@@ -5,6 +5,8 @@ import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
   const CategoryManagementScreen({super.key});
@@ -84,11 +86,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     fillColor: Colors.white.withValues(alpha: 0.05),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                      borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.positive),
+                      borderSide: BorderSide.none,
                     ),
                   ),
                 ),
@@ -98,12 +100,21 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 ],
               ],
             ),
+            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             actions: [
-              TextButton(
+              AppButton.secondary(
+                text: 'Cancel',
+                fullWidth: false,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
               ),
-              ElevatedButton(
+              const SizedBox(width: 8),
+              AppButton.primary(
+                text: 'Save',
+                fullWidth: false,
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 onPressed: () async {
                   final name = ctrl.text.trim();
                   if (name.isEmpty) return;
@@ -120,8 +131,6 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     Navigator.pop(ctx);
                   }
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.positive),
-                child: const Text('Save'),
               ),
             ],
           );
@@ -131,38 +140,20 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   }
 
   void _confirmDeleteCategory(BuildContext context, FinanceProvider provider, AppReason reason) {
-    showDialog(
+    AppConfirmDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          reason.isSubcategory ? 'Delete Subcategory?' : 'Delete Category?',
-          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          reason.isSubcategory
-              ? 'Are you sure you want to delete "${reason.name}"?'
-              : 'Are you sure you want to delete "${reason.name}" and all of its subcategories?',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await provider.deleteCategory(reason.id!);
-              if (context.mounted) {
-                Navigator.pop(ctx);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.negative),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: reason.isSubcategory ? 'Delete Subcategory?' : 'Delete Category?',
+      icon: Icons.delete_outline_rounded,
+      iconColor: AppColors.negative,
+      message: reason.isSubcategory
+          ? 'Are you sure you want to delete "${reason.name}"?'
+          : 'Are you sure you want to delete "${reason.name}" and all of its subcategories?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      onConfirm: () async {
+        await provider.deleteCategory(reason.id!);
+      },
     );
   }
 
@@ -261,13 +252,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: AppColors.positive,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          shape: const CircleBorder(),
+        floatingActionButton: AppButton.primary(
+          text: 'Add Category',
+          icon: Icons.add_rounded,
+          fullWidth: false,
+          height: 48,
+          elevation: 6.0,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           onPressed: () => _showAddCategoryDialog(context, provider),
-          child: const Icon(Icons.add_rounded, size: 28),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: SafeArea(
@@ -349,8 +341,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
-      ),
+              ),
       child: Row(
         children: [
           Expanded(
@@ -394,8 +385,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
-      ),
+              ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Column(
@@ -465,13 +455,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     const SizedBox(height: 4),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
+                      child: AppButton.secondary(
+                        icon: Icons.add,
+                        text: 'Add Subcategory',
+                        fullWidth: false,
+                        height: 34,
+                        fontSize: 12,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         onPressed: () => _showAddCategoryDialog(context, provider, parentCategory: category),
-                        icon: const Icon(Icons.add, color: AppColors.positive, size: 14),
-                        label: Text(
-                          'Add Subcategory under ${category.name}',
-                          style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
                       ),
                     ),
                   ],

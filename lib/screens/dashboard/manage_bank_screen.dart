@@ -4,6 +4,8 @@ import '../../models/sender.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 
 class ManageBankScreen extends StatefulWidget {
   final AppSender sender;
@@ -36,35 +38,22 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
   }
 
   Future<void> _handleSave() async {
-    final account = _accountController.text.trim();
-    final pin = _pinController.text.trim();
-
-    if (account.isEmpty || pin.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields')),
-      );
-      return;
-    }
-
-    _saveSender(account, pin);
-  }
-
-  Future<void> _saveSender(String account, String pin) async {
     setState(() => _isSaving = true);
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
+
     final updated = AppSender(
       id: widget.sender.id,
       senderName: widget.sender.senderName,
       depositKeywords: widget.sender.depositKeywords,
       expenseKeywords: widget.sender.expenseKeywords,
-      accountNumber: account,
-      pin: pin,
+      accountNumber: _accountController.text.trim(),
+      pin: _pinController.text.trim(),
     );
 
-    await Provider.of<FinanceProvider>(context, listen: false)
-        .updateSender(updated);
+    await provider.updateSender(updated);
+    setState(() => _isSaving = false);
 
     if (mounted) {
-      setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Information updated successfully')),
       );
@@ -73,32 +62,19 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
   }
 
   void _handleDelete() {
-    showDialog(
+    AppConfirmDialog.show(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.background,
-        title:
-            const Text('Unlink Account', style: TextStyle(color: Colors.white)),
-        content: Text(
+      title: 'Unlink Account',
+      icon: Icons.link_off_rounded,
+      iconColor: AppColors.negative,
+      message:
           'Are you sure you want to unlink your ${widget.sender.senderName} account? This will remove your saved credentials.',
-          style: const TextStyle(color: AppColors.textSoft),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSoft)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _performDelete();
-            },
-            child: const Text('Unlink',
-                style: TextStyle(color: AppColors.negative)),
-          ),
-        ],
-      ),
+      confirmText: 'Unlink',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      onConfirm: () async {
+        await _performDelete();
+      },
     );
   }
 
@@ -162,12 +138,13 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
             _buildActionButtons(),
             const SizedBox(height: 24),
             Center(
-              child: TextButton.icon(
+              child: AppButton.destructive(
                 onPressed: _handleDelete,
-                icon: const Icon(Icons.link_off_rounded,
-                    color: AppColors.negative, size: 18),
-                label: const Text("Unlink This Account",
-                    style: TextStyle(color: AppColors.negative)),
+                icon: Icons.link_off_rounded,
+                text: "Unlink This Account",
+                fullWidth: false,
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
               ),
             ),
           ],
@@ -219,29 +196,11 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
   }
 
   Widget _buildActionButtons() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: _isSaving ? null : _handleSave,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.gold,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 0,
-        ),
-        child: _isSaving
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.black))
-            : const Text("Save Changes",
-                style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16)),
-      ),
+    return AppButton.primary(
+      text: "Save Changes",
+      isLoading: _isSaving,
+      height: 52,
+      onPressed: _isSaving ? null : _handleSave,
     );
   }
 }

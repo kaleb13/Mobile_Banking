@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 
 class DataMaintenanceScreen extends StatefulWidget {
   const DataMaintenanceScreen({super.key});
@@ -125,18 +127,15 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildActionBar() {
     final isRefreshTab = _tabController.index == 0;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-      child: Row(
-        children: [
-          // Back button
-          AppBackButton(onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 12),
-          // Action button
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (isRefreshTab) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: isRefreshTab
+            ? AppButton.primary(
+                text: 'Start Refresh',
+                icon: Icons.refresh_rounded,
+                height: 50,
+                onPressed: () {
                   _showConfirmDialog(
                     title: 'Smart Refresh',
                     content:
@@ -145,7 +144,13 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
                     confirmText: 'Refresh',
                     confirmColor: AppColors.infoLight,
                   );
-                } else {
+                },
+              )
+            : AppButton.destructive(
+                text: 'Reset All',
+                icon: Icons.delete_sweep_rounded,
+                height: 50,
+                onPressed: () {
                   _showConfirmDialog(
                     title: 'Full Reset',
                     content:
@@ -154,50 +159,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
                     confirmText: 'Reset Everything',
                     confirmColor: AppColors.negative,
                   );
-                }
-              },
-              child: Container(
-                height: 56,
-                decoration: BoxDecoration(
-                  color: isRefreshTab
-                      ? AppColors.infoLight.withValues(alpha: 0.15)
-                      : AppColors.negative.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: isRefreshTab
-                        ? AppColors.infoLight.withValues(alpha: 0.3)
-                        : AppColors.negative.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isRefreshTab
-                          ? Icons.refresh_rounded
-                          : Icons.delete_sweep_rounded,
-                      color: isRefreshTab
-                          ? AppColors.infoLight
-                          : AppColors.negative,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isRefreshTab ? 'Start Refresh' : 'Reset All',
-                      style: TextStyle(
-                        color: isRefreshTab
-                            ? AppColors.infoLight
-                            : AppColors.negative,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
+                },
               ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -225,7 +188,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildTabBar() {
     return AppCapsuleTabBar(
-      tabs: const ['Clean Data', 'Import & Export'],
+      tabs: const ['Smart Refresh', 'Full Reset'],
       controller: _tabController,
       height: 40,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -297,7 +260,6 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,30 +338,18 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     required String confirmText,
     required Color confirmColor,
   }) {
-    showDialog(
+    AppConfirmDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.overlay,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content:
-            Text(content, style: const TextStyle(color: AppColors.textSoft)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel',
-                  style: TextStyle(color: AppColors.textSoft))),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              onConfirm();
-            },
-            child: Text(confirmText,
-                style: TextStyle(
-                    color: confirmColor, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      title: title,
+      icon: confirmColor == AppColors.negative
+          ? Icons.warning_amber_rounded
+          : Icons.info_outline_rounded,
+      iconColor: confirmColor,
+      message: content,
+      confirmText: confirmText,
+      cancelText: 'Cancel',
+      isDestructive: confirmColor == AppColors.negative,
+      onConfirm: onConfirm,
     );
   }
 }

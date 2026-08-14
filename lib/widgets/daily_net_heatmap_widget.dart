@@ -225,10 +225,6 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: tileBg,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isSelected ? Colors.white : (hasTx ? Colors.white.withValues(alpha: 0.12) : Colors.transparent),
-                        width: isSelected ? 2.0 : 0.5,
-                      ),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(

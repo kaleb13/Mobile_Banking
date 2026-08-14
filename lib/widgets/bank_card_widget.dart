@@ -430,12 +430,6 @@ class FreezeAccountGlassButton extends StatelessWidget {
             ? AppColors.darkCharcoal.withValues(alpha: 0.08)
             : Colors.white.withValues(alpha: 0.12);
 
-    final Color borderColor = isPaused
-        ? AppColors.pausedBorder.withValues(alpha: 0.55)
-        : isDarkTextTheme
-            ? AppColors.darkCharcoal.withValues(alpha: 0.14)
-            : Colors.white.withValues(alpha: 0.18);
-
     final Color iconColor = isPaused
         ? AppColors.pausedBorder
         : isDarkTextTheme
@@ -468,8 +462,7 @@ class FreezeAccountGlassButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor, width: 1),
+          borderRadius: BorderRadius.circular(100),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:ui';
-import 'package:flutter/material.dart' as m;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +16,7 @@ import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_button.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -166,14 +166,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surfaceCard.withValues(alpha: 0.35), // Fully transparent glass background
+                color: AppColors.surface.withValues(alpha: 0.35), // Fully transparent glass background
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border(
-                  top: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    width: 1.0,
-                  ),
-                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.25),
@@ -225,22 +219,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Got It button — uses canvas.saveLayer to correctly apply
-                    // BlendMode.overlay strictly to the text label against the
-                    // button background (the ONLY correct Flutter approach).
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: CustomPaint(
-                          painter: _OverlayButtonPainter(
-                            backgroundColor: AppColors.positive,
-                            label: "Got It",
-                            borderRadius: 24,
-                          ),
-                        ),
-                      ),
+                    // Got It button — standardized fully rounded primary button
+                    AppButton.primary(
+                      text: "Got It",
+                      height: 48,
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
@@ -381,10 +364,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.negative.withValues(alpha: 0.15),
-          border: Border(
-            bottom:
-                BorderSide(color: AppColors.negative.withValues(alpha: 0.3)),
-          ),
         ),
         child: Row(
           children: [
@@ -1039,8 +1018,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ? Colors.white.withValues(alpha: 0.08)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.transparent),
-                  ),
+                                      ),
                   child: Text(
                     f,
                     style: TextStyle(
@@ -1256,13 +1234,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: AppColors.lightGreyBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDefault
-              ? AppColors.lightGreyText.withValues(alpha: 0.3)
-              : AppColors.darkCharcoal.withValues(alpha: 0.6),
-          width: isDefault ? 1.0 : 1.2,
-        ),
-      ),
+              ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
@@ -1899,71 +1871,3 @@ class DashedUnderlinePainter extends CustomPainter {
   bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
 
-/// Correctly applies BlendMode.overlay to text against a pill button background.
-/// Uses canvas.saveLayer so both background and text share the same composited
-/// GPU buffer — the only way BlendMode.overlay works correctly against a colored
-/// background in Flutter's rendering pipeline.
-class _OverlayButtonPainter extends CustomPainter {
-  final Color backgroundColor;
-  final String label;
-  final double borderRadius;
-
-  _OverlayButtonPainter({
-    required this.backgroundColor,
-    required this.label,
-    required this.borderRadius,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(
-      rect,
-      Radius.circular(borderRadius),
-    );
-
-    // Step 1: Draw the solid button background pill
-    canvas.drawRRect(rrect, Paint()..color = backgroundColor);
-
-    // Step 2: Open a new compositing layer over the button area.
-    // When canvas.restore() is called, this layer is composited back
-    // onto the background using BlendMode.overlay.
-    canvas.saveLayer(
-      rect,
-      Paint()..blendMode = BlendMode.overlay,
-    );
-
-    // Step 3: Draw the label text inside the saved layer.
-    // The text is drawn in white — the overlay blend mode then blends
-    // these white pixels against the green background underneath,
-    // producing the correct overlay effect.
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'Got It',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
-          letterSpacing: 0.3,
-        ),
-      ),
-      textDirection: m.TextDirection.ltr,
-    )..layout();
-
-    final textOffset = Offset(
-      (size.width - textPainter.width) / 2,
-      (size.height - textPainter.height) / 2,
-    );
-    textPainter.paint(canvas, textOffset);
-
-    // Step 4: Restore triggers the GPU to composite the text layer
-    // back onto the green background using BlendMode.overlay.
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _OverlayButtonPainter old) =>
-      old.backgroundColor != backgroundColor ||
-      old.label != label ||
-      old.borderRadius != borderRadius;
-}

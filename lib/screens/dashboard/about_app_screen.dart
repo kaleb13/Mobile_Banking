@@ -61,16 +61,14 @@ class AboutAppScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
+              ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(2.5),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.gold, width: 2),
-            ),
+                          ),
             child: const CircleAvatar(
               radius: 30,
               backgroundImage: AssetImage('assets/images/developer.webp'),
@@ -157,8 +155,7 @@ class AboutAppScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
+              ),
       child: Row(
         children: [
           Container(
@@ -191,8 +188,7 @@ class AboutAppScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
+              ),
       child: Text(
         'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from CBE, Telebirr, and CBE Birr, providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',
         style: TextStyle(

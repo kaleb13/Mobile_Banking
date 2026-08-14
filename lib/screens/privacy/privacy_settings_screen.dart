@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/pin_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_back_button.dart';
+import '../../widgets/widgets.dart';
 
 enum _PinFlowMode { setNew, confirmNew, verifyOld }
 
@@ -210,11 +210,11 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
 
   // ── UI ────────────────────────────────────────────────────────────────────
 
-  Widget _buildCardBase(List<Widget> children) {
+  Widget _buildCardBase(BuildContext context, List<Widget> children) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.tabBackground,
+        color: context.themeSurface,
         borderRadius: BorderRadius.circular(16),
       ),
       clipBehavior: Clip.antiAlias,
@@ -222,13 +222,13 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     );
   }
 
-  Widget _sectionLabel(String label) {
+  Widget _sectionLabel(BuildContext context, String label) {
     return Padding(
       padding: const EdgeInsets.only(left: 32, bottom: 8, top: 24),
       child: Text(
         label,
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.4),
+          color: context.themeTextSecondary,
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
@@ -236,7 +236,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     );
   }
 
-  Widget _tile({
+  Widget _tile(
+    BuildContext context, {
     required IconData icon,
     required Color iconColor,
     required String label,
@@ -250,7 +251,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
       children: [
         InkWell(
           onTap: disabled ? null : onTap,
-          splashColor: Colors.white.withValues(alpha: 0.02),
+          splashColor: context.themeBorder.withValues(alpha: 0.2),
           child: Opacity(
             opacity: disabled ? 0.4 : 1.0,
             child: Padding(
@@ -273,8 +274,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                       children: [
                         Text(
                           label,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+                          style: TextStyle(
+                            color: context.themeTextPrimary,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
@@ -283,7 +284,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                         Text(
                           subtitle,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.35),
+                            color: context.themeTextSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -293,7 +294,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                   trailing ??
                       Icon(
                         Icons.arrow_forward_ios_rounded,
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: context.themeTextSecondary.withValues(alpha: 0.5),
                         size: 14,
                       ),
                 ],
@@ -305,13 +306,14 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
           Container(
             height: 1,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            color: Colors.white.withValues(alpha: 0.05),
+            color: context.themeBorder,
           ),
       ],
     );
   }
 
-  Widget _toggleTile({
+  Widget _toggleTile(
+    BuildContext context, {
     required IconData icon,
     required Color iconColor,
     required String label,
@@ -345,8 +347,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                     children: [
                       Text(
                         label,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.themeTextPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
@@ -355,7 +357,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.35),
+                          color: context.themeTextSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -374,7 +376,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
           Container(
             height: 1,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-            color: Colors.white.withValues(alpha: 0.05),
+            color: context.themeBorder,
           ),
       ],
     );
@@ -389,14 +391,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ),
+      value: context.themeOverlayStyle,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.themeBackground,
         body: Stack(
           children: [
             SafeArea(
@@ -412,10 +409,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                       child: Row(
                         children: [
                           const AppBackButton(),
-                          const Text(
+                          Text(
                             'Privacy & Security',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.themeTextPrimary,
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5,
@@ -426,9 +423,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                     ),
 
                     // ── App Lock Section ──────────────────────────────────
-                    _sectionLabel('App Lock'),
-                    _buildCardBase([
+                    _sectionLabel(context, 'App Lock'),
+                    _buildCardBase(context, [
                       _toggleTile(
+                        context,
                         icon: Icons.lock_rounded,
                         iconColor: AppColors.gold,
                         label: 'Enable App Lock',
@@ -453,6 +451,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                         },
                       ),
                       _tile(
+                        context,
                         icon: Icons.pin_outlined,
                         iconColor: AppColors.info,
                         label: _hasPin ? 'Change PIN' : 'Set PIN',
@@ -465,9 +464,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                     ]),
 
                     // ── Biometrics Section ────────────────────────────────
-                    _sectionLabel('Biometrics'),
-                    _buildCardBase([
+                    _sectionLabel(context, 'Biometrics'),
+                    _buildCardBase(context, [
                       _toggleTile(
+                        context,
                         icon: Icons.fingerprint_rounded,
                         iconColor: AppColors.positive,
                         label: 'Fingerprint Unlock',
@@ -489,52 +489,26 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
 
                     // ── Danger Zone ───────────────────────────────────────
                     if (_hasPin) ...[
-                      _sectionLabel('Danger Zone'),
-                      _buildCardBase([
+                      _sectionLabel(context, 'Danger Zone'),
+                      _buildCardBase(context, [
                         _tile(
+                          context,
                           icon: Icons.no_encryption_rounded,
                           iconColor: AppColors.negative,
                           label: 'Remove PIN',
                           subtitle: 'Disables lock and removes your PIN',
-                          onTap: () async {
-                            final confirm = await showDialog<bool>(
+                          onTap: () {
+                            AppConfirmDialog.show(
                               context: context,
-                              builder: (_) => AlertDialog(
-                                backgroundColor: AppColors.surfaceCard,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20)),
-                                title: const Text('Remove PIN?',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold)),
-                                content: Text(
+                              title: 'Remove PIN?',
+                              message:
                                   'Your PIN will be deleted and app lock will be disabled.',
-                                  style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.6),
-                                      fontSize: 13,
-                                      height: 1.5),
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, false),
-                                    child: Text('Cancel',
-                                        style: TextStyle(
-                                            color:
-                                                Colors.white.withValues(alpha: 0.5))),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, true),
-                                    child: const Text('Remove',
-                                        style: TextStyle(
-                                            color: AppColors.negative,
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
+                              confirmText: 'Remove',
+                              isDestructive: true,
+                              onConfirm: () {
+                                _startDisablePin();
+                              },
                             );
-                            if (confirm == true) {
-                              _startDisablePin();
-                            }
                           },
                           trailing: const Icon(Icons.arrow_forward_ios_rounded,
                               color: AppColors.negative, size: 14),
@@ -549,16 +523,16 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
             ),
 
             // ── In-page PIN numpad overlay ────────────────────────────────
-            if (_showPinEntry) _buildPinOverlay(),
+            if (_showPinEntry) _buildPinOverlay(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPinOverlay() {
+  Widget _buildPinOverlay(BuildContext context) {
     return Container(
-      color: AppColors.background,
+      color: context.themeBackground,
       child: SafeArea(
         child: Column(
           children: [
@@ -572,11 +546,11 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceCard,
+                        color: context.themeSurface,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white, size: 16),
+                      child: Icon(Icons.arrow_back_ios_new_rounded,
+                          color: context.themeTextPrimary, size: 16),
                     ),
                   ),
                 ],
@@ -587,8 +561,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
             // Title
             Text(
               _pinFlowTitle,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: context.themeTextPrimary,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
@@ -604,7 +578,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
               style: TextStyle(
                 color: _isError
                     ? AppColors.negative
-                    : Colors.white.withValues(alpha: 0.45),
+                    : context.themeTextSecondary,
                 fontSize: 13,
               ),
             ),
@@ -635,8 +609,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                       color: _isError
                           ? AppColors.negative
                           : filled
-                              ? AppColors.gold
-                              : AppColors.surfaceElevated,
+                              ? AppColors.brandGreen
+                              : context.themeBorder,
                     ),
                   );
                 }),
@@ -650,27 +624,29 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 40),
               child: Column(
                 children: [
-                  _numRow(['1', '2', '3']),
+                  _numRow(context, ['1', '2', '3']),
                   const SizedBox(height: 14),
-                  _numRow(['4', '5', '6']),
+                  _numRow(context, ['4', '5', '6']),
                   const SizedBox(height: 14),
-                  _numRow(['7', '8', '9']),
+                  _numRow(context, ['7', '8', '9']),
                   const SizedBox(height: 14),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       const SizedBox(width: 72, height: 72),
                       _numKey(
-                        child: const Text('0',
+                        context,
+                        child: Text('0',
                             style: TextStyle(
-                                color: Colors.white,
+                                color: context.themeTextPrimary,
                                 fontSize: 24,
                                 fontWeight: FontWeight.w600)),
                         onTap: () => _onPinKey('0'),
                       ),
                       _numKey(
-                        child: const Icon(Icons.backspace_outlined,
-                            color: Colors.white, size: 22),
+                        context,
+                        child: Icon(Icons.backspace_outlined,
+                            color: context.themeTextPrimary, size: 22),
                         onTap: _onPinBackspace,
                       ),
                     ],
@@ -685,14 +661,15 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     );
   }
 
-  Widget _numRow(List<String> digits) {
+  Widget _numRow(BuildContext context, List<String> digits) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: digits
           .map((d) => _numKey(
+                context,
                 child: Text(d,
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: context.themeTextPrimary,
                         fontSize: 24,
                         fontWeight: FontWeight.w600)),
                 onTap: () => _onPinKey(d),
@@ -701,14 +678,14 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
     );
   }
 
-  Widget _numKey({required Widget child, required VoidCallback onTap}) {
+  Widget _numKey(BuildContext context, {required Widget child, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 72,
         height: 72,
-        decoration: const BoxDecoration(
-          color: AppColors.surfaceCard,
+        decoration: BoxDecoration(
+          color: context.themeSurface,
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,

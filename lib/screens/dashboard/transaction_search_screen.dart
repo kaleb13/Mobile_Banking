@@ -152,11 +152,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         decoration: BoxDecoration(
           color: AppColors.overlay,
           borderRadius: BorderRadius.circular(23),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.05),
-            width: 1,
-          ),
-        ),
+                  ),
         child: Row(
           children: [
             const SizedBox(width: 16),
@@ -285,12 +281,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
             ? Colors.transparent
             : Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDefault
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.white.withValues(alpha: 0.2),
-        ),
-      ),
+              ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,

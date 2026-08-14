@@ -1,28 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../theme/app_theme.dart';
 
 /// Universal back button component for the app using the standard BackForNav SVG icon.
 class AppBackButton extends StatelessWidget {
   final VoidCallback? onPressed;
-  final Color color;
+  final Color? color;
   final double size;
   final EdgeInsetsGeometry? padding;
 
   const AppBackButton({
     super.key,
     this.onPressed,
-    this.color = Colors.white,
+    this.color,
     this.size = 20.0,
     this.padding,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? context.themeTextPrimary;
     final Widget iconWidget = SvgPicture.asset(
       'assets/images/BackForNav.svg',
       width: size,
       height: size,
-      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      colorFilter: ColorFilter.mode(effectiveColor, BlendMode.srcIn),
     );
 
     return IconButton(

@@ -11,6 +11,7 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/hold_to_refresh.dart';
+import '../../widgets/app_button.dart';
 import 'manual_transaction_sheet.dart';
 
 /// A pill widget that morphs in-place into a full notifications panel.
@@ -215,13 +216,7 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
                     ? AppColors.positive.withValues(alpha: 0.07)
                     : Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(19),
-                border: Border.all(
-                  color: isRefreshing
-                      ? AppColors.positive.withValues(alpha: 0.22)
-                      : Colors.white.withValues(alpha: 0.08),
-                  width: 1,
-                ),
-              ),
+                              ),
               child: SizedBox(
                 width: targetWidth,
                 height: 38,
@@ -381,7 +376,7 @@ class _MorphingPanelOverlay extends StatelessWidget {
 
         final Color currentBg = Color.lerp(
           Colors.white.withValues(alpha: 0.08),
-          AppColors.surfaceCard,
+          AppColors.background,
           morphT,
         )!;
 
@@ -430,11 +425,6 @@ class _MorphingPanelOverlay extends StatelessWidget {
                       color: currentBg,
                       borderRadius:
                           BorderRadius.circular(currentRadius),
-                      border: Border.all(
-                        color: Colors.white
-                            .withValues(alpha: 0.12 * (1.0 - morphT) + 0.04 * morphT),
-                        width: 1,
-                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.35 * expandAnim.value),
@@ -621,16 +611,16 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                           });
                         },
                         child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.buttonPrimary,
+                            borderRadius: BorderRadius.circular(100),
                           ),
                           child: const Text(
                             'Clear',
                             style: TextStyle(
-                              color: Colors.black,
+                              color: AppColors.buttonPrimaryText,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
@@ -672,7 +662,7 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
           ],
         ),
 
-        // ── Internal White Options Menu Sheet ──
+        // ── Internal Glass Options Menu Sheet ──
         if (_selectedNotificationForMenu != null)
           Positioned.fill(
             child: Stack(
@@ -680,37 +670,113 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                 GestureDetector(
                   onTap: () =>
                       setState(() => _selectedNotificationForMenu = null),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.45),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.35),
+                    ),
                   ),
                 ),
                 Positioned(
                   left: 12,
                   right: 12,
                   bottom: 12,
-                  child: _buildInternalWhiteMenu(
+                  child: _buildInternalGlassMenu(
                       provider, _selectedNotificationForMenu!),
                 ),
               ],
             ),
           ),
 
-        // ── Internal Clear All Confirmation Sheet ──
+        // ── Internal Clear All Confirmation Modal ──
         if (_isConfirmingClearAll)
           Positioned.fill(
             child: Stack(
+              alignment: Alignment.center,
               children: [
                 GestureDetector(
                   onTap: () => setState(() => _isConfirmingClearAll = false),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.45),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.35),
+                    ),
                   ),
                 ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: _buildInternalClearConfirm(provider),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface.withValues(alpha: 0.88),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Clear All Notifications?',
+                                textAlign: TextAlign.left,
+                                style: AppTypography.heading2.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Are you sure you want to permanently clear all unread notification messages?',
+                                textAlign: TextAlign.left,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  height: 1.45,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: AppButton.secondary(
+                                      text: 'Cancel',
+                                      height: 42,
+                                      onPressed: () => setState(
+                                          () => _isConfirmingClearAll = false),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: AppButton.destructive(
+                                      text: 'Clear All',
+                                      height: 42,
+                                      onPressed: () async {
+                                        setState(
+                                            () => _isConfirmingClearAll = false);
+                                        final ids = provider.notifications
+                                            .map((n) => n.id)
+                                            .toList();
+                                        for (final id in ids) {
+                                          await provider.deleteNotification(id);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -778,12 +844,8 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                 width: double.infinity,
                 height: double.infinity,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF16181D),
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    width: 1,
-                  ),
                 ),
                 child: isSystem
                     ? Column(
@@ -893,7 +955,7 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFF09090D),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Column(
@@ -1031,86 +1093,90 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
     }
   }
 
-  Widget _buildInternalWhiteMenu(
+  Widget _buildInternalGlassMenu(
       FinanceProvider provider, AppNotification notif) {
     final isSystem =
         notif.sender.startsWith('Loan') || notif.sender.startsWith('System');
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(24),
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InteractiveDragHandle(
-            color: const Color(0xFFCBD5E1),
-            onTap: () => setState(() => _selectedNotificationForMenu = null),
-            onVerticalDragUpdate: (details) {
-              if ((details.primaryDelta ?? 0) > 2) {
-                setState(() => _selectedNotificationForMenu = null);
-              }
-            },
-            padding: const EdgeInsets.only(top: 10, bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InteractiveDragHandle(
+                color: AppColors.textDisabled,
+                onTap: () => setState(() => _selectedNotificationForMenu = null),
+                onVerticalDragUpdate: (details) {
+                  if ((details.primaryDelta ?? 0) > 2) {
+                    setState(() => _selectedNotificationForMenu = null);
+                  }
+                },
+                padding: const EdgeInsets.only(top: 10, bottom: 8),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Message Options',
+                    style: AppTypography.heading2.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (!isSystem) ...[
+                _buildModalItem(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: 'Insert Transaction Manually',
+                  iconColor: AppColors.positive,
+                  onTap: () {
+                    setState(() => _selectedNotificationForMenu = null);
+                    _showManualInsert(context, provider, notif);
+                  },
+                ),
+                _buildModalItem(
+                  icon: Icons.telegram_rounded,
+                  label: 'Inform Developer',
+                  iconColor: AppColors.skyBlue,
+                  onTap: () {
+                    setState(() => _selectedNotificationForMenu = null);
+                    _informDeveloper(context, notif.body);
+                  },
+                ),
+              ],
+              _buildModalItem(
+                icon: Icons.delete_rounded,
+                label: 'Delete Message',
+                iconColor: AppColors.negative,
+                onTap: () {
+                  setState(() => _selectedNotificationForMenu = null);
+                  provider.deleteNotification(notif.id);
+                },
+              ),
+              _buildModalItem(
+                icon: Icons.block_rounded,
+                label: 'Ignore Permanently',
+                iconColor: AppColors.textSecondary,
+                onTap: () {
+                  setState(() => _selectedNotificationForMenu = null);
+                  provider.ignoreNotification(notif.id);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
           ),
-          const Text(
-            'Message Options',
-            style: TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.2,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (!isSystem) ...[
-            _buildModalItem(
-              icon: Icons.add_circle_outline_rounded,
-              label: 'Insert Transaction Manually',
-              iconColor: AppColors.positive,
-              onTap: () {
-                setState(() => _selectedNotificationForMenu = null);
-                _showManualInsert(context, provider, notif);
-              },
-            ),
-            _buildModalItem(
-              icon: Icons.telegram_rounded,
-              label: 'Inform Developer',
-              iconColor: const Color(0xFF0284C7),
-              onTap: () {
-                setState(() => _selectedNotificationForMenu = null);
-                _informDeveloper(context, notif.body);
-              },
-            ),
-          ],
-          _buildModalItem(
-            icon: Icons.delete_rounded,
-            label: 'Delete Message',
-            iconColor: AppColors.negative,
-            onTap: () {
-              setState(() => _selectedNotificationForMenu = null);
-              provider.deleteNotification(notif.id);
-            },
-          ),
-          _buildModalItem(
-            icon: Icons.block_rounded,
-            label: 'Ignore Permanently',
-            iconColor: const Color(0xFF64748B),
-            onTap: () {
-              setState(() => _selectedNotificationForMenu = null);
-              provider.ignoreNotification(notif.id);
-            },
-          ),
-          const SizedBox(height: 12),
-        ],
+        ),
       ),
     );
   }
@@ -1123,8 +1189,8 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
   }) {
     return InkWell(
       onTap: onTap,
-      splashColor: const Color(0xFFF1F5F9),
-      highlightColor: const Color(0xFFF8FAFC),
+      splashColor: AppColors.buttonSecondary,
+      highlightColor: AppColors.buttonSecondary,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
@@ -1140,133 +1206,13 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
             const SizedBox(width: 14),
             Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF1E293B),
-                fontSize: 14,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildInternalClearConfirm(FinanceProvider provider) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InteractiveDragHandle(
-            color: const Color(0xFFCBD5E1),
-            onTap: () => setState(() => _isConfirmingClearAll = false),
-            onVerticalDragUpdate: (details) {
-              if ((details.primaryDelta ?? 0) > 2) {
-                setState(() => _isConfirmingClearAll = false);
-              }
-            },
-            padding: const EdgeInsets.only(top: 2, bottom: 12),
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.negative.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.delete_sweep_rounded,
-              color: AppColors.negative,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Clear All Notifications?',
-            style: TextStyle(
-              color: Color(0xFF0F172A),
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Are you sure you want to permanently clear all unread notification messages?',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF64748B),
-              fontSize: 13,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _isConfirmingClearAll = false),
-                  child: Container(
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.lightGreyBackground,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: AppColors.darkCharcoal,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    setState(() => _isConfirmingClearAll = false);
-                    final ids =
-                        provider.notifications.map((n) => n.id).toList();
-                    for (final id in ids) {
-                      await provider.deleteNotification(id);
-                    }
-                  },
-                  child: Container(
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.negative,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: const Text(
-                      'Clear All',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1294,11 +1240,7 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.14),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: color.withValues(alpha: 0.25),
-                    width: 0.8,
-                  ),
-                ),
+                                  ),
                 child: Icon(icon, color: color, size: 16),
               ),
               const SizedBox(height: 3),
@@ -1402,8 +1344,7 @@ void showNotificationsOverlay(BuildContext context) {
         decoration: BoxDecoration(
           color: const Color(0xFF141419),
           borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          boxShadow: [
+                    boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.4),
               blurRadius: 24,

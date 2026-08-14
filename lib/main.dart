@@ -33,12 +33,18 @@ void main() async {
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
+  final String? savedTheme = prefs.getString('app_theme_mode');
+  AppThemeMode initialTheme = AppThemeMode.hybrid;
+  if (savedTheme == 'light') initialTheme = AppThemeMode.light;
+  if (savedTheme == 'dark') initialTheme = AppThemeMode.dark;
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (_) => FinanceProvider(
             initialOnboardingComplete: onboardingDone,
+            initialThemeMode: initialTheme,
           )..init(),
         ),
       ],
@@ -80,23 +86,22 @@ class _MobileBankingAppState extends State<MobileBankingApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Shibre',
-      theme: AppTheme.darkTheme,
-      debugShowCheckedModeBanner: false,
-      navigatorKey: appNavigatorKey,
-      home: !_checkedOnStart
-          ? const Scaffold(backgroundColor: AppColors.background)
-          : _isLocked
-              ? AppLockScreen(onUnlocked: _unlock)
-              : Consumer<FinanceProvider>(
-                  builder: (context, provider, child) {
-                    if (!provider.isOnboardingComplete) {
-                      return const OnboardingScreen();
-                    }
-                    return const MainShell();
-                  },
-                ),
+    return Consumer<FinanceProvider>(
+      builder: (context, provider, child) {
+        return MaterialApp(
+          title: 'Shibre',
+          theme: AppTheme.themeFor(provider.currentThemeMode),
+          debugShowCheckedModeBanner: false,
+          navigatorKey: appNavigatorKey,
+          home: !_checkedOnStart
+              ? Scaffold(backgroundColor: AppColors.background)
+              : _isLocked
+                  ? AppLockScreen(onUnlocked: _unlock)
+                  : !provider.isOnboardingComplete
+                      ? const OnboardingScreen()
+                      : const MainShell(),
+        );
+      },
     );
   }
 }

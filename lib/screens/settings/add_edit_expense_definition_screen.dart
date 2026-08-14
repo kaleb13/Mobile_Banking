@@ -5,6 +5,7 @@ import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_button.dart';
 import '../dashboard/reason_selection_sheet.dart';
 
 class AddEditExpenseDefinitionScreen extends StatefulWidget {
@@ -161,54 +162,25 @@ class _AddEditExpenseDefinitionScreenState
     return Scaffold(
       backgroundColor: AppColors.background,
       extendBody: true,
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-        child: Row(
-          children: [
-            AppBackButton(onPressed: () => Navigator.pop(context)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: GestureDetector(
-                onTap: _saveDefinition,
-                child: Container(
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppColors.gold.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                        color: AppColors.gold.withValues(alpha: 0.35)),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.check, color: AppColors.gold, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Save Expense Definition',
-                        style: TextStyle(
-                          color: AppColors.gold,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: AppButton.primary(
+            text: 'Save Expense Definition',
+            height: 50,
+            onPressed: _saveDefinition,
+          ),
         ),
       ),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        automaticallyImplyLeading:
-            false, // Ensures a back button isn't auto-generated here
+        leading: const AppBackButton(),
         title: Text(
           widget.expenseDefinition == null
               ? 'New Expense Definition'
               : 'Edit Expense Definition',
-          style: const TextStyle(
+          style: AppTypography.heading2.copyWith(
               color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
         ),
       ),
@@ -251,8 +223,6 @@ class _AddEditExpenseDefinitionScreenState
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.03),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.1)),
                         ),
                         child: Row(
                           children: [
@@ -293,8 +263,6 @@ class _AddEditExpenseDefinitionScreenState
                     decoration: BoxDecoration(
                       color: AppColors.gold.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppColors.gold.withValues(alpha: 0.3)),
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.add,
@@ -376,16 +344,15 @@ class _AddEditExpenseDefinitionScreenState
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _recurringType,
-                  dropdownColor: AppColors.surfaceCard,
+                  dropdownColor: AppColors.surface,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
                     enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.1))),
+                        borderSide: BorderSide.none),
                     focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.gold)),
+                        borderSide: BorderSide.none),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                   ),
@@ -456,19 +423,19 @@ class _AddEditExpenseDefinitionScreenState
         alignLabelWithHint: maxLines > 1,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.gold, width: 1),
+          borderSide: BorderSide.none,
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.negative, width: 1),
+          borderSide: BorderSide.none,
         ),
       ),
       validator: validator,
@@ -503,7 +470,7 @@ class _AddEditExpenseDefinitionScreenState
               label: Text(day['label'] as String),
               selected: isSelected,
               selectedColor: AppColors.gold,
-              backgroundColor: AppColors.surfaceCard,
+              backgroundColor: AppColors.surface,
               labelStyle: TextStyle(
                   color: isSelected ? Colors.black : Colors.white,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
@@ -538,20 +505,27 @@ class _AddEditExpenseDefinitionScreenState
           decoration: InputDecoration(
             hintText: 'e.g., Internet Bill',
             hintStyle: const TextStyle(color: AppColors.textSoft),
-            enabledBorder: UnderlineInputBorder(
-                borderSide:
-                    BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide.none),
             focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: AppColors.positive)),
+                borderSide: BorderSide.none),
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
-          TextButton(
+          AppButton.secondary(
+            text: 'Cancel',
+            fullWidth: false,
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSoft)),
           ),
-          TextButton(
+          const SizedBox(width: 8),
+          AppButton.primary(
+            text: 'Add',
+            fullWidth: false,
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             onPressed: () async {
               final name = controller.text.trim();
               if (name.isNotEmpty) {
@@ -568,7 +542,6 @@ class _AddEditExpenseDefinitionScreenState
                 }
               }
             },
-            child: const Text('Add', style: TextStyle(color: AppColors.positive)),
           ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/pin_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/widgets.dart';
 
 class AppLockScreen extends StatefulWidget {
   /// Called when the user successfully authenticates.
@@ -104,36 +105,19 @@ class _AppLockScreenState extends State<AppLockScreen>
   }
 
   void _forgotPin() {
-    showDialog(
+    AppConfirmDialog.show(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppColors.surfaceCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Reset PIN?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
+      title: 'Reset PIN?',
+      message:
           'This will remove your PIN and unlock the app. You can set a new PIN in Settings.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.65), fontSize: 13, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
-          ),
-          TextButton(
-            onPressed: () async {
-              await PinService.instance.clearPin();
-              if (mounted) {
-                Navigator.pop(context);
-                widget.onUnlocked();
-              }
-            },
-            child: const Text('Reset', style: TextStyle(color: AppColors.negative, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      confirmText: 'Reset',
+      isDestructive: true,
+      onConfirm: () async {
+        await PinService.instance.clearPin();
+        if (mounted) {
+          widget.onUnlocked();
+        }
+      },
     );
   }
 
@@ -148,14 +132,9 @@ class _AppLockScreenState extends State<AppLockScreen>
     final bool showBiometricButton = _canUseBiometric && _biometricEnabled;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ),
+      value: context.themeOverlayStyle,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.themeBackground,
         body: SafeArea(
           child: Column(
             children: [
@@ -168,16 +147,16 @@ class _AppLockScreenState extends State<AppLockScreen>
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
+                      color: context.themeSurface,
                       borderRadius: BorderRadius.circular(22),
                     ),
-                    child: const Icon(Icons.lock_rounded, color: AppColors.gold, size: 36),
+                    child: const Icon(Icons.lock_rounded, color: AppColors.brandGreen, size: 36),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Shibre',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.themeTextPrimary,
                       fontSize: 26,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
@@ -191,7 +170,7 @@ class _AppLockScreenState extends State<AppLockScreen>
                             ? 'Use fingerprint or enter PIN'
                             : 'Enter your PIN to continue',
                     style: TextStyle(
-                      color: _isError ? AppColors.negative : Colors.white.withValues(alpha: 0.5),
+                      color: _isError ? AppColors.negative : context.themeTextSecondary,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -226,8 +205,8 @@ class _AppLockScreenState extends State<AppLockScreen>
                         color: _isError
                             ? AppColors.negative
                             : filled
-                                ? AppColors.gold
-                                : AppColors.surfaceElevated,
+                                ? AppColors.brandGreen
+                                : context.themeBorder,
                       ),
                     );
                   }),
@@ -241,11 +220,11 @@ class _AppLockScreenState extends State<AppLockScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
                   children: [
-                    _buildNumRow(['1', '2', '3']),
+                    _buildNumRow(context, ['1', '2', '3']),
                     const SizedBox(height: 16),
-                    _buildNumRow(['4', '5', '6']),
+                    _buildNumRow(context, ['4', '5', '6']),
                     const SizedBox(height: 16),
-                    _buildNumRow(['7', '8', '9']),
+                    _buildNumRow(context, ['7', '8', '9']),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -253,27 +232,30 @@ class _AppLockScreenState extends State<AppLockScreen>
                         // Biometric button — tappable to re-prompt fingerprint
                         showBiometricButton
                             ? _buildNumKey(
+                                context,
                                 child: Icon(
                                   Icons.fingerprint_rounded,
                                   color: _biometricTriggered
-                                      ? AppColors.gold
-                                      : Colors.white,
+                                      ? AppColors.brandGreen
+                                      : context.themeTextPrimary,
                                   size: 30,
                                 ),
                                 onTap: _tryBiometric,
                               )
                             : const SizedBox(width: 72, height: 72),
                         _buildNumKey(
-                          child: const Text('0',
+                          context,
+                          child: Text('0',
                               style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.themeTextPrimary,
                                   fontSize: 24,
                                   fontWeight: FontWeight.w600)),
                           onTap: () => _onKey('0'),
                         ),
                         _buildNumKey(
-                          child: const Icon(Icons.backspace_outlined,
-                              color: Colors.white, size: 22),
+                          context,
+                          child: Icon(Icons.backspace_outlined,
+                              color: context.themeTextPrimary, size: 22),
                           onTap: _onBackspace,
                         ),
                       ],
@@ -290,10 +272,10 @@ class _AppLockScreenState extends State<AppLockScreen>
                 child: Text(
                   'Forgot PIN?',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.35),
+                    color: context.themeTextSecondary,
                     fontSize: 13,
                     decoration: TextDecoration.underline,
-                    decorationColor: Colors.white.withValues(alpha: 0.25),
+                    decorationColor: context.themeTextSecondary.withValues(alpha: 0.5),
                   ),
                 ),
               ),
@@ -305,14 +287,15 @@ class _AppLockScreenState extends State<AppLockScreen>
     );
   }
 
-  Widget _buildNumRow(List<String> digits) {
+  Widget _buildNumRow(BuildContext context, List<String> digits) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: digits
           .map((d) => _buildNumKey(
+                context,
                 child: Text(d,
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: context.themeTextPrimary,
                         fontSize: 24,
                         fontWeight: FontWeight.w600)),
                 onTap: () => _onKey(d),
@@ -321,14 +304,14 @@ class _AppLockScreenState extends State<AppLockScreen>
     );
   }
 
-  Widget _buildNumKey({required Widget child, required VoidCallback onTap}) {
+  Widget _buildNumKey(BuildContext context, {required Widget child, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 72,
         height: 72,
-        decoration: const BoxDecoration(
-          color: AppColors.surfaceCard,
+        decoration: BoxDecoration(
+          color: context.themeSurface,
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,

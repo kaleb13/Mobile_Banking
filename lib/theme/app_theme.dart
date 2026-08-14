@@ -1,23 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 export '../widgets/app_switch.dart';
+export 'app_typography.dart';
 
 class AppColors {
-  // ── Brand ─────────────────────────────────────────────────────────────────
-  static const Color gold      = Color(0xFFF0B90B); // Brand golden accent
+  static const Color brandGreen = Color(0xFF3EB489); // Primary brand emerald green accent (#3EB489)
+  static const Color gold       = brandGreen; // Accent color (mapped to primary brand green)
 
   // ── Backgrounds ───────────────────────────────────────────────────────────
   static const Color background = Color(0xFF050C16); // Main scaffold background (#050C16)
-  static const Color bgMid      = Color(0xFF050C16); // Secondary background / gradient mid (#050C16)
-  static const Color bgDeep     = Color(0xFF050C16); // Deepest background stop (#050C16)
+  static const Color bgMid      = background; // Secondary background / gradient mid (#050C16)
+  static const Color bgDeep     = background; // Deepest background stop (#050C16)
+  static const Color backgroundLight = Color(0xFFF8FAFC); // Light theme scaffold background
+  static const Color bgMidLight      = Color(0xFFF1F5F9); // Light theme mid gradient
+  static const Color bgDeepLight     = Color(0xFFE2E8F0); // Light theme deep gradient
 
   // ── Surfaces & Cards ──────────────────────────────────────────────────────
   static const Color surface        = Color(0xFF111821); // Base card/panel surface (#111821)
-  static const Color surfaceCard    = Color(0xFF111821); // Raised card surface (#111821)
-  static const Color tabBackground  = Color(0xFF111821); // Capsule tab & loan card background (#111821)
-  static const Color cardDarkHex    = Color(0xFF111821); // Defined card background color (#111821)
-  static const Color surfaceElevated = Color(0xFF363640); // Elevated surface / divider
+  static const Color surfaceElevated = Color(0xFF141D28); // Elevated surface tone
   static const Color overlay        = Color(0xFF2A2A34); // Modal / bottom sheet
   static const Color bottomNavBg    = Color(0xFF141924); // Navigation bar & Freeze Account button background (#141924)
+  static const Color surfaceLight   = Color(0xFFFFFFFF); // Light theme card surface
+  static const Color cardTileLight  = Color(0xFFF1F5F9); // Light theme elevated tile
+  static const Color glassSurface   = Color(0x59111821); // 35% dark surface glass
+  static const Color glassSurfaceSubtle = Color(0x1A111821); // 10% dark surface glass
+  static const Color destructiveSurface = Color(0x24E11D48); // 14% destructive soft surface
+
+  // ── Button Palette ────────────────────────────────────────────────────────
+  static const Color buttonPrimary          = Color(0xFFFFFFFF); // Primary button pure crisp white (#FFFFFF)
+  static const Color buttonPrimaryText      = Color(0xFF0F172A); // Primary button dark contrast text (#0F172A)
+  static const Color buttonPrimaryDisabled  = Color(0x66FFFFFF); // Primary button disabled state (40% white)
+  static const Color buttonSecondary        = Color(0x1FFFFFFF); // Glass-like translucent dark button (12% white)
+  static const Color buttonSecondaryText    = Color(0xFFFFFFFF); // Secondary button clean white text
+  static const Color buttonDestructive      = Color(0xFFE11D48); // Destructive button red
+  static const Color buttonDestructiveText  = Color(0xFFFFFFFF); // Destructive button text
+  static const Color buttonGlass            = Color(0x1AFFFFFF); // Translucent glass action button
 
   // ── Semantic ──────────────────────────────────────────────────────────────
   static const Color positive      = Color(0xFF3EB489); // Income / positive amounts
@@ -47,21 +64,28 @@ class AppColors {
   static const Color levelGlow5 = Color(0xFFFBBF24);
 
   // ── Daily Net Heatmap Palette ─────────────────────────────────────────────
-  static const Color heatmapHeavyGreen  = Color(0xFF34D399); // Vibrant emerald for high positive daily net
-  static const Color heatmapSubtleGreen = Color(0xFF0F5234); // Deep forest green for moderate positive daily net
-  static const Color heatmapNeutral     = Color(0xFF1B2431); // Dark charcoal for zero/no transaction days
-  static const Color heatmapSubtleRed   = Color(0xFF4A1D24); // Deep burgundy for moderate negative daily net
-  static const Color heatmapHeavyRed    = Color(0xFFF87171); // Vibrant coral red for high negative daily net
+  static const Color heatmapHeavyGreen   = Color(0xFF34D399); // Vibrant emerald for high positive daily net
+  static const Color heatmapSubtleGreen  = Color(0xFF0F5234); // Deep forest green for moderate positive daily net
+  static const Color heatmapNeutral      = Color(0xFF1B2431); // Dark charcoal for zero/no transaction days
+  static const Color heatmapNeutralLight = Color(0xFFE2E8F0); // Light slate for zero/no transaction days on light theme
+  static const Color heatmapSubtleRed    = Color(0xFF4A1D24); // Deep burgundy for moderate negative daily net
+  static const Color heatmapHeavyRed     = levelGlow4; // Vibrant coral red for high negative daily net
 
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFFFFFFFF); // Primary text on dark
   static const Color textSecondary = Color(0xFF9CA3AF); // Secondary / muted text
   static const Color textDisabled  = Color(0xFFC7C7C7); // Disabled / faint text
   static const Color textSoft      = Color(0xCCFFFFFF); // 80% white soft label
+  static const Color textPrimaryLight = Color(0xFF0F172A); // Dark slate text for light theme
+  static const Color textSecondaryLight = Color(0xFF64748B); // Muted slate text for light theme
+  static const Color textDisabledLight  = Color(0xFF94A3B8); // Faint slate text for light theme
 
   // ── UI Controls ───────────────────────────────────────────────────────────
-  static const Color border          = Color(0x33FFFFFF); // Borders / dividers
-  static const Color toggleActive    = Color(0xFF34C759); // iOS toggle on
+  static const Color border                 = Color(0x33FFFFFF); // Borders / dividers
+  static const Color borderLight            = Color(0x1F000000); // Light theme border
+  static const Color borderSubtleLight      = Color(0xFFCBD5E1); // Subtle inactive border on light theme
+  static const Color donutInactiveRingDark  = Color(0x1AFFFFFF); // 10% white inactive donut chart ring on dark theme
+  static const Color toggleActive         = Color(0xFF34C759); // iOS toggle on
   static const Color toggleInactive  = Color(0xFF39393D); // iOS toggle off
   static const Color brownDark       = Color(0xFF301900); // Dark brown icon tint
 
@@ -137,19 +161,18 @@ class AppColors {
   /// Amber badge/button background used when a bank's tracking is paused.
   static const Color pausedBadge        = Color(0xFFB45309); // dark amber
   /// Text / icon color on the amber pause badge.
-  static const Color pausedBadgeText    = Color(0xFFFFFFFF);
+  static const Color pausedBadgeText    = textPrimary;
   /// Amber border drawn around a paused bank card.
-  static const Color pausedBorder       = Color(0xFFFFB74D); // = AppColors.amber
+  static const Color pausedBorder       = amber; // = AppColors.amber
   /// Dark greyscale gradient stop for a paused card (start / top).
   static const Color pausedCardDark     = Color(0xFF2A2A2A);
   /// Mid greyscale gradient stop for a paused card (end / bottom).
   static const Color pausedCardMid      = Color(0xFF4A4A4A);
   /// Glow / shadow color for paused card.
-  static const Color pausedCardGlow     = Color(0xFF888888);
+  static const Color pausedCardGlow     = greyText;
 
   // ── Central UI Palette Additions ─────────────────────────────────────────
   static const Color dragHandleDark     = Color(0xFF0F172A);
-  static const Color navyDark           = Color(0xFF0F172A);
   static const Color navyCard           = Color(0xFF161F2C);
   static const Color deepNavy           = Color(0xFF0E1520);
   static const Color darkSheetBg        = Color(0xFF141419);
@@ -172,6 +195,41 @@ class AppColors {
   static const Color onboardingDark     = Color(0xFF071410);
   static const Color onboardingDeep     = Color(0xFF060D0A);
 
+  // ── Additional Semantic & Dynamic UI Palette ──────────────────────────────
+  static const Color destructiveRed            = Color(0xFFFF5252);
+  static const Color chartWarmOrange           = Color(0xFFFF9800);
+  static const Color chartBrightEmerald        = Color(0xFF10B981);
+  static const Color chartSkyBlue              = Color(0xFF3B82F6);
+  static const Color chartIndigo               = Color(0xFF6366F1);
+  static const Color chartCoralPink            = Color(0xFFEC4899);
+  static const Color chartAmberYellow          = Color(0xFFF59E0B);
+  static const Color chartCyan                 = Color(0xFF06B6D4);
+  static const Color chartTeal                 = Color(0xFF14B8A6);
+  static const Color chartPurpleVibrant        = Color(0xFFA855F7);
+  static const Color chartLimeGreen            = Color(0xFF84CC16);
+  static const Color chartSoftViolet           = Color(0xFF8B5CF6);
+  static const Color chartRoyalBlue            = Color(0xFF2563EB);
+  static const Color chartDarkEmerald          = Color(0xFF059669);
+  static const Color chartBronzeAmber          = Color(0xFFD97706);
+  static const Color chartCrimson              = Color(0xFFDC2626);
+  static const Color cbeDeepPurple             = Color(0xFF6B4C9A);
+  static const Color chartOrange               = Color(0xFFF97316);
+  static const Color chartYellow               = Color(0xFFEAB308);
+  static const Color chartFuchsia              = Color(0xFFD946EF);
+  static const Color savingProgressGreenMid    = Color(0xFF047857);
+  static const Color savingProgressGreenDark   = Color(0xFF065F46);
+  static const Color savingProgressGreenDeep   = Color(0xFF064E3B);
+  static const Color savingProgressPurpleStart = Color(0xFF7C3AED);
+  static const Color savingProgressPurpleMid   = Color(0xFF5B21B6);
+  static const Color savingProgressPurpleDark  = Color(0xFF4C1D95);
+  static const Color savingProgressPurpleDeep  = Color(0xFF3B0764);
+  static const Color savingProgressBlueMid     = Color(0xFF1E40AF);
+  static const Color savingProgressBlueDark    = Color(0xFF1E3A8A);
+  static const Color savingProgressBlueDeep    = Color(0xFF172554);
+
+
+  static const Color buttonSoftDestructiveBg = Color(0x24E11D48); // Soft red background (14% red)
+  static const Color buttonGlassBg           = Color(0x1AFFFFFF); // Translucent glass action background
 
   // ── Gradients ─────────────────────────────────────────────────────────────
   static const LinearGradient bgGradient = LinearGradient(
@@ -194,14 +252,300 @@ class AppColors {
       bgMid,
     ],
   );
+
+  static const LinearGradient screenBackgroundGradientLight = LinearGradient(
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+    colors: [
+      backgroundLight,
+      bgMidLight,
+    ],
+  );
+}
+
+/// Official Material 3 ThemeExtension for full theme-switching tweening,
+/// widget-scoped styling, and architectural purity.
+@immutable
+class AppThemeColors extends ThemeExtension<AppThemeColors> {
+  final Color background;
+  final Color bgMid;
+  final Color bgDeep;
+  final Color surface;
+  final Color surfaceElevated;
+  final Color cardTile;
+  final Color overlay;
+  final Color bottomNavBg;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textDisabled;
+  final Color border;
+  final Color brandGreen;
+  final Color buttonPrimary;
+  final Color buttonPrimaryText;
+  final Color buttonPrimaryDisabled;
+  final Color buttonSecondary;
+  final Color buttonSecondaryText;
+  final Color buttonDestructive;
+  final Color buttonDestructiveText;
+  final Color buttonSoftDestructiveBg;
+  final Color positive;
+  final Color negative;
+  final Color warning;
+  final Color error;
+  final Color info;
+  final LinearGradient screenGradient;
+
+  const AppThemeColors({
+    required this.background,
+    required this.bgMid,
+    required this.bgDeep,
+    required this.surface,
+    required this.surfaceElevated,
+    required this.cardTile,
+    required this.overlay,
+    required this.bottomNavBg,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textDisabled,
+    required this.border,
+    required this.brandGreen,
+    required this.buttonPrimary,
+    required this.buttonPrimaryText,
+    required this.buttonPrimaryDisabled,
+    required this.buttonSecondary,
+    required this.buttonSecondaryText,
+    required this.buttonDestructive,
+    required this.buttonDestructiveText,
+    required this.buttonSoftDestructiveBg,
+    required this.positive,
+    required this.negative,
+    required this.warning,
+    required this.error,
+    required this.info,
+    required this.screenGradient,
+  });
+
+  static const AppThemeColors dark = AppThemeColors(
+    background: AppColors.background,
+    bgMid: AppColors.bgMid,
+    bgDeep: AppColors.bgDeep,
+    surface: AppColors.surface,
+    surfaceElevated: AppColors.surfaceElevated,
+    cardTile: AppColors.darkTileBg,
+    overlay: AppColors.overlay,
+    bottomNavBg: AppColors.bottomNavBg,
+    textPrimary: AppColors.textPrimary,
+    textSecondary: AppColors.textSecondary,
+    textDisabled: AppColors.textDisabled,
+    border: AppColors.border,
+    brandGreen: AppColors.brandGreen,
+    buttonPrimary: AppColors.buttonPrimary,
+    buttonPrimaryText: AppColors.buttonPrimaryText,
+    buttonPrimaryDisabled: AppColors.buttonPrimaryDisabled,
+    buttonSecondary: AppColors.buttonSecondary,
+    buttonSecondaryText: AppColors.buttonSecondaryText,
+    buttonDestructive: AppColors.buttonDestructive,
+    buttonDestructiveText: AppColors.buttonDestructiveText,
+    buttonSoftDestructiveBg: AppColors.buttonSoftDestructiveBg,
+    positive: AppColors.positive,
+    negative: AppColors.negative,
+    warning: AppColors.warning,
+    error: AppColors.error,
+    info: AppColors.info,
+    screenGradient: AppColors.screenBackgroundGradient,
+  );
+
+  static const AppThemeColors light = AppThemeColors(
+    background: AppColors.backgroundLight,
+    bgMid: AppColors.bgMidLight,
+    bgDeep: AppColors.bgDeepLight,
+    surface: AppColors.surfaceLight,
+    surfaceElevated: AppColors.cardTileLight,
+    cardTile: AppColors.cardTileLight,
+    overlay: AppColors.surfaceLight,
+    bottomNavBg: AppColors.surfaceLight,
+    textPrimary: AppColors.textPrimaryLight,
+    textSecondary: AppColors.textSecondaryLight,
+    textDisabled: AppColors.textDisabledLight,
+    border: AppColors.borderLight,
+    brandGreen: AppColors.brandGreen,
+    buttonPrimary: AppColors.textPrimaryLight,
+    buttonPrimaryText: AppColors.surfaceLight,
+    buttonPrimaryDisabled: AppColors.textDisabledLight,
+    buttonSecondary: AppColors.cardTileLight,
+    buttonSecondaryText: AppColors.textPrimaryLight,
+    buttonDestructive: AppColors.buttonDestructive,
+    buttonDestructiveText: AppColors.surfaceLight,
+    buttonSoftDestructiveBg: AppColors.buttonSoftDestructiveBg,
+    positive: AppColors.positive,
+    negative: AppColors.negative,
+    warning: AppColors.warning,
+    error: AppColors.error,
+    info: AppColors.info,
+    screenGradient: AppColors.screenBackgroundGradientLight,
+  );
+
+  @override
+  AppThemeColors copyWith({
+    Color? background,
+    Color? bgMid,
+    Color? bgDeep,
+    Color? surface,
+    Color? surfaceElevated,
+    Color? cardTile,
+    Color? overlay,
+    Color? bottomNavBg,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? textDisabled,
+    Color? border,
+    Color? brandGreen,
+    Color? buttonPrimary,
+    Color? buttonPrimaryText,
+    Color? buttonPrimaryDisabled,
+    Color? buttonSecondary,
+    Color? buttonSecondaryText,
+    Color? buttonDestructive,
+    Color? buttonDestructiveText,
+    Color? buttonSoftDestructiveBg,
+    Color? positive,
+    Color? negative,
+    Color? warning,
+    Color? error,
+    Color? info,
+    LinearGradient? screenGradient,
+  }) {
+    return AppThemeColors(
+      background: background ?? this.background,
+      bgMid: bgMid ?? this.bgMid,
+      bgDeep: bgDeep ?? this.bgDeep,
+      surface: surface ?? this.surface,
+      surfaceElevated: surfaceElevated ?? this.surfaceElevated,
+      cardTile: cardTile ?? this.cardTile,
+      overlay: overlay ?? this.overlay,
+      bottomNavBg: bottomNavBg ?? this.bottomNavBg,
+      textPrimary: textPrimary ?? this.textPrimary,
+      textSecondary: textSecondary ?? this.textSecondary,
+      textDisabled: textDisabled ?? this.textDisabled,
+      border: border ?? this.border,
+      brandGreen: brandGreen ?? this.brandGreen,
+      buttonPrimary: buttonPrimary ?? this.buttonPrimary,
+      buttonPrimaryText: buttonPrimaryText ?? this.buttonPrimaryText,
+      buttonPrimaryDisabled: buttonPrimaryDisabled ?? this.buttonPrimaryDisabled,
+      buttonSecondary: buttonSecondary ?? this.buttonSecondary,
+      buttonSecondaryText: buttonSecondaryText ?? this.buttonSecondaryText,
+      buttonDestructive: buttonDestructive ?? this.buttonDestructive,
+      buttonDestructiveText: buttonDestructiveText ?? this.buttonDestructiveText,
+      buttonSoftDestructiveBg: buttonSoftDestructiveBg ?? this.buttonSoftDestructiveBg,
+      positive: positive ?? this.positive,
+      negative: negative ?? this.negative,
+      warning: warning ?? this.warning,
+      error: error ?? this.error,
+      info: info ?? this.info,
+      screenGradient: screenGradient ?? this.screenGradient,
+    );
+  }
+
+  @override
+  AppThemeColors lerp(ThemeExtension<AppThemeColors>? other, double t) {
+    if (other is! AppThemeColors) return this;
+    return AppThemeColors(
+      background: Color.lerp(background, other.background, t) ?? background,
+      bgMid: Color.lerp(bgMid, other.bgMid, t) ?? bgMid,
+      bgDeep: Color.lerp(bgDeep, other.bgDeep, t) ?? bgDeep,
+      surface: Color.lerp(surface, other.surface, t) ?? surface,
+      surfaceElevated: Color.lerp(surfaceElevated, other.surfaceElevated, t) ?? surfaceElevated,
+      cardTile: Color.lerp(cardTile, other.cardTile, t) ?? cardTile,
+      overlay: Color.lerp(overlay, other.overlay, t) ?? overlay,
+      bottomNavBg: Color.lerp(bottomNavBg, other.bottomNavBg, t) ?? bottomNavBg,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t) ?? textPrimary,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t) ?? textSecondary,
+      textDisabled: Color.lerp(textDisabled, other.textDisabled, t) ?? textDisabled,
+      border: Color.lerp(border, other.border, t) ?? border,
+      brandGreen: Color.lerp(brandGreen, other.brandGreen, t) ?? brandGreen,
+      buttonPrimary: Color.lerp(buttonPrimary, other.buttonPrimary, t) ?? buttonPrimary,
+      buttonPrimaryText: Color.lerp(buttonPrimaryText, other.buttonPrimaryText, t) ?? buttonPrimaryText,
+      buttonPrimaryDisabled: Color.lerp(buttonPrimaryDisabled, other.buttonPrimaryDisabled, t) ?? buttonPrimaryDisabled,
+      buttonSecondary: Color.lerp(buttonSecondary, other.buttonSecondary, t) ?? buttonSecondary,
+      buttonSecondaryText: Color.lerp(buttonSecondaryText, other.buttonSecondaryText, t) ?? buttonSecondaryText,
+      buttonDestructive: Color.lerp(buttonDestructive, other.buttonDestructive, t) ?? buttonDestructive,
+      buttonDestructiveText: Color.lerp(buttonDestructiveText, other.buttonDestructiveText, t) ?? buttonDestructiveText,
+      buttonSoftDestructiveBg: Color.lerp(buttonSoftDestructiveBg, other.buttonSoftDestructiveBg, t) ?? buttonSoftDestructiveBg,
+      positive: Color.lerp(positive, other.positive, t) ?? positive,
+      negative: Color.lerp(negative, other.negative, t) ?? negative,
+      warning: Color.lerp(warning, other.warning, t) ?? warning,
+      error: Color.lerp(error, other.error, t) ?? error,
+      info: Color.lerp(info, other.info, t) ?? info,
+      screenGradient: LinearGradient.lerp(screenGradient, other.screenGradient, t) ?? screenGradient,
+    );
+  }
+}
+
+enum AppThemeMode {
+  hybrid,
+  light,
+  dark,
+}
+
+extension AppThemeContext on BuildContext {
+  bool get isLightMode => Theme.of(this).brightness == Brightness.light;
+  AppThemeColors get themeColors =>
+      Theme.of(this).extension<AppThemeColors>() ??
+      (isLightMode ? AppThemeColors.light : AppThemeColors.dark);
+
+  Color get themeBackground => themeColors.background;
+  Color get themeSurface => themeColors.surface;
+  Color get themeSurfaceElevated => themeColors.surfaceElevated;
+  Color get themeTextPrimary => themeColors.textPrimary;
+  Color get themeTextSecondary => themeColors.textSecondary;
+  Color get themeTextDisabled => themeColors.textDisabled;
+  Color get themeBorder => themeColors.border;
+  Color get themeTileBg => themeColors.cardTile;
+
+  LinearGradient get themeScreenGradient => themeColors.screenGradient;
+
+  SystemUiOverlayStyle get themeOverlayStyle => SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            isLightMode ? Brightness.dark : Brightness.light,
+        systemNavigationBarIconBrightness:
+            isLightMode ? Brightness.dark : Brightness.light,
+      );
+}
+
+extension ColorContrast on Color {
+  /// Returns high-contrast text color based on the background's relative luminance:
+  /// - If background is light (luminance > 0.35) -> Dark Slate (#0F172A)
+  /// - If background is dark (luminance <= 0.35) -> Crisp White (#FFFFFF)
+  Color get onColor => computeLuminance() > 0.35
+      ? AppColors.textPrimaryLight
+      : Colors.white;
+
+  Color get onColorSecondary => computeLuminance() > 0.35
+      ? AppColors.textSecondaryLight
+      : AppColors.textSecondary;
 }
 
 class AppTheme {
-  static ThemeData get darkTheme {
+  static ThemeData themeFor(AppThemeMode mode) {
+    switch (mode) {
+      case AppThemeMode.light:
+        return lightTheme;
+      case AppThemeMode.dark:
+        return darkTheme;
+      case AppThemeMode.hybrid:
+        return hybridTheme;
+    }
+  }
+
+  static ThemeData get hybridTheme {
     return ThemeData(
       brightness: Brightness.dark,
-      primaryColor: AppColors.positive,
+      primaryColor: AppColors.brandGreen,
       scaffoldBackgroundColor: AppColors.background,
+      cardColor: AppColors.surface,
+      extensions: const [AppThemeColors.dark],
       textTheme: ThemeData.dark().textTheme.apply(
             bodyColor: AppColors.textPrimary,
             displayColor: AppColors.textPrimary,
@@ -214,14 +558,44 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.positive,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          backgroundColor: AppColors.buttonPrimary,
+          foregroundColor: AppColors.buttonPrimaryText,
+          shape: const StadiumBorder(),
+          elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
+
+  static ThemeData get lightTheme {
+    return ThemeData(
+      brightness: Brightness.light,
+      primaryColor: AppColors.brandGreen,
+      scaffoldBackgroundColor: AppColors.backgroundLight,
+      cardColor: AppColors.surfaceLight,
+      extensions: const [AppThemeColors.light],
+      textTheme: ThemeData.light().textTheme.apply(
+            bodyColor: AppColors.textPrimaryLight,
+            displayColor: AppColors.textPrimaryLight,
+            fontFamily: 'Inter',
+          ),
+      cardTheme: CardThemeData(
+        color: AppColors.surfaceLight,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.buttonPrimaryText,
+          foregroundColor: AppColors.buttonPrimary,
+          shape: const StadiumBorder(),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+      ),
+    );
+  }
+
+  static ThemeData get darkTheme => hybridTheme;
 }

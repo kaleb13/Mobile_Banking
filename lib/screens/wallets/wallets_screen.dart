@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/bank_card_widget.dart';
+import '../../widgets/widgets.dart';
 import '../dashboard/sender_detail_screen.dart';
 import '../dashboard/cash_wallet_detail_screen.dart';
 
@@ -22,19 +22,30 @@ class _WalletsScreenState extends State<WalletsScreen> {
     final txs = provider.transactions;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
+        statusBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
+        systemNavigationBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
       ),
       child: Scaffold(
         extendBody: true,
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: AppColors.screenBackgroundGradient,
+          decoration: BoxDecoration(
+            gradient: context.isLightMode
+                ? const LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [
+                      AppColors.backgroundLight,
+                      AppColors.bgMidLight,
+                    ],
+                  )
+                : AppColors.screenBackgroundGradient,
           ),
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
@@ -43,58 +54,25 @@ class _WalletsScreenState extends State<WalletsScreen> {
               SliverToBoxAdapter(
                 child: SafeArea(
                   bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Wallet Manager',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
+                  child: AppHeader(
+                    title: 'Wallet Manager',
+                    showBackButton: false,
+                    trailing: AppButton.primary(
+                      text: 'Add New',
+                      icon: Icons.add,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11.5,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Add New Wallet feature coming soon!'),
+                            duration: Duration(seconds: 2),
                           ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Add New Wallet feature coming soon!'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.add,
-                                  color: AppColors.background,
-                                  size: 16,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Add New',
-                                  style: TextStyle(
-                                    color: AppColors.background,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -104,31 +82,10 @@ class _WalletsScreenState extends State<WalletsScreen> {
               senders.isEmpty
                   ? SliverFillRemaining(
                       hasScrollBody: false,
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.account_balance_wallet_outlined,
-                              color: AppColors.textSecondary.withValues(alpha: 0.4),
-                              size: 56,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No wallets connected yet',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Set up senders in Settings to get started',
-                              style: TextStyle(
-                                  color: AppColors.textSoft, fontSize: 12),
-                            ),
-                          ],
-                        ),
+                      child: AppEmptyState(
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: 'No wallets connected yet',
+                        subtitle: 'Set up senders in Settings to get started',
                       ),
                     )
                   : SliverPadding(

@@ -7,8 +7,7 @@ import '../../models/loan_record.dart';
 import '../../models/loan_repayment_request.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_capsule_tab_bar.dart';
-import '../../widgets/custom_progress_bar.dart';
+import '../../widgets/widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loan Management Screen
@@ -75,26 +74,38 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
         borrowedLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
+        statusBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
+        systemNavigationBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
       ),
       child: Scaffold(
         extendBody: true,
+        backgroundColor: context.themeBackground,
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              colors: [
-                AppColors.background,
-                AppColors.bgMid,
-              ],
-            ),
+          decoration: BoxDecoration(
+            gradient: context.isLightMode
+                ? const LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [
+                      AppColors.backgroundLight,
+                      AppColors.bgMidLight,
+                    ],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [
+                      AppColors.background,
+                      AppColors.bgMid,
+                    ],
+                  ),
           ),
           child: Column(
             children: [
@@ -175,7 +186,7 @@ class _LoanHeader extends StatelessWidget {
     required this.provider,
   });
 
-  Widget _buildAmountText(double amount) {
+  Widget _buildAmountText(BuildContext context, double amount) {
     final fmt = NumberFormat('#,##0.00');
     final formattedStr = fmt.format(amount);
     final parts = formattedStr.split('.');
@@ -187,8 +198,8 @@ class _LoanHeader extends StatelessWidget {
         children: [
           TextSpan(
             text: intPart,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.themeTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
               letterSpacing: -0.4,
@@ -197,7 +208,7 @@ class _LoanHeader extends StatelessWidget {
           TextSpan(
             text: '$fracPart ETB',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
+              color: context.themeTextSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -218,17 +229,24 @@ class _LoanHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Loan Tracker',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: context.themeTextPrimary,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
                 ),
               ),
-              GestureDetector(
-                onTap: () {
+              AppButton.primary(
+                text: 'Add Loan',
+                icon: Icons.add,
+                fullWidth: false,
+                height: 28,
+                fontSize: 11.5,
+                iconSize: 13,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                onPressed: () {
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
@@ -236,33 +254,6 @@ class _LoanHeader extends StatelessWidget {
                     builder: (_) => AddLoanSheet(provider: provider),
                   );
                 },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.add,
-                        color: Colors.black,
-                        size: 14,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Add Loan',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ],
           ),
@@ -304,7 +295,7 @@ class _LoanHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    _buildAmountText(totalLent),
+                    _buildAmountText(context, totalLent),
                   ],
                 ),
               ),
@@ -313,7 +304,7 @@ class _LoanHeader extends StatelessWidget {
               Container(
                 height: 30,
                 width: 1,
-                color: Colors.white.withValues(alpha: 0.2),
+                color: context.themeBorder,
               ),
 
               // Borrowed Column
@@ -349,7 +340,7 @@ class _LoanHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    _buildAmountText(totalBorrowed),
+                    _buildAmountText(context, totalBorrowed),
                   ],
                 ),
               ),
@@ -388,17 +379,17 @@ class _LoanList extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.handshake_outlined,
-                color: AppColors.textSoft.withValues(alpha: 0.3), size: 52),
+                color: context.themeTextSecondary.withValues(alpha: 0.5), size: 52),
             const SizedBox(height: 16),
             Text(emptyTitle,
-                style: const TextStyle(
-                    color: AppColors.textSoft,
+                style: TextStyle(
+                    color: context.themeTextPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
             Text(emptySubtitle,
                 style:
-                    const TextStyle(color: AppColors.textSoft, fontSize: 12),
+                    TextStyle(color: context.themeTextSecondary, fontSize: 12),
                 textAlign: TextAlign.center),
           ],
         ),
@@ -428,7 +419,7 @@ class _LoanCard extends StatelessWidget {
   const _LoanCard(
       {required this.loan, required this.accentColor, this.showPaid = false});
 
-  Widget _buildAmount(double amount, {bool isRightAligned = false}) {
+  Widget _buildAmount(BuildContext context, double amount, {bool isRightAligned = false}) {
     final fmt = NumberFormat('#,##0.00');
     final formattedStr = fmt.format(amount);
     final parts = formattedStr.split('.');
@@ -441,8 +432,8 @@ class _LoanCard extends StatelessWidget {
         children: [
           TextSpan(
             text: intPart,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.themeTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
               letterSpacing: -0.3,
@@ -451,7 +442,7 @@ class _LoanCard extends StatelessWidget {
           TextSpan(
             text: fracPart,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
+              color: context.themeTextSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -472,7 +463,7 @@ class _LoanCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.tabBackground,
+          color: context.themeSurface,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -485,8 +476,8 @@ class _LoanCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     loan.personName,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.themeTextPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       letterSpacing: -0.3,
@@ -502,9 +493,6 @@ class _LoanCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.negative.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.negative.withValues(alpha: 0.35),
-                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -540,31 +528,31 @@ class _LoanCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Remaining',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: context.themeTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    _buildAmount(loan.remainingAmount),
+                    _buildAmount(context, loan.remainingAmount),
                   ],
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text(
+                    Text(
                       'Paid',
                       style: TextStyle(
-                        color: Colors.white60,
+                        color: context.themeTextSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    _buildAmount(loan.paidAmount, isRightAligned: true),
+                    _buildAmount(context, loan.paidAmount, isRightAligned: true),
                   ],
                 ),
               ],
@@ -620,34 +608,11 @@ class _LoanCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () => _showPaymentSheet(context, provider, loan),
-                    child: Container(
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.50),
-                        borderRadius: BorderRadius.circular(21),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.account_balance_wallet_outlined,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Text(
-                            'Record Payment',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  child: AppButton.primary(
+                    text: 'Record Payment',
+                    icon: Icons.account_balance_wallet_outlined,
+                    height: 42,
+                    onPressed: () => _showPaymentSheet(context, provider, loan),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -656,9 +621,9 @@ class _LoanCard extends StatelessWidget {
                   child: Container(
                     width: 42,
                     height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(12),
+                    decoration: const BoxDecoration(
+                      color: AppColors.buttonSecondary,
+                      shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.delete_outline_rounded,
@@ -694,34 +659,18 @@ class _LoanCard extends StatelessWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, FinanceProvider provider) async {
-    final confirm = await showDialog<bool>(
+  void _confirmDelete(BuildContext context, FinanceProvider provider) {
+    AppConfirmDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title:
-            const Text('Delete Loan?', style: TextStyle(color: Colors.white)),
-        content: Text(
-            'Are you sure you want to delete the loan for ${loan.personName}? All payment history will be lost.',
-            style: const TextStyle(color: AppColors.textSoft)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSoft)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete',
-                style: TextStyle(color: AppColors.negative)),
-          ),
-        ],
-      ),
+      title: 'Delete Loan?',
+      message:
+          'Are you sure you want to delete the loan for ${loan.personName}? All payment history will be lost.',
+      confirmText: 'Delete',
+      isDestructive: true,
+      onConfirm: () async {
+        await provider.deleteLoan(loan.id!);
+      },
     );
-    if (confirm == true) {
-      await provider.deleteLoan(loan.id!);
-    }
   }
 }
 
@@ -745,21 +694,24 @@ class LoanDetailScreen extends StatelessWidget {
         isLent ? AppColors.positive : AppColors.warning;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.themeBackground,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: context.themeTextPrimary),
         title: Text(
           current.personName,
-          style: const TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+          style: TextStyle(
+              color: context.themeTextPrimary, fontSize: 18, fontWeight: FontWeight.w600),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
           if (!current.isPaid) ...[
-            GestureDetector(
-              onTap: () async {
+            AppButton.pill(
+              text: 'Extend',
+              icon: Icons.event_repeat_rounded,
+              isSelected: false,
+              onPressed: () async {
                 final picked = await showDatePicker(
                   context: context,
                   initialDate: current.dueDate.isBefore(DateTime.now())
@@ -771,7 +723,7 @@ class LoanDetailScreen extends StatelessWidget {
                     data: Theme.of(ctx).copyWith(
                       colorScheme: const ColorScheme.dark(
                         primary: AppColors.positive,
-                        surface: AppColors.bgMid,
+                        surface: AppColors.surface,
                       ),
                     ),
                     child: child!,
@@ -781,29 +733,6 @@ class LoanDetailScreen extends StatelessWidget {
                   await provider.updateLoanDueDate(current.id!, picked);
                 }
               },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.event_repeat_rounded,
-                        color: Colors.white70, size: 14),
-                    SizedBox(width: 4),
-                    Text('Extend',
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(width: 8),
             Padding(
@@ -824,8 +753,6 @@ class LoanDetailScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: accentColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: accentColor.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -855,7 +782,6 @@ class LoanDetailScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.overlay.withValues(alpha: 0.45),
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               children: [
@@ -1158,7 +1084,6 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
       decoration: BoxDecoration(
         color: widget.accentColor.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: widget.accentColor.withValues(alpha: 0.2)),
       ),
       child: Column(
         children: [
@@ -1226,7 +1151,6 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
               ),
               child: SelectableText(
                 widget.rawMessage,
@@ -1260,7 +1184,6 @@ class _PaymentTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.overlay.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [
@@ -1298,30 +1221,17 @@ class _PaymentTile extends StatelessWidget {
             ),
           ),
           GestureDetector(
-            onTap: () async {
-              final confirm = await showDialog<bool>(
+            onTap: () {
+              AppConfirmDialog.show(
                 context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: AppColors.surface,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  title: const Text('Remove payment?',
-                      style: TextStyle(color: Colors.white)),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancel',
-                            style: TextStyle(color: AppColors.textSecondary))),
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Remove',
-                            style: TextStyle(color: AppColors.negative))),
-                  ],
-                ),
+                title: 'Remove payment?',
+                message: 'Are you sure you want to remove this payment record?',
+                confirmText: 'Remove',
+                isDestructive: true,
+                onConfirm: () async {
+                  await provider.deleteLoanPaymentRecord(payment.id!, loanId);
+                },
               );
-              if (confirm == true) {
-                await provider.deleteLoanPaymentRecord(payment.id!, loanId);
-              }
             },
             child: const Icon(Icons.close_rounded,
                 color: AppColors.negative, size: 16),
@@ -1537,7 +1447,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                 if (widget.prefilledType == null) ...[
                   Container(
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceCard,
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
@@ -1594,9 +1504,6 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                         decoration: BoxDecoration(
                           color: AppColors.positive.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.positive.withValues(alpha: 0.35),
-                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1656,7 +1563,6 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                     decoration: BoxDecoration(
                       color: AppColors.previewCardBg,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                     ),
                     child: Row(
                       children: [
@@ -1681,7 +1587,6 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                   decoration: BoxDecoration(
                     color: AppColors.previewCardBg,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1787,11 +1692,6 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                                         ? AppColors.positive.withValues(alpha: 0.18)
                                         : Colors.white.withValues(alpha: 0.05),
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? AppColors.positive.withValues(alpha: 0.45)
-                                          : Colors.white.withValues(alpha: 0.08),
-                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -1886,30 +1786,10 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                 const SizedBox(height: 20),
 
                 // ── Save Action Button ────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.positive,
-                      foregroundColor: Colors.black,
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                          )
-                        : const Text(
-                            'Save Loan Record',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-                          ),
-                  ),
+                AppButton.primary(
+                  text: 'Save Loan Record',
+                  isLoading: _saving,
+                  onPressed: _saving ? null : _save,
                 ),
               ],
             ),
@@ -2051,13 +1931,13 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
               fillColor: AppColors.previewCardBg,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+                  borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
+                  borderSide: BorderSide.none),
               focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.gold, width: 1.5)),
+                  borderSide: BorderSide.none),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
@@ -2145,27 +2025,13 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
           ),
           const SizedBox(height: 16),
 
-          // Confirm button
-          SizedBox(
-            width: double.infinity,
+          // Confirm button (Standardized Fully Rounded Pill)
+          AppButton.primary(
             height: 48,
-            child: ElevatedButton(
-              onPressed: _confirmSelection,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.positive,
-                foregroundColor: Colors.black,
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(
-                _selectedNames.isEmpty
-                    ? 'Done (No contact selected)'
-                    : 'Done (${_selectedNames.length} contact${_selectedNames.length > 1 ? "s" : ""} selected)',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            ),
+            onPressed: _confirmSelection,
+            text: _selectedNames.isEmpty
+                ? 'Done (No contact selected)'
+                : 'Done (${_selectedNames.length} contact${_selectedNames.length > 1 ? "s" : ""} selected)',
           ),
         ],
       ),
@@ -2195,9 +2061,6 @@ class _TypeToggle extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? activeColor.withValues(alpha: 0.15) : null,
             borderRadius: BorderRadius.circular(14),
-            border: active
-                ? Border.all(color: activeColor.withValues(alpha: 0.4))
-                : null,
           ),
           child: Center(
             child: Text(
@@ -2252,13 +2115,13 @@ class _SheetField extends StatelessWidget {
         fillColor: AppColors.previewCardBg,
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10))),
+            borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10))),
+            borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
+          borderSide: BorderSide.none,
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -2372,27 +2235,11 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
               icon: Icons.notes_rounded,
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saving ? null : _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.black, strokeWidth: 2))
-                    : const Text('Confirm Payment',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600)),
-              ),
+            AppButton.primary(
+              text: 'Confirm Payment',
+              isLoading: _saving,
+              height: 50,
+              onPressed: _saving ? null : _save,
             ),
           ],
         ),
@@ -2430,8 +2277,6 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
@@ -2492,8 +2337,6 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                       decoration: BoxDecoration(
                         color: AppColors.bgMid,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.06)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2548,8 +2391,6 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.03),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.06)),
                             ),
                             child: Row(
                               children: [
@@ -2589,8 +2430,13 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                             children: [
                               // Approve
                               Expanded(
-                                child: GestureDetector(
-                                  onTap: () async {
+                                child: AppButton.primary(
+                                  text: 'Approve',
+                                  icon: Icons.check_rounded,
+                                  height: 36,
+                                  fontSize: 12,
+                                  iconSize: 14,
+                                  onPressed: () async {
                                     await widget.provider
                                         .approveLoanRepaymentRequest(req);
                                     if (context.mounted) {
@@ -2605,38 +2451,18 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                       );
                                     }
                                   },
-                                  child: Container(
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.positive
-                                          .withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                          color: AppColors.positive
-                                              .withValues(alpha: 0.4)),
-                                    ),
-                                    child: const Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.check_rounded,
-                                            color: AppColors.positive, size: 14),
-                                        SizedBox(width: 6),
-                                        Text('Approve',
-                                            style: TextStyle(
-                                                color: AppColors.positive,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               // Reject
                               Expanded(
-                                child: GestureDetector(
-                                  onTap: () async {
+                                child: AppButton.destructive(
+                                  text: 'Reject',
+                                  icon: Icons.close_rounded,
+                                  height: 36,
+                                  fontSize: 12,
+                                  iconSize: 14,
+                                  onPressed: () async {
                                     await widget.provider
                                         .rejectLoanRepaymentRequest(req);
                                     if (context.mounted) {
@@ -2651,32 +2477,6 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                       );
                                     }
                                   },
-                                  child: Container(
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.negative
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                          color: AppColors.negative
-                                              .withValues(alpha: 0.35)),
-                                    ),
-                                    child: const Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.close_rounded,
-                                            color: AppColors.negative,
-                                            size: 14),
-                                        SizedBox(width: 6),
-                                        Text('Reject',
-                                            style: TextStyle(
-                                                color: AppColors.negative,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                  ),
                                 ),
                               ),
                             ],

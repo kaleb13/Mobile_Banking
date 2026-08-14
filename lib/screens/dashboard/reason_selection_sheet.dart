@@ -5,6 +5,7 @@ import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
+import '../../widgets/app_button.dart';
 
 class ReasonSelectionSheet extends StatefulWidget {
   final AppReason? initialReason;
@@ -141,15 +142,15 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide(color: AppColors.positive.withValues(alpha: 0.3)),
+                              borderSide: BorderSide.none,
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide(color: AppColors.positive.withValues(alpha: 0.3)),
+                              borderSide: BorderSide.none,
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(30),
-                              borderSide: const BorderSide(color: AppColors.positive),
+                              borderSide: BorderSide.none,
                             ),
                           ),
                         ),
@@ -197,8 +198,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-                          ),
+                                                      ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -262,39 +262,22 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
           ),
           const SizedBox(height: 8),
 
-          // ── Sticky Floating "Save Changes" Button ──────────────────────
+          // ── Sticky Floating "Save Changes" Button (Fully Rounded Pill) ──
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 8),
             color: AppColors.bgMid,
-            child: SizedBox(
+            child: AppButton.primary(
               height: 48,
-              child: ElevatedButton(
-                onPressed: () {
-                  if (_selectedReason != null) {
-                    widget.onReasonSelected(_selectedReason!);
-                  }
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.positive,
-                  foregroundColor: Colors.black,
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  _selectedReason != null
-                      ? 'Save Changes (${_selectedReason!.name})'
-                      : 'Save Changes',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
+              text: _selectedReason != null
+                  ? 'Save Changes (${_selectedReason!.name})'
+                  : 'Save Changes',
+              onPressed: () {
+                if (_selectedReason != null) {
+                  widget.onReasonSelected(_selectedReason!);
+                }
+                Navigator.pop(context);
+              },
             ),
           ),
         ],
@@ -347,12 +330,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
             ? AppColors.positive.withValues(alpha: 0.14)
             : Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isSelected
-              ? AppColors.positive.withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.04),
-        ),
-      ),
+              ),
       child: ListTile(
         dense: true,
         visualDensity: VisualDensity.compact,
@@ -429,12 +407,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
             ? AppColors.positive.withValues(alpha: 0.08)
             : Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isCategorySelected
-              ? AppColors.positive.withValues(alpha: 0.3)
-              : Colors.white.withValues(alpha: 0.04),
-        ),
-      ),
+              ),
       child: Column(
         children: [
           ListTile(
@@ -588,20 +561,20 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                     );
                   }),
                   const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        // Open Category Management screen to add new subcategories
-                      },
-                      icon: const Icon(Icons.add, color: AppColors.positive, size: 14),
-                      label: Text(
-                        'Add Subcategory under ${category.name}',
-                        style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppButton.secondary(
+                        icon: Icons.add,
+                        text: 'Add Subcategory',
+                        fullWidth: false,
+                        height: 34,
+                        fontSize: 12,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

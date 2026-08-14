@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-
+import '../theme/app_theme.dart';
 import '../models/app_currency.dart';
 import '../models/sender.dart';
 import '../models/transaction.dart';
@@ -80,6 +80,18 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   AppCurrency get currentCurrency => _currentCurrency;
 
+  AppThemeMode _currentThemeMode = AppThemeMode.hybrid;
+  AppThemeMode get currentThemeMode => _currentThemeMode;
+
+  Future<void> setThemeMode(AppThemeMode mode) async {
+    _currentThemeMode = mode;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('app_theme_mode', mode.name);
+    } catch (_) {}
+  }
+
   Future<void> setCurrency(String code) async {
     _currentCurrency = AppCurrency.fromCode(code);
     notifyListeners();
@@ -118,8 +130,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// [initialOnboardingComplete] should be read from SharedPreferences in
   /// main() BEFORE runApp() so the first frame is always correct.
-  FinanceProvider({bool initialOnboardingComplete = false})
-      : _isOnboardingComplete = initialOnboardingComplete;
+  FinanceProvider({
+    bool initialOnboardingComplete = false,
+    AppThemeMode initialThemeMode = AppThemeMode.hybrid,
+  })  : _isOnboardingComplete = initialOnboardingComplete,
+        _currentThemeMode = initialThemeMode;
 
   String? get userName => _userName;
 

@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/expense_definition.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import 'add_edit_expense_definition_screen.dart';
 
 class ExpenseDefinitionsScreen extends StatelessWidget {
@@ -106,8 +108,6 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.02)),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
@@ -274,48 +274,20 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                               color: AppColors.negative,
                                               size: 18),
                                           onPressed: () {
-                                            showDialog(
-                                                context: context,
-                                                builder: (c) => AlertDialog(
-                                                      backgroundColor:
-                                                          AppColors.surfaceCard,
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          20)),
-                                                      title: const Text(
-                                                          'Delete Template',
-                                                          style: TextStyle(
-                                                              color: Colors
-                                                                  .white)),
-                                                      content: Text(
-                                                          'Are you sure you want to delete "${def.name}"?',
-                                                          style: const TextStyle(
-                                                              color: AppColors.textSecondary)),
-                                                      actions: [
-                                                        TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.pop(
-                                                                    c),
-                                                            child: const Text(
-                                                                'Cancel',
-                                                                style: TextStyle(
-                                                                    color: AppColors.textSecondary))),
-                                                        TextButton(
-                                                            onPressed: () {
-                                                              provider
-                                                                  .deleteExpenseDefinition(
-                                                                      def.id!);
-                                                              Navigator.pop(c);
-                                                            },
-                                                             child: const Text(
-                                                                'Delete',
-                                                                style: TextStyle(
-                                                                    color: AppColors.negative))),
-                                                      ],
-                                                    ));
+                                            AppConfirmDialog.show(
+                                              context: context,
+                                              title: 'Delete Template',
+                                              icon: Icons.delete_outline_rounded,
+                                              iconColor: AppColors.negative,
+                                              message:
+                                                  'Are you sure you want to delete "${def.name}"?',
+                                              confirmText: 'Delete',
+                                              cancelText: 'Cancel',
+                                              isDestructive: true,
+                                              onConfirm: () {
+                                                provider.deleteExpenseDefinition(def.id!);
+                                              },
+                                            );
                                           },
                                         ),
                                       ],
@@ -334,49 +306,21 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
             ],
           ),
         ),
-        bottomNavigationBar: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-          child: Row(
-            children: [
-              AppBackButton(onPressed: () => Navigator.pop(context)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          const AddEditExpenseDefinitionScreen(),
-                    ),
-                  ),
-                  child: Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppColors.gold.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                          color: AppColors.gold.withValues(alpha: 0.35)),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_rounded,
-                            color: AppColors.gold, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Add Definition',
-                          style: TextStyle(
-                            color: AppColors.gold,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: AppButton.primary(
+              text: 'Add Definition',
+              icon: Icons.add_rounded,
+              height: 50,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      const AddEditExpenseDefinitionScreen(),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
