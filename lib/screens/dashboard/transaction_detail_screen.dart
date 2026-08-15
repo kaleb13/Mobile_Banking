@@ -54,12 +54,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Future<void> _showReasonPicker(
       BuildContext context, FinanceProvider provider) async {
+    final currentTx = provider.transactions
+        .where((t) => t.id == widget.transaction.id)
+        .firstOrNull ?? widget.transaction;
+
     AppReason? initial = _selectedReason;
-    if (initial == null && widget.transaction.resolvedReason != null) {
+    if (initial == null && currentTx.resolvedReason != null) {
       initial = provider.reasons
           .where((r) =>
               r.name.toLowerCase() ==
-              widget.transaction.resolvedReason!.toLowerCase())
+              currentTx.resolvedReason!.toLowerCase())
           .firstOrNull;
     }
 
@@ -95,49 +99,55 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     if (!mounted || !context.mounted) return;
 
-    // ── Always trigger the follow-up modal for special reasons, regardless
-    //    of whether the reason changed — the user explicitly selected it.
+    final latestTx = provider.transactions
+        .where((t) => t.id == widget.transaction.id)
+        .firstOrNull ?? widget.transaction;
+
     final chosenName = chosen!.name.trim().toLowerCase();
 
     if (chosenName == 'loan' || chosenName.contains('loan')) {
-      if (!mounted || !context.mounted) return;
-      final shouldCreate = await AppConfirmDialog.show(
-        context: context,
-        title: 'Create Loan Record?',
-        icon: Icons.handshake_outlined,
-        iconColor: AppColors.positive,
-        message:
-            'This transaction (${NumberFormat("#,##0.00").format(widget.transaction.amount)} ETB) was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?',
-        confirmText: 'Create Loan',
-        cancelText: 'Skip',
-        onConfirm: () {},
-      );
-
-      if (shouldCreate == true && mounted && context.mounted) {
-        await showModalBottomSheet(
+      final existingLoan = provider.loanRecords
+          .where((l) => l.linkedTransactionId == latestTx.id)
+          .firstOrNull;
+      if (existingLoan == null && mounted && context.mounted) {
+        final shouldCreate = await AppConfirmDialog.show(
           context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => AddLoanSheet(
-            provider: provider,
-            linkedTransactionId: widget.transaction.id,
-            prefilledAmount: widget.transaction.amount,
-            prefilledName: widget.transaction.sender,
-            prefilledTrackedSender: widget.transaction.sender,
-            prefilledType:
-                widget.transaction.type == 'expense' ? 'lent' : 'borrowed',
-          ),
+          title: 'Create Loan Record?',
+          icon: Icons.handshake_outlined,
+          iconColor: AppColors.positive,
+          message:
+              'This transaction (${NumberFormat("#,##0.00").format(latestTx.amount)} ETB) was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?',
+          confirmText: 'Create Loan',
+          cancelText: 'Skip',
+          onConfirm: () {},
         );
+
+        if (shouldCreate == true && mounted && context.mounted) {
+          await showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => AddLoanSheet(
+              provider: provider,
+              linkedTransactionId: latestTx.id,
+              prefilledAmount: latestTx.amount,
+              prefilledName: latestTx.sender,
+              prefilledTrackedSender: latestTx.sender,
+              prefilledType:
+                  latestTx.type == 'expense' ? 'lent' : 'borrowed',
+            ),
+          );
+        }
       }
     } else if (chosenName == 'internal transfer') {
       if (!context.mounted) return;
-      if (widget.transaction.linkedTransactionId == null) {
+      if (latestTx.linkedTransactionId == null) {
         await showModalBottomSheet(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (_) => InternalTransferPickerSheet(
-            sourceTransaction: widget.transaction,
+            sourceTransaction: latestTx,
             provider: provider,
           ),
         );
@@ -157,7 +167,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           onConfirm: () {},
         );
         if (shouldUnlink == true && context.mounted) {
-          await provider.unlinkInternalTransfer(widget.transaction.id!);
+          await provider.unlinkInternalTransfer(latestTx.id!);
           if (context.mounted) {
             messenger.showSnackBar(
               const SnackBar(
@@ -173,7 +183,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Future<void> _save(FinanceProvider provider) async {
-    if (widget.transaction.id == null) return;
+    final currentTx = provider.transactions
+        .where((t) => t.id == widget.transaction.id)
+        .firstOrNull ?? widget.transaction;
+    if (currentTx.id == null) return;
 
     final noteText = _noteController.text.trim();
     bool changesMade = false;
@@ -182,16 +195,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final isSub = _selectedReason!.isSubcategory;
       final isTop = _selectedReason!.isTopLevelCategory;
       await provider.updateTransactionReason(
-        widget.transaction.id!,
+        currentTx.id!,
         reasonId: _selectedReason!.id,
         categoryId: isSub ? _selectedReason!.parentId : (isTop ? _selectedReason!.id : null),
         subcategoryId: isSub ? _selectedReason!.id : null,
         note: noteText.isNotEmpty ? noteText : null,
       );
       changesMade = true;
-    } else if (noteText != (widget.transaction.note ?? '')) {
+    } else if (noteText != (currentTx.note ?? '')) {
       await provider.updateTransactionNote(
-        widget.transaction.id!,
+        currentTx.id!,
         noteText.isNotEmpty ? noteText : null,
       );
       changesMade = true;
@@ -327,29 +340,33 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    final bool isIncome = widget.transaction.type == 'income';
+    final currentTx = provider.transactions
+        .where((t) => t.id == widget.transaction.id)
+        .firstOrNull ?? widget.transaction;
+
+    final bool isIncome = currentTx.type == 'income';
     final sign = isIncome ? '+' : '-';
     final amountColor = isIncome ? AppColors.positive : AppColors.negative;
 
     // Resolved current label to show in the chip
     final String? currentLabel =
-        _selectedReason?.name ?? widget.transaction.resolvedReason;
+        _selectedReason?.name ?? currentTx.resolvedReason;
 
     final int? activeReasonId =
-        _selectedReason?.id ?? widget.transaction.reasonId;
+        _selectedReason?.id ?? currentTx.reasonId;
 
     // Find linked loan if any
     LoanRecord? linkedLoan;
     try {
       linkedLoan = provider.loanRecords.firstWhere(
-        (l) => l.linkedTransactionId == widget.transaction.id,
+        (l) => l.linkedTransactionId == currentTx.id,
       );
     } catch (_) {
       linkedLoan = null;
     }
 
     // True if this transaction is auto-locked (Telebirr credit/repayment)
-    final bool isAutoLocked = widget.transaction.isReasonLocked;
+    final bool isAutoLocked = currentTx.isReasonLocked;
     // True if reason editing is blocked by any lock (linked loan OR auto-lock)
     final bool isReasonBlocked = linkedLoan != null || isAutoLocked;
 
@@ -358,7 +375,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final links = provider.linksForReason(activeReasonId);
       final idx = links.indexWhere((l) =>
           l.linkedName.toLowerCase() ==
-          widget.transaction.sender.toLowerCase());
+          currentTx.sender.toLowerCase());
       if (idx != -1) activeLink = links[idx];
     }
 
@@ -367,7 +384,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       'loan', 'bounce', 'internal transfer', 'cash'
     };
     final activeReasonName = (_selectedReason?.name ??
-            widget.transaction.resolvedReason ??
+            currentTx.resolvedReason ??
             '')
         .trim()
         .toLowerCase();
@@ -533,17 +550,24 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                         const SizedBox(height: 18),
 
-                        // ── 1. LOAN TRACKING / CREATE LOAN CARD (TOP MOST) ──────────────────────
+                        // ── 1. LOAN TRACKING / CREATE LOAN / INTERNAL TRANSFER CARD (TOP MOST) ──
                         if (linkedLoan != null) ...[
                           _buildLoanTrackingCard(context, linkedLoan, provider),
                           const SizedBox(height: 14),
                         ] else if (currentLabel?.toLowerCase().contains('loan') == true) ...[
-                          _buildCreateLoanCard(context, provider),
+                          _buildCreateLoanCard(context, provider, currentTx),
                           const SizedBox(height: 14),
-                        ] else if (widget.transaction.linkedTransactionId != null) ...[
-                          _buildInternalTransferCard(context, provider),
+                        ] else if (currentLabel?.toLowerCase().contains('internal transfer') == true) ...[
+                          if (currentTx.linkedTransactionId != null) ...[
+                            _buildInternalTransferCard(context, provider, currentTx),
+                          ] else ...[
+                            _buildLinkInternalTransferCard(context, provider, currentTx),
+                          ],
                           const SizedBox(height: 14),
-                        ] else if ((currentLabel?.toLowerCase() == 'cash' || widget.transaction.reason?.toLowerCase() == 'cash') && widget.transaction.type == 'expense') ...[
+                        ] else if (currentTx.linkedTransactionId != null) ...[
+                          _buildInternalTransferCard(context, provider, currentTx),
+                          const SizedBox(height: 14),
+                        ] else if ((currentLabel?.toLowerCase() == 'cash' || currentTx.reason?.toLowerCase() == 'cash') && currentTx.type == 'expense') ...[
                           _buildCashSpendingBreakdownCard(context, provider),
                           const SizedBox(height: 14),
                         ],
@@ -1890,7 +1914,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCreateLoanCard(
-      BuildContext context, FinanceProvider provider) {
+      BuildContext context, FinanceProvider provider, AppTransaction tx) {
     return GestureDetector(
       onTap: () {
         showModalBottomSheet(
@@ -1899,12 +1923,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           backgroundColor: Colors.transparent,
           builder: (_) => AddLoanSheet(
             provider: provider,
-            linkedTransactionId: widget.transaction.id,
-            prefilledAmount: widget.transaction.amount,
-            prefilledName: widget.transaction.sender,
-            prefilledTrackedSender: widget.transaction.sender,
+            linkedTransactionId: tx.id,
+            prefilledAmount: tx.amount,
+            prefilledName: tx.sender,
+            prefilledTrackedSender: tx.sender,
             prefilledType:
-                widget.transaction.type == 'expense' ? 'lent' : 'borrowed',
+                tx.type == 'expense' ? 'lent' : 'borrowed',
           ),
         );
       },
@@ -1912,7 +1936,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 20),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface, // Color(0xFF111821)
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -1963,12 +1987,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   backgroundColor: Colors.transparent,
                   builder: (_) => AddLoanSheet(
                     provider: provider,
-                    linkedTransactionId: widget.transaction.id,
-                    prefilledAmount: widget.transaction.amount,
-                    prefilledName: widget.transaction.sender,
-                    prefilledTrackedSender: widget.transaction.sender,
+                    linkedTransactionId: tx.id,
+                    prefilledAmount: tx.amount,
+                    prefilledName: tx.sender,
+                    prefilledTrackedSender: tx.sender,
                     prefilledType:
-                        widget.transaction.type == 'expense' ? 'lent' : 'borrowed',
+                        tx.type == 'expense' ? 'lent' : 'borrowed',
                   ),
                 );
               },
@@ -1979,27 +2003,94 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
+  void _openInternalTransferPicker(
+      BuildContext context, FinanceProvider provider, AppTransaction tx) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => InternalTransferPickerSheet(
+        sourceTransaction: tx,
+        provider: provider,
+      ),
+    );
+  }
+
+  Widget _buildLinkInternalTransferCard(
+      BuildContext context, FinanceProvider provider, AppTransaction tx) {
+    return GestureDetector(
+      onTap: () => _openInternalTransferPicker(context, provider, tx),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.positive.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.sync_alt,
+                  color: AppColors.positive, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Link Internal Transfer',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Tap to link matching transfer between accounts',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AppButton.primary(
+              text: 'Link',
+              fullWidth: false,
+              height: 32,
+              fontSize: 11,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              onPressed: () =>
+                  _openInternalTransferPicker(context, provider, tx),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInternalTransferCard(
-      BuildContext context, FinanceProvider provider) {
+      BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
     AppTransaction? linkedTx;
     try {
       linkedTx = provider.transactions
-          .firstWhere((t) => t.id == widget.transaction.linkedTransactionId);
+          .firstWhere((t) => t.id == currentTx.linkedTransactionId);
     } catch (_) {}
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface, // Color(0xFF111821)
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.positive.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2041,10 +2132,46 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ],
                 ),
               ),
+              AppButton.destructive(
+                text: 'Unlink',
+                icon: Icons.link_off_rounded,
+                fullWidth: false,
+                height: 28,
+                fontSize: 10.5,
+                iconSize: 12,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final shouldUnlink = await AppConfirmDialog.show(
+                    context: context,
+                    title: 'Unlink Transfer?',
+                    icon: Icons.link_off_rounded,
+                    iconColor: AppColors.negative,
+                    message:
+                        'Are you sure you want to unlink this internal transfer?',
+                    confirmText: 'Unlink',
+                    cancelText: 'Cancel',
+                    isDestructive: true,
+                    onConfirm: () {},
+                  );
+                  if (shouldUnlink == true && context.mounted) {
+                    await provider.unlinkInternalTransfer(currentTx.id!);
+                    if (context.mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Internal transfer unlinked'),
+                          backgroundColor: AppColors.negative,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
             ],
           ),
           if (linkedTx != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -2063,391 +2190,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
           ]
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-//  Reason picker bottom sheet
-// ─────────────────────────────────────────────────────────
-class _ReasonPickerSheet extends StatefulWidget {
-  final FinanceProvider provider;
-  final AppReason? initialReason;
-  final ValueChanged<AppReason> onSave;
-
-  const _ReasonPickerSheet({
-    required this.provider,
-    required this.initialReason,
-    required this.onSave,
-  });
-
-  @override
-  State<_ReasonPickerSheet> createState() => _ReasonPickerSheetState();
-}
-
-class _ReasonPickerSheetState extends State<_ReasonPickerSheet> {
-  AppReason? _selectedReason;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedReason = widget.initialReason;
-  }
-
-  void _showAddReasonDialog() {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('New Reason',
-            style: TextStyle(color: AppColors.textPrimary)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: InputDecoration(
-            hintText: 'Reason name…',
-            hintStyle:
-                TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.6)),
-            filled: true,
-            fillColor: AppColors.surface.withValues(alpha: 0.1),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          AppButton.secondary(
-            text: 'Cancel',
-            fullWidth: false,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          const SizedBox(width: 8),
-          AppButton.primary(
-            text: 'Add',
-            fullWidth: false,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () async {
-              final name = ctrl.text.trim();
-              if (name.isNotEmpty) {
-                await widget.provider.addReason(name);
-                if (mounted) {
-                  final newReason = widget.provider.reasons
-                      .where((r) => r.name.toLowerCase() == name.toLowerCase())
-                      .firstOrNull;
-                  if (newReason != null) {
-                    setState(() {
-                      _selectedReason = newReason;
-                    });
-                  }
-                }
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSpecialTile(AppReason reason) {
-    bool isSelected = _selectedReason?.id == reason.id;
-    String desc = '';
-    final lower = reason.name.toLowerCase();
-    if (lower == 'bounce') {
-      desc = 'Excludes this transaction from income/expense calculations';
-    } else if (lower == 'internal transfer') {
-      desc = 'Links to another transaction to balance them out';
-    } else if (lower == 'cash') {
-      desc = 'Used for ATM withdrawals and physical cash deposits';
-    } else if (lower == 'loan' || lower.contains('loan')) {
-      desc = 'Marks this as a loan — track its repayment in Loan Manager';
-    }
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedReason = reason;
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.positive.withValues(alpha: 0.12)
-              : AppColors.surface.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.positive.withValues(alpha: 0.2)
-                    : AppColors.surface.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.star_border,
-                  color:
-                      isSelected ? AppColors.positive : AppColors.textSecondary,
-                  size: 16),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(reason.name,
-                      style: TextStyle(
-                          color: isSelected
-                              ? AppColors.positive
-                              : AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold)),
-                  if (desc.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(desc,
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 11)),
-                  ],
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle,
-                  color: AppColors.positive, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<FinanceProvider>(builder: (ctx, provider, _) {
-      final systemReasons = provider.reasons.where((r) => r.isSystem).toList();
-      final userReasons = provider.reasons.where((r) => !r.isSystem).toList();
-
-      // Special reasons: Bounce, Internal Transfer, Cash, Loan
-      const specialNames = {'bounce', 'internal transfer', 'cash', 'loan'};
-      bool isSpecial(AppReason r) =>
-          specialNames.contains(r.name.trim().toLowerCase()) ||
-          r.name.trim().toLowerCase().contains('loan');
-
-      final normalSystem = systemReasons
-          .where((r) => !isSpecial(r))
-          .toList();
-      final specialSystem = systemReasons
-          .where((r) => isSpecial(r))
-          .toList();
-
-      return Container(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          12,
-          20,
-          MediaQuery.of(context).padding.bottom + 16,
-        ),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Top Drag Handle
-            Center(
-              child: InteractiveDragHandle(
-                color: AppColors.textSecondary.withValues(alpha: 0.4),
-                onTap: () => Navigator.pop(ctx),
-                onVerticalDragUpdate: (details) {
-                  if ((details.primaryDelta ?? 0) > 3) {
-                    Navigator.pop(ctx);
-                  }
-                },
-                padding: const EdgeInsets.only(bottom: 12),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  const Text('Select Reason',
-                      style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close,
-                        color: AppColors.textSecondary, size: 20),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (normalSystem.isNotEmpty) ...[
-                      _sectionLabel('System Categories'),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: normalSystem
-                            .map((r) => _ReasonChip(
-                                  reason: r,
-                                  isSelected: _selectedReason?.id == r.id,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedReason = r;
-                                    });
-                                  },
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    if (specialSystem.isNotEmpty) ...[
-                      _sectionLabel('Special Reasons'),
-                      const SizedBox(height: 8),
-                      ...specialSystem
-                          .map((r) => _buildSpecialTile(r)),
-                      const SizedBox(height: 12),
-                    ],
-                    // My Reasons
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _sectionLabel('My Reasons'),
-                        const Spacer(),
-                        GestureDetector(
-                            onTap: _showAddReasonDialog,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppColors.positive
-                                    .withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.add,
-                                  size: 16, color: AppColors.positive),
-                            )),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    if (userReasons.isNotEmpty)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: userReasons
-                            .map((r) => _ReasonChip(
-                                  reason: r,
-                                  isSelected: _selectedReason?.id == r.id,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedReason = r;
-                                    });
-                                  },
-                                ))
-                            .toList(),
-                      )
-                    else
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('No custom reasons yet.',
-                            style: TextStyle(
-                                color: AppColors.textSecondary, fontSize: 12)),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Primary Action Button (Standardized Fully Rounded AppButton)
-            AppButton.primary(
-              text: 'Save Changes',
-              height: 52,
-              onPressed: _selectedReason == null
-                  ? null
-                  : () {
-                      widget.onSave(_selectedReason!);
-                    },
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
-  Widget _sectionLabel(String label) => Padding(
-        padding: const EdgeInsets.only(bottom: 2),
-        child: Text(label,
-            style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5)),
-      );
-}
-
-class _ReasonChip extends StatelessWidget {
-  final AppReason reason;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ReasonChip({
-    required this.reason,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.positive.withValues(alpha: 0.15)
-              : AppColors.surface.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (reason.isSystem)
-              const Icon(Icons.verified_outlined,
-                  size: 13, color: AppColors.positive),
-            if (reason.isSystem) const SizedBox(width: 4),
-            Text(reason.name,
-                style: TextStyle(
-                    color: isSelected
-                        ? AppColors.positive
-                        : AppColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
-          ],
-        ),
       ),
     );
   }

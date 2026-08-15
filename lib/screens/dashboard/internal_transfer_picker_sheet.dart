@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
@@ -110,11 +110,11 @@ class InternalTransferPickerSheet extends StatelessWidget {
                             Navigator.pop(context); // close sheet
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Internal transfer linked!'),
-                                backgroundColor: AppColors.gold,
+                                content: Text('Internal transfer linked! ✓'),
+                                backgroundColor: AppColors.positive,
+                                behavior: SnackBarBehavior.floating,
                               ),
                             );
-                            Navigator.pop(context); // close detail screen
                           }
                         },
                         leading: CircleAvatar(

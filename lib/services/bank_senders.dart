@@ -57,6 +57,12 @@ class BankSenders {
     if (lower.contains('otp code')) return true;
     if (lower.contains('otp is')) return true;
     if (lower.contains('your otp')) return true;
+    if (lower.contains('otp:')) return true;
+    if (lower.contains('passcode')) return true;
+    if (lower.contains('secret code')) return true;
+    if (lower.contains('login code')) return true;
+    if (lower.contains('activation code')) return true;
+    if (lower.contains('confirmation code')) return true;
 
     // ── PIN / password failure messages ──────────────────────────────────────
     if (lower.contains('pin or password is incorrect')) return true;
@@ -68,14 +74,33 @@ class BankSenders {
     if (lower.contains('wrong password')) return true;
     if (lower.contains('pin is incorrect')) return true;
     if (lower.contains('password is incorrect')) return true;
+    if (lower.contains('pin locked') || lower.contains('password locked')) return true;
+    if (lower.contains('account has been locked') || lower.contains('account locked')) return true;
 
-    // ── Reset / change requests ───────────────────────────────────────────────
+    // ── Reset / change / credential delivery requests ─────────────────────────
     if (lower.contains('pin reset')) return true;
     if (lower.contains('password reset')) return true;
     if (lower.contains('reset your pin')) return true;
     if (lower.contains('reset your password')) return true;
     if (lower.contains('change your pin')) return true;
     if (lower.contains('change your password')) return true;
+    if (lower.contains('pin changed') || lower.contains('password changed')) return true;
+    if (lower.contains('temporary pin') || lower.contains('temporary password')) return true;
+    if (lower.contains('initial pin') || lower.contains('initial password')) return true;
+    if (lower.contains('your pin is') || lower.contains('your password is')) return true;
+
+    // ── Security warnings with PIN / code context ────────────────────────────
+    if ((lower.contains('do not share') ||
+            lower.contains('never share') ||
+            lower.contains('do not disclose') ||
+            lower.contains('keep it confidential') ||
+            lower.contains('keep it secret')) &&
+        (lower.contains('pin') ||
+            lower.contains('otp') ||
+            lower.contains('password') ||
+            lower.contains('code'))) {
+      return true;
+    }
 
     // ── Auth codes — only when paired with OTP/auth context ──────────────────
     if (lower.contains('auth code')) return true;
@@ -86,7 +111,7 @@ class BankSenders {
     }
     // "access code" / "security code" — only when paired with OTP context
     if ((lower.contains('access code') || lower.contains('security code')) &&
-        (lower.contains('use') || lower.contains('enter') || lower.contains('otp'))) {
+        (lower.contains('use') || lower.contains('enter') || lower.contains('otp') || lower.contains('code'))) {
       return true;
     }
 
