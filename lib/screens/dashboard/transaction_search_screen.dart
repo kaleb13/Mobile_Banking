@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_search_bar.dart';
+import '../../widgets/app_dropdown.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -145,72 +147,42 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   }
 
   Widget _buildSearchHeader(BuildContext context) {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Container(
-        height: 46,
-        decoration: BoxDecoration(
-          color: AppColors.overlay,
-          borderRadius: BorderRadius.circular(23),
-                  ),
-        child: Row(
-          children: [
-            const SizedBox(width: 16),
-            const Icon(Icons.search_rounded,
-                color: AppColors.textSoft, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Search by sender, bank, or reason...',
-                  hintStyle: const TextStyle(
-                      color: AppColors.textSoft,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                  suffixIconConstraints: const BoxConstraints(
-                    minHeight: 24,
-                    minWidth: 24,
-                  ),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _searchQuery = '';
-                              _searchController.clear();
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 12.0),
-                            child: Icon(Icons.cancel_rounded,
-                                color: Colors.white.withValues(alpha: 0.3),
-                                size: 18),
-                          ),
-                        )
-                      : null,
-                ),
-                onChanged: (val) {
-                  setState(() {
-                    _searchQuery = val;
-                  });
-                },
-              ),
+      child: AppSearchBar(
+        mode: AppSearchBarMode.bar,
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        autofocus: true,
+        hint: 'Search by sender, bank, or reason...',
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val;
+          });
+        },
+        onClear: () {
+          setState(() {
+            _searchQuery = '';
+          });
+        },
+        trailing: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4.0),
+            child: Icon(
+              Icons.close_rounded,
+              color: Colors.white,
+              size: 20,
             ),
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close_rounded,
-                  color: Colors.white, size: 20),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
-            const SizedBox(width: 14),
-          ],
+          ),
         ),
+        backgroundColor: AppColors.surfaceElevated,
+        textColor: Colors.white,
+        hintColor: AppColors.textSoft,
+        iconColor: AppColors.textSoft,
+        height: 46,
+        borderRadius: 23,
       ),
     );
   }
@@ -268,47 +240,13 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     required ValueChanged<String?> onChanged,
     double? maxWidth,
   }) {
-    final bool isDefault = value == 'All' ||
-        value == 'Any Time' ||
-        value == 'All Senders' ||
-        value == 'All Banks';
-
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: isDefault
-            ? Colors.transparent
-            : Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-              ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          icon: Padding(
-            padding: const EdgeInsets.only(left: 4.0),
-            child: Icon(Icons.unfold_more_rounded,
-                color: isDefault ? AppColors.textSoft : Colors.white,
-                size: 16),
-          ),
-          dropdownColor: AppColors.overlay,
-          style: TextStyle(
-            color: isDefault ? AppColors.textSoft : Colors.white,
-            fontSize: 12,
-            fontWeight: isDefault ? FontWeight.w500 : FontWeight.w600,
-          ),
-          onChanged: onChanged,
-          items: items.map((String item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth ?? 150),
-                child: Text(item, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
+    return AppDropdown.simple(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.dark,
+      maxWidth: maxWidth,
+      icon: Icons.unfold_more_rounded,
     );
   }
 
@@ -369,7 +307,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.overlay.withValues(alpha: 0.4),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -439,7 +377,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
     } else if (nameUp.contains('AHADU')) {
       img =
-          Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
+          SvgPicture.asset('assets/images/Ahadu_Logo.svg', width: 22, height: 22, fit: BoxFit.contain);
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       img =
           SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 22, height: 22, fit: BoxFit.contain);

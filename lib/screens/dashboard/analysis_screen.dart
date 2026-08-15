@@ -9,11 +9,13 @@ import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
-import '../../widgets/app_button.dart';
+import '../../widgets/app_dropdown.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/daily_net_heatmap_widget.dart';
-import 'all_transactions_screen.dart';
+import '../../widgets/custom_progress_bar.dart';
+import 'category_detail_screen.dart';
+import 'reason_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
 enum PeriodFilter { day, week, month, quarter, year }
@@ -32,7 +34,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   int _selectedSubPeriodIndex = 0;
   late PageController _subPeriodScrollController;
 
-  DateTime _selectedHeatmapMonth = DateTime.now();
   DateTime? _selectedHeatmapDay;
 
   int? _selectedArcIndex;
@@ -46,6 +47,40 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // Track previous category state for seamless morphing transitions
   List<CategoryArcItem> _previousCategories = [];
   double _previousTotal = 0.0;
+
+  DateTime _getSynchronizedTargetDate() {
+    final now = DateTime.now();
+    switch (_selectedPeriod) {
+      case PeriodFilter.day:
+        return now.subtract(Duration(days: 13 - _selectedSubPeriodIndex));
+      case PeriodFilter.week:
+        final subItems = _getSubPeriodItems();
+        final int weeksOffset = (subItems.length - 1) - _selectedSubPeriodIndex;
+        final currentMonday = now.subtract(Duration(days: now.weekday - 1));
+        return DateTime(currentMonday.year, currentMonday.month, currentMonday.day)
+            .subtract(Duration(days: 7 * weeksOffset));
+      case PeriodFilter.month:
+        return DateTime(now.year, _selectedSubPeriodIndex + 1, 1);
+      case PeriodFilter.quarter:
+        final startMonth = (_selectedSubPeriodIndex * 3) + 1;
+        return DateTime(now.year, startMonth, 1);
+      case PeriodFilter.year:
+        final targetYear = now.year - (2 - _selectedSubPeriodIndex);
+        return DateTime(targetYear, 1, 1);
+    }
+  }
+
+  DateTimeRange? _getSynchronizedWeekRange() {
+    if (_selectedPeriod != PeriodFilter.week) return null;
+    final now = DateTime.now();
+    final subItems = _getSubPeriodItems();
+    final int weeksOffset = (subItems.length - 1) - _selectedSubPeriodIndex;
+    final currentMonday = now.subtract(Duration(days: now.weekday - 1));
+    final targetMonday = DateTime(currentMonday.year, currentMonday.month, currentMonday.day)
+        .subtract(Duration(days: 7 * weeksOffset));
+    final targetSunday = targetMonday.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+    return DateTimeRange(start: targetMonday, end: targetSunday);
+  }
 
   @override
   void initState() {
@@ -158,6 +193,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (_selectedPeriod == period) return;
     _changeFilter(() {
       _selectedPeriod = period;
+      _selectedHeatmapDay = null;
       _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(period);
       if (_subPeriodScrollController.hasClients) {
         _subPeriodScrollController.jumpToPage(_selectedSubPeriodIndex);
@@ -169,6 +205,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (_selectedSubPeriodIndex == index) return;
     _changeFilter(() {
       _selectedSubPeriodIndex = index;
+      _selectedHeatmapDay = null;
     });
   }
 
@@ -321,22 +358,29 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        final parentReason = provider.resolveTopLevelCategory(
-          reasonId: tx.reasonId,
-          reasonName: tx.reasonName ?? tx.description,
-        );
-        final String categoryLabel;
-        if (parentReason != null) {
-          categoryLabel = parentReason.name;
-        } else {
-          final rawCat = tx.reasonName ?? tx.description ?? 'Other';
-          categoryLabel = _normalizeCategoryName(rawCat);
-        }
-
         if (tx.type == 'expense') {
+          final parentReason = provider.resolveTopLevelCategory(
+            reasonId: tx.reasonId,
+            reasonName: tx.reasonName ?? tx.description,
+          );
+          final String categoryLabel;
+          if (parentReason != null) {
+            categoryLabel = parentReason.name;
+          } else {
+            final rawCat = tx.reasonName ?? tx.description ?? 'Other';
+            categoryLabel = _normalizeCategoryName(rawCat);
+          }
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
         } else if (tx.type == 'addition') {
-          categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
+          // Only add to category income if it has an explicit reason (not generic wallet add)
+          if (tx.reasonId != null || (tx.reasonName != null && tx.reasonName!.isNotEmpty)) {
+            final parentReason = provider.resolveTopLevelCategory(
+              reasonId: tx.reasonId,
+              reasonName: tx.reasonName,
+            );
+            final categoryLabel = parentReason?.name ?? _normalizeCategoryName(tx.reasonName!);
+            categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
+          }
         }
       }
     } else {
@@ -377,7 +421,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           }
           if (tx.type == 'expense') {
             categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
-          } else if (tx.type == 'addition') {
+          } else if (tx.type == 'addition' && tx.reasonId != null) {
             categoryIncome[subName] = (categoryIncome[subName] ?? 0) + tx.amount;
           }
         }
@@ -727,17 +771,38 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       DailyNetHeatmapWidget(
                         bankTransactions: provider.transactions,
                         cashTransactions: provider.cashTransactions,
-                        selectedMonth: _selectedHeatmapMonth,
-                        onMonthChanged: (newMonth) {
-                          _changeFilter(() {
-                            _selectedHeatmapMonth = newMonth;
-                            _selectedHeatmapDay = null;
-                          });
-                        },
+                        periodType: HeatmapPeriodType.values[_selectedPeriod.index],
+                        selectedDate: _getSynchronizedTargetDate(),
+                        highlightedWeekRange: _getSynchronizedWeekRange(),
+                        selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
+                        selectedYear: _selectedPeriod == PeriodFilter.year
+                            ? (DateTime.now().year - (2 - _selectedSubPeriodIndex))
+                            : DateTime.now().year,
                         selectedDay: _selectedHeatmapDay,
                         onDaySelected: (day) {
                           _changeFilter(() {
-                            _selectedHeatmapDay = day;
+                            if (day != null && _selectedPeriod == PeriodFilter.day) {
+                              final now = DateTime.now();
+                              final diff = now.difference(day).inDays;
+                              if (diff >= 0 && diff < 14) {
+                                _selectedSubPeriodIndex = 13 - diff;
+                                if (_subPeriodScrollController.hasClients) {
+                                  _subPeriodScrollController.jumpToPage(_selectedSubPeriodIndex);
+                                }
+                              }
+                            } else {
+                              _selectedHeatmapDay = day;
+                            }
+                          });
+                        },
+                        onMonthSelected: (monthIndex) {
+                          _changeFilter(() {
+                            _selectedPeriod = PeriodFilter.month;
+                            _selectedSubPeriodIndex = monthIndex;
+                            _selectedHeatmapDay = null;
+                            if (_subPeriodScrollController.hasClients) {
+                              _subPeriodScrollController.jumpToPage(monthIndex);
+                            }
                           });
                         },
                         isBalanceVisible: provider.isBalanceVisible,
@@ -859,16 +924,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   // ── 2. Full-Width Period Filter Row & Redesigned Dropdown Menu ────────────
   Widget _buildPeriodFilterRow() {
-    final periodOptions = [
-      (value: PeriodFilter.day, label: 'Day'),
-      (value: PeriodFilter.week, label: 'Week'),
-      (value: PeriodFilter.month, label: 'Month'),
-      (value: PeriodFilter.quarter, label: 'Quarter'),
-      (value: PeriodFilter.year, label: 'Year'),
-    ];
-
-    final selectedPeriodLabel = _selectedPeriod.name[0].toUpperCase() + _selectedPeriod.name.substring(1);
-
     final analysisTypeIndex = switch (_selectedAnalysisType) {
       'Expenses' => 1,
       'Income' => 2,
@@ -878,59 +933,25 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // 1. Period Dropdown Menu (Left) - Month selected by default
-        Theme(
-          data: Theme.of(context).copyWith(
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
-          ),
-          child: PopupMenuButton<PeriodFilter>(
-            offset: const Offset(0, 38),
-            onSelected: (PeriodFilter value) {
-              _onPeriodChanged(value);
-            },
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-                          ),
-            color: AppColors.bgMid,
-            elevation: 10,
-            itemBuilder: (BuildContext context) {
-              return periodOptions.map((opt) {
-                final isSelected = _selectedPeriod == opt.value;
-                return PopupMenuItem<PeriodFilter>(
-                  value: opt.value,
-                  height: 42,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          opt.label,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      if (isSelected)
-                        const Icon(Icons.check_rounded, color: AppColors.positive, size: 16),
-                    ],
-                  ),
-                );
-              }).toList();
-            },
-            child: AppButton.pill(
-              text: selectedPeriodLabel,
-              trailingIcon: Icons.unfold_more_rounded,
-              isSelected: false,
-              height: 38,
-              fontSize: 11,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              onPressed: null,
-            ),
-          ),
+        // 1. Period Dropdown Menu (Left) - Uses AppDropdown
+        AppDropdown<PeriodFilter>.dark(
+          value: _selectedPeriod,
+          items: const [
+            AppDropdownItem(value: PeriodFilter.day, label: 'Day'),
+            AppDropdownItem(value: PeriodFilter.week, label: 'Week'),
+            AppDropdownItem(value: PeriodFilter.month, label: 'Month'),
+            AppDropdownItem(value: PeriodFilter.quarter, label: 'Quarter'),
+            AppDropdownItem(value: PeriodFilter.year, label: 'Year'),
+          ],
+          onChanged: (PeriodFilter? val) {
+            if (val != null) _onPeriodChanged(val);
+          },
+          height: 38,
+          borderRadius: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          backgroundColor: AppColors.surface,
+          dropdownColor: AppColors.surfaceElevated,
+          isDefault: false,
         ),
         const SizedBox(width: 10),
 
@@ -1432,7 +1453,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
         decoration: BoxDecoration(
-          color: AppColors.overlay.withValues(alpha: 0.35),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
@@ -1532,25 +1553,191 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ── 6. Redesigned Reason Analysis Section ──────────────────────────────────
+  String _getPeriodSubtitle() {
+    final subItems = _getSubPeriodItems();
+    final int subIndex =
+        _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
+    if (subIndex >= 0 && subIndex < subItems.length) {
+      return subItems[subIndex];
+    }
+    return '';
+  }
+
   Widget _buildReasonBreakdownSection(
     List<AppTransaction> filteredBankTxs,
     List<CashTransaction> filteredCashTxs,
     FinanceProvider provider,
   ) {
-    // ── Step 1: Accumulate gross expense AND same-reason income ───────────────
-    final Map<String, double> grossExpense = {};
-    final Map<String, double> sameReasonIncome = {};
+    // ── Group transactions by Top-Level Category ──────────────────────────────
+    final Map<String, _CategoryDataAccumulator> categoryMap = {};
+
+    void processBankTx(AppTransaction tx) {
+      String? categoryName;
+      AppReason? categoryReason;
+      String? subName;
+      AppReason? subReason;
+
+      if (tx.categoryId != null) {
+        final cat = provider.reasons
+            .where((r) => r.id == tx.categoryId)
+            .firstOrNull;
+        if (cat != null) {
+          categoryName = cat.name;
+          categoryReason = cat;
+        }
+      }
+
+      if (categoryName == null && tx.reasonId != null) {
+        final r = provider.reasons
+            .where((r) => r.id == tx.reasonId)
+            .firstOrNull;
+        if (r != null) {
+          if (r.isSubcategory && r.parentId != null) {
+            final p = provider.reasons
+                .where((pr) => pr.id == r.parentId)
+                .firstOrNull;
+            if (p != null) {
+              categoryName = p.name;
+              categoryReason = p;
+              subName = r.name;
+              subReason = r;
+            }
+          } else {
+            categoryName = r.name;
+            categoryReason = r;
+          }
+        }
+      }
+
+      if (categoryName == null) {
+        final raw =
+            (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
+        if (raw.isNotEmpty) {
+          final matchedReason = provider.reasons
+              .where((r) => r.name.toLowerCase() == raw.toLowerCase())
+              .firstOrNull;
+          if (matchedReason != null) {
+            if (matchedReason.isSubcategory && matchedReason.parentId != null) {
+              final p = provider.reasons
+                  .where((pr) => pr.id == matchedReason.parentId)
+                  .firstOrNull;
+              if (p != null) {
+                categoryName = p.name;
+                categoryReason = p;
+                subName = matchedReason.name;
+                subReason = matchedReason;
+              }
+            } else {
+              categoryName = matchedReason.name;
+              categoryReason = matchedReason;
+            }
+          } else {
+            categoryName = _normalizeCategoryName(raw);
+            if (raw.toLowerCase() != categoryName.toLowerCase()) {
+              subName = raw;
+            }
+          }
+        } else {
+          categoryName = 'Uncategorized';
+        }
+      }
+
+      final normalizedCat = categoryName ?? 'Uncategorized';
+      final acc = categoryMap.putIfAbsent(
+        normalizedCat,
+        () => _CategoryDataAccumulator(
+          categoryName: normalizedCat,
+          categoryReason: categoryReason,
+        ),
+      );
+
+      acc.allBankTxs.add(tx);
+
+      if (subName != null &&
+          subName.trim().isNotEmpty &&
+          subName.trim().toLowerCase() != normalizedCat.toLowerCase() &&
+          subName.trim().toLowerCase() != 'general') {
+        final sub = subName;
+        final subAcc = acc.subcategories.putIfAbsent(
+          sub,
+          () => _SubcategoryDataAccumulator(
+            name: sub,
+            reason: subReason,
+          ),
+        );
+        subAcc.bankTxs.add(tx);
+      } else {
+        acc.directBankTxs.add(tx);
+      }
+    }
+
+    void processCashTx(CashTransaction ctx) {
+      final raw = (ctx.reasonName ?? ctx.description ?? 'Other Cash').trim();
+      String? categoryName;
+      AppReason? categoryReason;
+      String? subName;
+      AppReason? subReason;
+
+      final matchedReason = provider.reasons
+          .where((r) => r.name.toLowerCase() == raw.toLowerCase())
+          .firstOrNull;
+      if (matchedReason != null) {
+        if (matchedReason.isSubcategory && matchedReason.parentId != null) {
+          final p = provider.reasons
+              .where((pr) => pr.id == matchedReason.parentId)
+              .firstOrNull;
+          if (p != null) {
+            categoryName = p.name;
+            categoryReason = p;
+            subName = matchedReason.name;
+            subReason = matchedReason;
+          }
+        } else {
+          categoryName = matchedReason.name;
+          categoryReason = matchedReason;
+        }
+      } else {
+        categoryName = _normalizeCategoryName(raw);
+        if (raw.toLowerCase() != categoryName.toLowerCase()) {
+          subName = raw;
+        }
+      }
+
+      final normalizedCat = categoryName ?? 'Other Cash';
+      final acc = categoryMap.putIfAbsent(
+        normalizedCat,
+        () => _CategoryDataAccumulator(
+          categoryName: normalizedCat,
+          categoryReason: categoryReason,
+        ),
+      );
+
+      acc.allCashTxs.add(ctx);
+
+      if (subName != null &&
+          subName.trim().isNotEmpty &&
+          subName.trim().toLowerCase() != normalizedCat.toLowerCase() &&
+          subName.trim().toLowerCase() != 'general') {
+        final sub = subName;
+        final subAcc = acc.subcategories.putIfAbsent(
+          sub,
+          () => _SubcategoryDataAccumulator(
+            name: sub,
+            reason: subReason,
+          ),
+        );
+        subAcc.cashTxs.add(ctx);
+      } else {
+        acc.directCashTxs.add(ctx);
+      }
+    }
 
     if (_selectedAnalysisType == 'Income') {
       for (var t in filteredBankTxs.where((t) => t.type == 'income')) {
-        final label = (t.resolvedReason?.isNotEmpty == true)
-            ? t.resolvedReason!
-            : (t.reason ?? t.customReasonText ?? 'Uncategorized');
-        grossExpense[label] = (grossExpense[label] ?? 0) + t.amount;
+        processBankTx(t);
       }
       for (var ctx in filteredCashTxs.where((t) => t.type == 'addition')) {
-        final label = ctx.reasonName ?? ctx.description ?? 'Other Cash';
-        grossExpense[label] = (grossExpense[label] ?? 0) + ctx.amount;
+        processCashTx(ctx);
       }
     } else {
       for (var t in filteredBankTxs.where((t) =>
@@ -1558,41 +1745,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           t.reason?.toLowerCase() != 'cash' &&
           t.customReasonText?.toLowerCase() != 'cash' &&
           t.resolvedReason?.toLowerCase() != 'cash')) {
-        final label = (t.resolvedReason?.isNotEmpty == true)
-            ? t.resolvedReason!
-            : (t.reason ?? t.customReasonText ?? 'Uncategorized');
-        grossExpense[label] = (grossExpense[label] ?? 0) + t.amount;
+        processBankTx(t);
       }
-
-      for (var t in filteredBankTxs.where((t) =>
-          t.type == 'income' &&
-          t.reason?.toLowerCase() != 'cash' &&
-          t.customReasonText?.toLowerCase() != 'cash' &&
-          t.resolvedReason?.toLowerCase() != 'cash')) {
-        final label =
-            (t.resolvedReason?.isNotEmpty == true) ? t.resolvedReason! : t.reason;
-        if (label != null && grossExpense.containsKey(label)) {
-          sameReasonIncome[label] = (sameReasonIncome[label] ?? 0) + t.amount;
-        }
-      }
-
       for (var ctx in filteredCashTxs.where((t) => t.type == 'expense')) {
-        final label = ctx.reasonName ?? ctx.description ?? 'Other Cash';
-        grossExpense[label] = (grossExpense[label] ?? 0) + ctx.amount;
+        processCashTx(ctx);
       }
     }
 
-    final Map<String, double> reasonTotals = {};
-    for (final label in grossExpense.keys) {
-      final netSpend = (grossExpense[label] ?? 0) - (sameReasonIncome[label] ?? 0);
-      if (netSpend > 0) {
-        reasonTotals[label] = netSpend;
-      } else if ((grossExpense[label] ?? 0) > 0) {
-        reasonTotals[label] = grossExpense[label]!;
-      }
-    }
-
-    if (reasonTotals.isEmpty) {
+    if (categoryMap.isEmpty) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
         decoration: BoxDecoration(
@@ -1606,7 +1766,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               Icon(Icons.analytics_outlined, color: Colors.white38, size: 18),
               SizedBox(width: 8),
               Text(
-                'No transaction reasons recorded for this period',
+                'No transaction categories recorded for this period',
                 style: TextStyle(
                   color: Colors.white54,
                   fontSize: 13,
@@ -1619,11 +1779,52 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       );
     }
 
-    final sorted = reasonTotals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final totalSum = sorted.fold<double>(0, (s, e) => s + e.value);
+    // Convert accumulator map to sorted list
+    final categoryList = categoryMap.values.map((acc) {
+      final subList = acc.subcategories.values.map((sAcc) {
+        double sTotal = 0.0;
+        for (final t in sAcc.bankTxs) {
+          sTotal += t.amount;
+        }
+        for (final ct in sAcc.cashTxs) {
+          sTotal += ct.amount;
+        }
+        return SubcategoryAnalysisItem(
+          name: sAcc.name,
+          reason: sAcc.reason,
+          totalAmount: sTotal,
+          bankTransactions: sAcc.bankTxs,
+          cashTransactions: sAcc.cashTxs,
+        );
+      }).where((s) => s.totalCount > 0).toList()
+        ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+
+      double catTotal = 0.0;
+      for (final t in acc.allBankTxs) {
+        catTotal += t.amount;
+      }
+      for (final ct in acc.allCashTxs) {
+        catTotal += ct.amount;
+      }
+
+      return (
+        categoryName: acc.categoryName,
+        categoryReason: acc.categoryReason,
+        color: _getReasonColor(acc.categoryName),
+        totalAmount: catTotal,
+        allBankTxs: acc.allBankTxs,
+        allCashTxs: acc.allCashTxs,
+        directBankTxs: acc.directBankTxs,
+        directCashTxs: acc.directCashTxs,
+        subcategories: subList,
+        totalTxCount: acc.allBankTxs.length + acc.allCashTxs.length,
+      );
+    }).where((c) => c.totalTxCount > 0).toList()
+      ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+
+    final totalSum = categoryList.fold<double>(0, (s, e) => s + e.totalAmount);
     final fmt = NumberFormat('#,##0.00');
-    final hasOffsets = sameReasonIncome.isNotEmpty;
+    final periodSubtitle = _getPeriodSubtitle();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1632,7 +1833,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Reason Analysis',
+              'Category Analysis',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -1641,7 +1842,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               ),
             ),
             Text(
-              '${sorted.length} ${sorted.length == 1 ? 'Reason' : 'Reasons'}',
+              '${categoryList.length} ${categoryList.length == 1 ? 'Category' : 'Categories'}',
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
@@ -1652,56 +1853,64 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ),
         const SizedBox(height: 14),
 
-        if (hasOffsets) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: AppColors.positive.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded,
-                    color: AppColors.positive, size: 14),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Net spending shown — income tagged with matching reasons has been offset.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        ...sorted.asMap().entries.map((entry) {
+        ...categoryList.asMap().entries.map((entry) {
           final i = entry.key;
-          final e = entry.value;
-          final pct = totalSum > 0 ? e.value / totalSum : 0.0;
-          final color = _getReasonColor(e.key);
-          final gross = grossExpense[e.key] ?? e.value;
-          final offset = sameReasonIncome[e.key] ?? 0;
+          final cat = entry.value;
+          final pct = totalSum > 0 ? cat.totalAmount / totalSum : 0.0;
+          final color = cat.color;
+          final hasSubcategories = cat.subcategories.isNotEmpty;
+
+          String subtitleText;
+          if (hasSubcategories) {
+            final subCount = cat.subcategories.length;
+            subtitleText =
+                '$subCount ${subCount == 1 ? 'subcategory' : 'subcategories'} • ${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
+          } else {
+            subtitleText =
+                '${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
+          }
 
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(16),
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AllTransactionsScreen(
-                        initialSearchQuery: e.key,
+                  if (hasSubcategories) {
+                    // Scenario 1: Category HAS subcategories -> Open CategoryDetailScreen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CategoryDetailScreen(
+                          categoryName: cat.categoryName,
+                          categoryReason: cat.categoryReason,
+                          categoryColor: color,
+                          totalAmount: cat.totalAmount,
+                          periodLabel: periodSubtitle,
+                          directBankTransactions: cat.directBankTxs,
+                          directCashTransactions: cat.directCashTxs,
+                          allBankTransactions: cat.allBankTxs,
+                          allCashTransactions: cat.allCashTxs,
+                          subcategories: cat.subcategories,
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  } else {
+                    // Scenario 2: Category has NO subcategories -> Go straight to ReasonTransactionsScreen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReasonTransactionsScreen(
+                          title: cat.categoryName,
+                          reason: cat.categoryReason,
+                          periodSubtitle: periodSubtitle,
+                          transactions: cat.allBankTxs,
+                          cashTransactions: cat.allCashTxs,
+                        ),
+                      ),
+                    );
+                  }
                 },
                 child: Container(
                   padding: const EdgeInsets.all(14),
@@ -1740,7 +1949,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               children: [
                                 Expanded(
                                   child: Text(
-                                    e.key,
+                                    cat.categoryName,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 14,
@@ -1753,13 +1962,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 const SizedBox(width: 8),
                                 provider.isBalanceVisible
                                     ? CurrencyTextWidget(
-                                        amount: e.value,
+                                        amount: cat.totalAmount,
                                         style: TextStyle(
                                           color: color,
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
                                         ),
-                                        customFormattedStr: fmt.format(e.value),
+                                        customFormattedStr:
+                                            fmt.format(cat.totalAmount),
                                       )
                                     : Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -1788,71 +1998,19 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 ),
                               ],
                             ),
-                            if (offset > 0) ...[
-                              const SizedBox(height: 3),
-                              Row(
-                                children: [
-                                  CurrencyTextWidget(
-                                    amount: gross,
-                                    style: TextStyle(
-                                      color: AppColors.negative.withValues(alpha: 0.8),
-                                      fontSize: 10,
-                                    ),
-                                    customFormattedStr: fmt.format(gross),
-                                  ),
-                                  Text(
-                                    ' out',
-                                    style: TextStyle(
-                                      color: AppColors.negative.withValues(alpha: 0.8),
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 4),
-                                    child: Text('−',
-                                        style: TextStyle(
-                                            color: Colors.white38, fontSize: 10)),
-                                  ),
-                                  CurrencyTextWidget(
-                                    amount: offset,
-                                    style: TextStyle(
-                                      color: AppColors.positive.withValues(alpha: 0.8),
-                                      fontSize: 10,
-                                    ),
-                                    customFormattedStr: fmt.format(offset),
-                                  ),
-                                  Text(
-                                    ' in',
-                                    style: TextStyle(
-                                      color: AppColors.positive.withValues(alpha: 0.8),
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 4),
-                                    child: Text('=',
-                                        style: TextStyle(
-                                            color: Colors.white38, fontSize: 10)),
-                                  ),
-                                  Text(
-                                    'net ${fmt.format(e.value)}',
-                                    style: const TextStyle(
-                                      color: Colors.white60,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitleText,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
                               ),
-                            ],
+                            ),
                             const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: LinearProgressIndicator(
-                                value: pct.clamp(0.0, 1.0),
-                                minHeight: 4,
-                                backgroundColor: Colors.white.withValues(alpha: 0.08),
-                                valueColor: AlwaysStoppedAnimation<Color>(color),
-                              ),
+                            CustomProgressBar(
+                              progress: pct,
+                              height: 10,
+                              progressColor: color,
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -1950,15 +2108,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // Clean, high-contrast monochrome progress track (no heavy colors)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: ratio,
-                      minHeight: 4,
-                      backgroundColor: AppColors.border,
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.textSoft),
-                    ),
+                  CustomProgressBar(
+                    progress: ratio,
+                    height: 10,
+                    progressColor:
+                        isPositive ? AppColors.positive : AppColors.negative,
                   ),
                 ],
               ),
@@ -2099,5 +2253,32 @@ class MorphingRingPainter extends CustomPainter {
         oldDelegate.newTotal != newTotal ||
         oldDelegate.selectedIndex != selectedIndex;
   }
+}
+
+class _CategoryDataAccumulator {
+  final String categoryName;
+  final AppReason? categoryReason;
+  final List<AppTransaction> allBankTxs = [];
+  final List<CashTransaction> allCashTxs = [];
+  final List<AppTransaction> directBankTxs = [];
+  final List<CashTransaction> directCashTxs = [];
+  final Map<String, _SubcategoryDataAccumulator> subcategories = {};
+
+  _CategoryDataAccumulator({
+    required this.categoryName,
+    this.categoryReason,
+  });
+}
+
+class _SubcategoryDataAccumulator {
+  final String name;
+  final AppReason? reason;
+  final List<AppTransaction> bankTxs = [];
+  final List<CashTransaction> cashTxs = [];
+
+  _SubcategoryDataAccumulator({
+    required this.name,
+    this.reason,
+  });
 }
 

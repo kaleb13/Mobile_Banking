@@ -6,6 +6,8 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_dropdown.dart';
 import '../dashboard/reason_selection_sheet.dart';
 
 class AddEditExpenseDefinitionScreen extends StatefulWidget {
@@ -203,10 +205,9 @@ class _AddEditExpenseDefinitionScreenState
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        showModalBottomSheet(
+                        AppBottomSheet.show(
                           context: context,
                           isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
                           builder: (context) => ReasonSelectionSheet(
                             initialReason: _selectedReason,
                             onReasonSelected: (reason) {
@@ -284,7 +285,8 @@ class _AddEditExpenseDefinitionScreenState
               const SizedBox(height: 16),
               _buildTextField(
                 controller: _amountController,
-                label: 'Default Amount (ETB)',
+                label:
+                    'Default Amount (${Provider.of<FinanceProvider>(context, listen: false).currentCurrency.shortLabel})',
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (val) {
@@ -342,38 +344,32 @@ class _AddEditExpenseDefinitionScreenState
                         fontWeight: FontWeight.w500,
                         fontSize: 14)),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _recurringType,
-                  dropdownColor: AppColors.surface,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                  ),
+                AppDropdown<String>.dark(
+                  value: _recurringType,
                   items: const [
-                    DropdownMenuItem(
-                        value: 'daily', child: Text('Daily (Every day)')),
-                    DropdownMenuItem(
+                    AppDropdownItem(
+                        value: 'daily', label: 'Daily (Every day)'),
+                    AppDropdownItem(
                         value: 'interval',
-                        child: Text('Custom Interval (Every X days)')),
-                    DropdownMenuItem(
+                        label: 'Custom Interval (Every X days)'),
+                    AppDropdownItem(
                         value: 'specific_day',
-                        child: Text('Specific Day of Month')),
-                    DropdownMenuItem(
+                        label: 'Specific Day of Month'),
+                    AppDropdownItem(
                         value: 'days_of_week',
-                        child: Text('Specific Days of Week')),
+                        label: 'Specific Days of Week'),
                   ],
                   onChanged: (val) {
-                    setState(() {
-                      _recurringType = val!;
-                    });
+                    if (val != null) {
+                      setState(() {
+                        _recurringType = val;
+                      });
+                    }
                   },
+                  height: 46,
+                  borderRadius: 14,
+                  maxWidth: 240,
+                  isDefault: false,
                 ),
                 const SizedBox(height: 16),
                 if (_recurringType == 'interval')

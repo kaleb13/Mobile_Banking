@@ -1,9 +1,11 @@
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/interactive_3d_badge.dart';
 import '../widgets/custom_progress_bar.dart';
 import '../widgets/app_button.dart';
+import '../widgets/app_badges.dart';
 
 // ── Glow colors per level (mirrors profile_hub_screen.dart) ──────────────────
 Color _levelGlowColor(int level) {
@@ -41,15 +43,30 @@ Future<void> showLevelUpModal(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.72),
+    barrierColor: Colors.black.withValues(alpha: 0.65),
     useSafeArea: false,
-    builder: (_) => _LevelUpSheet(
-      newLevel: newLevel,
-      newLevelName: newLevelName,
-      newLevelDescription: newLevelDescription,
-      nextLevelName: nextLevelName,
-      nextLevelProgress: nextLevelProgress,
-      onContinue: onContinue,
+    builder: (ctx) => Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () => Navigator.pop(ctx),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.25),
+              ),
+            ),
+          ),
+        ),
+        _LevelUpSheet(
+          newLevel: newLevel,
+          newLevelName: newLevelName,
+          newLevelDescription: newLevelDescription,
+          nextLevelName: nextLevelName,
+          nextLevelProgress: nextLevelProgress,
+          onContinue: onContinue,
+        ),
+      ],
     ),
   );
 }
@@ -414,21 +431,9 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
                 builder: (_, __) {
                   final pct = (_barAnim.value * widget.nextLevelProgress * 100)
                       .toStringAsFixed(1);
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.positive.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$pct%',
-                      style: const TextStyle(
-                        color: AppColors.positive,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  return AppBadge.success(
+                    text: '$pct%',
+                    size: AppBadgeSize.small,
                   );
                 },
               ),

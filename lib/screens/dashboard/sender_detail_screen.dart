@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -13,6 +12,11 @@ import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/app_search_bar.dart';
+import '../../widgets/bank_card_widget.dart';
+import '../../widgets/app_toast.dart';
 import 'transaction_detail_screen.dart';
 import 'manage_bank_screen.dart';
 
@@ -40,73 +44,31 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   void _showPNLInfo(BuildContext context) {
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 20,
-                offset: Offset(0, -5),
-              ),
-            ],
+        return AppDrawer(
+          headerCard: AppDrawerHeaderCard(
+            icon: Icons.analytics_outlined,
+            iconColor: AppColors.positive,
+            title: "30D PNL (${widget.sender.senderName})",
+            subtitle: "30-Day Profit or Loss Calculation",
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+          bottomAction: AppButton.primary(
+            text: "OK",
+            height: 48,
+            onPressed: () => Navigator.pop(context),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              "This 30-Day Profit or Loss calculation for this specific account = (Deposits) - (Expenditures) over the last 30 days.\n\nIt reflects the recent net performance of this wallet or account.",
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 13.5,
+                height: 1.5,
               ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  "30D PNL (${widget.sender.senderName})",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  "This 30-Day Profit or Loss calculation for this specific account = (Deposits) - (Expenditures) over the last 30 days.\n\nIt reflects the recent net performance of this wallet or account.",
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-                child: AppButton.primary(
-                  text: "OK",
-                  height: 48,
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -211,10 +173,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           elevation: 6.0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           onPressed: () {
-            showModalBottomSheet(
+            AppBottomSheet.show(
               context: context,
               isScrollControlled: true,
-              backgroundColor: Colors.transparent,
               builder: (context) => ManualTransactionSheet(
                 provider: provider,
                 initialSender: widget.sender,
@@ -266,201 +227,64 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   Widget _buildSearchHeader(BuildContext context) {
+    final senderName = widget.sender.senderName.toUpperCase().contains('AHADU')
+        ? 'Ahadu Bank'
+        : widget.sender.senderName;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 16, 8),
-      child: Row(
-        children: [
-          const AppBackButton(),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Container(
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  const Icon(
-                    Icons.search_rounded,
-                    color: AppColors.textSoft,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Search in ${widget.sender.senderName}...',
-                        hintStyle: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 13,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                        suffixIconConstraints:
-                            const BoxConstraints(minHeight: 24, minWidth: 24),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _searchQuery = '';
-                                    _searchController.clear();
-                                  });
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 12.0),
-                                  child: Icon(
-                                    Icons.cancel_rounded,
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                    size: 16,
-                                  ),
-                                ),
-                              )
-                            : null,
-                      ),
-                      onChanged: (val) {
-                        setState(() {
-                          _searchQuery = val;
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: AppSearchBar(
+        mode: AppSearchBarMode.icon,
+        controller: _searchController,
+        hint: 'Search in $senderName...',
+        title: senderName,
+        leading: const AppBackButton(),
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val;
+          });
+        },
+        onClear: () {
+          setState(() {
+            _searchQuery = '';
+          });
+        },
+        onClose: () {
+          setState(() {
+            _searchQuery = '';
+          });
+        },
+        backgroundColor: AppColors.surface,
+        textColor: Colors.white,
+        hintColor: AppColors.textSoft,
+        iconColor: Colors.white70,
+        closeIconColor: Colors.white,
       ),
     );
-  }
-
-  Widget _bankLogo(String name) {
-    final nameUp = name.toUpperCase();
-    String imagePath = '';
-
-    if (nameUp == 'CBE') {
-      imagePath = 'assets/images/CBE logo 1.webp';
-    } else if (nameUp == 'TELEBIRR') {
-      imagePath = 'assets/images/Telebirr Logo.png';
-    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      imagePath = 'assets/images/CBEBirr Logo.png';
-    } else if (nameUp.contains('AHADU')) {
-      imagePath = 'assets/images/Ahadu_Logo.png';
-    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
-      return SvgPicture.asset(
-        'assets/images/Bank_of_Abyssinia_Icon.svg',
-        width: 38,
-        height: 38,
-        fit: BoxFit.contain,
-        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-      );
-    }
-
-    if (imagePath.isNotEmpty) {
-      return Image.asset(
-        imagePath,
-        width: 38,
-        height: 38,
-        fit: BoxFit.contain,
-      );
-    }
-
-    return Icon(
-      Icons.account_balance,
-      color: Colors.white.withValues(alpha: 0.9),
-      size: 34,
-    );
-  }
-
-  String _bankSubtitle(String name) {
-    final n = name.toUpperCase();
-    if (n == 'TELEBIRR') return 'Ethio Telecom, E-money';
-    if (n == 'CBE') return 'Commercial Bank of Ethiopia';
-    if (n == 'CBE BIRR' || n == 'CBEBIRR') return 'CBE Birr Mobile Wallet';
-    if (n.contains('AHADU')) return 'Ahadu Bank S.C.';
-    return 'Bank Account';
-  }
-
-  List<Color> _getCardGradient(String name) {
-    final nameUp = name.toUpperCase();
-    if (nameUp == 'TELEBIRR') {
-      return [
-        AppColors.success,
-        AppColors.cardLime,
-      ];
-    } else if (nameUp == 'CBE') {
-      return [
-        AppColors.cardBrownDark,
-        AppColors.cardBrownMid,
-      ];
-    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      return [
-        AppColors.cardCbeBirrSilver,
-        AppColors.cardCbeBirrWhite,
-      ];
-    } else if (nameUp.contains('AHADU')) {
-      return [
-        AppColors.cardAhaduPink,
-        AppColors.cardAhaduWhite,
-      ];
-    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA') {
-      return [
-        AppColors.cardBoaDarkIcon,
-        AppColors.cardBoaBg,
-      ];
-    } else if (nameUp.contains('DASHEN')) {
-      return [
-        AppColors.cardDashenDarkIcon,
-        AppColors.cardDashenBg,
-      ];
-    } else if (nameUp.contains('COOP')) {
-      return [
-        AppColors.cardCoopDarkIcon,
-        AppColors.cardCoopBg,
-      ];
-    }
-    return [
-      AppColors.bgMid,
-      AppColors.cardGrayLight,
-    ];
   }
 
   Widget _buildBankCard(
       double balance, double change, double percent, int txCount) {
     final senderName = widget.sender.senderName;
-    final cardGradient = _getCardGradient(senderName);
-    final bool isDarkTextTheme = senderName.toUpperCase().contains('AHADU') ||
-        senderName.toUpperCase() == 'CBE BIRR' ||
-        senderName.toUpperCase() == 'CBEBIRR';
+    final cardGradient = BankCardWidget.getCardGradient(senderName);
+    final bool isDarkTextTheme = BankCardWidget.isDarkTextTheme(senderName);
     final Color textColorPrimary =
         isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
     final Color textColorSub = isDarkTextTheme
         ? AppColors.darkCharcoal.withValues(alpha: 0.6)
-        : Colors.white.withValues(alpha: 0.6);
+        : Colors.white.withValues(alpha: 0.8);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           gradient: LinearGradient(
             begin: Alignment.bottomLeft,
             end: Alignment.topRight,
             colors: cardGradient,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,7 +293,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _bankLogo(senderName),
+                BankCardWidget.bankLogo(
+                  senderName,
+                  38,
+                  isDarkTextTheme ? AppColors.darkCharcoal : Colors.white,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -485,15 +313,19 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.3,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _bankSubtitle(senderName),
+                        BankCardWidget.subtitle(senderName),
                         style: TextStyle(
                           color: textColorSub,
                           fontSize: 11,
                           fontWeight: FontWeight.w400,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -536,31 +368,39 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 return GestureDetector(
                   onTap: provider.toggleBalanceVisibility,
                   behavior: HitTestBehavior.opaque,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        parts[0],
-                        style: TextStyle(
-                          color: textColorPrimary,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.6,
-                          height: 1.0,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          parts[0],
+                          style: TextStyle(
+                            color: textColorPrimary,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            height: 1.0,
+                          ),
+                          maxLines: 1,
                         ),
-                      ),
-                      Text(
-                        '.${parts[1]}',
-                        style: TextStyle(
-                          color: isDarkTextTheme
-                              ? AppColors.darkCharcoal.withValues(alpha: 0.5)
-                              : Colors.white.withValues(alpha: 0.65),
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
+                        Text(
+                          '.${parts[1]}',
+                          style: TextStyle(
+                            color: isDarkTextTheme
+                                ? AppColors.darkCharcoal
+                                    .withValues(alpha: 0.5)
+                                : Colors.white.withValues(alpha: 0.65),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },
@@ -593,7 +433,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       color: isDarkTextTheme
                           ? Colors.black.withValues(alpha: 0.08)
                           : Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -620,8 +460,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         const SizedBox(width: 4),
                         Icon(
                           _isChartVisible
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
                           color: textColorPrimary,
                           size: 16,
                         ),
@@ -657,7 +497,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   context,
                   label: "View Bank",
                   icon: Icons.account_balance_rounded,
-                  color: AppColors.overlay,
+                  color: AppColors.surfaceElevated,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -674,9 +514,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   color: AppColors.gold,
                   textColor: Colors.black,
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Transfer feature coming soon!')),
+                    AppToast.info(
+                      context,
+                      message: 'Quick Transfer',
+                      subtitle: 'Direct transfer feature is coming soon!',
                     );
                   },
                 ),
@@ -737,31 +578,23 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   /// Lets the user pick how far back to re-scan SMS, then refreshes.
   void _showRefreshChooser(BuildContext context, FinanceProvider provider) {
     Future<void> runRefresh(int days) async {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Refreshing the last $days days…',
-              style: const TextStyle(color: Colors.white, fontSize: 13)),
-          backgroundColor: AppColors.overlay,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 1),
-        ),
+      AppToast.info(
+        context,
+        message: 'Rescanning SMS',
+        subtitle: 'Refreshing transactions from the last $days days…',
+        duration: const Duration(seconds: 2),
       );
       await provider.refreshData(lastDays: days);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Refreshed the last $days days',
-              style: const TextStyle(color: Colors.white, fontSize: 13)),
-          backgroundColor: AppColors.overlay,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
+      AppToast.success(
+        context,
+        message: 'Sync Complete',
+        subtitle: 'Refreshed the last $days days of transactions',
       );
     }
 
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
         Widget option({
           required IconData icon,
@@ -776,12 +609,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               runRefresh(days);
             },
             child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.overlay.withValues(alpha: 0.5),
+                color: AppColors.surfaceElevated,
                 borderRadius: BorderRadius.circular(16),
-                              ),
+              ),
               child: Row(
                 children: [
                   Icon(icon, color: Colors.white, size: 22),
@@ -809,54 +642,29 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           );
         }
 
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.bgMid,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        return AppDrawer(
+          headerCard: const AppDrawerHeaderCard(
+            icon: Icons.refresh_rounded,
+            iconColor: AppColors.positive,
+            title: 'Refresh transactions',
+            subtitle: 'Choose how far back to re-scan your SMS.',
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 18),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const Text('Refresh transactions',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  const Text('Choose how far back to re-scan your SMS.',
-                      style:
-                          TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
-                  const SizedBox(height: 18),
-                  option(
-                    icon: Icons.history_rounded,
-                    title: 'Past 7 days',
-                    subtitle: 'Quick — recent messages only',
-                    days: 7,
-                  ),
-                  option(
-                    icon: Icons.date_range_rounded,
-                    title: 'Last 30 days',
-                    subtitle: 'Thorough — wider catch-up',
-                    days: 30,
-                  ),
-                ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              option(
+                icon: Icons.history_rounded,
+                title: 'Past 7 days',
+                subtitle: 'Quick — recent messages only',
+                days: 7,
               ),
-            ),
+              option(
+                icon: Icons.date_range_rounded,
+                title: 'Last 30 days',
+                subtitle: 'Thorough — wider catch-up',
+                days: 30,
+              ),
+            ],
           ),
         );
       },

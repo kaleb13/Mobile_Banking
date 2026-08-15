@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_badges.dart';
 import 'manual_transaction_sheet.dart';
 
 /// A pill widget that morphs in-place into a full notifications panel.
@@ -996,21 +997,9 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        isSystem ? 'System Message' : 'Unregistered',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                    AppBadge.neutral(
+                      text: isSystem ? 'System Message' : 'Unregistered',
+                      size: AppBadgeSize.small,
                     ),
                     Flexible(
                       child: Text(

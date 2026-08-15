@@ -18,12 +18,16 @@ class AppColors {
   // ── Surfaces & Cards ──────────────────────────────────────────────────────
   static const Color surface        = Color(0xFF111821); // Base card/panel surface (#111821)
   static const Color surfaceElevated = Color(0xFF141D28); // Elevated surface tone
-  static const Color overlay        = Color(0xFF2A2A34); // Modal / bottom sheet
-  static const Color bottomNavBg    = Color(0xFF141924); // Navigation bar & Freeze Account button background (#141924)
+  static const Color overlay        = surfaceElevated; // Replaced legacy #2A2A34 with #141D28
+  static const Color bottomNavDark  = Color(0xFF08101C); // Deep navy-slate (between background #050C16 and surface #111821)
+  static const Color bottomNavBg    = Color(0xD908101C); // 85% translucent frosted deep dark glass (#08101C @ 85%)
+  static const Color bottomNavBgLight = Color(0xCCFFFFFF); // 80% translucent frosted white glass
   static const Color surfaceLight   = Color(0xFFFFFFFF); // Light theme card surface
   static const Color cardTileLight  = Color(0xFFF1F5F9); // Light theme elevated tile
   static const Color glassSurface   = Color(0x59111821); // 35% dark surface glass
   static const Color glassSurfaceSubtle = Color(0x1A111821); // 10% dark surface glass
+  static const Color glassSurfaceModal  = Color(0xE0111821); // 88% dark modal surface glass
+  static const double glassBlurSigma    = 20.0; // Centralized glass blur radius
   static const Color destructiveSurface = Color(0x24E11D48); // 14% destructive soft surface
 
   // ── Button Palette ────────────────────────────────────────────────────────
@@ -55,6 +59,13 @@ class AppColors {
   static const Color statusActiveBg  = Color(0xFF0F3A2E); // Deep emerald background for active status
   static const Color statusWarningBg = Color(0xFF3A240F); // Deep amber background for warning status
   static const Color previewCardBg   = Color(0xFF141D2B); // Dark navy tint for notification preview card
+
+  // ── Badge Solid Colors ────────────────────────────────────────────────────
+  static const Color badgeSuccessBg     = Color(0xFF0BA751); // Solid Emerald Green (#0BA751)
+  static const Color badgeWarningBg     = Color(0xFFE67E22); // Solid Amber / Orange (#E67E22)
+  static const Color badgeDestructiveBg = Color(0xFFE11D48); // Solid Crimson Red (#E11D48)
+  static const Color badgeNeutralBg     = Color(0xFF2A3441); // Solid Slate Surface (#2A3441)
+  static const Color badgeInfoBg        = Color(0xFF2563EB); // Solid Royal Blue (#2563EB)
 
   // ── Tier Level Glows ──────────────────────────────────────────────────────
   static const Color levelGlow1 = Color(0xFF8B9DFF);
@@ -113,9 +124,11 @@ class AppColors {
   static const Color cardCbeBirrSilver = Color(0xFFE2E8F0); // Sleek white-gray contrast
 
   // ── Ahadu Bank Palette ───────────────────────────────────────────────────
-  static const Color cardAhaduRed   = Color(0xFFC62828); // Ahadu Red / Crimson
-  static const Color cardAhaduPink  = Color(0xFFFFE7EE); // Soft blush pink / tint (FFE7EE)
-  static const Color cardAhaduWhite = Color(0xFFFFFFFF); // Crisp white
+  static const Color cardAhaduRedDark  = Color(0xFF6B031F); // Deep burgundy / dark crimson base (#6B031F)
+  static const Color cardAhaduRed      = Color(0xFFA90533); // Official Ahadu Brand Crimson (#A90533)
+  static const Color cardAhaduRedLight = Color(0xFFC71545); // Vibrant Ahadu Crimson highlight (#C71545)
+  static const Color cardAhaduPink     = Color(0xFFFFE7EE); // Soft blush pink / tint (FFE7EE)
+  static const Color cardAhaduWhite    = Color(0xFFFFFFFF); // Crisp white
 
   // ── Extended Bank Card Palettes ────────────────────────────────────────────
   static const Color cardCbeBg        = Color(0xFF1B5E4B);
@@ -146,7 +159,6 @@ class AppColors {
 
   // ── Neutral Dark/Light & Alerts ────────────────────────────────────────────
   static const Color darkCharcoal       = Color(0xFF1A1A1A);
-  static const Color surfaceGreyBlue    = Color(0xFF2A2D36);
   static const Color lightGreyBackground= Color(0xFFF2F4F7);
   static const Color lightGreySurface   = Color(0xFFF0F0F0);
   static const Color mediumGreyText     = Color(0xFF757575);
@@ -556,6 +568,22 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        modalBackgroundColor: Colors.transparent,
+        modalBarrierColor: Color(0xA6000000), // 65% dark black barrier
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(32)),
+        ),
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.buttonPrimary,
@@ -584,6 +612,22 @@ class AppTheme {
         color: AppColors.surfaceLight,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        modalBackgroundColor: Colors.transparent,
+        modalBarrierColor: Color(0x8C000000),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(32)),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

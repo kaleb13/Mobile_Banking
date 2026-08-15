@@ -19,7 +19,6 @@ class _WalletsScreenState extends State<WalletsScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
     final senders = provider.senders;
-    final txs = provider.transactions;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -66,11 +65,10 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       iconSize: 13,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Add New Wallet feature coming soon!'),
-                            duration: Duration(seconds: 2),
-                          ),
+                        AppToast.info(
+                          context,
+                          message: 'Add New Wallet',
+                          subtitle: 'Multi-bank linking feature is coming soon!',
                         );
                       },
                     ),
@@ -93,50 +91,80 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
-                            if (index == senders.length) {
+                            final activeSenders = provider.activeSenders;
+                            final pausedSenders = provider.pausedSenders;
+                            final int activeCount = activeSenders.length;
+
+                            // 1. Active Bank Cards
+                            if (index < activeCount) {
+                              final sender = activeSenders[index];
+                              final double balance =
+                                  provider.balanceForSender(sender.senderName);
+                              final int txCount =
+                                  provider.txCountForSender(sender.senderName);
+
+                              return _WalletCard(
+                                senderName: sender.senderName,
+                                balance: balance,
+                                txCount: txCount,
+                                isBalanceVisible: provider.isBalanceVisible,
+                                isPaused: false,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        SenderDetailScreen(sender: sender),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            // 2. Cash Wallet (Directly below active bank cards)
+                            if (index == activeCount) {
                               return _buildCashWalletRow(context, provider);
                             }
 
-                            final sender = senders[index];
-                            final sNameUp = sender.senderName.toUpperCase();
-                            final senderTxs = txs.where((t) {
-                              final tNameUp = t.name.toUpperCase();
-                              final tSenderUp = t.sender.toUpperCase();
-                              if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
-                                return tNameUp == 'BOA' ||
-                                    tSenderUp == 'BOA' ||
-                                    tNameUp.contains('ABYSSINIA') ||
-                                    tSenderUp.contains('ABYSSINIA');
-                              }
-                              return tNameUp == sNameUp || tSenderUp == sNameUp;
-                            }).toList();
-
-                            double balance = 0;
-                            final withBal =
-                                senderTxs.where((t) => t.totalBalance > 0);
-                            if (withBal.isNotEmpty) {
-                              balance = withBal.first.totalBalance;
+                            // 3. Paused Section Header
+                            if (index == activeCount + 1 &&
+                                pausedSenders.isNotEmpty) {
+                              return _buildPausedSectionHeader(
+                                  context, pausedSenders.length);
                             }
 
-                            final isPaused =
-                                provider.isTrackingPaused(sender.senderName);
+                            // 4. Paused Bank Cards (Below Cash Wallet)
+                            final int pausedIndex =
+                                index - (activeCount + 2);
+                            if (pausedIndex >= 0 &&
+                                pausedIndex < pausedSenders.length) {
+                              final sender = pausedSenders[pausedIndex];
+                              final double balance =
+                                  provider.balanceForSender(sender.senderName);
+                              final int txCount =
+                                  provider.txCountForSender(sender.senderName);
 
-                            return _WalletCard(
-                              senderName: sender.senderName,
-                              balance: balance,
-                              txCount: senderTxs.length,
-                              isBalanceVisible: provider.isBalanceVisible,
-                              isPaused: isPaused,
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      SenderDetailScreen(sender: sender),
+                              return _WalletCard(
+                                senderName: sender.senderName,
+                                balance: balance,
+                                txCount: txCount,
+                                isBalanceVisible: provider.isBalanceVisible,
+                                isPaused: true,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        SenderDetailScreen(sender: sender),
+                                  ),
                                 ),
-                              ),
-                            );
+                              );
+                            }
+
+                            return const SizedBox.shrink();
                           },
-                          childCount: senders.length + 1,
+                          childCount: provider.activeSenders.length +
+                              1 +
+                              (provider.pausedSenders.isNotEmpty
+                                  ? 1 + provider.pausedSenders.length
+                                  : 0),
                         ),
                       ),
                     ),
@@ -147,22 +175,55 @@ class _WalletsScreenState extends State<WalletsScreen> {
     );
   }
 
+  Widget _buildPausedSectionHeader(BuildContext context, int count) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14, bottom: 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.pausedBadge.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.pause_circle_rounded,
+                  color: AppColors.pausedBadge,
+                  size: 13,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'PAUSED TRACKING ($count)',
+                  style: const TextStyle(
+                    color: AppColors.pausedBadge,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCashWalletRow(BuildContext context, FinanceProvider provider) {
-    int txCount = 0;
-
-    for (var tx in provider.transactions) {
-      if (tx.reason?.toLowerCase() == 'cash' ||
-          tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash') {
-        txCount++;
-      }
-    }
-    txCount += provider.cashTransactions.length;
-
     return _WalletCard(
       senderName: 'Cash Wallet',
-      balance: provider.cashBalance,
-      txCount: txCount,
+      balance: provider.balanceForSender('Cash Wallet'),
+      txCount: provider.txCountForSender('Cash Wallet'),
       isBalanceVisible: provider.isBalanceVisible,
       isPaused: false, // Cash Wallet is never paused
       onTap: () {
@@ -202,13 +263,12 @@ class _WalletCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
     final pageOffset = provider.pageOffset;
-    final isWalletActive = provider.currentScreenIndex == 1;
 
-    // During mid-flight transition from Home (when offset is between 0.05 and 0.95 and not yet on wallet screen),
-    // placeholders hold height while main_shell's overlay animates.
-    // As soon as user reaches Wallet Manager screen (index == 1 or pageOffset >= 0.95),
-    // render the 100% fully expanded real card widget in-tree!
-    if (!isWalletActive && pageOffset < 0.95) {
+    // During any flight/transition between Home and Wallet (pageOffset < 0.98),
+    // main_shell's overlay handles 100% of the flying cards with ZERO ghost cards underneath.
+    // As soon as user arrives on Wallet Manager (pageOffset >= 0.98),
+    // render the 100% real card widget in-tree.
+    if (pageOffset < 0.98) {
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
         height: 160,

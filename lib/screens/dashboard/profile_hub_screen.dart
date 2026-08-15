@@ -7,6 +7,8 @@ import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/interactive_3d_badge.dart';
 import '../../widgets/level_up_modal.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_badges.dart';
+import '../../widgets/app_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/finance_provider.dart';
 import 'saving_goals_screen.dart';
@@ -381,11 +383,8 @@ class ProfileHubScreen extends StatelessWidget {
   }
 
   void _showLevelsInfoDialog(BuildContext context) {
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (ctx) => Consumer<FinanceProvider>(
         builder: (context, provider, _) {
           final currentLv = provider.userLevel;
@@ -403,220 +402,153 @@ class ProfileHubScreen extends StatelessWidget {
             {'level': 5, 'name': 'Elite', 'range': '> 5M ETB', 'badge': 'assets/images/LV5.svg'},
           ];
 
-          return Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surface, // Defined surface #111821
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          return AppDrawer(
+            headerCard: const AppDrawerHeaderCard(
+              icon: Icons.military_tech_rounded,
+              iconColor: AppColors.gold,
+              title: 'Financial Levels',
+              subtitle: 'Earn wealth tiers as your net worth grows',
             ),
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              MediaQuery.of(context).padding.bottom + 16,
+            bottomAction: AppButton.primary(
+              text: 'Got It',
+              height: 48,
+              onPressed: () => Navigator.pop(ctx),
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Top Drag Handle
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Current Level Progress Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.previewCardBg,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-
-                  // Header Title
-                  const Text(
-                    'Financial Levels',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: -0.3,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Current Level Progress Card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
-                                          ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            SvgPicture.asset(
-                              'assets/images/LV$currentLv.svg',
-                              width: 44,
-                              height: 44,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Level $currentLv · $currentLvName',
-                                        style: const TextStyle(
-                                          color: Colors.white, // All White Text
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 7, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.positive.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(6),
-                                                                                  ),
-                                        child: const Text(
-                                          'CURRENT',
-                                          style: TextStyle(
-                                            color: AppColors.positive,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            letterSpacing: 0.3,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    nextLvName != null
-                                        ? '${(progress * 100).toStringAsFixed(1)}% to Level ${currentLv + 1} ($nextLvName)'
-                                        : 'Max Financial Level Reached!',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.6),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Progress Bar
-                        CustomProgressBar(
-                          progress: progress,
-                          height: 8,
-                          backgroundColor: Colors.white.withValues(alpha: 0.1),
-                          progressColor: AppColors.positive,
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Remaining Balance Statement
-                        Text(
-                          nextLvName != null
-                              ? 'You need ${fmt.format(remaining)} ETB more to reach Level ${currentLv + 1} ($nextLvName).'
-                              : 'Congratulations! You have reached the highest financial level.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // All Levels Breakdown (White level names and range texts)
-                  ...levels.map((l) {
-                    final lv = l['level'] as int;
-                    final isCurrent = lv == currentLv;
-
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isCurrent
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
                           SvgPicture.asset(
-                            l['badge'] as String,
-                            width: 32,
-                            height: 32,
+                            'assets/images/LV$currentLv.svg',
+                            width: 44,
+                            height: 44,
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'LV$lv · ${l['name']}',
-                                  style: const TextStyle(
-                                    color: Colors.white, // All White Level Text
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Level $currentLv · $currentLvName',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const AppBadge.success(text: 'CURRENT'),
+                                  ],
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
-                                  l['range'] as String,
+                                  nextLvName != null
+                                      ? '${(progress * 100).toStringAsFixed(1)}% to Level ${currentLv + 1} ($nextLvName)'
+                                      : 'Max Financial Level Reached!',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.50),
-                                    fontSize: 11.5,
+                                    color: Colors.white.withValues(alpha: 0.6),
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          if (isCurrent)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.positive.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'CURRENT',
-                                style: TextStyle(
-                                  color: AppColors.positive,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                            ),
                         ],
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 20),
+                      const SizedBox(height: 14),
 
-                  // Got It Action Button — standardized primary pill
-                  AppButton.primary(
-                    text: 'Got It',
-                    height: 48,
-                    onPressed: () => Navigator.pop(ctx),
+                      // Progress Bar
+                      CustomProgressBar(
+                        progress: progress,
+                        height: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
+                        progressColor: AppColors.positive,
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Remaining Balance Statement
+                      Text(
+                        nextLvName != null
+                            ? 'You need ${fmt.format(remaining)} ETB more to reach Level ${currentLv + 1} ($nextLvName).'
+                            : 'Congratulations! You have reached the highest financial level.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 16),
+
+                // All Levels Breakdown
+                ...levels.map((l) {
+                  final lv = l['level'] as int;
+                  final isCurrent = lv == currentLv;
+
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isCurrent
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        SvgPicture.asset(
+                          l['badge'] as String,
+                          width: 32,
+                          height: 32,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'LV$lv · ${l['name']}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                l['range'] as String,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.50),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isCurrent)
+                          const AppBadge.success(text: 'CURRENT'),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ),
           );
         },

@@ -236,6 +236,9 @@ Future<void> processSmsRaw({
   // 3. ONLY if the message was NOT parsed (tx == null), insert an In-App Notification
   // so it appears in the top Notification Panel as an UNREGISTERED message for manual setup!
   final notificationId = sha256.convert(utf8.encode('$senderAddress|${date.millisecondsSinceEpoch}|$body')).toString();
+  final ignored = prefs.getStringList('ignored_notification_ids') ?? [];
+  if (ignored.contains(notificationId)) return;
+
   final notification = AppNotification(
     id: notificationId,
     sender: bank ?? senderAddress,

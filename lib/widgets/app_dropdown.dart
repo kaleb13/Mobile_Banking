@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
+/// Visual style variant for [AppDropdown].
+enum AppDropdownVariant {
+  /// Optimized for white / light background surfaces (e.g. homepage transaction sheet).
+  light,
+
+  /// Optimized for dark / translucent background surfaces (e.g. search screen, dark sheets).
+  dark,
+
+  /// Automatically adapts based on the active theme surface brightness.
+  auto,
+}
+
 /// Item model for [AppDropdown].
 class AppDropdownItem<T> {
   final T value;
@@ -18,291 +30,317 @@ class AppDropdownItem<T> {
   });
 }
 
-/// A generic, theme-adaptive Dropdown component for single and multi-selection.
+/// Standardized design system Dropdown component.
 ///
-/// Supports both compact pill triggers (for filters/bars) and full-width
-/// form triggers with unified design, typography, and selection indicators.
+/// Features 100% rounded pill triggers, custom menu popups with rounded corners,
+/// zero border strokes, and dedicated light and dark variants.
 class AppDropdown<T> extends StatelessWidget {
-  /// Currently selected value for single-select mode.
+  /// Currently selected value.
   final T? value;
 
-  /// Currently selected values for multi-select mode.
-  final List<T>? selectedValues;
-
-  /// Available options to select from.
+  /// Available options.
   final List<AppDropdownItem<T>> items;
 
-  /// Callback when a value is selected in single-select mode.
-  final ValueChanged<T>? onChanged;
+  /// Callback when a value is chosen.
+  final ValueChanged<T?> onChanged;
 
-  /// Callback when values change in multi-select mode.
-  final ValueChanged<List<T>>? onMultiChanged;
+  /// Visual theme variant (light for white sheets, dark for dark surfaces).
+  final AppDropdownVariant variant;
 
-  /// Placeholder text when no item is selected.
-  final String placeholder;
+  /// Maximum width constraint for the selected text and menu items.
+  final double? maxWidth;
 
-  /// Whether multiple items can be selected.
-  final bool isMultiSelect;
+  /// Trigger button height (defaults to 32).
+  final double height;
 
-  /// Whether the trigger is rendered as a compact pill or full-width container.
-  final bool isPill;
-
-  /// Custom height for the trigger button.
-  final double? height;
+  /// Border radius for the trigger and dropdown menu popup (defaults to 16).
+  final double borderRadius;
 
   /// Custom padding for the trigger button.
   final EdgeInsetsGeometry? padding;
 
-  /// Optional prefix widget (e.g. filter icon or bank logo).
+  /// Optional prefix widget before the label.
   final Widget? prefix;
 
-  /// Whether to display the chevron/dropdown indicator icon.
-  final bool showChevron;
+  /// Dropdown chevron / indicator icon.
+  final IconData? icon;
 
-  /// Border radius for the trigger and popup menu.
-  final double borderRadius;
+  /// Explicit default state override. If null, inferred automatically.
+  final bool? isDefault;
 
-  /// Background color override.
+  /// Placeholder text when value is null.
+  final String placeholder;
+
+  /// Custom background color override for the trigger button.
   final Color? backgroundColor;
+
+  /// Custom background color override for the popup menu.
+  final Color? dropdownColor;
+
+  /// Custom text color override for the trigger button.
+  final Color? textColor;
+
+  /// Custom icon color override for the trigger button.
+  final Color? iconColor;
 
   const AppDropdown({
     super.key,
+    required this.value,
     required this.items,
-    this.value,
-    this.selectedValues,
-    this.onChanged,
-    this.onMultiChanged,
-    this.placeholder = 'Select',
-    this.isMultiSelect = false,
-    this.isPill = true,
-    this.height,
+    required this.onChanged,
+    this.variant = AppDropdownVariant.dark,
+    this.maxWidth,
+    this.height = 32,
+    this.borderRadius = 16,
     this.padding,
     this.prefix,
-    this.showChevron = true,
-    this.borderRadius = 20,
+    this.icon,
+    this.isDefault,
+    this.placeholder = 'Select',
     this.backgroundColor,
+    this.dropdownColor,
+    this.textColor,
+    this.iconColor,
   });
 
-  /// Factory constructor for a compact pill dropdown (ideal for filter bars).
-  factory AppDropdown.pill({
+  /// Factory constructor for white / light background surfaces.
+  factory AppDropdown.light({
     Key? key,
+    required T? value,
     required List<AppDropdownItem<T>> items,
-    T? value,
-    ValueChanged<T>? onChanged,
-    String placeholder = 'Select',
-    Widget? prefix,
-    double height = 38,
-    double borderRadius = 20,
-    Color? backgroundColor,
-  }) {
-    return AppDropdown<T>(
-      key: key,
-      items: items,
-      value: value,
-      onChanged: onChanged,
-      placeholder: placeholder,
-      isPill: true,
-      height: height,
-      borderRadius: borderRadius,
-      prefix: prefix,
-      backgroundColor: backgroundColor,
-    );
-  }
-
-  /// Factory constructor for a multi-select dropdown.
-  factory AppDropdown.multi({
-    Key? key,
-    required List<AppDropdownItem<T>> items,
-    required List<T> selectedValues,
-    required ValueChanged<List<T>> onMultiChanged,
-    String placeholder = 'Select options',
-    bool isPill = false,
-    double? height,
+    required ValueChanged<T?> onChanged,
+    double? maxWidth,
+    double height = 32,
     double borderRadius = 16,
+    EdgeInsetsGeometry? padding,
+    Widget? prefix,
+    IconData? icon,
+    bool? isDefault,
+    String placeholder = 'Select',
     Color? backgroundColor,
+    Color? dropdownColor,
+    Color? textColor,
+    Color? iconColor,
   }) {
     return AppDropdown<T>(
       key: key,
+      value: value,
       items: items,
-      selectedValues: selectedValues,
-      onMultiChanged: onMultiChanged,
-      placeholder: placeholder,
-      isMultiSelect: true,
-      isPill: isPill,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.light,
+      maxWidth: maxWidth,
       height: height,
       borderRadius: borderRadius,
+      padding: padding,
+      prefix: prefix,
+      icon: icon,
+      isDefault: isDefault,
+      placeholder: placeholder,
       backgroundColor: backgroundColor,
+      dropdownColor: dropdownColor,
+      textColor: textColor,
+      iconColor: iconColor,
     );
   }
 
-  String _getDisplayLabel() {
-    if (isMultiSelect) {
-      final selected = selectedValues ?? [];
-      if (selected.isEmpty) return placeholder;
-      if (selected.length == 1) {
-        final match = items.where((i) => i.value == selected.first);
-        return match.isNotEmpty ? match.first.label : placeholder;
-      }
-      return '${selected.length} Selected';
-    }
-
-    if (value == null) return placeholder;
-    final match = items.where((i) => i.value == value);
-    return match.isNotEmpty ? match.first.label : placeholder;
+  /// Factory constructor for dark background surfaces.
+  factory AppDropdown.dark({
+    Key? key,
+    required T? value,
+    required List<AppDropdownItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    double? maxWidth,
+    double height = 32,
+    double borderRadius = 16,
+    EdgeInsetsGeometry? padding,
+    Widget? prefix,
+    IconData? icon,
+    bool? isDefault,
+    String placeholder = 'Select',
+    Color? backgroundColor,
+    Color? dropdownColor,
+    Color? textColor,
+    Color? iconColor,
+  }) {
+    return AppDropdown<T>(
+      key: key,
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.dark,
+      maxWidth: maxWidth,
+      height: height,
+      borderRadius: borderRadius,
+      padding: padding,
+      prefix: prefix,
+      icon: icon,
+      isDefault: isDefault,
+      placeholder: placeholder,
+      backgroundColor: backgroundColor,
+      dropdownColor: dropdownColor,
+      textColor: textColor,
+      iconColor: iconColor,
+    );
   }
 
-  bool _isItemSelected(T itemValue) {
-    if (isMultiSelect) {
-      return selectedValues?.contains(itemValue) ?? false;
-    }
-    return value == itemValue;
+  /// Convenience factory for simple `List<String>` items.
+  static Widget simple({
+    Key? key,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    AppDropdownVariant variant = AppDropdownVariant.dark,
+    double? maxWidth,
+    double height = 32,
+    double borderRadius = 16,
+    EdgeInsetsGeometry? padding,
+    Widget? prefix,
+    IconData? icon,
+    bool? isDefault,
+    Color? backgroundColor,
+    Color? dropdownColor,
+    Color? textColor,
+    Color? iconColor,
+  }) {
+    final dropdownItems = items
+        .map((item) => AppDropdownItem<String>(value: item, label: item))
+        .toList();
+
+    return AppDropdown<String>(
+      key: key,
+      value: value,
+      items: dropdownItems,
+      onChanged: onChanged,
+      variant: variant,
+      maxWidth: maxWidth,
+      height: height,
+      borderRadius: borderRadius,
+      padding: padding,
+      prefix: prefix,
+      icon: icon,
+      isDefault: isDefault,
+      backgroundColor: backgroundColor,
+      dropdownColor: dropdownColor,
+      textColor: textColor,
+      iconColor: iconColor,
+    );
+  }
+
+  bool _computeIsDefault() {
+    if (isDefault != null) return isDefault!;
+    if (value == null) return true;
+    final str = value.toString();
+    return str == 'All' ||
+        str == 'Any Time' ||
+        str == 'All Senders' ||
+        str == 'All Banks' ||
+        (items.isNotEmpty && items.first.value == value);
   }
 
   @override
   Widget build(BuildContext context) {
-    final effectiveBg = backgroundColor ?? context.themeSurface;
-    final displayLabel = _getDisplayLabel();
-    final effectivePadding = padding ??
-        (isPill
-            ? const EdgeInsets.symmetric(horizontal: 14, vertical: 8)
-            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12));
+    final isLight = variant == AppDropdownVariant.light ||
+        (variant == AppDropdownVariant.auto &&
+            Theme.of(context).brightness == Brightness.light);
 
-    final trigger = Container(
+    final bool isDef = _computeIsDefault();
+
+    // Trigger styling
+    final Color triggerBg = backgroundColor ??
+        (isLight
+            ? (isDef
+                ? AppColors.lightGreyBackground
+                : AppColors.bgDeepLight)
+            : (isDef
+                ? AppColors.surface
+                : AppColors.surface));
+
+    final Color effectiveTextColor = textColor ??
+        (isLight
+            ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
+            : (isDef ? AppColors.textSecondary : Colors.white));
+
+    final Color effectiveIconColor = iconColor ??
+        (isLight
+            ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
+            : (isDef ? AppColors.textSecondary : Colors.white));
+
+    // Popup styling
+    final Color menuBg = dropdownColor ?? (isLight ? Colors.white : AppColors.surfaceElevated);
+    final Color itemTextColor = isLight ? AppColors.darkCharcoal : Colors.white;
+
+    return Container(
       height: height,
-      padding: effectivePadding,
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: effectiveBg,
+        color: triggerBg,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Row(
-        mainAxisSize: isPill ? MainAxisSize.min : MainAxisSize.max,
-        mainAxisAlignment:
-            isPill ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (prefix != null) ...[
             prefix!,
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
           ],
-          Flexible(
-            child: Text(
-              displayLabel,
-              style: (isPill ? AppTypography.titleSmall : AppTypography.bodyMedium)
-                  .copyWith(
-                color: (value != null || (selectedValues?.isNotEmpty ?? false))
-                    ? context.themeTextPrimary
-                    : context.themeTextSecondary,
-                fontWeight: isPill ? FontWeight.w600 : FontWeight.w500,
-                fontSize: isPill ? 12 : 14,
+          DropdownButtonHideUnderline(
+            child: DropdownButton<T>(
+              isDense: true,
+              value: value,
+              icon: Padding(
+                padding: const EdgeInsets.only(left: 4.0),
+                child: Icon(
+                  icon ?? Icons.keyboard_arrow_down_rounded,
+                  color: effectiveIconColor,
+                  size: 16,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (showChevron) ...[
-            const SizedBox(width: 6),
-            Icon(
-              Icons.unfold_more_rounded,
-              color: context.themeTextSecondary,
-              size: isPill ? 16 : 18,
-            ),
-          ],
-        ],
-      ),
-    );
-
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashColor: Colors.white.withValues(alpha: 0.14),
-        highlightColor: Colors.white.withValues(alpha: 0.10),
-      ),
-      child: PopupMenuButton<T>(
-        offset: Offset(0, (height ?? (isPill ? 34 : 44)) + 6),
-        constraints: const BoxConstraints(minWidth: 130, maxWidth: 220),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-        color: context.themeSurface,
-        elevation: 12,
-        borderRadius: BorderRadius.circular(borderRadius),
-        onSelected: (T selected) {
-          if (isMultiSelect) {
-            final current = List<T>.from(selectedValues ?? []);
-            if (current.contains(selected)) {
-              current.remove(selected);
-            } else {
-              current.add(selected);
-            }
-            onMultiChanged?.call(current);
-          } else {
-            onChanged?.call(selected);
-          }
-        },
-        itemBuilder: (BuildContext menuContext) {
-          return items.map((opt) {
-            final isSelected = _isItemSelected(opt.value);
-            return PopupMenuItem<T>(
-              value: opt.value,
-              height: 42,
-              child: Row(
-                children: [
-                  if (opt.leading != null) ...[
-                    opt.leading!,
-                    const SizedBox(width: 10),
-                  ] else if (opt.icon != null) ...[
-                    Icon(opt.icon,
-                        color: isSelected
-                            ? AppColors.brandGreen
-                            : menuContext.themeTextSecondary,
-                        size: 18),
-                    const SizedBox(width: 10),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
+              dropdownColor: menuBg,
+              borderRadius: BorderRadius.circular(borderRadius),
+              menuMaxHeight: 300,
+              elevation: 8,
+              style: TextStyle(
+                color: effectiveTextColor,
+                fontSize: 12,
+                fontWeight: isDef ? FontWeight.w500 : FontWeight.w700,
+              ),
+              onChanged: onChanged,
+              items: items.map((AppDropdownItem<T> item) {
+                return DropdownMenuItem<T>(
+                  value: item.value,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth ?? 160),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          opt.label,
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: isSelected
-                                ? menuContext.themeTextPrimary
-                                : menuContext.themeTextSecondary,
-                            fontWeight:
-                                isSelected ? FontWeight.bold : FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (opt.subtitle != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            opt.subtitle!,
-                            style: AppTypography.bodySmall.copyWith(
-                              color: menuContext.themeTextSecondary,
-                              fontSize: 11,
-                            ),
+                        if (item.leading != null) ...[
+                          item.leading!,
+                          const SizedBox(width: 8),
+                        ] else if (item.icon != null) ...[
+                          Icon(item.icon, size: 16, color: itemTextColor),
+                          const SizedBox(width: 8),
+                        ],
+                        Flexible(
+                          child: Text(
+                            item.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: itemTextColor,
+                              fontSize: 13,
+                              fontWeight:
+                                  item.value == value ? FontWeight.w600 : FontWeight.normal,
+                            ),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
-                  if (isSelected) ...[
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.check_rounded,
-                      color: AppColors.brandGreen,
-                      size: 18,
-                    ),
-                  ],
-                ],
-              ),
-            );
-          }).toList();
-        },
-        child: trigger,
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }

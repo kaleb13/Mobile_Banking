@@ -55,6 +55,7 @@ class CurrencyTextWidget extends StatelessWidget {
   final String? customFormattedStr;
   final MainAxisSize mainAxisSize;
   final CrossAxisAlignment crossAxisAlignment;
+  final bool autoFit;
 
   const CurrencyTextWidget({
     super.key,
@@ -67,6 +68,7 @@ class CurrencyTextWidget extends StatelessWidget {
     this.customFormattedStr,
     this.mainAxisSize = MainAxisSize.min,
     this.crossAxisAlignment = CrossAxisAlignment.center,
+    this.autoFit = true,
   });
 
   @override
@@ -89,30 +91,37 @@ class CurrencyTextWidget extends StatelessWidget {
       fontWeight: effectiveStyle.fontWeight,
     );
 
-    if (activeCurrency.isPrefix) {
-      return Row(
-        mainAxisSize: mainAxisSize,
-        crossAxisAlignment: crossAxisAlignment,
-        children: [
-          if (signStr.isNotEmpty)
-            Text(signStr, style: effectiveStyle),
-          symbolWidget,
-          const SizedBox(width: 2),
-          Text(formattedAmount, style: effectiveStyle),
-        ],
-      );
-    } else {
-      return Row(
-        mainAxisSize: mainAxisSize,
-        crossAxisAlignment: crossAxisAlignment,
-        children: [
-          if (signStr.isNotEmpty)
-            Text(signStr, style: effectiveStyle),
-          Text(formattedAmount, style: effectiveStyle),
-          const SizedBox(width: 4),
-          symbolWidget,
-        ],
+    final Widget content = activeCurrency.isPrefix
+        ? Row(
+            mainAxisSize: mainAxisSize,
+            crossAxisAlignment: crossAxisAlignment,
+            children: [
+              if (signStr.isNotEmpty)
+                Text(signStr, style: effectiveStyle),
+              symbolWidget,
+              const SizedBox(width: 2),
+              Text(formattedAmount, style: effectiveStyle),
+            ],
+          )
+        : Row(
+            mainAxisSize: mainAxisSize,
+            crossAxisAlignment: crossAxisAlignment,
+            children: [
+              if (signStr.isNotEmpty)
+                Text(signStr, style: effectiveStyle),
+              Text(formattedAmount, style: effectiveStyle),
+              const SizedBox(width: 4),
+              symbolWidget,
+            ],
+          );
+
+    if (autoFit) {
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: content,
       );
     }
+    return content;
   }
 }

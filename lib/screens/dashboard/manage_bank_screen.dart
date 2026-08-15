@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_toast.dart';
 
 class ManageBankScreen extends StatefulWidget {
   final AppSender sender;
@@ -54,8 +55,10 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
     setState(() => _isSaving = false);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Information updated successfully')),
+      AppToast.success(
+        context,
+        message: 'Credentials Updated',
+        subtitle: '${widget.sender.senderName} information saved successfully',
       );
       Navigator.pop(context);
     }
@@ -92,8 +95,10 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
         .updateSender(updated);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account unlinked')),
+      AppToast.warning(
+        context,
+        message: 'Account Unlinked',
+        subtitle: '${widget.sender.senderName} credentials removed',
       );
       Navigator.pop(context);
     }
@@ -164,7 +169,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.overlay,
+            color: AppColors.surfaceElevated,
             borderRadius: BorderRadius.circular(16),
           ),
           child: TextField(

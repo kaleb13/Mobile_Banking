@@ -43,22 +43,25 @@ class CustomBottomNavBar extends StatelessWidget {
       margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
       height: 60,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(100),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          filter: ImageFilter.blur(
+            sigmaX: AppColors.glassBlurSigma,
+            sigmaY: AppColors.glassBlurSigma,
+          ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: context.isLightMode
-                  ? AppColors.surfaceLight
+                  ? AppColors.bottomNavBgLight
                   : AppColors.bottomNavBg,
-              borderRadius: BorderRadius.circular(30),
+              borderRadius: BorderRadius.circular(100),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black
-                      .withValues(alpha: context.isLightMode ? 0.08 : 0.35),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
+                      .withValues(alpha: context.isLightMode ? 0.06 : 0.30),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),

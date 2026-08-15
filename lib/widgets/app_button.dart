@@ -220,11 +220,13 @@ class AppButton extends StatelessWidget {
         children.add(
           Flexible(
             fit: fullWidth ? FlexFit.loose : FlexFit.loose,
-            child: Text(
-              text!,
-              style: textStyle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                text!,
+                style: textStyle,
+                maxLines: 1,
+              ),
             ),
           ),
         );

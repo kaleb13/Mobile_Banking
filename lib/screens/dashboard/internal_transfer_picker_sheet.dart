@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/app_badges.dart';
 
 class InternalTransferPickerSheet extends StatelessWidget {
   final AppTransaction sourceTransaction;
@@ -20,8 +22,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
     final targetType =
         sourceTransaction.type == 'income' ? 'expense' : 'income';
 
-    // Find candidates
-    // It should be within a couple of days and roughly the same amount
+    // Find candidates within 3 days and unlinked
     final cutoffDate = sourceTransaction.date.subtract(const Duration(days: 3));
     final futureDate = sourceTransaction.date.add(const Duration(days: 3));
 
@@ -35,152 +36,115 @@ class InternalTransferPickerSheet extends StatelessWidget {
       return true;
     }).toList();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 60),
-      height:
-          MediaQuery.of(context).size.height * 0.85, // Provide bounded height
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return AppDrawer(
+      heightFactor: 0.85,
+      headerCard: AppDrawerHeaderCard(
+        icon: Icons.sync_alt_rounded,
+        iconColor: AppColors.gold,
+        title: 'Select Linked Transaction',
+        subtitle:
+            'Match with $targetType within 3 days to link this transfer.',
       ),
-      child: Column(
-        children: [
-          // Handle
-          Container(
-            margin: const EdgeInsets.only(top: 12, bottom: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.textSecondary.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Row(
-              children: [
-                const Icon(Icons.sync_alt, color: AppColors.gold),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Select Linked Transaction',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Text(
-              'Select the matching $targetType for this internal transfer. Only unlinked transactions within 3 days are shown.',
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
-            ),
-          ),
-          const Divider(color: Colors.white10),
-          Expanded(
-            child: candidates.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No matching transactions found.',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: candidates.length,
-                    itemBuilder: (ctx, i) {
-                      final tx = candidates[i];
-                      final isExactMatch =
-                          tx.amount == sourceTransaction.amount;
+      child: candidates.isEmpty
+          ? const Center(
+              child: Text(
+                'No matching transactions found within 3 days.',
+                style: TextStyle(color: AppColors.textSoft, fontSize: 13),
+              ),
+            )
+          : ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 16),
+              itemCount: candidates.length,
+              itemBuilder: (ctx, i) {
+                final tx = candidates[i];
+                final isExactMatch = tx.amount == sourceTransaction.amount;
 
-                      return ListTile(
-                        onTap: () async {
-                          await provider.linkAsInternalTransfer(
-                              sourceTransaction.id!, tx.id!);
-                          if (context.mounted) {
-                            Navigator.pop(context); // close sheet
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Internal transfer linked! ✓'),
-                                backgroundColor: AppColors.positive,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          }
-                        },
-                        leading: CircleAvatar(
-                          backgroundColor: tx.type == 'income'
-                              ? AppColors.positive.withValues(alpha: 0.1)
-                              : AppColors.negative.withValues(alpha: 0.1),
-                          child: Icon(
-                            tx.type == 'income'
-                                ? Icons.arrow_downward
-                                : Icons.arrow_upward,
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    onTap: () async {
+                      await provider.linkAsInternalTransfer(
+                          sourceTransaction.id!, tx.id!);
+                      if (context.mounted) {
+                        Navigator.pop(context); // close sheet
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Internal transfer linked! ✓'),
+                            backgroundColor: AppColors.positive,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                    leading: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: (tx.type == 'income'
+                                ? AppColors.positive
+                                : AppColors.warning)
+                            .withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        tx.type == 'income'
+                            ? Icons.arrow_downward_rounded
+                            : Icons.arrow_upward_rounded,
+                        color: tx.type == 'income'
+                            ? AppColors.positive
+                            : AppColors.warning,
+                        size: 18,
+                      ),
+                    ),
+                    title: Text(
+                      tx.sender,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: Text(
+                      DateFormat('MMM dd, HH:mm').format(tx.date),
+                      style: const TextStyle(
+                        color: AppColors.textSoft,
+                        fontSize: 11,
+                      ),
+                    ),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${NumberFormat('#,##0.00').format(tx.amount)} ETB',
+                          style: TextStyle(
                             color: tx.type == 'income'
                                 ? AppColors.positive
-                                : AppColors.negative,
-                            size: 16,
+                                : AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
                         ),
-                        title: Text(
-                          tx.sender,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          DateFormat('MMM dd, HH:mm').format(tx.date),
-                          style: const TextStyle(
-                              color: AppColors.textSoft, fontSize: 12),
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${NumberFormat('#,##0.00').format(tx.amount)} ETB',
-                              style: TextStyle(
-                                color: tx.type == 'income'
-                                    ? AppColors.positive
-                                    : AppColors.negative,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            if (isExactMatch)
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.gold
-                                      .withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'EXACT AMOUNT',
-                                  style: TextStyle(
-                                    color: AppColors.gold,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                        if (isExactMatch) ...[
+                          const SizedBox(height: 4),
+                          const AppBadge.warning(
+                            text: 'EXACT AMOUNT',
+                            size: AppBadgeSize.micro,
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-          ),
-        ],
-      ),
+                );
+              },
+            ),
     );
   }
 }

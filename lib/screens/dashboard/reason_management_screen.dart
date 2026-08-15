@@ -7,6 +7,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_badges.dart';
+import '../../widgets/app_drawer.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
   const CategoryManagementScreen({super.key});
@@ -158,41 +160,20 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   }
 
   void _showCategoryOptionsModal(BuildContext context, FinanceProvider provider, AppReason reason) {
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
-        return Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          decoration: const BoxDecoration(
-            color: AppColors.bgMid,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        return AppDrawer(
+          headerCard: AppDrawerHeaderCard(
+            icon: Icons.category_outlined,
+            iconColor: AppColors.positive,
+            title: reason.name,
+            subtitle: reason.isSubcategory ? 'Subcategory Options' : 'Category Options',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                reason.name,
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                reason.isSubcategory ? 'Subcategory Options' : 'Category Options',
-                style: const TextStyle(color: Colors.white38, fontSize: 12),
-              ),
-              const SizedBox(height: 16),
               ListTile(
                 leading: const Icon(Icons.edit_outlined, color: Colors.white70),
                 title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
@@ -360,16 +341,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.positive.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'System',
-              style: TextStyle(color: AppColors.positive, fontSize: 10, fontWeight: FontWeight.bold),
-            ),
+          const AppBadge.info(
+            text: 'System',
+            size: AppBadgeSize.small,
           ),
         ],
       ),

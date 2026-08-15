@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_badges.dart';
 
 /// Top-down 3/4 screen height drawer for transaction categorization.
 ///
@@ -212,22 +214,34 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
     return GestureDetector(
       onTap: _dismiss,
       child: Scaffold(
-        backgroundColor: Colors.black.withValues(alpha: 0.45),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: GestureDetector(
-            onTap: () {}, // Absorb taps on top drawer
-            child: _loaded
-                ? FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
-                      child: _buildTopDrawer(
-                          context, topPadding, threeQuarterHeight),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.topCenter,
+              child: GestureDetector(
+                onTap: () {}, // Absorb taps on top drawer
+                child: _loaded
+                    ? FadeTransition(
+                        opacity: _fadeAnim,
+                        child: SlideTransition(
+                          position: _slideAnim,
+                          child: _buildTopDrawer(
+                              context, topPadding, threeQuarterHeight),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -419,64 +433,21 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                 Row(
                   children: [
                     Expanded(
-                      child: GestureDetector(
-                        onTap: _selectedReasonName != null ? _save : null,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: _selectedReasonName != null
-                                ? AppColors.positive
-                                : AppColors.positive.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(23),
-                          ),
-                          child: Center(
-                            child: Text(
-                              _selectedReasonName != null
-                                  ? 'Save as "$_selectedReasonName"'
-                                  : 'Select Category',
-                              style: TextStyle(
-                                color: _selectedReasonName != null
-                                    ? Colors.black
-                                    : Colors.white.withValues(alpha: 0.4),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13.5,
-                              ),
-                            ),
-                          ),
-                        ),
+                      child: AppButton.primary(
+                        text: _selectedReasonName != null
+                            ? 'Save as "$_selectedReasonName"'
+                            : 'Select Category',
+                        height: 46,
+                        onPressed: _selectedReasonName != null ? _save : null,
                       ),
                     ),
                     const SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: _openApp,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 13),
-                        decoration: BoxDecoration(
-                          color: AppColors.positive.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(23),
-                                                  ),
-                        child: const Row(
-                          children: [
-                            Text(
-                              'Open App',
-                              style: TextStyle(
-                                color: AppColors.positive,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              color: AppColors.positive,
-                              size: 14,
-                            ),
-                          ],
-                        ),
-                      ),
+                    AppButton.secondary(
+                      text: 'Open App',
+                      icon: Icons.arrow_forward_rounded,
+                      fullWidth: false,
+                      height: 46,
+                      onPressed: _openApp,
                     ),
                   ],
                 ),
@@ -537,38 +508,13 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                     ),
                   ),
                   if (hasSubcategories) ...[
-                    GestureDetector(
+                    AppBadge.success(
+                      text: 'Go deeper',
+                      icon: isExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.chevron_right_rounded,
+                      size: AppBadgeSize.small,
                       onTap: () => _toggleGroup(group),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Go deeper',
-                              style: TextStyle(
-                                color: AppColors.positive.withValues(alpha: 0.9),
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            Icon(
-                              isExpanded
-                                  ? Icons.keyboard_arrow_up_rounded
-                                  : Icons.chevron_right_rounded,
-                              color: AppColors.positive,
-                              size: 14,
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                   ],
                 ],

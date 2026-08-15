@@ -65,6 +65,30 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         }
 
         /**
+         * Returns true if the text contains Amharic Ethiopic characters.
+         */
+        fun isAmharicMessage(body: String): Boolean {
+            return body.any { it in '\u1200'..'\u137F' }
+        }
+
+        /**
+         * Returns true if the text contains at least one English banking keyword.
+         */
+        fun isEnglishBankingMessage(body: String): Boolean {
+            val lower = body.lowercase()
+            val keywords = listOf(
+                "received", "sent", "send", "transferred", "transfer", "paid", "pay",
+                "payment", "credited", "credit", "debited", "debit", "deposited",
+                "deposit", "withdrawn", "withdrawal", "withdraw", "balance", "account",
+                "available", "remaining", "amount", "total", "birr", "etb", "usd",
+                "loan", "repay", "due", "transaction", "txn", "ref no", "reference",
+                "purchase", "charged", "fee", "bank", "wallet", "mobile money",
+                "telebirr", "cbe", "ahadu", "boa"
+            )
+            return keywords.any { lower.contains(it) }
+        }
+
+        /**
          * Returns true if the message is a security/auth/OTP message.
          */
         fun isSecurityOrAuthMessage(body: String): Boolean {
@@ -75,6 +99,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (lower.contains("otp code")) return true
             if (lower.contains("otp is")) return true
             if (lower.contains("your otp")) return true
+            if (lower.contains("otp:")) return true
+            if (lower.contains("passcode")) return true
+            if (lower.contains("secret code")) return true
+            if (lower.contains("login code")) return true
+            if (lower.contains("activation code")) return true
+            if (lower.contains("confirmation code")) return true
 
             if (lower.contains("pin or password is incorrect")) return true
             if (lower.contains("incorrect pin")) return true
@@ -85,6 +115,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (lower.contains("wrong password")) return true
             if (lower.contains("pin is incorrect")) return true
             if (lower.contains("password is incorrect")) return true
+            if (lower.contains("pin locked") || lower.contains("password locked")) return true
+            if (lower.contains("account has been locked") || lower.contains("account locked")) return true
 
             if (lower.contains("pin reset")) return true
             if (lower.contains("password reset")) return true
@@ -92,12 +124,22 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (lower.contains("reset your password")) return true
             if (lower.contains("change your pin")) return true
             if (lower.contains("change your password")) return true
+            if (lower.contains("pin changed") || lower.contains("password changed")) return true
+            if (lower.contains("temporary pin") || lower.contains("temporary password")) return true
+            if (lower.contains("initial pin") || lower.contains("initial password")) return true
+            if (lower.contains("your pin is") || lower.contains("your password is")) return true
+
+            if ((lower.contains("do not share") || lower.contains("never share") ||
+                 lower.contains("do not disclose") || lower.contains("keep it confidential")) &&
+                (lower.contains("pin") || lower.contains("otp") || lower.contains("password") || lower.contains("code"))) {
+                return true
+            }
 
             if (lower.contains("auth code")) return true
             if (lower.contains("verification code") &&
                 Regex("\\d{4,8}").containsMatchIn(lower)) return true
             if ((lower.contains("access code") || lower.contains("security code")) &&
-                (lower.contains("use") || lower.contains("enter") || lower.contains("otp"))) {
+                (lower.contains("use") || lower.contains("enter") || lower.contains("otp") || lower.contains("code"))) {
                 return true
             }
 
@@ -178,7 +220,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         if (body.isBlank()) return
 
         val bankName = matchBankSender(sender) ?: return
+        if (isAmharicMessage(body)) return
         if (isSecurityOrAuthMessage(body)) return
+        if (!isEnglishBankingMessage(body)) return
 
         val txId = generateId(sender, timestampMs, body)
         val inserted = insertIntoDb(context, txId, bankName, body, timestampMs, sender)

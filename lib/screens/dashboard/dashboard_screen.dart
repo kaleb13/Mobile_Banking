@@ -17,6 +17,9 @@ import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_search_bar.dart';
+import '../../widgets/app_dropdown.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -155,19 +158,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showPNLInfo(BuildContext context, bool isToday) {
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
         return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.35), // Fully transparent glass background
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                color: AppColors.surface.withValues(alpha: 0.85),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.25),
@@ -367,20 +369,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.negative,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                overdueCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            AppBadge.destructive(
+              text: overdueCount.toString(),
+              size: AppBadgeSize.small,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -471,50 +462,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Large Balance Display
+                  // Large Balance Display (Auto-scales down for high amounts e.g. 1M+ so it never truncates)
                   GestureDetector(
                     onTap: provider.toggleBalanceVisibility,
                     behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const CurrencySymbolWidget(
-                          size: 28,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  fullyFormatted,
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 40,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -1.0,
-                                    height: 1.05,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Text(
-                                '.$decimals',
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.05,
-                                ),
-                              ),
-                            ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Baseline(
+                            baseline: 32,
+                            baselineType: TextBaseline.alphabetic,
+                            child: CurrencySymbolWidget(
+                              size: 26,
+                              color: Colors.white,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Text(
+                            fullyFormatted,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 38,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1.0,
+                              height: 1.05,
+                            ),
+                            maxLines: 1,
+                          ),
+                          Text(
+                            '.$decimals',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              height: 1.05,
+                            ),
+                            maxLines: 1,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -631,8 +622,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final senders = provider.senders;
     final t = provider.pageOffset.clamp(0.0, 1.0);
 
-    // If swiping page transition is active (t > 0.05), let MainShell flying overlay handle it
-    if (senders.isEmpty || t > 0.05) {
+    // If swiping page transition is active (t > 0.02), let MainShell flying overlay handle it
+    if (senders.isEmpty || t > 0.02) {
       return GestureDetector(
         onTap: () => provider.animateToTab(1),
         behavior: HitTestBehavior.opaque,
@@ -646,39 +637,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const double homeW = 100.0;
     const double homeH = 185.0;
 
-    final int totalCards = senders.length + 1;
+    final activeSenders = provider.activeSenders;
     final List<Widget> cardWidgets = [];
 
-    for (int i = 0; i < totalCards; i++) {
-      final bool isCashWallet = i == senders.length;
-      final String cardName =
-          isCashWallet ? 'Cash Wallet' : senders[i].senderName;
-      final bool isVisibleOnHome = !isCashWallet && i < 3;
-      if (!isVisibleOnHome) continue;
+    for (int i = 0; i < activeSenders.length && i < 3; i++) {
+      final sender = activeSenders[i];
+      final String cardName = sender.senderName;
 
       final int deckIndex = i;
       final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
 
-      final senderTxs = provider.transactions
-          .where((tx) =>
-              tx.name.trim().toUpperCase() == cardName.trim().toUpperCase())
-          .toList();
-
-      double balance = 0;
-      final withBal = senderTxs.where((tx) => tx.totalBalance > 0);
-      if (withBal.isNotEmpty) {
-        balance = withBal.first.totalBalance;
-      }
-
-      final isPaused = provider.isTrackingPaused(cardName);
+      final double balance = provider.balanceForSender(cardName);
+      final int txCount = provider.txCountForSender(cardName);
 
       final Widget card = BankCardWidget(
         senderName: cardName,
         balance: balance,
-        txCount: senderTxs.length,
+        txCount: txCount,
         isBalanceVisible: provider.isBalanceVisible,
-        isPaused: isPaused,
+        isPaused: false,
         animationFactor: 0.0,
+        onTap: () => provider.animateToTab(1),
       );
 
       cardWidgets.add(
@@ -1223,54 +1202,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required ValueChanged<String?> onChanged,
     double? maxWidth,
   }) {
-    final bool isDefault = value == 'All' ||
-        value == 'Any Time' ||
-        value == 'All Senders' ||
-        value == 'All Banks';
-
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.lightGreyBackground,
-        borderRadius: BorderRadius.circular(16),
-              ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          icon: const Padding(
-            padding: EdgeInsets.only(left: 4.0),
-            child: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: AppColors.darkCharcoal,
-              size: 16,
-            ),
-          ),
-          dropdownColor: Colors.white,
-          style: TextStyle(
-            color: AppColors.darkCharcoal,
-            fontSize: 12,
-            fontWeight: isDefault ? FontWeight.w500 : FontWeight.bold,
-          ),
-          onChanged: onChanged,
-          items: items.map((String item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxWidth ?? 150),
-                child: Text(
-                  item,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.darkCharcoal,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
+    return AppDropdown.simple(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.light,
+      maxWidth: maxWidth,
     );
   }
 
@@ -1434,139 +1371,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: _isSearchActive
-                    ? Container(
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: AppColors.lightGreyBackground,
-                          borderRadius: BorderRadius.circular(21),
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 14),
-                            const Icon(Icons.search_rounded,
-                                color: AppColors.darkGreyText, size: 18),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                focusNode: _searchFocusNode,
-                                style: const TextStyle(
-                                    color: AppColors.darkCharcoal,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500),
-                                decoration: InputDecoration(
-                                  hintText:
-                                      'Search by sender, bank, or reason...',
-                                  hintStyle: const TextStyle(
-                                      color: AppColors.greyText,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w400),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  suffixIconConstraints: const BoxConstraints(
-                                    minHeight: 24,
-                                    minWidth: 24,
-                                  ),
-                                  suffixIcon: _searchQuery.isNotEmpty
-                                      ? GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              _searchQuery = '';
-                                              _searchController.clear();
-                                            });
-                                          },
-                                          child: const Padding(
-                                            padding: EdgeInsets.only(
-                                                right: 10.0),
-                                            child: Icon(Icons.cancel_rounded,
-                                                color: AppColors.greyText,
-                                                size: 16),
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _searchQuery = val;
-                                  });
-                                },
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _isSearchActive = false;
-                                  _searchQuery = '';
-                                  _searchController.clear();
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                child: const Icon(Icons.close_rounded,
-                                    color: AppColors.darkCharcoal, size: 18),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                        ),
-                      )
-                    : Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _isFilterExpanded = !_isFilterExpanded;
-                              });
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(
-                                Icons.filter_list,
-                                color: _isFilterExpanded
-                                    ? AppColors.darkCharcoal
-                                    : AppColors.overlayDark50,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                          const Expanded(
-                            child: Text(
-                              'Transactions',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppColors.darkCharcoal,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _isSearchActive = true;
-                              });
-                              _searchFocusNode.requestFocus();
-                              _sheetController.animateTo(0.95,
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeOutCubic);
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              child: const Icon(
-                                Icons.search,
-                                color: AppColors.overlayDark50,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                        ],
+                child: AppSearchBar(
+                  mode: AppSearchBarMode.icon,
+                  isExpanded: _isSearchActive,
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  hint: 'Search by sender, bank, or reason...',
+                  title: 'Transactions',
+                  leading: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isFilterExpanded = !_isFilterExpanded;
+                      });
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.filter_list,
+                        color: _isFilterExpanded
+                            ? AppColors.darkCharcoal
+                            : AppColors.overlayDark50,
+                        size: 22,
                       ),
+                    ),
+                  ),
+                  onExpandChanged: (expanded) {
+                    setState(() {
+                      _isSearchActive = expanded;
+                    });
+                    if (expanded) {
+                      _sheetController.animateTo(
+                        0.95,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutCubic,
+                      );
+                    }
+                  },
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                    });
+                  },
+                  onClear: () {
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                  onClose: () {
+                    setState(() {
+                      _isSearchActive = false;
+                      _searchQuery = '';
+                    });
+                  },
+                  backgroundColor: AppColors.lightGreyBackground,
+                  textColor: AppColors.darkCharcoal,
+                  hintColor: AppColors.greyText,
+                  iconColor: AppColors.darkGreyText,
+                  closeIconColor: AppColors.darkCharcoal,
+                ),
               ),
 
               // Filter Row Dropdowns (Hidden by default; appears when search active or filter icon tapped)
@@ -1771,7 +1634,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       img = Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
       bgColor = AppColors.cbeBirrPink.withValues(alpha: 0.10);
     } else if (nameUp.contains('AHADU')) {
-      img = Image.asset('assets/images/Ahadu_Logo.png', width: 22, height: 22);
+      img = SvgPicture.asset('assets/images/Ahadu_Logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.10);
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 22, height: 22, fit: BoxFit.contain);
@@ -1827,13 +1690,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         colorBlendMode: overrideColor != null ? BlendMode.srcIn : null,
       );
     } else if (nameUp.contains('AHADU')) {
-      return Image.asset(
-        'assets/images/Ahadu_Logo.png',
+      return SvgPicture.asset(
+        'assets/images/Ahadu_Logo.svg',
         width: size,
         height: size,
         fit: BoxFit.contain,
-        color: overrideColor,
-        colorBlendMode: overrideColor != null ? BlendMode.srcIn : null,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
       );
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       return SvgPicture.asset(

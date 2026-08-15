@@ -103,14 +103,17 @@ class AppConfirmDialog extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(32),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            filter: ImageFilter.blur(
+              sigmaX: AppColors.glassBlurSigma,
+              sigmaY: AppColors.glassBlurSigma,
+            ),
             child: Container(
               padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
               decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(24),
+                color: AppColors.glassSurfaceModal,
+                borderRadius: BorderRadius.circular(32),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

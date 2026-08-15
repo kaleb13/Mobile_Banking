@@ -170,6 +170,26 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   List<AppSender> get senders => _senders;
 
+  /// Senders that are actively tracked (NOT paused).
+  List<AppSender> get activeSenders =>
+      _senders.where((s) => !isTrackingPaused(s.senderName)).toList();
+
+  /// Senders whose tracking is currently paused.
+  List<AppSender> get pausedSenders =>
+      _senders.where((s) => isTrackingPaused(s.senderName)).toList();
+
+  /// Full dynamic ordered wallet card names:
+  /// 1. Active bank senders
+  /// 2. 'Cash Wallet'
+  /// 3. Paused bank senders
+  List<String> get orderedWalletNames {
+    return [
+      ...activeSenders.map((s) => s.senderName),
+      'Cash Wallet',
+      ...pausedSenders.map((s) => s.senderName),
+    ];
+  }
+
   /// Returns all unique person/sender names captured in transaction records.
   /// Used to power "pick from existing contacts" in the loan form.
   List<String> get allTrackedPersonNames {
@@ -645,6 +665,51 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   double get cashBalance => _cashBalance;
   List<SavingGoal> get savingGoals => _savingGoals;
 
+  /// Centralized single source-of-truth: returns all transactions matching a sender name.
+  List<AppTransaction> transactionsForSender(String senderName) {
+    final sNameUp = senderName.trim().toUpperCase();
+    return _transactions.where((t) {
+      final tNameUp = t.name.trim().toUpperCase();
+      final tSenderUp = t.sender.trim().toUpperCase();
+      if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
+        return tNameUp == 'BOA' ||
+            tSenderUp == 'BOA' ||
+            tNameUp.contains('ABYSSINIA') ||
+            tSenderUp.contains('ABYSSINIA');
+      }
+      return tNameUp == sNameUp || tSenderUp == sNameUp;
+    }).toList();
+  }
+
+  /// Centralized single source-of-truth: returns the latest known account balance for a sender name.
+  double balanceForSender(String senderName) {
+    if (senderName.trim().toUpperCase() == 'CASH WALLET') {
+      return _cashBalance;
+    }
+    final txs = transactionsForSender(senderName);
+    final withBal = txs.where((t) => t.totalBalance > 0);
+    if (withBal.isNotEmpty) {
+      return withBal.first.totalBalance;
+    }
+    return 0.0;
+  }
+
+  /// Centralized single source-of-truth: returns total transaction count for a sender name.
+  int txCountForSender(String senderName) {
+    if (senderName.trim().toUpperCase() == 'CASH WALLET') {
+      int count = 0;
+      for (var tx in _transactions) {
+        if (tx.reason?.toLowerCase() == 'cash' ||
+            tx.customReasonText?.toLowerCase() == 'cash' ||
+            tx.resolvedReason?.toLowerCase() == 'cash') {
+          count++;
+        }
+      }
+      return count + _cashTransactions.length;
+    }
+    return transactionsForSender(senderName).length;
+  }
+
   /// Returns all cash deduction transactions linked to a specific bank withdrawal transaction ID.
   List<CashTransaction> spendingsForTransaction(String transactionId) {
     return _cashTransactions
@@ -962,6 +1027,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   void animateToTab(int index) {
     setScreenIndex(index);
+    if (tabNavigationNotifier.value == index) {
+      tabNavigationNotifier.value = null;
+    }
     tabNavigationNotifier.value = index;
   }
 
@@ -1525,6 +1593,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final List<AppNotification> filtered = [];
     final List<String> idsToDelete = [];
 
+    final prefs = await SharedPreferences.getInstance();
+    final ignored = prefs.getStringList('ignored_notification_ids') ?? [];
+
     for (final n in all) {
       _notifIdToBodyMap[n.id] = n.body;
 
@@ -1535,6 +1606,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
       if (!isSystemAlert) {
         final bodyNormalised = n.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+        final bodyHash =
+            sha256.convert(utf8.encode(bodyNormalised)).toString();
+
+        // 0. Ignore if ID or normalized body hash is in user's ignored list
+        if (ignored.contains(n.id) || ignored.contains(bodyHash)) {
+          idsToDelete.add(n.id);
+          continue;
+        }
 
         // 1. Ignore Amharic messages completely
         if (_isAmharicMessage(n.body)) {
@@ -1593,15 +1672,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           continue;
         }
 
-        // 5. Ingest raw banking notifications into transactions table so they display on Shibre home screen
-        if (BankSenders.match(n.sender) != null ||
-            TelebirrParser.parse(n.body, n.date) != null ||
+        // 5. Ingest raw banking notifications into transactions table if parsable
+        final isParsable = TelebirrParser.parse(n.body, n.date) != null ||
             TelebirrParser.isCreditDisbursement(n.body) ||
             TelebirrParser.isCreditRepayment(n.body) ||
             CbeParser.parse(n.body, n.date) != null ||
             CbeBirrParser.parse(n.body, n.date) != null ||
             AhaduParser.parse(n.body, n.date) != null ||
-            BoaParser.parse(n.body, n.date) != null) {
+            BoaParser.parse(n.body, n.date) != null;
+
+        if (isParsable) {
           await processSmsRaw(
             senderAddress: n.sender,
             body: n.body,
@@ -1621,7 +1701,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       filtered.add(n);
     }
 
-    // Asynchronously delete stale/already-registered notifications from SQLite
+    // Asynchronously delete stale/already-registered/ignored notifications from SQLite
     for (final id in idsToDelete) {
       DatabaseService.instance.deleteNotification(id);
     }
@@ -1659,15 +1739,28 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// Permanently ignores a notification — it will never reappear even after refresh.
   Future<void> ignoreNotification(String id) async {
-    // 1. Delete from visible list and DB
+    // 1. Retrieve the notification body before deleting
+    final notifBody = _notifIdToBodyMap[id] ??
+        _notifications.where((n) => n.id == id).firstOrNull?.body;
+
+    // 2. Delete from visible list and DB
     await deleteNotification(id);
-    // 2. Persist the ignored ID so addUnrecognizedNotification skips it forever
+
+    // 3. Persist the ignored ID and body hash so it is skipped forever
     final prefs = await SharedPreferences.getInstance();
     final ignored = prefs.getStringList('ignored_notification_ids') ?? [];
     if (!ignored.contains(id)) {
       ignored.add(id);
-      await prefs.setStringList('ignored_notification_ids', ignored);
     }
+    if (notifBody != null && notifBody.trim().isNotEmpty) {
+      final bodyNormalised = notifBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final bodyHash =
+          sha256.convert(utf8.encode(bodyNormalised)).toString();
+      if (!ignored.contains(bodyHash)) {
+        ignored.add(bodyHash);
+      }
+    }
+    await prefs.setStringList('ignored_notification_ids', ignored);
   }
 
   /// Returns true if [msg] looks like a banking message (contains an English
@@ -1800,12 +1893,20 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
 
-    final id = '${sender}_${date.millisecondsSinceEpoch}';
+    final id = isSystemAlert
+        ? '${sender}_${date.millisecondsSinceEpoch}'
+        : sha256
+            .convert(utf8.encode('$sender|${date.millisecondsSinceEpoch}|$body'))
+            .toString();
 
     // Check if this message was permanently ignored by the user
     final prefs = await SharedPreferences.getInstance();
     final ignored = prefs.getStringList('ignored_notification_ids') ?? [];
-    if (ignored.contains(id)) return; // silently skip — user said ignore
+    final bodyNormalised = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final bodyHash = sha256.convert(utf8.encode(bodyNormalised)).toString();
+    if (ignored.contains(id) || ignored.contains(bodyHash)) {
+      return; // silently skip — user said ignore
+    }
 
     final notification = AppNotification(
       id: id,
@@ -1814,6 +1915,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       date: date,
     );
     await DatabaseService.instance.insertNotification(notification);
+    _notifIdToBodyMap[id] = body;
     _notifications.insert(0, notification);
     _unreadNotificationCount++;
     notifyListeners();
@@ -2267,6 +2369,31 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       reason: resolvedName ?? oldTx.reason,
       note: note ?? oldTx.note,
     );
+
+    final wasCash = oldTx.reason?.toLowerCase() == 'cash' ||
+        oldTx.customReasonText?.toLowerCase() == 'cash' ||
+        oldTx.resolvedReason?.toLowerCase() == 'cash';
+    final isNewCash = resolvedName?.toLowerCase() == 'cash' ||
+        customReasonText?.toLowerCase() == 'cash';
+
+    if (wasCash && !isNewCash) {
+      final linkedDeductions = spendingsForTransaction(transactionId);
+      for (final s in linkedDeductions) {
+        if (s.id != null) {
+          await DatabaseService.instance.deleteCashTransaction(s.id!);
+          _cashTransactions.removeWhere((t) => t.id == s.id);
+        }
+      }
+    }
+
+    final wasInternalTransfer = oldTx.linkedTransactionId != null;
+    final isNewInternalTransfer =
+        resolvedName?.toLowerCase() == 'internal transfer' ||
+            customReasonText?.toLowerCase() == 'internal transfer';
+
+    if (wasInternalTransfer && !isNewInternalTransfer) {
+      await unlinkInternalTransfer(transactionId);
+    }
 
     await DatabaseService.instance.updateTransaction(newTx);
     _transactions[index] = newTx;
@@ -2897,6 +3024,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     String message,
     DateTime date,
   ) async {
+    // ── Global pre-checks: drop Amharic, security/auth/passwords, and non-financial SMS ──
+    if (_isAmharicMessage(message)) return;
+    if (BankSenders.isSecurityOrAuthMessage(message)) return;
+    if (!_isEnglishBankingMessage(message)) return;
+
     // If name is not yet captured, try to extract from bank messages
     if (_userName == null) {
       final name = CbeParser.extractOwnerName(message) ??
@@ -2920,6 +3052,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
 
     if (bank == 'Telebirr') {
+      if (TelebirrParser.isCreditDisbursement(message) ||
+          TelebirrParser.isCreditRepayment(message)) {
+        await processSmsRaw(
+          senderAddress: sender,
+          body: message,
+          date: date,
+        );
+        return;
+      }
       AppTransaction? telebirrTx = TelebirrParser.parse(message, date);
       if (telebirrTx != null) {
         await addTransaction(telebirrTx);
@@ -3066,6 +3207,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   Future<void> addCashTransaction(CashTransaction transaction) async {
+    if (transaction.type == 'expense' &&
+        (transaction.reasonName == null || transaction.reasonName!.trim().isEmpty) &&
+        transaction.reasonId == null) {
+      throw ArgumentError('Cash expense deductions must have an assigned reason.');
+    }
+
     final id =
         await DatabaseService.instance.insertCashTransaction(transaction);
     final mapped = transaction.toMap();

@@ -6,14 +6,19 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_search_bar.dart';
 
 class ReasonSelectionSheet extends StatefulWidget {
   final AppReason? initialReason;
+  final String? transactionType;
+  final bool isCashSpending;
   final Function(AppReason) onReasonSelected;
 
   const ReasonSelectionSheet({
     super.key,
     this.initialReason,
+    this.transactionType,
+    this.isCashSpending = false,
     required this.onReasonSelected,
   });
 
@@ -66,10 +71,20 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
     final query = _searchQuery.trim().toLowerCase();
+    final bool isIncome = widget.transactionType?.toLowerCase() == 'income' ||
+        widget.transactionType?.toLowerCase() == 'addition';
 
     final specialReasonsMap = <String, AppReason>{};
     for (var r in provider.reasons.where(_isSpecial)) {
       final nameKey = r.name.trim().toLowerCase();
+      // For cash spending/deductions: ONLY 'Loan' is permitted from special reasons.
+      if (widget.isCashSpending && nameKey != 'loan') {
+        continue;
+      }
+      // "Cash" reason is ONLY for withdrawals/expenses. In deposits/income, hide "Cash".
+      if (isIncome && nameKey == 'cash') {
+        continue;
+      }
       if (nameKey.contains(query)) {
         specialReasonsMap.putIfAbsent(nameKey, () => r);
       }
@@ -92,16 +107,19 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
         ? MediaQuery.of(context).size.height * 0.95
         : MediaQuery.of(context).size.height * 0.82;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-      height: targetHeight,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      decoration: const BoxDecoration(
-        color: AppColors.bgMid,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      clipBehavior: Clip.antiAlias,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        height: targetHeight,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Drag Handle
@@ -120,104 +138,29 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
           const SizedBox(height: 12),
 
           // ── Header Row / Expandable Search Bar ────────────────────────────
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            height: 42,
-            child: _isSearchExpanded
-                ? Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          autofocus: true,
-                          onChanged: (val) => setState(() => _searchQuery = val),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'Search reason or category...',
-                            hintStyle: const TextStyle(color: AppColors.textSoft, fontSize: 13),
-                            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.positive, size: 18),
-                            filled: true,
-                            fillColor: Colors.white.withValues(alpha: 0.08),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isSearchExpanded = false;
-                            _searchQuery = '';
-                            _searchController.clear();
-                          });
-                        },
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close_rounded, color: Colors.white70, size: 18),
-                        ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      const Text(
-                        'Select Reason',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isSearchExpanded = true;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(20),
-                                                      ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.search_rounded, color: AppColors.positive, size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                'Search',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          AppSearchBar(
+            mode: AppSearchBarMode.pill,
+            title: 'Select Reason',
+            pillLabel: 'Search',
+            isExpanded: _isSearchExpanded,
+            controller: _searchController,
+            hint: 'Search reason or category...',
+            autofocus: true,
+            onExpandChanged: (expanded) {
+              setState(() => _isSearchExpanded = expanded);
+            },
+            onChanged: (val) => setState(() => _searchQuery = val),
+            onClear: () => setState(() => _searchQuery = ''),
+            onClose: () {
+              setState(() {
+                _isSearchExpanded = false;
+                _searchQuery = '';
+              });
+            },
+            backgroundColor: Colors.white.withValues(alpha: 0.08),
+            iconColor: AppColors.positive,
+            textColor: Colors.white,
+            hintColor: AppColors.textSoft,
           ),
           const SizedBox(height: 12),
 
@@ -282,7 +225,8 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {

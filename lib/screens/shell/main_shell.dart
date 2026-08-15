@@ -190,12 +190,9 @@ class _MainShellState extends State<MainShell> {
 
   Widget _buildFlyingCardsOverlay(BuildContext context, FinanceProvider provider) {
     final t = provider.pageOffset.clamp(0.0, 1.0);
-    final isWalletTab = provider.currentScreenIndex == 1;
-    final isRestingOnWallet = isWalletTab && (t >= 0.95);
 
-    // Hide when resting on Home (t <= 0.05) or fully/resting on Wallet Page (isRestingOnWallet || t >= 0.98)
-    // On Wallet Manager, real in-tree cards render 100% fully expanded.
-    if (t <= 0.05 || isRestingOnWallet || t >= 0.98) return const SizedBox.shrink();
+    // Hide when resting on Home (t <= 0.02) or resting on/beyond Wallet Page (t >= 0.98 || provider.pageOffset >= 0.98)
+    if (t <= 0.02 || t >= 0.98 || provider.pageOffset >= 0.98) return const SizedBox.shrink();
 
     final senders = provider.senders;
     if (senders.isEmpty) return const SizedBox.shrink();
@@ -206,36 +203,30 @@ class _MainShellState extends State<MainShell> {
     final topScrollOffset = provider.homeTopScrollOffset.clamp(0.0, double.infinity);
     final deckTop = topPadding + 68.0 + overdueOffset - topScrollOffset;
 
-    // Unified card list: all bank senders + Cash Wallet (always last)
-    final int totalCards = senders.length + 1;
+    // Dynamic ordered card list: active bank senders + Cash Wallet + paused bank senders
+    final orderedNames = provider.orderedWalletNames;
+    final int totalCards = orderedNames.length;
+    final int activeCount = provider.activeSenders.length;
+    final bool hasPaused = provider.pausedSenders.isNotEmpty;
 
     // Home deck (t=0.0) left-offset pattern matching DashboardScreen
     const double baseLeftOffset = -42.0;
     const double leftStep = 22.0;
 
-    // Pre-compute Cash Wallet tx count (same logic as wallets_screen)
-    int cashTxCount = 0;
-    for (var tx in provider.transactions) {
-      if (tx.reason?.toLowerCase() == 'cash' ||
-          tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash') {
-        cashTxCount++;
-      }
-    }
-    cashTxCount += provider.cashTransactions.length;
-
     final List<Widget> cardWidgets = [];
 
     for (int i = 0; i < totalCards; i++) {
-      final bool isCashWallet = i == senders.length;
-      final String cardName =
-          isCashWallet ? 'Cash Wallet' : senders[i].senderName;
-      // Only the first 3 bank senders are visible on the Home page deck
-      final bool isVisibleOnHome = !isCashWallet && i < 3;
+      final String cardName = orderedNames[i];
+      final bool isCashWallet = cardName == 'Cash Wallet';
+      final bool isPaused =
+          isCashWallet ? false : provider.isTrackingPaused(cardName);
+      // Only the first 3 active bank senders are visible on the Home page deck
+      final bool isVisibleOnHome = !isPaused && !isCashWallet && i < 3;
 
       // ── Wallet list position (t=1.0) ──────────────────────────────
       const double walletLeft = 16.0;
-      final double walletTop = topPadding + 62.0 + i * 174.0;
+      final double headerOffset = (hasPaused && i > activeCount) ? 36.0 : 0.0;
+      final double walletTop = topPadding + 62.0 + i * 174.0 + headerOffset;
       final double walletW = screenWidth - 32.0;
       const double walletH = 160.0;
 
@@ -243,7 +234,7 @@ class _MainShellState extends State<MainShell> {
       // Visible-on-Home cards get their own stacked offset; all others
       // collapse behind the last visible deck card.
       final int deckIndex =
-          isVisibleOnHome ? i : 2.clamp(0, senders.length - 1);
+          isVisibleOnHome ? i : 2.clamp(0, activeCount > 0 ? activeCount - 1 : 0);
       final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
       final double homeLeft = screenWidth - 105.0 + deckLeftOffset + 42.0;
       const double homeW = 100.0;
@@ -256,7 +247,7 @@ class _MainShellState extends State<MainShell> {
       final double h = lerpDouble(homeH, walletH, t)!;
 
       // ── Opacity ───────────────────────────────────────────────────
-      // Top 3 bank senders: always visible during flight
+      // Top 3 active bank senders: always visible during flight
       // Others: smoothly fade in from t ≈ 0.15 → 0.60, invisible on Home
       final double cardOpacity;
       if (isVisibleOnHome) {
@@ -269,39 +260,17 @@ class _MainShellState extends State<MainShell> {
       if (cardOpacity < 0.001) continue;
 
       // ── Build card widget ─────────────────────────────────────────
-      final Widget card;
-      if (isCashWallet) {
-        card = BankCardWidget(
-          senderName: 'Cash Wallet',
-          balance: provider.cashBalance,
-          txCount: cashTxCount,
-          isBalanceVisible: provider.isBalanceVisible,
-          isPaused: false,
-          animationFactor: t,
-        );
-      } else {
-        final senderTxs = provider.transactions
-            .where((tx) =>
-                tx.name.trim().toUpperCase() == cardName.trim().toUpperCase())
-            .toList();
+      final double balance = provider.balanceForSender(cardName);
+      final int txCount = provider.txCountForSender(cardName);
 
-        double balance = 0;
-        final withBal = senderTxs.where((tx) => tx.totalBalance > 0);
-        if (withBal.isNotEmpty) {
-          balance = withBal.first.totalBalance;
-        }
-
-        final isPaused = provider.isTrackingPaused(cardName);
-
-        card = BankCardWidget(
-          senderName: cardName,
-          balance: balance,
-          txCount: senderTxs.length,
-          isBalanceVisible: provider.isBalanceVisible,
-          isPaused: isPaused,
-          animationFactor: t,
-        );
-      }
+      final Widget card = BankCardWidget(
+        senderName: cardName,
+        balance: balance,
+        txCount: txCount,
+        isBalanceVisible: provider.isBalanceVisible,
+        isPaused: isPaused,
+        animationFactor: t,
+      );
 
       cardWidgets.add(
         Positioned(
@@ -312,8 +281,11 @@ class _MainShellState extends State<MainShell> {
           child: Opacity(
             opacity: cardOpacity,
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
-                if (t <= 0.05) provider.setScreenIndex(1);
+                if (t <= 0.05) {
+                  provider.animateToTab(1);
+                }
               },
               child: card,
             ),
@@ -323,51 +295,13 @@ class _MainShellState extends State<MainShell> {
     }
 
     final bool shouldIgnorePointer = t > 0.01;
-    final double screenHeight = MediaQuery.of(context).size.height;
-    final double topHeaderY = topPadding + 56.0 + overdueOffset;
-    final double maxBottomY = provider.homeSheetTopY ?? screenHeight;
 
     return IgnorePointer(
       ignoring: shouldIgnorePointer,
-      child: ClipRect(
-        clipper: _FlyingCardsClipper(
-          topHeaderY: topHeaderY,
-          maxBottomY: maxBottomY,
-          t: t,
-        ),
-        child: Stack(
-          children: cardWidgets,
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: cardWidgets,
       ),
     );
-  }
-}
-
-class _FlyingCardsClipper extends CustomClipper<Rect> {
-  final double topHeaderY;
-  final double maxBottomY;
-  final double t;
-
-  _FlyingCardsClipper({
-    required this.topHeaderY,
-    required this.maxBottomY,
-    required this.t,
-  });
-
-  @override
-  Rect getClip(Size size) {
-    // Top boundary: On Home (t=0.0), clip any pixels above topHeaderY so cards NEVER overlap Section 1A (Notification Header).
-    // Bottom boundary: On Home (t=0.0), clip any pixels below maxBottomY (top edge of White Transaction Section).
-    // As t approaches 1.0 (swiping to Wallet page), smoothly remove clipping to allow full flight.
-    final double effectiveTop = topHeaderY * (1.0 - t);
-    final double effectiveBottom = size.height * t + maxBottomY * (1.0 - t);
-    return Rect.fromLTRB(0, effectiveTop, size.width, effectiveBottom);
-  }
-
-  @override
-  bool shouldReclip(_FlyingCardsClipper oldClipper) {
-    return oldClipper.topHeaderY != topHeaderY ||
-        oldClipper.maxBottomY != maxBottomY ||
-        oldClipper.t != t;
   }
 }

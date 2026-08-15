@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -193,27 +192,31 @@ class _LoanHeader extends StatelessWidget {
     final intPart = parts[0];
     final fracPart = parts.length > 1 ? '.${parts[1]}' : '.00';
 
-    return RichText(
-      text: TextSpan(
-        children: [
-          TextSpan(
-            text: intPart,
-            style: TextStyle(
-              color: context.themeTextPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.4,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.center,
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: intPart,
+              style: TextStyle(
+                color: context.themeTextPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.4,
+              ),
             ),
-          ),
-          TextSpan(
-            text: '$fracPart ETB',
-            style: TextStyle(
-              color: context.themeTextSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+            TextSpan(
+              text: '$fracPart ETB',
+              style: TextStyle(
+                color: context.themeTextSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -247,10 +250,9 @@ class _LoanHeader extends StatelessWidget {
                 iconSize: 13,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 onPressed: () {
-                  showModalBottomSheet(
+                  AppBottomSheet.show(
                     context: context,
                     isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
                     builder: (_) => AddLoanSheet(provider: provider),
                   );
                 },
@@ -267,32 +269,10 @@ class _LoanHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.emeraldDeep,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.arrow_upward,
-                            color: Colors.white,
-                            size: 9.5,
-                          ),
-                          SizedBox(width: 3),
-                          Text(
-                            'Lent Out',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                    const AppBadge.success(
+                      text: 'Lent Out',
+                      icon: Icons.arrow_upward,
+                      size: AppBadgeSize.small,
                     ),
                     const SizedBox(height: 6),
                     _buildAmountText(context, totalLent),
@@ -312,32 +292,10 @@ class _LoanHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.amberDark,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Borrowed',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(width: 3),
-                          Icon(
-                            Icons.arrow_downward,
-                            color: Colors.white,
-                            size: 9.5,
-                          ),
-                        ],
-                      ),
+                    const AppBadge.warning(
+                      text: 'Borrowed',
+                      icon: Icons.arrow_downward,
+                      size: AppBadgeSize.small,
                     ),
                     const SizedBox(height: 6),
                     _buildAmountText(context, totalBorrowed),
@@ -488,32 +446,10 @@ class _LoanCard extends StatelessWidget {
                 ),
                 if (loan.isOverdue && !showPaid) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.negative.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: AppColors.negative,
-                          size: 12,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${loan.daysOverdue}d OVERDUE',
-                          style: const TextStyle(
-                            color: AppColors.negative,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
+                  AppBadge.destructive(
+                    text: '${loan.daysOverdue}d OVERDUE',
+                    icon: Icons.warning_amber_rounded,
+                    size: AppBadgeSize.small,
                   ),
                 ],
               ],
@@ -651,10 +587,9 @@ class _LoanCard extends StatelessWidget {
 
   void _showPaymentSheet(
       BuildContext context, FinanceProvider provider, LoanRecord loan) {
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (_) => RecordPaymentSheet(loan: loan, provider: provider),
     );
   }
@@ -739,10 +674,9 @@ class LoanDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.only(right: 16),
               child: GestureDetector(
                 onTap: () {
-                  showModalBottomSheet(
+                  AppBottomSheet.show(
                     context: context,
                     isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
                     builder: (_) =>
                         RecordPaymentSheet(loan: current, provider: provider),
                   );
@@ -780,7 +714,7 @@ class LoanDetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.overlay.withValues(alpha: 0.45),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(22),
             ),
             child: Column(
@@ -1182,7 +1116,7 @@ class _PaymentTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.45),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -1309,10 +1243,9 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
         .where((s) => s.isNotEmpty)
         .toSet();
 
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (_) => _NamePickerSheet(
         title: _loanType == 'lent' ? 'Pick Borrower(s)' : 'Pick Lender(s)',
         names: names,
@@ -1390,411 +1323,372 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
     final allPersonNames = widget.provider.allTrackedPersonNames;
     final bankNames = widget.provider.bankSenderNames;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(24, 20, 24, 24 + bottomPad),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return AppDrawer(
+      heightFactor: 0.88,
+      headerCard: AppDrawerHeaderCard(
+        icon: Icons.handshake_outlined,
+        iconColor: _loanType == 'lent' ? AppColors.positive : AppColors.warning,
+        title: 'Create Loan Record',
+        subtitle: _loanType == 'lent'
+            ? 'Track money lent out with SMS repayment monitoring.'
+            : 'Track debt borrowed with SMS repayment monitoring.',
+      ),
+      bottomAction: AppButton.primary(
+        text: 'Save Loan Record',
+        isLoading: _saving,
+        height: 48,
+        onPressed: _saving ? null : _save,
+      ),
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          // ── Auto-detected Loan Type Toggle (When no prefilled type) ─
+          if (widget.prefilledType == null) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  _TypeToggle(
+                    label: '↑ Money Lent Out',
+                    active: _loanType == 'lent',
+                    activeColor: AppColors.positive,
+                    onTap: () => setState(() => _loanType = 'lent'),
+                  ),
+                  _TypeToggle(
+                    label: '↓ Debt Borrowed',
+                    active: _loanType == 'borrowed',
+                    activeColor: AppColors.warning,
+                    onTap: () => setState(() => _loanType = 'borrowed'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // ── Person Name Dropdown Field ──────────────────────────
+          Text(
+            _loanType == 'lent' ? 'Person Name (Borrower)' : 'Person Name (Lender)',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          child: SingleChildScrollView(
+          const SizedBox(height: 6),
+          _SheetField(
+            controller: _nameCtrl,
+            hint: _loanType == 'lent' ? 'Select or type borrower\'s name…' : 'Select or type lender\'s name…',
+            icon: Icons.person_outline_rounded,
+            onTap: allPersonNames.isNotEmpty ? () => _pickPersonName(context, allPersonNames) : null,
+            suffixIcon: allPersonNames.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_drop_down_circle_outlined, color: AppColors.textSecondary, size: 18),
+                    onPressed: () => _pickPersonName(context, allPersonNames),
+                  )
+                : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_selectedPersonNames.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _selectedPersonNames.map((name) {
+                return Container(
+                  padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.positive.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          color: AppColors.positive,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => _removePersonName(name),
+                        behavior: HitTestBehavior.opaque,
+                        child: const Padding(
+                          padding: EdgeInsets.all(2.0),
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: AppColors.positive,
+                            size: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          const SizedBox(height: 14),
+
+          // ── Amount Field ────────────────────────────────────────
+          const Text(
+            'Principal Amount',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          _SheetField(
+            controller: _amountCtrl,
+            hint: 'Amount…',
+            prefixWidget: const CurrencySymbolWidget(
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 14),
+
+          // ── Return Due Date Picker ─────────────────────────────────
+          GestureDetector(
+            onTap: _pickDate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.previewCardBg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined, color: AppColors.textSecondary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Repayment Due Date: ${DateFormat('MMM d, y').format(_dueDate)}',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 18),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Real-Time Payment Tracking Section Card ────────────────
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.previewCardBg,
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                // Handle
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(2),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.positive.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.radar_rounded,
+                        color: AppColors.positive,
+                        size: 15,
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                const Text(
-                  'Create Loan Record',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _loanType == 'lent'
-                      ? 'Track money lent out (Lent) with automatic real-time SMS repayment monitoring.'
-                      : 'Track debt borrowed (Borrowed) with automatic real-time SMS repayment monitoring.',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11.5,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Auto-detected Loan Type Toggle (When no prefilled type) ─
-                if (widget.prefilledType == null) ...[
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        _TypeToggle(
-                          label: '↑ Money Lent Out',
-                          active: _loanType == 'lent',
-                          activeColor: AppColors.positive,
-                          onTap: () => setState(() => _loanType = 'lent'),
-                        ),
-                        _TypeToggle(
-                          label: '↓ Debt Borrowed',
-                          active: _loanType == 'borrowed',
-                          activeColor: AppColors.warning,
-                          onTap: () => setState(() => _loanType = 'borrowed'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // ── Person Name Dropdown Field ──────────────────────────
-                Text(
-                  _loanType == 'lent' ? 'Person Name (Borrower)' : 'Person Name (Lender)',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                _SheetField(
-                  controller: _nameCtrl,
-                  hint: _loanType == 'lent' ? 'Select or type borrower\'s name…' : 'Select or type lender\'s name…',
-                  icon: Icons.person_outline_rounded,
-                  onTap: allPersonNames.isNotEmpty ? () => _pickPersonName(context, allPersonNames) : null,
-                  suffixIcon: allPersonNames.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.arrow_drop_down_circle_outlined, color: AppColors.textSecondary, size: 18),
-                          onPressed: () => _pickPersonName(context, allPersonNames),
-                        )
-                      : null,
-                  onChanged: (_) => setState(() {}),
-                ),
-                if (_selectedPersonNames.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: _selectedPersonNames.map((name) {
-                      return Container(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.positive.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              name,
-                              style: const TextStyle(
-                                color: AppColors.positive,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: () => _removePersonName(name),
-                              behavior: HitTestBehavior.opaque,
-                              child: const Padding(
-                                padding: EdgeInsets.all(2.0),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  color: AppColors.positive,
-                                  size: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-                const SizedBox(height: 14),
-
-                // ── Amount Field ────────────────────────────────────────
-                const Text(
-                  'Principal Amount',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                _SheetField(
-                  controller: _amountCtrl,
-                  hint: 'Amount in ETB…',
-                  icon: Icons.attach_money_rounded,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 14),
-
-                // ── Return Due Date Picker ─────────────────────────────────
-                GestureDetector(
-                  onTap: _pickDate,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.previewCardBg,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined, color: AppColors.textSecondary, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Repayment Due Date: ${DateFormat('MMM d, y').format(_dueDate)}',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 18),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Real-Time Payment Tracking Section Card ────────────────
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.previewCardBg,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: AppColors.positive.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.radar_rounded,
-                              color: AppColors.positive,
-                              size: 15,
+                          Text(
+                            'Real-Time Repayment Tracking',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          SizedBox(height: 1),
+                          Text(
+                            'Auto-detect repayment SMS messages',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'WATCH CHANNELS',
+                      style: TextStyle(
+                        color: AppColors.textSoft,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        if (_selectedBanks.length == bankNames.length) {
+                          _selectedBanks.clear();
+                        } else {
+                          _selectedBanks = Set<String>.from(bankNames);
+                        }
+                      }),
+                      child: Text(
+                        _selectedBanks.length == bankNames.length
+                            ? 'Deselect All'
+                            : 'Select All',
+                        style: const TextStyle(
+                          color: AppColors.positive,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: bankNames.map((bank) {
+                      final isSelected = _selectedBanks.contains(bank);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6.0),
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            if (isSelected) {
+                              _selectedBanks.remove(bank);
+                            } else {
+                              _selectedBanks.add(bank);
+                            }
+                          }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.positive.withValues(alpha: 0.18)
+                                  : Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  'Real-Time Repayment Tracking',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                Icon(
+                                  isSelected
+                                      ? Icons.check_circle_rounded
+                                      : Icons.radio_button_unchecked_rounded,
+                                  color: isSelected
+                                      ? AppColors.positive
+                                      : AppColors.textSoft,
+                                  size: 12,
                                 ),
-                                SizedBox(height: 1),
+                                const SizedBox(width: 5),
                                 Text(
-                                  'Auto-detect repayment SMS messages',
+                                  bank,
                                   style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 10,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'WATCH CHANNELS',
-                            style: TextStyle(
-                              color: AppColors.textSoft,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              if (_selectedBanks.length == bankNames.length) {
-                                _selectedBanks.clear();
-                              } else {
-                                _selectedBanks = Set<String>.from(bankNames);
-                              }
-                            }),
-                            child: Text(
-                              _selectedBanks.length == bankNames.length
-                                  ? 'Deselect All'
-                                  : 'Select All',
-                              style: const TextStyle(
-                                color: AppColors.positive,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      // Harmonious Bank Pills (Green tint when selected, Dark faded when unselected)
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        child: Row(
-                          children: bankNames.map((bank) {
-                            final isSelected = _selectedBanks.contains(bank);
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 6.0),
-                              child: GestureDetector(
-                                onTap: () => setState(() {
-                                  if (isSelected) {
-                                    _selectedBanks.remove(bank);
-                                  } else {
-                                    _selectedBanks.add(bank);
-                                  }
-                                }),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? AppColors.positive.withValues(alpha: 0.18)
-                                        : Colors.white.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        isSelected
-                                            ? Icons.check_circle_rounded
-                                            : Icons.radio_button_unchecked_rounded,
-                                        color: isSelected
-                                            ? AppColors.positive
-                                            : AppColors.textSoft,
-                                        size: 12,
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        bank,
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? Colors.white
-                                              : AppColors.textSecondary,
-                                          fontSize: 11,
-                                          fontWeight: isSelected
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
                         ),
-                      ),
-                    ],
+                      );
+                    }).toList(),
                   ),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Expandable Note / Remarks Section ─────────────────────
-                if (!_isNoteExpanded) ...[
-                  GestureDetector(
-                    onTap: () => setState(() => _isNoteExpanded = true),
-                    behavior: HitTestBehavior.opaque,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add_rounded, color: AppColors.positive, size: 15),
-                          SizedBox(width: 4),
-                          Text(
-                            'Add Note / Remarks',
-                            style: TextStyle(
-                              color: AppColors.positive,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Note / Remarks',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => setState(() {
-                          _noteCtrl.clear();
-                          _isNoteExpanded = false;
-                        }),
-                        child: const Icon(Icons.close_rounded, color: AppColors.textSoft, size: 16),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  _SheetField(
-                    controller: _noteCtrl,
-                    hint: 'Optional note / remarks…',
-                    icon: Icons.notes_rounded,
-                  ),
-                ],
-                const SizedBox(height: 20),
-
-                // ── Save Action Button ────────────────────────────────────
-                AppButton.primary(
-                  text: 'Save Loan Record',
-                  isLoading: _saving,
-                  onPressed: _saving ? null : _save,
                 ),
               ],
             ),
           ),
-        ),
+          const SizedBox(height: 16),
+
+          // ── Expandable Note / Remarks Section ─────────────────────
+          if (!_isNoteExpanded) ...[
+            GestureDetector(
+              onTap: () => setState(() => _isNoteExpanded = true),
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, color: AppColors.positive, size: 15),
+                    SizedBox(width: 4),
+                    Text(
+                      'Add Note / Remarks',
+                      style: TextStyle(
+                        color: AppColors.positive,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Note / Remarks',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _noteCtrl.clear();
+                    _isNoteExpanded = false;
+                  }),
+                  child: const Icon(Icons.close_rounded, color: AppColors.textSoft, size: 16),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _SheetField(
+              controller: _noteCtrl,
+              hint: 'Optional note / remarks…',
+              icon: Icons.notes_rounded,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1859,108 +1753,61 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return AppDrawer(
+      heightFactor: 0.70,
+      title: widget.title,
+      trailingHeader: _filtered.isNotEmpty
+          ? GestureDetector(
+              onTap: () => setState(() {
+                if (_selectedNames.length == _filtered.length) {
+                  _selectedNames.clear();
+                } else {
+                  _selectedNames = Set<String>.from(_filtered);
+                }
+              }),
+              child: Text(
+                _selectedNames.length == _filtered.length ? 'Deselect All' : 'Select All',
+                style: const TextStyle(
+                  color: AppColors.gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : null,
+      bottomAction: AppButton.primary(
+        height: 48,
+        onPressed: _confirmSelection,
+        text: _selectedNames.isEmpty
+            ? 'Done (No contact selected)'
+            : 'Done (${_selectedNames.length} contact${_selectedNames.length > 1 ? "s" : ""} selected)',
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          // Title & Select All / Deselect All
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                widget.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (_filtered.isNotEmpty)
-                GestureDetector(
-                  onTap: () => setState(() {
-                    if (_selectedNames.length == _filtered.length) {
-                      _selectedNames.clear();
-                    } else {
-                      _selectedNames = Set<String>.from(_filtered);
-                    }
-                  }),
-                  child: Text(
-                    _selectedNames.length == _filtered.length ? 'Deselect All' : 'Select All',
-                    style: const TextStyle(
-                      color: AppColors.gold,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
           // Search field with high contrast card style
-          TextField(
+          AppSearchBar(
+            mode: AppSearchBarMode.bar,
             controller: _searchCtrl,
-            autofocus: false,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search_rounded,
-                  color: AppColors.textSecondary, size: 18),
-              hintText: 'Search contacts…',
-              hintStyle:
-                  TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.5)),
-              filled: true,
-              fillColor: AppColors.previewCardBg,
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
-              focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
+            hint: 'Search contacts…',
+            backgroundColor: AppColors.previewCardBg,
+            textColor: Colors.white,
+            hintColor: AppColors.textSecondary.withValues(alpha: 0.6),
+            iconColor: AppColors.textSecondary,
           ),
           const SizedBox(height: 12),
 
           // Results list (capped height)
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.35,
-            ),
+          Expanded(
             child: _filtered.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(24),
+                ? const Center(
                     child: Text('No matching contacts found',
                         style: TextStyle(color: AppColors.textSecondary)),
                   )
                 : ListView.separated(
-                    shrinkWrap: true,
                     physics: const BouncingScrollPhysics(),
                     itemCount: _filtered.length,
                     separatorBuilder: (_, __) => const Divider(
-                        color: AppColors.overlay, height: 1, thickness: 1),
+                        color: AppColors.surfaceElevated, height: 1, thickness: 1),
                     itemBuilder: (_, i) {
                       final name = _filtered[i];
                       final isSelected = _selectedNames.contains(name);
@@ -2023,16 +1870,6 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                     },
                   ),
           ),
-          const SizedBox(height: 16),
-
-          // Confirm button (Standardized Fully Rounded Pill)
-          AppButton.primary(
-            height: 48,
-            onPressed: _confirmSelection,
-            text: _selectedNames.isEmpty
-                ? 'Done (No contact selected)'
-                : 'Done (${_selectedNames.length} contact${_selectedNames.length > 1 ? "s" : ""} selected)',
-          ),
         ],
       ),
     );
@@ -2081,7 +1918,8 @@ class _TypeToggle extends StatelessWidget {
 class _SheetField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? prefixWidget;
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
   final VoidCallback? onTap;
@@ -2090,7 +1928,8 @@ class _SheetField extends StatelessWidget {
   const _SheetField({
     required this.controller,
     required this.hint,
-    required this.icon,
+    this.icon,
+    this.prefixWidget,
     this.keyboardType,
     this.onChanged,
     this.onTap,
@@ -2106,7 +1945,18 @@ class _SheetField extends StatelessWidget {
       onTap: onTap,
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 18),
+        prefixIcon: prefixWidget != null
+            ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: prefixWidget,
+              )
+            : (icon != null
+                ? Icon(icon, color: AppColors.textSecondary, size: 18)
+                : null),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 40,
+          minHeight: 40,
+        ),
         suffixIcon: suffixIcon,
         hintText: hint,
         hintStyle: TextStyle(
@@ -2178,71 +2028,48 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
     final isLent = widget.loan.loanType == 'lent';
     final accentColor =
         isLent ? AppColors.positive : AppColors.warning;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: Container(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomPad),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+    return AppDrawer(
+      heightFactor: null,
+      isBodyScrollable: false,
+      headerCard: AppDrawerHeaderCard(
+        icon: Icons.payments_outlined,
+        iconColor: accentColor,
+        title: isLent
+            ? 'Record payment from ${widget.loan.personName}'
+            : 'Record repayment to ${widget.loan.personName}',
+        subtitle: '${NumberFormat('#,##0.00').format(widget.loan.remainingAmount)} ETB remaining',
+      ),
+      bottomAction: AppButton.primary(
+        text: 'Confirm Payment',
+        isLoading: _saving,
+        height: 48,
+        onPressed: _saving ? null : _save,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SheetField(
+            controller: _amountCtrl,
+            hint: 'Amount paid…',
+            prefixWidget: const CurrencySymbolWidget(
+              size: 16,
+              color: AppColors.textSecondary,
             ),
-            const SizedBox(height: 20),
-            Text(
-              isLent
-                  ? 'Record payment from ${widget.loan.personName}'
-                  : 'Record repayment to ${widget.loan.personName}',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${NumberFormat('#,##0.00').format(widget.loan.remainingAmount)} ETB remaining',
-              style: TextStyle(color: accentColor, fontSize: 12),
-            ),
-            const SizedBox(height: 20),
-            _SheetField(
-              controller: _amountCtrl,
-              hint: 'Amount paid (ETB)…',
-              icon: Icons.attach_money_rounded,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 12),
-            _SheetField(
-              controller: _noteCtrl,
-              hint: 'Note (optional)…',
-              icon: Icons.notes_rounded,
-            ),
-            const SizedBox(height: 24),
-            AppButton.primary(
-              text: 'Confirm Payment',
-              isLoading: _saving,
-              height: 50,
-              onPressed: _saving ? null : _save,
-            ),
-          ],
-        ),
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+          ),
+          const SizedBox(height: 12),
+          _SheetField(
+            controller: _noteCtrl,
+            hint: 'Note (optional)…',
+            icon: Icons.notes_rounded,
+          ),
+        ],
       ),
     );
   }

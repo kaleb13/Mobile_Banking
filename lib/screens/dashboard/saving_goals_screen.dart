@@ -12,7 +12,8 @@ import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
-import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/app_badges.dart';
+import '../../widgets/app_drawer.dart';
 
 class SavingGoalsScreen extends StatefulWidget {
   const SavingGoalsScreen({super.key});
@@ -198,20 +199,6 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
     final isOnHold = goal.status == 'on_hold';
     final isCompleted = goal.savedAmount >= goal.targetAmount;
 
-    String statusText = 'Active';
-    Color badgeBg = AppColors.activeBadgeBg;
-    Color badgeTextColor = AppColors.activeBadgeText;
-
-    if (isOnHold) {
-      statusText = 'On Hold';
-      badgeBg = const Color(0xFFE5E7EB);
-      badgeTextColor = const Color(0xFF374151);
-    } else if (isCompleted) {
-      statusText = 'Completed';
-      badgeBg = AppColors.activeBadgeBg;
-      badgeTextColor = AppColors.activeBadgeText;
-    }
-
     final theme = GoalGradientTheme.fromId(goal.colorTheme);
 
     Widget cardWidget = Container(
@@ -297,26 +284,24 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     ],
                   ),
 
-                  // Fully rounded Active status tab at the top right
+                  // Fully rounded Active / Completed / On Hold status badge at the top right
                   Positioned(
                     top: 0,
                     right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: badgeBg,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        statusText,
-                        style: TextStyle(
-                          color: badgeTextColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
+                    child: isCompleted
+                        ? const AppBadge.success(
+                            text: 'Completed',
+                            size: AppBadgeSize.small,
+                          )
+                        : isOnHold
+                            ? const AppBadge.neutral(
+                                text: 'On Hold',
+                                size: AppBadgeSize.small,
+                              )
+                            : const AppBadge.success(
+                                text: 'Active',
+                                size: AppBadgeSize.small,
+                              ),
                   ),
                 ],
               ),
@@ -559,97 +544,26 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   void _showGoalOptionsSheet(
       BuildContext context, SavingGoal goal, FinanceProvider provider) {
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0E1520),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      builder: (ctx) => AppDrawer(
+        headerCard: AppDrawerHeaderCard(
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 44,
+              height: 44,
+              color: Colors.white,
+              child: _buildGoalThumbnail(goal.imagePath),
+            ),
+          ),
+          title: goal.title,
+          subtitle: '${currencyFmt.format(goal.savedAmount)} ETB of ${currencyFmt.format(goal.targetAmount)} ETB',
         ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // Header info
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    color: Colors.white,
-                    child: _buildGoalThumbnail(goal.imagePath),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        goal.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CurrencyTextWidget(
-                            amount: goal.savedAmount,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 13,
-                            ),
-                            customFormattedStr: currencyFmt.format(goal.savedAmount),
-                          ),
-                          Text(
-                            ' of ',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 13,
-                            ),
-                          ),
-                          CurrencyTextWidget(
-                            amount: goal.targetAmount,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 13,
-                            ),
-                            customFormattedStr: currencyFmt.format(goal.targetAmount),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Divider(color: Colors.white12, height: 1),
-            const SizedBox(height: 12),
-
             // 1. Edit Goal
             _buildOptionTile(
               icon: Icons.edit_rounded,
@@ -790,10 +704,8 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   // ADD / EDIT GOAL SHEET
   // ─────────────────────────────────────────────────────────────────────────
   void _showAddGoalSheet(BuildContext context, {SavingGoal? goalToEdit}) {
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _AddGoalSheet(goalToEdit: goalToEdit),
     );
   }
@@ -838,7 +750,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
     {'icon': Icons.music_note_rounded,      'label': 'Music',     'id': 'icon:music'},
     {'icon': Icons.beach_access_rounded,    'label': 'Vacation',  'id': 'icon:vacation'},
   ];
-  int _selectedIconIndex = 7; // default to Savings icon
+  int _selectedIconIndex = 7;
 
   String _selectedThemeId = 'green';
 
@@ -860,11 +772,8 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         _iconSectionExpanded = true;
       } else if (edit.imagePath.startsWith('icon:')) {
         final idx = _iconOptions.indexWhere((opt) => opt['id'] == edit.imagePath);
-        if (idx != -1) {
-          _selectedIconIndex = idx;
-        }
+        if (idx != -1) _selectedIconIndex = idx;
       }
-      // Restore allocation settings
       _allocationMode = edit.allocationMode;
       _globalPct = edit.accountAllocations['*'] ?? 30.0;
       if (edit.allocationMode != AllocationMode.globalPercent) {
@@ -873,12 +782,50 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
     }
   }
 
+  void _saveGoal() {
+    final title = _titleCtrl.text.trim();
+    final targetClean = _targetCtrl.text.replaceAll(',', '').replaceAll(' ', '').replaceAll('\$', '').trim();
+    final savedClean = _savedCtrl.text.replaceAll(',', '').replaceAll(' ', '').replaceAll('\$', '').trim();
+    final target = double.tryParse(targetClean) ?? 0;
+    final saved = double.tryParse(savedClean) ?? 0;
+
+    if (title.isEmpty || target <= 0) return;
+
+    final Map<String, double> allocMap =
+        _allocationMode == AllocationMode.globalPercent
+            ? {'*': _globalPct}
+            : Map<String, double>.from(_accountPcts);
+
+    if (widget.goalToEdit != null) {
+      final updated = widget.goalToEdit!.copyWith(
+        title: title,
+        targetAmount: target,
+        savedAmount: saved,
+        imagePath: _finalImagePath,
+        allocationMode: _allocationMode,
+        accountAllocations: allocMap,
+        colorTheme: _selectedThemeId,
+      );
+      context.read<FinanceProvider>().updateSavingGoal(updated);
+    } else {
+      final newGoal = SavingGoal(
+        id: 'goal_${DateTime.now().millisecondsSinceEpoch}',
+        title: title,
+        targetAmount: target,
+        savedAmount: saved,
+        imagePath: _finalImagePath,
+        allocationMode: _allocationMode,
+        accountAllocations: allocMap,
+        colorTheme: _selectedThemeId,
+      );
+      context.read<FinanceProvider>().addSavingGoal(newGoal);
+    }
+    Navigator.pop(context);
+  }
+
   Future<void> _pickImage() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-      );
+      final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false);
       if (result != null && result.files.single.path != null) {
         setState(() {
           _pickedImagePath = result.files.single.path!;
@@ -889,9 +836,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
   }
 
   String get _finalImagePath {
-    if (_useCustomImage && _pickedImagePath != null) {
-      return _pickedImagePath!;
-    }
+    if (_useCustomImage && _pickedImagePath != null) return _pickedImagePath!;
     if (_selectedIconIndex >= 0 && _selectedIconIndex < _iconOptions.length) {
       return _iconOptions[_selectedIconIndex]['id'] as String;
     }
@@ -908,683 +853,368 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final inset = MediaQuery.of(context).viewInsets.bottom;
     final isEditing = widget.goalToEdit != null;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0E1520),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return AppDrawer(
+      heightFactor: 0.88,
+      headerCard: AppDrawerHeaderCard(
+        icon: Icons.savings_outlined,
+        iconColor: AppColors.gold,
+        title: isEditing ? 'Edit Saving Goal' : 'New Saving Goal',
+        subtitle: isEditing
+            ? 'Update your target, saved amount, or icon'
+            : 'Set a target price and track your progress',
       ),
-      padding: EdgeInsets.fromLTRB(20, 24, 20, inset + 24),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Handle ───────────────────────────────────────────────────────
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
+      bottomAction: AppButton.primary(
+        text: isEditing ? 'Update Goal' : 'Save Goal',
+        height: 48,
+        onPressed: _saveGoal,
+      ),
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          _buildField(
+            controller: _titleCtrl,
+            label: 'Goal Name',
+            hint: 'e.g. New Car, Dream House',
+            keyboardType: TextInputType.text,
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            controller: _targetCtrl,
+            label:
+                'Target Amount (${Provider.of<FinanceProvider>(context, listen: false).currentCurrency.shortLabel})',
+            hint: 'e.g. 200,000',
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          _buildField(
+            controller: _savedCtrl,
+            label:
+                'Already Saved (${Provider.of<FinanceProvider>(context, listen: false).currentCurrency.shortLabel})',
+            hint: '0',
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 16),
+          _buildThemeSelector(),
+          const SizedBox(height: 20),
+          ValueListenableBuilder(
+            valueListenable: _targetCtrl,
+            builder: (_, __, ___) {
+              return ValueListenableBuilder(
+                valueListenable: _savedCtrl,
+                builder: (_, __, ___) {
+                  final target = double.tryParse(_targetCtrl.text.trim()) ?? 0;
+                  final saved = double.tryParse(_savedCtrl.text.trim()) ?? 0;
+                  if (target <= 0) return const SizedBox.shrink();
+                  final pct = ((saved / target) * 100).clamp(0.0, 100.0);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Progress preview', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          Text('${pct.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      CustomProgressBar(
+                        progress: pct / 100,
+                        height: 10,
+                        progressColor: AppColors.positive,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          Consumer<FinanceProvider>(
+            builder: (context, prov, _) {
+              final accountNames = prov.allAccountNames;
+              final balances = prov.latestBalancesMap;
+              final fmt = NumberFormat('#,##0');
+              return Container(
                 margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // ── Title ────────────────────────────────────────────────────────
-            Text(
-              isEditing ? 'Edit Saving Goal' : 'New Saving Goal',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.4,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              isEditing
-                  ? 'Update your target, saved amount, or icon'
-                  : 'Set a target price and track your progress',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 22),
-
-            // ── FORM FIELDS (main content) ────────────────────────────────────
-            _buildField(
-              controller: _titleCtrl,
-              label: 'Goal Name',
-              hint: 'e.g. New Car, Dream House',
-              keyboardType: TextInputType.text,
-            ),
-            const SizedBox(height: 12),
-
-            _buildField(
-              controller: _targetCtrl,
-              label: 'Target Amount (\$)',
-              hint: 'e.g. 200,000',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-
-            _buildField(
-              controller: _savedCtrl,
-              label: 'Already Saved (\$)',
-              hint: '0',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 16),
-
-            // ── Card Color / Gradient Selector ────────────────────────────────
-            _buildThemeSelector(),
-            const SizedBox(height: 20),
-
-            // ── Live progress preview ─────────────────────────────────────────
-            ValueListenableBuilder(
-              valueListenable: _targetCtrl,
-              builder: (_, __, ___) {
-                return ValueListenableBuilder(
-                  valueListenable: _savedCtrl,
-                  builder: (_, __, ___) {
-                    final target =
-                        double.tryParse(_targetCtrl.text.trim()) ?? 0;
-                    final saved =
-                        double.tryParse(_savedCtrl.text.trim()) ?? 0;
-                    if (target <= 0) return const SizedBox.shrink();
-                    final pct = ((saved / target) * 100).clamp(0.0, 100.0);
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: AppColors.previewCardBg, borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _allocationExpanded = !_allocationExpanded),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(color: AppColors.savingProgressGradStart.withValues(alpha: 0.15), shape: BoxShape.circle),
+                            child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.savingProgressGradStart, size: 15),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Funding Source & Allocation', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                                SizedBox(height: 1),
+                                Text('Choose how your bank balances count toward this goal', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                          AnimatedRotation(turns: _allocationExpanded ? 0.5 : 0.0, duration: const Duration(milliseconds: 200), child: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary, size: 20)),
+                        ],
+                      ),
+                    ),
+                    if (_allocationExpanded) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          _modePill('Global %', AllocationMode.globalPercent),
+                          const SizedBox(width: 6),
+                          _modePill('Specific Bank', AllocationMode.accountSpecific),
+                          const SizedBox(width: 6),
+                          _modePill('Custom %', AllocationMode.multiAccount),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      if (_allocationMode == AllocationMode.globalPercent) ...[
+                        Text('Use ${_globalPct.toStringAsFixed(0)}% of your total balance across ALL accounts.', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+                        const SizedBox(height: 8),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Progress preview',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 12,
+                            Expanded(
+                              child: SliderTheme(
+                                data: SliderThemeData(activeTrackColor: AppColors.savingProgressGradStart, inactiveTrackColor: Colors.white.withValues(alpha: 0.12), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7)),
+                                child: Slider(value: _globalPct, min: 5, max: 100, divisions: 19, onChanged: (v) => setState(() => _globalPct = v)),
                               ),
                             ),
-                            Text(
-                              '${pct.toStringAsFixed(1)}%',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: AppColors.savingProgressGradStart.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+                              child: Text('${_globalPct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.savingProgressGradStart, fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: pct / 100,
-                            minHeight: 6,
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.1),
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.positive),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-
-            // ── Funding Source / Allocation Section (Moved UP & Spaced Comfortably)
-            Consumer<FinanceProvider>(
-              builder: (context, prov, _) {
-                final accountNames = prov.allAccountNames;
-                final balances = prov.latestBalancesMap;
-                final fmt = NumberFormat('#,##0');
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 20),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111821),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Toggle Header Row
-                      GestureDetector(
-                        onTap: () => setState(
-                            () => _allocationExpanded = !_allocationExpanded),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: AppColors.savingProgressGradStart
-                                    .withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.account_balance_wallet_rounded,
-                                color: AppColors.savingProgressGradStart,
-                                size: 18,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
+                      ] else ...[
+                        Text(_allocationMode == AllocationMode.accountSpecific ? 'Select ONE bank account to fund this goal:' : 'Assign custom % to multiple bank accounts:', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+                        const SizedBox(height: 8),
+                        if (accountNames.isEmpty)
+                          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No bank accounts detected yet.', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)))
+                        else
+                          ...accountNames.map((name) {
+                            final bal = balances[name] ?? 0.0;
+                            final isSelected = _accountPcts.containsKey(name);
+                            final pct = _accountPcts[name] ?? 50.0;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(color: isSelected ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(10)),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Funding Source',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => setState(() {
+                                          if (isSelected) {
+                                            _accountPcts.remove(name);
+                                          } else {
+                                            _accountPcts[name] = 50.0;
+                                            if (_allocationMode == AllocationMode.accountSpecific) {
+                                              _accountPcts.removeWhere((k, v) => k != name);
+                                            }
+                                          }
+                                        }),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 160),
+                                          width: 20,
+                                          height: 20,
+                                          decoration: BoxDecoration(color: isSelected ? AppColors.savingProgressGradStart : Colors.transparent, borderRadius: BorderRadius.circular(6)),
+                                          child: isSelected ? const Icon(Icons.check_rounded, color: Colors.white, size: 13) : null,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(name, style: TextStyle(color: isSelected ? Colors.white : AppColors.textSecondary, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))),
+                                      Text('ETB ${fmt.format(bal)}', style: TextStyle(color: isSelected ? AppColors.positive : AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                                    ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _allocationMode == AllocationMode.globalPercent
-                                        ? '${_globalPct.toStringAsFixed(0)}% of total balance'
-                                        : _accountPcts.isEmpty
-                                            ? 'Select specific account'
-                                            : _accountPcts.entries
-                                                .map((e) =>
-                                                    '${e.key} ${e.value.toStringAsFixed(0)}%')
-                                                .join(', '),
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.5),
-                                      fontSize: 11,
+                                  if (isSelected && _allocationMode == AllocationMode.multiAccount) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: SliderTheme(
+                                            data: SliderThemeData(activeTrackColor: AppColors.savingProgressGradStart, inactiveTrackColor: Colors.white.withValues(alpha: 0.1), thumbColor: Colors.white, trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
+                                            child: Slider(value: pct, min: 5, max: 100, divisions: 19, onChanged: (v) => setState(() => _accountPcts[name] = v)),
+                                          ),
+                                        ),
+                                        Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.savingProgressGradStart, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      ],
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
+                            );
+                          }),
+                      ],
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _iconSectionExpanded = !_iconSectionExpanded),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(color: AppColors.previewCardBg, borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: [
+                  Icon(_iconSectionExpanded ? Icons.palette_rounded : Icons.palette_outlined, color: _iconSectionExpanded ? AppColors.gold : AppColors.textSecondary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Customize Icon / Image', style: TextStyle(color: _iconSectionExpanded ? Colors.white : AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600))),
+                  ClipRRect(borderRadius: BorderRadius.circular(8), child: Container(width: 28, height: 28, color: Colors.transparent, child: _buildPreviewThumbnail())),
+                  const SizedBox(width: 8),
+                  AnimatedRotation(turns: _iconSectionExpanded ? 0.5 : 0.0, duration: const Duration(milliseconds: 200), child: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary, size: 20)),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 240),
+            crossFadeState: _iconSectionExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+            firstChild: _iconSectionExpanded
+                ? Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.previewCardBg,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Choose an Icon',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Inline Icon Grid
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(_iconOptions.length, (i) {
+                            final item = _iconOptions[i];
+                            final isSel =
+                                !_useCustomImage && _selectedIconIndex == i;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedIconIndex = i;
+                                  _useCustomImage = false;
+                                });
+                              },
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: isSel
+                                      ? AppColors.gold.withValues(alpha: 0.2)
+                                      : Colors.white.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  item['icon'] as IconData,
+                                  color: isSel
+                                      ? AppColors.gold
+                                      : AppColors.textSecondary,
+                                  size: 20,
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Divider text
+                        const Row(
+                          children: [
+                            Expanded(child: Divider(color: Colors.white12)),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                'or use photo',
+                                style: TextStyle(
+                                    color: AppColors.textSoft, fontSize: 11),
+                              ),
                             ),
-                            AnimatedRotation(
-                              turns: _allocationExpanded ? 0.5 : 0.0,
-                              duration: const Duration(milliseconds: 200),
-                              child: const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                color: Colors.white54,
-                                size: 22,
+                            Expanded(child: Divider(color: Colors.white12)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Upload Photo Row
+                        Row(
+                          children: [
+                            if (_pickedImagePath != null) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  File(_pickedImagePath!),
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                            ],
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: _pickImage,
+                                child: Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white
+                                        .withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.upload_rounded,
+                                          color: AppColors.textSecondary, size: 18),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Upload Photo',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-
-                      // Collapsible Content
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        child: _allocationExpanded
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Mode selector pills
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        children: [
-                                          _modePill('All Accounts',
-                                              AllocationMode.globalPercent),
-                                          const SizedBox(width: 8),
-                                          _modePill('One Account',
-                                              AllocationMode.accountSpecific),
-                                          const SizedBox(width: 8),
-                                          _modePill('Multiple Accounts',
-                                              AllocationMode.multiAccount),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-
-                                    // Global percent slider
-                                    if (_allocationMode ==
-                                        AllocationMode.globalPercent) ...[
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            'Allocation: ${_globalPct.toStringAsFixed(0)}%',
-                                            style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          Text(
-                                            'ETB ${fmt.format(prov.totalBalance * _globalPct / 100)}',
-                                            style: const TextStyle(
-                                              color: AppColors.savingProgressGradStart,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      SliderTheme(
-                                        data: SliderThemeData(
-                                          trackHeight: 4,
-                                          activeTrackColor:
-                                              AppColors.savingProgressGradStart,
-                                          inactiveTrackColor:
-                                              Colors.white.withValues(alpha: 0.12),
-                                          thumbColor:
-                                              AppColors.savingProgressGradStart,
-                                          overlayColor: AppColors
-                                              .savingProgressGradStart
-                                              .withValues(alpha: 0.15),
-                                        ),
-                                        child: Slider(
-                                          value: _globalPct,
-                                          min: 5,
-                                          max: 100,
-                                          divisions: 19,
-                                          onChanged: (v) =>
-                                              setState(() => _globalPct = v),
-                                        ),
-                                      ),
-                                    ],
-
-                                    // Account-specific / multi-account sliders
-                                    if (_allocationMode !=
-                                        AllocationMode.globalPercent) ...[
-                                      if (accountNames.isEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
-                                          child: Text(
-                                            'No accounts detected yet — send or receive a transaction to auto-link accounts.',
-                                            style: TextStyle(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.45),
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        ...accountNames.map((name) {
-                                          final bal = balances[name] ?? 0;
-                                          final pct = _accountPcts[name] ?? 0.0;
-                                          final isSelected = pct > 0;
-                                          return Container(
-                                            margin: const EdgeInsets.only(
-                                                bottom: 8),
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.03),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    GestureDetector(
-                                                      onTap: () => setState(() {
-                                                        if (isSelected) {
-                                                          _accountPcts
-                                                              .remove(name);
-                                                        } else {
-                                                          _accountPcts[name] =
-                                                              50.0;
-                                                          if (_allocationMode ==
-                                                              AllocationMode
-                                                                  .accountSpecific) {
-                                                            _accountPcts
-                                                                .removeWhere(
-                                                                    (k, v) =>
-                                                                        k !=
-                                                                        name);
-                                                          }
-                                                        }
-                                                      }),
-                                                      child: AnimatedContainer(
-                                                        duration: const Duration(
-                                                            milliseconds: 160),
-                                                        width: 20,
-                                                        height: 20,
-                                                        decoration: BoxDecoration(
-                                                          color: isSelected
-                                                              ? AppColors
-                                                                  .savingProgressGradStart
-                                                              : Colors
-                                                                  .transparent,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(6),
-                                                        ),
-                                                        child: isSelected
-                                                            ? const Icon(
-                                                                Icons
-                                                                    .check_rounded,
-                                                                color:
-                                                                    Colors.white,
-                                                                size: 13)
-                                                            : null,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Text(
-                                                        name,
-                                                        style: TextStyle(
-                                                          color: isSelected
-                                                              ? Colors.white
-                                                              : Colors.white60,
-                                                          fontSize: 13,
-                                                          fontWeight: isSelected
-                                                              ? FontWeight.w600
-                                                              : FontWeight
-                                                                  .normal,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      'ETB ${fmt.format(bal)}',
-                                                      style: TextStyle(
-                                                        color: Colors.white
-                                                            .withValues(
-                                                                alpha: 0.4),
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                if (isSelected) ...[
-                                                  const SizedBox(height: 6),
-                                                  SliderTheme(
-                                                    data: SliderThemeData(
-                                                      trackHeight: 3,
-                                                      activeTrackColor: AppColors
-                                                          .savingProgressGradStart,
-                                                      inactiveTrackColor: Colors
-                                                          .white
-                                                          .withValues(
-                                                              alpha: 0.1),
-                                                      thumbColor: AppColors
-                                                          .savingProgressGradStart,
-                                                      overlayColor: AppColors
-                                                          .savingProgressGradStart
-                                                          .withValues(
-                                                              alpha: 0.15),
-                                                    ),
-                                                    child: Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: Slider(
-                                                            value: pct,
-                                                            min: 5,
-                                                            max: 100,
-                                                            divisions: 19,
-                                                            onChanged: (v) =>
-                                                                setState(() =>
-                                                                    _accountPcts[
-                                                                            name] =
-                                                                        v),
-                                                          ),
-                                                        ),
-                                                        SizedBox(
-                                                          width: 36,
-                                                          child: Text(
-                                                            '${pct.toStringAsFixed(0)}%',
-                                                            style:
-                                                                const TextStyle(
-                                                              color: AppColors
-                                                                  .savingProgressGradStart,
-                                                              fontSize: 12,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          );
-                                        }),
-                                    ],
-                                  ],
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-
-            // ── Customize Icon / Image — TOGGLE SECTION ──────────────────────
-            GestureDetector(
-              onTap: () => setState(() =>
-                  _iconSectionExpanded = !_iconSectionExpanded),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111821),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _iconSectionExpanded
-                          ? Icons.palette_rounded
-                          : Icons.palette_outlined,
-                      color: _iconSectionExpanded
-                          ? AppColors.gold
-                          : Colors.white54,
-                      size: 18,
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Customize Icon / Image',
-                        style: TextStyle(
-                          color: _iconSectionExpanded
-                              ? Colors.white
-                              : Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    // Selected Icon / Custom Image Thumbnail Preview
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        color: Colors.transparent,
-                        child: _buildPreviewThumbnail(),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    AnimatedRotation(
-                      turns: _iconSectionExpanded ? 0.5 : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: const Icon(Icons.keyboard_arrow_down_rounded,
-                          color: Colors.white54, size: 20),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Collapsible Icon/Image Content (Inline Grid — No Overflow!) ───
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              child: _iconSectionExpanded
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Choose Icon',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildIconGrid(),
-                          const SizedBox(height: 14),
-
-                          const Text(
-                            'Or Upload a Photo',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  width: 48,
-                                  height: 48,
-                                  color: Colors.white,
-                                  child: _buildPreviewThumbnail(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: _pickImage,
-                                  child: Container(
-                                    height: 44,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.06),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.upload_rounded,
-                                            color: Colors.white70, size: 18),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'Upload Photo',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Save / Update button ──────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: GestureDetector(
-                onTap: () {
-                  final title = _titleCtrl.text.trim();
-                  final targetClean = _targetCtrl.text
-                      .replaceAll(',', '')
-                      .replaceAll(' ', '')
-                      .replaceAll('\$', '')
-                      .trim();
-                  final savedClean = _savedCtrl.text
-                      .replaceAll(',', '')
-                      .replaceAll(' ', '')
-                      .replaceAll('\$', '')
-                      .trim();
-                  final target = double.tryParse(targetClean) ?? 0;
-                  final saved = double.tryParse(savedClean) ?? 0;
-
-                  if (title.isEmpty || target <= 0) return;
-
-                  final Map<String, double> allocMap =
-                      _allocationMode == AllocationMode.globalPercent
-                          ? {'*': _globalPct}
-                          : Map<String, double>.from(_accountPcts);
-
-                  if (isEditing) {
-                    final updated = widget.goalToEdit!.copyWith(
-                      title: title,
-                      targetAmount: target,
-                      savedAmount: saved,
-                      imagePath: _finalImagePath,
-                      allocationMode: _allocationMode,
-                      accountAllocations: allocMap,
-                      colorTheme: _selectedThemeId,
-                    );
-                    context.read<FinanceProvider>().updateSavingGoal(updated);
-                  } else {
-                    final newGoal = SavingGoal(
-                      id: 'goal_${DateTime.now().millisecondsSinceEpoch}',
-                      title: title,
-                      targetAmount: target,
-                      savedAmount: saved,
-                      imagePath: _finalImagePath,
-                      allocationMode: _allocationMode,
-                      accountAllocations: allocMap,
-                      colorTheme: _selectedThemeId,
-                    );
-                    context.read<FinanceProvider>().addSavingGoal(newGoal);
-                  }
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    isEditing ? 'Update Goal' : 'Save Goal',
-                    style: const TextStyle(
-                      color: AppColors.background,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+                  )
+                : const SizedBox.shrink(),
+            secondChild: const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
@@ -1620,15 +1250,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                     end: Alignment.bottomRight,
                     colors: theme.gradientColors,
                   ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: theme.accentColor.withValues(alpha: 0.45),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          )
-                        ]
-                      : [],
                 ),
                 child: isSelected
                     ? const Icon(
@@ -1667,68 +1288,12 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
           style: TextStyle(
             color: selected
                 ? AppColors.savingProgressGradStart
-                : Colors.white60,
+                : AppColors.textSecondary,
             fontSize: 11,
             fontWeight: selected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),
-    );
-  }
-
-  /// Redesigned inline 4-column icon selection grid (Fixes 345px bottom overflow error)
-  Widget _buildIconGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _iconOptions.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        childAspectRatio: 1.15,
-      ),
-      itemBuilder: (context, index) {
-        final isSelected = !_useCustomImage && _selectedIconIndex == index;
-        final opt = _iconOptions[index];
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedIconIndex = index;
-              _useCustomImage = false;
-              _pickedImagePath = null;
-            });
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.gold.withValues(alpha: 0.15)
-                  : Colors.white.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  opt['icon'] as IconData,
-                  color: isSelected ? AppColors.gold : Colors.white70,
-                  size: 20,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  opt['label'] as String,
-                  style: TextStyle(
-                    color: isSelected ? AppColors.gold : Colors.white60,
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -1787,7 +1352,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
             hintText: hint,
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
             filled: true,
-            fillColor: const Color(0xFF111821),
+            fillColor: AppColors.previewCardBg,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(

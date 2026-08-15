@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_badges.dart';
 import 'add_edit_expense_definition_screen.dart';
 
 class ExpenseDefinitionsScreen extends StatelessWidget {
@@ -204,23 +205,16 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                     : FontWeight.normal),
                                           ),
                                           if (def.isRecurring) ...[
-                                            const Text('•',
-                                                style: TextStyle(
-                                                    color: AppColors.textSecondary,
-                                                    fontSize: 12)),
-                                            Text(
-                                              def.isActive
-                                                  ? 'Active'
-                                                  : 'Inactive',
-                                              style: TextStyle(
-                                                  color: def.isActive
-                                                      ? AppColors.positive
-                                                      : AppColors.negative
-                                                          .withValues(
-                                                              alpha: 0.5),
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
+                                            const SizedBox(width: 6),
+                                            def.isActive
+                                                ? const AppBadge.success(
+                                                    text: 'ACTIVE',
+                                                    size: AppBadgeSize.micro,
+                                                  )
+                                                : const AppBadge.neutral(
+                                                    text: 'INACTIVE',
+                                                    size: AppBadgeSize.micro,
+                                                  ),
                                           ],
                                         ],
                                       ),

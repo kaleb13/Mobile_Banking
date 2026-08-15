@@ -11,6 +11,8 @@ import 'reason_management_screen.dart';
 import 'about_app_screen.dart';
 import '../../models/app_currency.dart';
 import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_badges.dart';
 import 'privacy_policy_screen.dart';
 import '../privacy/privacy_settings_screen.dart';
 import '../settings/background_settings_screen.dart';
@@ -262,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           final currency = provider.currentCurrency;
                           return _settingsTile(
                             context,
-                            icon: Icons.monetization_on_outlined,
+                            icon: Icons.currency_exchange_rounded,
                             iconColor: AppColors.positive,
                             label: 'Currency Icon',
                             subtitle: currency.name,
@@ -270,31 +272,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.positive.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(8),
-                                                                      ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      CurrencySymbolWidget(
-                                        currency: currency,
-                                        size: 14,
-                                        color: AppColors.positive,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        currency.shortLabel,
-                                        style: const TextStyle(
-                                          color: AppColors.positive,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                AppBadge.success(
+                                  text: currency.shortLabel,
+                                  size: AppBadgeSize.small,
                                 ),
                                 const SizedBox(width: 8),
                                 Icon(
@@ -486,34 +466,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 
   Widget _comingSoon() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-              ),
-      child: const Text(
-        'Soon',
-        style: TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+    return const AppBadge.neutral(
+      text: 'Soon',
+      size: AppBadgeSize.small,
     );
   }
 
   void _showCurrencyPickerSheet(BuildContext context, FinanceProvider provider) {
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
         final currentCode = provider.currentCurrency.code;
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF161F2C),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(

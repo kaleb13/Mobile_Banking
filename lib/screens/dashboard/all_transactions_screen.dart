@@ -10,6 +10,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_search_bar.dart';
+import '../../widgets/app_dropdown.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -30,8 +33,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   String _selectedType = 'All';
   int _searchLabelIndex = 0;
   Timer? _searchLabelTimer;
-  bool _isSenderMenuOpen = false;
-  bool _isTypeMenuOpen = false;
 
   @override
   void initState() {
@@ -214,68 +215,28 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           const SizedBox(height: 16),
 
           // ── Fully Rounded Search Bar (No border) ──────────────────────────
-          Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Stack(
-                    alignment: Alignment.centerLeft,
-                    children: [
-                      if (_searchQuery.isEmpty)
-                        IgnorePointer(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 400),
-                            child: Text(
-                              _getSearchHint(provider),
-                              key: ValueKey(_searchLabelIndex),
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                        onChanged: (value) => setState(() => _searchQuery = value),
-                        decoration: const InputDecoration(
-                          hintText: '',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
+          AppSearchBar(
+            mode: AppSearchBarMode.bar,
+            controller: _searchController,
+            customHintWidget: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: Text(
+                _getSearchHint(provider),
+                key: ValueKey(_searchLabelIndex),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
                 ),
-                if (_searchQuery.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _searchQuery = '';
-                        _searchController.clear();
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppColors.buttonSecondary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 14),
-                    ),
-                  ),
-              ],
+              ),
             ),
+            height: 48,
+            borderRadius: 28,
+            onChanged: (value) => setState(() => _searchQuery = value),
+            onClear: () => setState(() => _searchQuery = ''),
+            backgroundColor: AppColors.surface,
+            textColor: AppColors.textPrimary,
+            hintColor: AppColors.textSecondary,
+            iconColor: AppColors.textSecondary,
           ),
           const SizedBox(height: 14),
 
@@ -314,208 +275,53 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   }
 
   Widget _buildSenderDropdown(List<String> senderNames) {
-    final bool isSelected = _selectedSender != 'All';
-    final bool isActive = isSelected || _isSenderMenuOpen;
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashColor: Colors.white.withValues(alpha: 0.15),
-        highlightColor: Colors.white.withValues(alpha: 0.12),
-      ),
-      child: PopupMenuButton<String>(
-        onOpened: () => setState(() => _isSenderMenuOpen = true),
-        onCanceled: () => setState(() => _isSenderMenuOpen = false),
-        offset: const Offset(0, 38),
-        constraints: const BoxConstraints(minWidth: 150, maxWidth: 220),
-        borderRadius: BorderRadius.circular(100),
-        padding: EdgeInsets.zero,
-        color: AppColors.surface,
-        elevation: 10,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        onSelected: (name) => setState(() {
-          _isSenderMenuOpen = false;
-          _selectedSender = name;
-        }),
-        itemBuilder: (context) => senderNames.map((name) {
-          final isItemSel = _selectedSender == name;
-          return PopupMenuItem<String>(
-            value: name,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    name,
-                    style: TextStyle(
-                      color: isItemSel ? Colors.white : AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight:
-                          isItemSel ? FontWeight.bold : FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (isItemSel)
-                  const Icon(Icons.check_rounded,
-                      color: AppColors.positive, size: 16),
-              ],
-            ),
-          );
-        }).toList(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: isActive ? Colors.white : AppColors.buttonSecondary,
-            borderRadius: BorderRadius.circular(100),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.account_balance_wallet_rounded,
-                size: 14,
-                color: isActive
-                    ? AppColors.buttonPrimaryText
-                    : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 5),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 110),
-                child: Text(
-                  _selectedSender == 'All' ? 'Wallet' : _selectedSender,
-                  style: TextStyle(
-                    color: isActive
-                        ? AppColors.buttonPrimaryText
-                        : AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 15,
-                color: isActive
-                    ? AppColors.buttonPrimaryText
-                    : AppColors.textSecondary,
-              ),
-            ],
-          ),
-        ),
+    return AppDropdown.simple(
+      value: _selectedSender,
+      items: senderNames,
+      onChanged: (name) {
+        if (name != null) setState(() => _selectedSender = name);
+      },
+      variant: AppDropdownVariant.dark,
+      maxWidth: 120,
+      borderRadius: 100,
+      prefix: Icon(
+        Icons.account_balance_wallet_rounded,
+        size: 14,
+        color: _selectedSender != 'All' ? Colors.white : AppColors.textSecondary,
       ),
     );
   }
 
   Widget _buildTypeDropdown() {
-    final bool isSelected = _selectedType != 'All';
-    final bool isActive = isSelected || _isTypeMenuOpen;
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashColor: Colors.white.withValues(alpha: 0.15),
-        highlightColor: Colors.white.withValues(alpha: 0.12),
-      ),
-      child: PopupMenuButton<String>(
-        onOpened: () => setState(() => _isTypeMenuOpen = true),
-        onCanceled: () => setState(() => _isTypeMenuOpen = false),
-        offset: const Offset(0, 38),
-        constraints: const BoxConstraints(minWidth: 130, maxWidth: 180),
-        borderRadius: BorderRadius.circular(100),
-        padding: EdgeInsets.zero,
-        color: AppColors.surface,
-        elevation: 10,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        onSelected: (type) => setState(() {
-          _isTypeMenuOpen = false;
-          _selectedType = type;
-        }),
-        itemBuilder: (context) => ['All', 'Income', 'Expense'].map((type) {
-          final isItemSel = _selectedType == type;
-          return PopupMenuItem<String>(
-            value: type,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    type,
-                    style: TextStyle(
-                      color: isItemSel ? Colors.white : AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight:
-                          isItemSel ? FontWeight.bold : FontWeight.w500,
-                    ),
-                  ),
-                ),
-                if (isItemSel)
-                  const Icon(Icons.check_rounded,
-                      color: AppColors.positive, size: 16),
-              ],
-            ),
-          );
-        }).toList(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: isActive ? Colors.white : AppColors.buttonSecondary,
-            borderRadius: BorderRadius.circular(100),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.swap_vert_rounded,
-                size: 14,
-                color: isActive
-                    ? AppColors.buttonPrimaryText
-                    : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                _selectedType == 'All' ? 'Type' : _selectedType,
-                style: TextStyle(
-                  color: isActive
-                      ? AppColors.buttonPrimaryText
-                      : AppColors.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 15,
-                color: isActive
-                    ? AppColors.buttonPrimaryText
-                    : AppColors.textSecondary,
-              ),
-            ],
-          ),
-        ),
+    return AppDropdown.simple(
+      value: _selectedType,
+      items: const ['All', 'Income', 'Expense'],
+      onChanged: (type) {
+        if (type != null) setState(() => _selectedType = type);
+      },
+      variant: AppDropdownVariant.dark,
+      maxWidth: 100,
+      borderRadius: 100,
+      prefix: Icon(
+        Icons.swap_vert_rounded,
+        size: 14,
+        color: _selectedType != 'All' ? Colors.white : AppColors.textSecondary,
       ),
     );
   }
 
   Future<void> _pickDateRange() async {
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
-      backgroundColor: AppColors.bgMid,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -790,9 +596,9 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           width: 20, height: 20, fit: BoxFit.contain);
       bgColor = const Color(0xFFE91E63).withValues(alpha: 0.20);
     } else if (nameUp.contains('AHADU')) {
-      img = Image.asset('assets/images/Ahadu_Logo.png',
+      img = SvgPicture.asset('assets/images/Ahadu_Logo.svg',
           width: 20, height: 20, fit: BoxFit.contain);
-      bgColor = const Color(0xFFFF9800).withValues(alpha: 0.20);
+      bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.20);
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg',
           width: 20, height: 20, fit: BoxFit.contain);

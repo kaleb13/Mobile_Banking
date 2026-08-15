@@ -10,6 +10,7 @@ import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_badges.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Backup & Restore Screen
@@ -392,9 +393,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.45),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-              ),
+      ),
       child: Row(
         children: [
           Container(
@@ -565,9 +566,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: AppColors.overlay.withValues(alpha: 0.45),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
-                  ),
+        ),
         child: Row(
           children: [
             Container(
@@ -644,9 +645,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.overlay.withValues(alpha: 0.45),
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),
-                      ),
+          ),
           child: Row(
             children: [
               _statBadge(
@@ -757,9 +758,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.overlay.withValues(alpha: 0.45),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-              ),
+      ),
       child: Row(
         children: [
           Icon(
@@ -806,24 +807,12 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             ),
           ),
           if (!result.success && result.rawData != null)
-            GestureDetector(
-              onTap: () => _retryItem(index),
-              child: Container(
-                margin: const EdgeInsets.only(left: 8),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'Retry',
-                  style: TextStyle(
-                    color: AppColors.gold,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: AppBadge.warning(
+                text: 'Retry',
+                size: AppBadgeSize.small,
+                onTap: () => _retryItem(index),
               ),
             ),
         ],

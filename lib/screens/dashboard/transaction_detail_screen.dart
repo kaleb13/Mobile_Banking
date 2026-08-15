@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -8,13 +7,18 @@ import '../../models/transaction.dart';
 import '../../models/reason.dart';
 import '../../models/loan_record.dart';
 import '../../models/cash_transaction.dart';
+import '../../models/transaction_attachment.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_badges.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_note_card.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/custom_progress_bar.dart';
 import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
@@ -69,20 +73,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     AppReason? chosen;
 
-    await showModalBottomSheet(
+    await AppDrawer.show(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (sheetCtx) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: ReasonSelectionSheet(
-            initialReason: initial,
-            onReasonSelected: (reason) {
-              chosen = reason;
-            },
-          ),
+        return ReasonSelectionSheet(
+          initialReason: initial,
+          transactionType: widget.transaction.type,
+          onReasonSelected: (reason) {
+            chosen = reason;
+          },
         );
       },
     );
@@ -109,29 +108,28 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final existingLoan = provider.loanRecords
           .where((l) => l.linkedTransactionId == latestTx.id)
           .firstOrNull;
-      if (existingLoan == null && mounted && context.mounted) {
+      if (mounted && context.mounted) {
         final shouldCreate = await AppConfirmDialog.show(
           context: context,
-          title: 'Create Loan Record?',
+          title: existingLoan == null ? 'Create Loan Record?' : 'Manage Loan Record',
           icon: Icons.handshake_outlined,
           iconColor: AppColors.positive,
-          message:
-              'This transaction (${NumberFormat("#,##0.00").format(latestTx.amount)} ETB) was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?',
-          confirmText: 'Create Loan',
+          message: existingLoan == null
+              ? 'This transaction (${NumberFormat("#,##0.00").format(latestTx.amount)} ETB) was tagged as a loan.\n\nWould you like to track its repayment in the Loan Manager?'
+              : 'This transaction is tagged as a loan (${existingLoan.personName} - ${NumberFormat("#,##0.00").format(existingLoan.principalAmount)} ETB).\n\nWould you like to open the Loan Sheet to view or update it?',
+          confirmText: existingLoan == null ? 'Create Loan' : 'Open Loan Sheet',
           cancelText: 'Skip',
           onConfirm: () {},
         );
 
         if (shouldCreate == true && mounted && context.mounted) {
-          await showModalBottomSheet(
+          await AppDrawer.show(
             context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
             builder: (_) => AddLoanSheet(
               provider: provider,
               linkedTransactionId: latestTx.id,
               prefilledAmount: latestTx.amount,
-              prefilledName: latestTx.sender,
+              prefilledName: existingLoan?.personName ?? latestTx.sender,
               prefilledTrackedSender: latestTx.sender,
               prefilledType:
                   latestTx.type == 'expense' ? 'lent' : 'borrowed',
@@ -141,44 +139,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       }
     } else if (chosenName == 'internal transfer') {
       if (!context.mounted) return;
-      if (latestTx.linkedTransactionId == null) {
-        await showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => InternalTransferPickerSheet(
-            sourceTransaction: latestTx,
-            provider: provider,
-          ),
-        );
-      } else {
-        if (!context.mounted) return;
-        final messenger = ScaffoldMessenger.of(context);
-        final shouldUnlink = await AppConfirmDialog.show(
-          context: context,
-          title: 'Already Linked',
-          icon: Icons.sync_alt,
-          iconColor: AppColors.gold,
-          message:
-              'This transaction is already linked to another internal transfer.\n\nWould you like to unlink it?',
-          confirmText: 'Unlink',
-          cancelText: 'Keep Link',
-          isDestructive: true,
-          onConfirm: () {},
-        );
-        if (shouldUnlink == true && context.mounted) {
-          await provider.unlinkInternalTransfer(latestTx.id!);
-          if (context.mounted) {
-            messenger.showSnackBar(
-              const SnackBar(
-                content: Text('Internal transfer unlinked'),
-                backgroundColor: AppColors.negative,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-        }
-      }
+      await AppDrawer.show(
+        context: context,
+        builder: (_) => InternalTransferPickerSheet(
+          sourceTransaction: latestTx,
+          provider: provider,
+        ),
+      );
     }
   }
 
@@ -218,83 +185,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-    }
-  }
-
-  Future<void> _attachMedia(BuildContext context, FinanceProvider provider) async {
-    if (widget.transaction.id == null) return;
-    final pathController = TextEditingController();
-    final filePath = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.attach_file_rounded, color: AppColors.positive, size: 20),
-            SizedBox(width: 8),
-            Text('Attach Media / Receipt', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: TextField(
-          controller: pathController,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Enter local file path or file URL...',
-            hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.05),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-          ),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          AppButton.secondary(
-            text: 'Cancel',
-            fullWidth: false,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          const SizedBox(width: 8),
-          AppButton.primary(
-            text: 'Attach',
-            fullWidth: false,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () => Navigator.pop(ctx, pathController.text.trim()),
-          ),
-        ],
-      ),
-    );
-
-    if (filePath != null && filePath.isNotEmpty) {
-      final ext = filePath.toLowerCase();
-      String type = 'image';
-      if (ext.endsWith('.pdf')) {
-        type = 'pdf';
-      } else if (ext.endsWith('.mp3') || ext.endsWith('.wav') || ext.endsWith('.m4a')) {
-        type = 'audio';
-      }
-
-      final fileName = filePath.contains('/') ? filePath.split('/').last : filePath.split('\\').last;
-
-      await provider.addAttachment(
-        widget.transaction.id!,
-        filePath,
-        type,
-        fileName: fileName,
-      );
-
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Media attached ✓'),
-            backgroundColor: AppColors.positive,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     }
   }
 
@@ -365,10 +255,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       linkedLoan = null;
     }
 
+    final bool isCashWithDeductions = (currentTx.reason?.toLowerCase() == 'cash' ||
+            currentTx.customReasonText?.toLowerCase() == 'cash' ||
+            currentTx.resolvedReason?.toLowerCase() == 'cash') &&
+        provider.spendingsForTransaction(currentTx.id ?? '').isNotEmpty;
+
     // True if this transaction is auto-locked (Telebirr credit/repayment)
     final bool isAutoLocked = currentTx.isReasonLocked;
-    // True if reason editing is blocked by any lock (linked loan OR auto-lock)
-    final bool isReasonBlocked = linkedLoan != null || isAutoLocked;
+    // True if reason editing is blocked by any lock (linked loan OR auto-lock OR cash with active deductions)
+    final bool isReasonBlocked = linkedLoan != null || isAutoLocked || isCashWithDeductions;
 
     AppReasonLink? activeLink;
     if (activeReasonId != null) {
@@ -581,6 +476,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           isSpecialReason,
                           isReasonBlocked,
                           isAutoLocked,
+                          isCashWithDeductions,
                           linkedLoan,
                           activeLink,
                           isIncome,
@@ -650,7 +546,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       shortName = 'Telebirr';
       bg = AppColors.telebirrGreenSoft;
     } else if (combined.contains('AHADU')) {
-      iconWidget = Image.asset('assets/images/Ahadu_Logo.png', width: 24, height: 24);
+      iconWidget = SvgPicture.asset('assets/images/Ahadu_Logo.svg', width: 24, height: 24, fit: BoxFit.contain);
       bankName = 'Ahadu Bank';
       shortName = 'Ahadu';
       bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
@@ -665,7 +561,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       shortName = 'CBE';
       bg = AppColors.slackPurple.withValues(alpha: 0.15);
     } else if (combined.contains('CASH')) {
-      iconWidget = const Icon(Icons.account_balance_wallet_outlined, color: AppColors.positive, size: 22);
+      iconWidget = SvgPicture.asset(
+        'assets/images/Wallet Icon.svg',
+        width: 22,
+        height: 22,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn),
+      );
       bankName = 'Cash Wallet';
       shortName = 'Cash';
       bg = AppColors.positive.withValues(alpha: 0.15);
@@ -842,36 +744,20 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.positive.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${fmtShort.format(remaining)} ETB Left',
-                  style: const TextStyle(
-                    color: AppColors.positive,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              AppBadge.success(
+                text: '${fmtShort.format(remaining)} ETB Left',
+                size: AppBadgeSize.small,
               ),
             ],
           ),
           const SizedBox(height: 14),
 
           // Progress Bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 7,
-              backgroundColor: Colors.white.withValues(alpha: 0.08),
-              valueColor: AlwaysStoppedAnimation<Color>(
+          CustomProgressBar(
+            progress: progress,
+            height: 10,
+            progressColor:
                 progress >= 1.0 ? AppColors.negative : AppColors.positive,
-              ),
-            ),
           ),
           const SizedBox(height: 6),
           Row(
@@ -922,6 +808,30 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       '-${fmtShort.format(s.amount)} ETB',
                       style: const TextStyle(color: AppColors.negative, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: AppColors.textSoft, size: 16),
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                      tooltip: 'Delete deduction',
+                      onPressed: () {
+                        AppConfirmDialog.show(
+                          context: context,
+                          title: 'Delete Deduction?',
+                          message:
+                              'Remove this ${fmtShort.format(s.amount)} ETB $reasonLabel deduction and return the funds to this withdrawal balance?',
+                          confirmText: 'Delete',
+                          isDestructive: true,
+                          onConfirm: () async {
+                            if (s.id != null) {
+                              await provider.deleteCashTransaction(s.id!);
+                            }
+                          },
+                        );
+                      },
+                    ),
                   ],
                 ),
               );
@@ -929,14 +839,26 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ],
 
           const SizedBox(height: 12),
-          AppButton.secondary(
-            height: 38,
-            icon: Icons.add_circle_outline_rounded,
-            text: 'Deduct Cash Expense from this withdrawal',
-            onPressed: () {
-              _showDeductCashFromWithdrawalModal(context, provider, widget.transaction);
-            },
-          ),
+          if (remaining > 0)
+            AppButton.secondary(
+              height: 38,
+              icon: Icons.add_circle_outline_rounded,
+              text: 'Deduct Cash Expense',
+              onPressed: () {
+                _showDeductCashFromWithdrawalModal(context, provider, widget.transaction);
+              },
+            )
+          else
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: AppBadge.success(
+                  text: 'Fully Allocated (100%)',
+                  icon: Icons.check_circle_rounded,
+                  size: AppBadgeSize.medium,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -945,111 +867,43 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   void _showDeductCashFromWithdrawalModal(BuildContext context, FinanceProvider provider, AppTransaction bankTx) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
+    final pendingAttachments = <TransactionAttachment>[];
     AppReason? selectedReason;
     final fmtShort = NumberFormat('#,##0.00');
 
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      isScrollControlled: true,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setModalState) {
           final remaining = provider.getCashWithdrawalRemainingAmount(bankTx.id!, bankTx.amount);
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              top: 24,
-              left: 20,
-              right: 20,
+          final enteredAmt = double.tryParse(amountController.text.trim());
+          final bool isExceeded = enteredAmt != null && enteredAmt > remaining;
+          final bool isValid = enteredAmt != null && enteredAmt > 0 && !isExceeded && selectedReason != null;
+          final String buttonText = isExceeded
+              ? 'Exceeds Remaining Limit'
+              : (selectedReason == null
+                  ? 'Select Reason to Save'
+                  : (enteredAmt == null || enteredAmt <= 0
+                      ? 'Enter Amount'
+                      : 'Save Deduction'));
+
+          return AppDrawer(
+            heightFactor: 0.85,
+            headerCard: AppDrawerHeaderCard(
+              icon: Icons.money_off_rounded,
+              iconColor: AppColors.positive,
+              title: 'Deduct Cash Expense',
+              subtitle: 'Linked to ${bankTx.name} (${fmtShort.format(remaining)} ETB left)',
             ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Deduct Cash Expense', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text('Linked to ${bankTx.name} (${fmtShort.format(remaining)} ETB left)', style: const TextStyle(color: AppColors.positive, fontSize: 11)),
-                        ],
-                      ),
-                      IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(ctx)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      hintText: '0.00',
-                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.15)),
-                      suffixText: 'ETB',
-                      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide.none),
-                      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  InkWell(
-                    onTap: () {
-                      showModalBottomSheet(
-                        context: ctx,
-                        backgroundColor: Colors.transparent,
-                        isScrollControlled: true,
-                        builder: (_) => ReasonSelectionSheet(
-                          initialReason: selectedReason,
-                          onReasonSelected: (r) => setModalState(() => selectedReason = r),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.category_rounded, color: AppColors.positive, size: 18),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              selectedReason?.name ?? 'Select Expense Reason',
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const Icon(Icons.keyboard_arrow_right, color: Colors.white54, size: 18),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: noteController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Note (Optional)',
-                      labelStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.05),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  AppButton.primary(
-                    text: 'Save Deduction',
-                    height: 48,
-                    onPressed: () async {
+            bottomAction: AppButton.primary(
+              text: buttonText,
+              height: 48,
+              onPressed: !isValid
+                  ? null
+                  : () async {
                       final amtStr = amountController.text.trim();
                       final amt = double.tryParse(amtStr);
-                      if (amt == null || amt <= 0) return;
+                      if (amt == null || amt <= 0 || selectedReason == null || amt > remaining) return;
 
                       final cashTx = CashTransaction(
                         type: 'expense',
@@ -1064,10 +918,124 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       await provider.addCashTransaction(cashTx);
                       if (context.mounted) Navigator.pop(ctx);
                     },
+            ),
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 16),
+              children: [
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: TextStyle(
+                    color: isExceeded ? AppColors.negative : Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 20),
+                  textAlign: TextAlign.center,
+                  onChanged: (_) => setModalState(() {}),
+                  decoration: InputDecoration(
+                    hintText: '0.00',
+                    hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.15)),
+                    suffixText: provider.currentCurrency.shortLabel,
+                    suffixStyle: TextStyle(
+                      color: isExceeded ? AppColors.negative : AppColors.textSoft,
+                      fontSize: 16,
+                    ),
+                    enabledBorder: const UnderlineInputBorder(borderSide: BorderSide.none),
+                    focusedBorder: const UnderlineInputBorder(borderSide: BorderSide.none),
+                  ),
+                ),
+                if (isExceeded) ...[
+                  const SizedBox(height: 6),
+                  Center(
+                    child: AppBadge.destructive(
+                      text:
+                          'Exceeds remaining limit of ${fmtShort.format(remaining)} ${provider.currentCurrency.shortLabel}',
+                      icon: Icons.error_outline_rounded,
+                      size: AppBadgeSize.medium,
+                    ),
+                  ),
                 ],
-              ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: () {
+                    AppBottomSheet.show(
+                      context: ctx,
+                      isScrollControlled: true,
+                      builder: (_) => ReasonSelectionSheet(
+                        initialReason: selectedReason,
+                        transactionType: 'expense',
+                        isCashSpending: true,
+                        onReasonSelected: (r) => setModalState(() => selectedReason = r),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: selectedReason != null
+                          ? AppColors.positive.withValues(alpha: 0.1)
+                          : Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.category_rounded,
+                          color: selectedReason != null
+                              ? AppColors.positive
+                              : AppColors.gold,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            selectedReason?.name ?? 'Select Expense Reason (Required)',
+                            style: TextStyle(
+                              color: selectedReason != null
+                                  ? Colors.white
+                                  : AppColors.gold,
+                              fontSize: 13,
+                              fontWeight: selectedReason != null
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_right, color: Colors.white54, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                AppNoteCard(
+                  controller: noteController,
+                  title: 'NOTE & RECEIPT',
+                  hintText: 'Add an optional note or attach receipts...',
+                  attachments: pendingAttachments,
+                  isCollapsible: true,
+                  initialExpanded: false,
+                  accentColor: AppColors.positive,
+                  onAttachMedia: (filePath, fileType, fileName) async {
+                    setModalState(() {
+                      pendingAttachments.add(TransactionAttachment(
+                        id: 'att_${DateTime.now().millisecondsSinceEpoch}',
+                        transactionId: bankTx.id ?? '',
+                        filePath: filePath,
+                        fileType: fileType,
+                        fileName: fileName,
+                        createdAt: DateTime.now().toIso8601String(),
+                      ));
+                    });
+                  },
+                  onDeleteAttachment: (att) {
+                    setModalState(() {
+                      pendingAttachments.removeWhere((a) => a.id == att.id);
+                    });
+                  },
+                ),
+              ],
             ),
           );
         });
@@ -1187,6 +1155,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     bool isSpecialReason,
     bool isReasonBlocked,
     bool isAutoLocked,
+    bool isCashLocked,
     LoanRecord? linkedLoan,
     AppReasonLink? activeLink,
     bool isIncome,
@@ -1206,7 +1175,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
           focusColor: Colors.transparent,
-          onTap: () {
+          onTap: () async {
             if (linkedLoan != null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -1227,136 +1196,132 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               );
               return;
             }
+            if (isCashLocked) {
+              final spendings = provider.spendingsForTransaction(widget.transaction.id ?? '');
+              AppConfirmDialog.show(
+                context: context,
+                title: 'Reason Locked',
+                message:
+                    'This transaction has ${spendings.length} active cash ${spendings.length == 1 ? 'deduction' : 'deductions'} linked to it. To change the reason away from Cash, all linked deductions must be removed first.\n\nWould you like to delete all linked deductions and change the reason now?',
+                confirmText: 'Clear & Edit',
+                cancelText: 'Keep Locked',
+                isDestructive: true,
+                onConfirm: () async {
+                  for (final s in spendings) {
+                    if (s.id != null) {
+                      await provider.deleteCashTransaction(s.id!);
+                    }
+                  }
+                  if (context.mounted) {
+                    _showReasonPicker(context, provider);
+                  }
+                },
+              );
+              return;
+            }
             _showReasonPicker(context, provider);
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: (currentLabel != null
-                                ? AppColors.positive
-                                : AppColors.textSecondary)
-                            .withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isReasonBlocked
-                            ? Icons.lock_outline
-                            : _getReasonCategoryIcon(currentLabel),
-                        color: isReasonBlocked
-                            ? AppColors.warning
-                            : (currentLabel != null
-                                ? AppColors.positive
-                                : AppColors.textSecondary),
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            currentLabel ?? 'Uncategorized',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isReasonBlocked
-                                ? (isAutoLocked
-                                    ? 'Auto-locked • Telebirr credit transaction'
-                                    : 'Locked • Delete loan in manager to change')
-                                : (currentLabel != null
-                                    ? 'Tap to change reason'
-                                    : 'Assign a reason for tracking'),
-                            style: TextStyle(
-                              color: isReasonBlocked
-                                  ? AppColors.warning
-                                  : AppColors.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (activeReasonId != null && !isSpecialReason) ...[
-                      if (activeLink != null)
-                        AppButton.destructive(
-                          text: 'Unlink',
-                          icon: Icons.link_off_rounded,
-                          fullWidth: false,
-                          height: 26,
-                          fontSize: 10.5,
-                          iconSize: 12,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          onPressed: () async {
-                            await provider.deleteReasonLink(activeLink.id!);
-                          },
-                        )
-                      else
-                        AppButton.secondary(
-                          text: 'Link',
-                          icon: Icons.add_link_rounded,
-                          fullWidth: false,
-                          height: 26,
-                          fontSize: 10.5,
-                          iconSize: 12,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          onPressed: () async {
-                            await provider.addReasonLink(
-                              reasonId: activeReasonId,
-                              linkedName: widget.transaction.sender,
-                              linkType: isIncome ? 'sender' : 'receiver',
-                            );
-                          },
-                        ),
-                      const SizedBox(width: 8),
-                    ],
-                    Icon(
-                      isReasonBlocked ? Icons.lock : Icons.chevron_right,
-                      color: isReasonBlocked ? AppColors.warning : AppColors.textSecondary,
-                      size: isReasonBlocked ? 16 : 20,
-                    ),
-                  ],
-                ),
-                if (isReasonBlocked) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 14),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            isAutoLocked
-                                ? 'This transaction was auto-created from a Telebirr credit SMS. The reason is set to Loan and cannot be changed.'
-                                : 'To change this transaction\'s reason, delete the linked loan record from Loan Manager first.',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
+                // Single solid filled lock icon with matching soft tint when locked, or clean translucent white when unlocked
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isReasonBlocked
+                        ? AppColors.warning.withValues(alpha: 0.14)
+                        : Colors.white.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      isReasonBlocked
+                          ? Icons.lock_rounded
+                          : _getReasonCategoryIcon(currentLabel),
+                      color: isReasonBlocked
+                          ? AppColors.warning
+                          : Colors.white,
+                      size: 19,
                     ),
                   ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        currentLabel ?? 'Uncategorized',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        isReasonBlocked
+                            ? (isAutoLocked
+                                ? 'Locked • Telebirr credit transaction'
+                                : (isCashLocked
+                                    ? 'Locked • Linked deductions active'
+                                    : 'Locked • Linked loan record'))
+                            : (currentLabel != null
+                                ? 'Tap to change reason'
+                                : 'Assign a reason for tracking'),
+                        style: TextStyle(
+                          color: isReasonBlocked
+                              ? Colors.white54
+                              : Colors.white38,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (activeReasonId != null && !isSpecialReason) ...[
+                  if (activeLink != null)
+                    AppButton.destructive(
+                      text: 'Unlink',
+                      icon: Icons.link_off_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      onPressed: () async {
+                        await provider.deleteReasonLink(activeLink.id!);
+                      },
+                    )
+                  else
+                    AppButton.secondary(
+                      text: 'Link',
+                      icon: Icons.add_link_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      onPressed: () async {
+                        await provider.addReasonLink(
+                          reasonId: activeReasonId,
+                          linkedName: widget.transaction.sender,
+                          linkType: isIncome ? 'sender' : 'receiver',
+                        );
+                      },
+                    ),
+                  const SizedBox(width: 8),
                 ],
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white24,
+                  size: 20,
+                ),
               ],
             ),
           ),
@@ -1366,160 +1331,27 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCollapsiblePersonalNoteCard(BuildContext context, FinanceProvider provider) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          hoverColor: Colors.transparent,
-          focusColor: Colors.transparent,
-          onTap: () {
-            setState(() {
-              _isPersonalNoteExpanded = !_isPersonalNoteExpanded;
-            });
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.note_alt_outlined, color: AppColors.positive, size: 18),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'PERSONAL NOTE',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const Spacer(),
-                    AppButton.secondary(
-                      text: 'Attach Media',
-                      icon: Icons.attach_file_rounded,
-                      fullWidth: false,
-                      height: 28,
-                      fontSize: 11,
-                      iconSize: 13,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      onPressed: () => _attachMedia(context, provider),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: AnimatedRotation(
-                        turns: _isPersonalNoteExpanded ? 0.5 : 0.0,
-                        duration: const Duration(milliseconds: 250),
-                        child: const Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          color: Colors.white70,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                AnimatedCrossFade(
-                  firstChild: const SizedBox(width: double.infinity, height: 0),
-                  secondChild: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 12),
-                      Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _noteController,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          hintText: 'Add a private note about this transaction...',
-                          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.25)),
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        onChanged: (_) => setState(() {}),
-                        onEditingComplete: () {
-                          FocusScope.of(context).unfocus();
-                          _save(provider);
-                        },
-                      ),
-                      if (widget.transaction.attachments.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        const Text(
-                          'ATTACHMENTS',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: widget.transaction.attachments.map((att) {
-                            IconData attIcon = Icons.image_rounded;
-                            if (att.fileType == 'pdf') attIcon = Icons.picture_as_pdf_rounded;
-                            if (att.fileType == 'audio') attIcon = Icons.audiotrack_rounded;
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(attIcon, color: AppColors.positive, size: 14),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    att.fileName ?? att.fileType.toUpperCase(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 11),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  GestureDetector(
-                                    onTap: () {
-                                      provider.deleteAttachment(widget.transaction.id!, att.id);
-                                    },
-                                    child: const Icon(Icons.close_rounded, color: Colors.white38, size: 14),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ],
-                  ),
-                  crossFadeState: _isPersonalNoteExpanded
-                      ? CrossFadeState.showSecond
-                      : CrossFadeState.showFirst,
-                  duration: const Duration(milliseconds: 280),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return AppNoteCard(
+      controller: _noteController,
+      title: 'PERSONAL NOTE',
+      hintText: 'Add a private note about this transaction...',
+      attachments: widget.transaction.attachments,
+      isCollapsible: true,
+      initialExpanded: _isPersonalNoteExpanded,
+      accentColor: AppColors.positive,
+      onChanged: (_) => setState(() {}),
+      onEditingComplete: () => _save(provider),
+      onAttachMedia: (filePath, fileType, fileName) async {
+        await provider.addAttachment(
+          widget.transaction.id!,
+          filePath,
+          fileType,
+          fileName: fileName,
+        );
+      },
+      onDeleteAttachment: (att) {
+        provider.deleteAttachment(widget.transaction.id!, att.id);
+      },
     );
   }
 
@@ -1748,14 +1580,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        loan.isPaid ? 'Fully Settled ✓' : 'In Progress (Hold for options)',
-                        style: TextStyle(
-                          color: loan.isPaid ? AppColors.positive : accentColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      const SizedBox(height: 4),
+                      loan.isPaid
+                          ? const AppBadge.success(
+                              text: 'SETTLED',
+                              icon: Icons.check_circle_rounded,
+                              size: AppBadgeSize.small,
+                            )
+                          : const AppBadge.warning(
+                              text: 'IN PROGRESS',
+                              icon: Icons.schedule_rounded,
+                              size: AppBadgeSize.small,
+                            ),
                     ],
                   ),
                 ),
@@ -1791,14 +1627,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: loan.progressPercent,
-                minHeight: 6,
-                backgroundColor: Colors.white.withValues(alpha: 0.05),
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-              ),
+            CustomProgressBar(
+              progress: loan.progressPercent,
+              height: 10,
+              progressColor: accentColor,
             ),
           ],
         ),
@@ -1808,49 +1640,25 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   void _showLoanOptionsSheet(
       BuildContext context, LoanRecord loan, FinanceProvider provider) {
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      builder: (ctx) => AppDrawer(
+        heightFactor: null,
+        isBodyScrollable: false,
+        headerCard: AppDrawerHeaderCard(
+          icon: Icons.handshake_outlined,
+          iconColor: AppColors.positive,
+          title: 'Loan Options',
+          subtitle: loan.personName,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: InteractiveDragHandle(
-                color: AppColors.textSecondary.withValues(alpha: 0.4),
-                onTap: () => Navigator.pop(ctx),
-                padding: const EdgeInsets.only(bottom: 12),
-              ),
-            ),
-            Row(
-              children: [
-                const Icon(Icons.handshake_outlined,
-                    color: AppColors.gold, size: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Loan Options (${loan.personName})',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
             ListTile(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               tileColor: Colors.white.withValues(alpha: 0.04),
-              leading: const Icon(Icons.open_in_new, color: AppColors.gold),
+              leading: const Icon(Icons.open_in_new, color: AppColors.brandGreen),
               title: const Text('Open in Loan Manager',
                   style: TextStyle(
                       color: Colors.white, fontWeight: FontWeight.w600)),
@@ -1899,7 +1707,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       const SnackBar(
                         content: Text(
                             'Loan record deleted. Reason editing is now unlocked.'),
-                        backgroundColor: AppColors.gold,
+                        backgroundColor: AppColors.overlay,
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -1917,10 +1725,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       BuildContext context, FinanceProvider provider, AppTransaction tx) {
     return GestureDetector(
       onTap: () {
-        showModalBottomSheet(
+        AppBottomSheet.show(
           context: context,
           isScrollControlled: true,
-          backgroundColor: Colors.transparent,
           builder: (_) => AddLoanSheet(
             provider: provider,
             linkedTransactionId: tx.id,
@@ -1981,10 +1788,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               fontSize: 11,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               onPressed: () {
-                showModalBottomSheet(
+                AppBottomSheet.show(
                   context: context,
                   isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
                   builder: (_) => AddLoanSheet(
                     provider: provider,
                     linkedTransactionId: tx.id,
@@ -2005,10 +1811,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   void _openInternalTransferPicker(
       BuildContext context, FinanceProvider provider, AppTransaction tx) {
-    showModalBottomSheet(
+    AppBottomSheet.show(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (_) => InternalTransferPickerSheet(
         sourceTransaction: tx,
         provider: provider,
@@ -2062,6 +1867,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 ],
               ),
             ),
+            const SizedBox(width: 16),
             AppButton.primary(
               text: 'Link',
               fullWidth: false,

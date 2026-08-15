@@ -1,9 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../screens/wallets/freeze_account_sheet.dart';
+import 'app_badges.dart';
+import 'bank_card_action_modal.dart';
 
 /// Single source-of-truth card widget used in both WalletsScreen list
 /// and MainShell's flight overlay animation.
@@ -16,6 +19,8 @@ class BankCardWidget extends StatelessWidget {
   final VoidCallback? onTap;
   /// Animation factor: 0.0 = Home stack deck state, 1.0 = full Wallet list card state.
   final double animationFactor;
+  /// Whether to display the top-right three-dot menu button.
+  final bool showMoreButton;
 
   const BankCardWidget({
     super.key,
@@ -26,6 +31,7 @@ class BankCardWidget extends StatelessWidget {
     required this.isPaused,
     this.onTap,
     this.animationFactor = 1.0,
+    this.showMoreButton = true,
   });
 
   static Widget bankLogo(String name, [double size = 34.0, Color? iconColor]) {
@@ -39,7 +45,15 @@ class BankCardWidget extends StatelessWidget {
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
-      imagePath = 'assets/images/Ahadu_Logo.png';
+      return SvgPicture.asset(
+        'assets/images/Ahadu_Logo.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: iconColor != null
+            ? ColorFilter.mode(iconColor, BlendMode.srcIn)
+            : null,
+      );
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       return SvgPicture.asset(
         'assets/images/Bank_of_Abyssinia_Icon.svg',
@@ -62,10 +76,15 @@ class BankCardWidget extends StatelessWidget {
     }
 
     if (nameUp == 'CASH WALLET') {
-      return Icon(
-        Icons.account_balance_wallet_outlined,
-        color: Colors.white,
-        size: size,
+      return SvgPicture.asset(
+        'assets/images/Wallet Icon.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: ColorFilter.mode(
+          iconColor ?? Colors.white,
+          BlendMode.srcIn,
+        ),
       );
     }
 
@@ -106,8 +125,8 @@ class BankCardWidget extends StatelessWidget {
       ];
     } else if (nameUp.contains('AHADU')) {
       return [
-        AppColors.cardAhaduPink,
-        AppColors.cardAhaduWhite,
+        AppColors.cardAhaduRedDark,
+        AppColors.cardAhaduRedLight,
       ];
     } else if (nameUp == 'CASH WALLET') {
       return [
@@ -136,6 +155,12 @@ class BankCardWidget extends StatelessWidget {
     ];
   }
 
+  static bool isDarkTextTheme(String name, {bool isPaused = false}) {
+    if (isPaused) return false;
+    final nameUp = name.toUpperCase();
+    return nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR';
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = animationFactor.clamp(0.0, 1.0);
@@ -148,10 +173,8 @@ class BankCardWidget extends StatelessWidget {
         ? [AppColors.pausedCardDark, AppColors.pausedCardMid]
         : getCardGradient(senderName);
 
-    final bool isDarkTextTheme = !isPaused &&
-        (senderName.toUpperCase().contains('AHADU') ||
-            senderName.toUpperCase() == 'CBE BIRR' ||
-            senderName.toUpperCase() == 'CBEBIRR');
+    final bool isDarkTextTheme =
+        BankCardWidget.isDarkTextTheme(senderName, isPaused: isPaused);
     final Color textColorPrimary =
         isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
     final Color textColorSub = isDarkTextTheme
@@ -169,13 +192,33 @@ class BankCardWidget extends StatelessWidget {
     // and smoothly expands height & fades in between t = 0.60 and t = 1.0
     final buttonProgress = ((t - 0.60) / 0.40).clamp(0.0, 1.0);
     final buttonOpacity = Curves.easeInOut.transform(buttonProgress);
-    final buttonHeightFactor = Curves.easeOutCubic.transform(buttonProgress);
 
     final double logoSize = lerpDouble(22, 38, t)!;
     final double cardPadding = lerpDouble(10, 16, t)!;
     final double nameFontSize = lerpDouble(15, 17, t)!;
     final double balanceFontSize = lerpDouble(22, 28, t)!;
     final double decimalFontSize = lerpDouble(14, 18, t)!;
+
+    // Drop shadow is strictly ONLY present when stacked on the Home deck (t <= 0.01).
+    // In the wallet manager (t = 1.0) or during flight (on the way), cards have zero shadow.
+    final bool hasHomeShadow = t <= 0.01;
+    final List<BoxShadow> cardShadows = hasHomeShadow
+        ? (isPaused
+            ? [
+                BoxShadow(
+                  color: AppColors.pausedCardGlow.withValues(alpha: 0.25),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: cardGradient.first.withValues(alpha: 0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ])
+        : const [];
 
     return GestureDetector(
       onTap: onTap,
@@ -186,218 +229,223 @@ class BankCardWidget extends StatelessWidget {
             padding: EdgeInsets.all(cardPadding),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              border: isPaused
-                  ? Border.all(
-                      color: AppColors.pausedBorder,
-                      width: 1.5,
-                    )
-                  : null,
               gradient: LinearGradient(
                 begin: Alignment.bottomLeft,
                 end: Alignment.topRight,
                 colors: cardGradient,
               ),
-              boxShadow: isPaused
-                  ? [
-                      BoxShadow(
-                        color: AppColors.pausedCardGlow.withValues(alpha: 0.25),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : [
-                      BoxShadow(
-                        color: cardGradient.first.withValues(alpha: 0.35),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+              boxShadow: cardShadows,
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              clipBehavior: Clip.hardEdge,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight.isFinite ? constraints.maxHeight : 0.0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                    // Top Row: Logo + Bank Title + Sub-description
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Opacity(
-                          opacity: logoOpacity,
-                          child: bankLogo(senderName, logoSize, isDarkTextTheme ? AppColors.darkCharcoal : Colors.white),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Opacity(
-                            opacity: titleOpacity,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  senderName.toUpperCase().contains('AHADU')
-                                      ? 'Ahadu Bank'
-                                      : senderName,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Top Row: Logo + Bank Title + Sub-description
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Opacity(
+                      opacity: logoOpacity,
+                      child: bankLogo(senderName, logoSize, isDarkTextTheme ? AppColors.darkCharcoal : Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Opacity(
+                        opacity: titleOpacity,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              senderName.toUpperCase().contains('AHADU')
+                                  ? 'Ahadu Bank'
+                                  : senderName,
+                              style: TextStyle(
+                                color: textColorPrimary,
+                                fontSize: nameFontSize,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Opacity(
+                              opacity: descriptionOpacity,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Text(
+                                  isPaused
+                                      ? 'Tracking paused — tap card to view history'
+                                      : subtitle(senderName),
                                   style: TextStyle(
-                                    color: textColorPrimary,
-                                    fontSize: nameFontSize,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: -0.3,
+                                    color: textColorSub,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w400,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                Opacity(
-                                  opacity: descriptionOpacity,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 1),
-                                    child: Text(
-                                      isPaused
-                                          ? 'Tracking paused — tap card to view history'
-                                          : subtitle(senderName),
-                                      style: TextStyle(
-                                        color: textColorSub,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: lerpDouble(2, 8, t)!),
+
+                // Large Balance Display (Integer + Decimals - Auto-scales down for high amounts)
+                Opacity(
+                  opacity: titleOpacity,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          parts[0],
+                          style: TextStyle(
+                            color: textColorPrimary,
+                            fontSize: balanceFontSize,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            height: 1.0,
                           ),
+                          maxLines: 1,
+                        ),
+                        Text(
+                          '.${parts[1]}',
+                          style: TextStyle(
+                            color: isDarkTextTheme
+                                ? AppColors.darkCharcoal
+                                    .withValues(alpha: 0.5)
+                                : Colors.white.withValues(alpha: 0.65),
+                            fontSize: decimalFontSize,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
                         ),
                       ],
                     ),
-
-                    SizedBox(height: lerpDouble(2, 8, t)!),
-
-                    // Large Balance Display (Integer + Decimals)
-                    Opacity(
-                      opacity: titleOpacity,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            parts[0],
-                            style: TextStyle(
-                              color: textColorPrimary,
-                              fontSize: balanceFontSize,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.6,
-                              height: 1.0,
-                            ),
-                          ),
-                          Text(
-                            '.${parts[1]}',
-                            style: TextStyle(
-                              color: isDarkTextTheme
-                                  ? AppColors.darkCharcoal
-                                      .withValues(alpha: 0.5)
-                                  : Colors.white.withValues(alpha: 0.65),
-                              fontSize: decimalFontSize,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Subtitle: Transaction Count
-                    Opacity(
-                      opacity: txCountOpacity,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '$txCount total Transactions',
-                          style: TextStyle(
-                            color: textColorSub,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Pause / Resume Button (Excluding Cash Wallet) — Left Aligned
-                    if (senderName.toUpperCase() != 'CASH WALLET')
-                      ClipRect(
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          heightFactor: buttonHeightFactor,
-                          child: Opacity(
-                            opacity: buttonOpacity,
-                            child: IgnorePointer(
-                              ignoring: buttonProgress < 0.8,
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                    top: lerpDouble(0, 8, buttonProgress)!),
-                                child: FreezeAccountGlassButton(
-                                  senderName: senderName,
-                                  balance: balance,
-                                  txCount: txCount,
-                                  isBalanceVisible: isBalanceVisible,
-                                  isDarkTextTheme: isDarkTextTheme,
-                                  isPaused: isPaused,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
-            );
-          },
-        ),
-      ),
-    ),
 
-          // ── PAUSED badge in top-right corner ──────────────────────
+                // Subtitle: Transaction Count
+                Opacity(
+                  opacity: txCountOpacity,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '$txCount total Transactions',
+                      style: TextStyle(
+                        color: textColorSub,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── PAUSED badge in top-right area ──────────────────────
           if (isPaused)
             Positioned(
               top: 12,
-              right: 12,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.pausedBadge,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.pause_rounded,
-                        color: AppColors.pausedBadgeText, size: 11),
-                    SizedBox(width: 4),
-                    Text(
-                      'PAUSED',
-                      style: TextStyle(
-                        color: AppColors.pausedBadgeText,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                  ],
+              right: (showMoreButton && senderName.toUpperCase() != 'CASH WALLET')
+                  ? 48
+                  : 12,
+              child: const AppBadge.warning(
+                text: 'PAUSED',
+                icon: Icons.pause_rounded,
+                size: AppBadgeSize.small,
+              ),
+            ),
+
+          // ── Three-Dot Action Menu in top-right corner ────────────
+          if (showMoreButton && senderName.toUpperCase() != 'CASH WALLET')
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Opacity(
+                opacity: buttonOpacity,
+                child: IgnorePointer(
+                  ignoring: buttonProgress < 0.8,
+                  child: _CardMoreActionButton(
+                    senderName: senderName,
+                    balance: balance,
+                    txCount: txCount,
+                    isBalanceVisible: isBalanceVisible,
+                    isPaused: isPaused,
+                    isDarkTextTheme: isDarkTextTheme,
+                  ),
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Three-dot glass button in top-right corner of BankCardWidget
+class _CardMoreActionButton extends StatelessWidget {
+  final String senderName;
+  final double balance;
+  final int txCount;
+  final bool isBalanceVisible;
+  final bool isPaused;
+  final bool isDarkTextTheme;
+
+  const _CardMoreActionButton({
+    required this.senderName,
+    required this.balance,
+    required this.txCount,
+    required this.isBalanceVisible,
+    required this.isPaused,
+    required this.isDarkTextTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bgColor = isDarkTextTheme
+        ? AppColors.darkCharcoal.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.16);
+
+    final Color iconColor = isDarkTextTheme
+        ? AppColors.darkCharcoal
+        : Colors.white;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        BankCardActionModal.show(
+          context,
+          senderName: senderName,
+          balance: balance,
+          txCount: txCount,
+          isBalanceVisible: isBalanceVisible,
+          isPaused: isPaused,
+        );
+      },
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.more_horiz_rounded,
+          color: iconColor,
+          size: 18,
+        ),
       ),
     );
   }
