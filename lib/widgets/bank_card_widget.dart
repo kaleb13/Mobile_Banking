@@ -64,6 +64,16 @@ class BankCardWidget extends StatelessWidget {
             ? ColorFilter.mode(iconColor, BlendMode.srcIn)
             : null,
       );
+    } else if (nameUp.contains('DASHEN')) {
+      return SvgPicture.asset(
+        'assets/images/Dashen_Bank_Logo.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: iconColor != null
+            ? ColorFilter.mode(iconColor, BlendMode.srcIn)
+            : null,
+      );
     }
 
     if (imagePath.isNotEmpty) {
@@ -102,6 +112,7 @@ class BankCardWidget extends StatelessWidget {
     if (n == 'CBE BIRR' || n == 'CBEBIRR') return 'CBE Birr Mobile Wallet';
     if (n.contains('AHADU')) return 'Ahadu Bank S.C.';
     if (n.contains('ABYSSINIA') || n == 'BOA') return 'Bank of Abyssinia S.C.';
+    if (n.contains('DASHEN')) return 'Dashen Bank S.C.';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     return 'Bank Account';
   }
@@ -140,8 +151,8 @@ class BankCardWidget extends StatelessWidget {
       ];
     } else if (nameUp.contains('DASHEN')) {
       return [
-        AppColors.cardDashenDarkIcon,
-        AppColors.cardDashenBg,
+        AppColors.cardDashenLight,
+        AppColors.cardDashenDark,
       ];
     } else if (nameUp.contains('COOP')) {
       return [

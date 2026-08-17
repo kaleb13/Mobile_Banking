@@ -45,6 +45,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             "AHADU" to "Ahadu Bank",
             "BOA" to "BOA",
             "ABYSSINIA" to "BOA",
+            "DASHEN" to "Dashen Bank",
+            "AMOLE" to "Dashen Bank",
         )
 
         /**
@@ -83,7 +85,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 "available", "remaining", "amount", "total", "birr", "etb", "usd",
                 "loan", "repay", "due", "transaction", "txn", "ref no", "reference",
                 "purchase", "charged", "fee", "bank", "wallet", "mobile money",
-                "telebirr", "cbe", "ahadu", "boa"
+                "telebirr", "cbe", "ahadu", "boa", "dashen"
             )
             return keywords.any { lower.contains(it) }
         }
@@ -143,6 +145,18 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 return true
             }
 
+            // ── Amharic PIN / Password / Security / OTP patterns ─────────────
+            if (lower.contains("የይለፍ ቃል") ||
+                lower.contains("የይለፍ ቃልዎ") ||
+                lower.contains("ሚስጥር ቁጥር") ||
+                lower.contains("ሚስጥራዊ ቁጥር") ||
+                lower.contains("የይለፍ ቁጥር") ||
+                lower.contains("የማረጋገጫ ኮድ") ||
+                lower.contains("የማረጋገጫ ቁጥር") ||
+                (lower.contains("ኮድ") && (lower.contains("አይስጡ") || lower.contains("አያጋሩ")))) {
+                return true
+            }
+
             return false
         }
 
@@ -178,32 +192,54 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             val numRegex = Regex("([0-9]{1,6}(?:\\.[0-9]{1,2})?)")
             val numMatch = numRegex.find(body)
             if (numMatch != null) {
-                val d = numMatch.groupValues[1].toDoubleOrNull()
-                if (d != null && d > 0) {
+                val rawAmountStr = numMatch.groupValues[1].replace(",", "")
+                val doubleVal = rawAmountStr.toDoubleOrNull()
+                if (doubleVal != null) {
                     val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
                         minimumFractionDigits = 2
                         maximumFractionDigits = 2
                     }
-                    return "ETB ${formatter.format(d)}"
+                    return "ETB ${formatter.format(doubleVal)}"
                 }
             }
             return "ETB 0.00"
         }
 
         /**
-         * Determines direction header ("From: [Sender]" vs "For: [Recipient/Merchant]")
+         * Extracts person name or counterparty from SMS text.
          */
-        fun getDirectionHeader(sender: String, body: String): String {
-            val lower = body.lowercase()
-            val isDebit = lower.contains("sent") || lower.contains("debited") ||
-                    lower.contains("paid") || lower.contains("withdrawn") ||
-                    lower.contains("transfer to") || lower.contains("payment to")
-
-            return if (isDebit) {
-                "For: $sender"
-            } else {
-                "From: $sender"
+        fun extractPersonName(body: String): String? {
+            // "to Kaleb Kebede" or "from Kaleb Kebede"
+            val toFromRegex = Regex("(?i)(?:to|from)\\s+([A-Za-z]+(?:\\s+[A-Za-z]+)?)")
+            val match = toFromRegex.find(body)
+            if (match != null) {
+                val name = match.groupValues[1].trim()
+                // Ignore known bank names
+                val upper = name.uppercase()
+                if (!upper.contains("BANK") && !upper.contains("TELEBIRR") && !upper.contains("CBE")) {
+                    return name
+                }
             }
+            return null
+        }
+
+        /**
+         * Returns a direction header string like "To: John" or "From: John".
+         */
+        fun getDirectionHeader(bankName: String, body: String): String {
+            val person = extractPersonName(body)
+            if (!person.isNullOrBlank()) {
+                val lower = body.lowercase()
+                val isDebit = lower.contains("debit") || lower.contains("transferred") ||
+                        lower.contains("paid") || lower.contains("spent") ||
+                        lower.contains("transfer to") || lower.contains("payment to")
+                return if (isDebit) "To: $person" else "From: $person"
+            }
+            val lower = body.lowercase()
+            val isDebit = lower.contains("debit") || lower.contains("transferred") ||
+                    lower.contains("paid") || lower.contains("spent") ||
+                    lower.contains("transfer to") || lower.contains("payment to")
+            return if (isDebit) "Debit ($bankName)" else "Credit ($bankName)"
         }
     }
 
@@ -225,16 +261,14 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         if (!isEnglishBankingMessage(body)) return
 
         val txId = generateId(sender, timestampMs, body)
-        val inserted = insertIntoDb(context, txId, bankName, body, timestampMs, sender)
+        val attachedReason = checkAttachedReasonInDb(context, sender, body)
 
-        if (inserted) {
-            val attachedReason = checkAttachedReasonInDb(context, sender, body)
-            showNotification(context, txId, bankName, body, attachedReason)
+        // Show Android system status bar notification with interactive action buttons
+        showNotification(context, txId, bankName, body, attachedReason)
 
-            try {
-                MainActivity.smsEventSink?.success("newTransaction")
-            } catch (_: Exception) {}
-        }
+        try {
+            MainActivity.smsEventSink?.success("newTransaction")
+        } catch (_: Exception) {}
     }
 
     private fun insertIntoDb(
@@ -291,11 +325,16 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             // 1. Check Telebirr credit/loan auto-reasons
             val lower = body.lowercase()
-            if (lower.contains("credit loan") || lower.contains("loan disbursement") || lower.contains("credit request")) {
+            if (lower.contains("credit loan") || lower.contains("loan disbursement") || lower.contains("credit request") || lower.contains("contract number") || lower.contains("outstanding credit amount")) {
                 reason = "Loan"
             }
 
-            // 2. Check reason_links table joined with reasons table
+            // 2. Check internal transfers (Sanduq / self transfer)
+            if (reason == null && (lower.contains("sanduq") || lower.contains("internal transfer"))) {
+                reason = "Internal Transfer"
+            }
+
+            // 3. Check reason_links table joined with reasons table
             if (reason == null) {
                 try {
                     val cursor = db.rawQuery("""
@@ -323,6 +362,24 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun isLockedReason(reason: String?, body: String): Boolean {
+        val rLower = reason?.lowercase()?.trim() ?: ""
+        val bLower = body.lowercase().trim()
+        return rLower == "loan" ||
+               rLower == "internal transfer" ||
+               rLower == "bounce" ||
+               rLower == "saving" ||
+               rLower == "savings" ||
+               bLower.contains("credit loan") ||
+               bLower.contains("loan disbursement") ||
+               bLower.contains("credit request") ||
+               bLower.contains("contract number") ||
+               bLower.contains("outstanding credit amount") ||
+               bLower.contains("sanduq") ||
+               bLower.contains("saving account") ||
+               bLower.contains("saving balance")
     }
 
     private fun extractPersonName(body: String): String? {
@@ -370,9 +427,20 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         val notifId = txId.hashCode()
 
+        val isLocked = isLockedReason(attachedReason, body)
+        val resolvedReason = if (isLocked && attachedReason.isNullOrBlank()) {
+            if (body.lowercase().contains("sanduq") || body.lowercase().contains("internal transfer")) "Internal Transfer" else "Loan"
+        } else {
+            attachedReason
+        }
+
         val directionLine = getDirectionHeader(bankName, body)
         val amountLine = extractAmount(body)
-        val reasonLine = if (!attachedReason.isNullOrBlank()) attachedReason else "Uncategorized"
+        val reasonLine = if (!resolvedReason.isNullOrBlank()) {
+            if (isLocked) "$resolvedReason (Locked)" else resolvedReason
+        } else {
+            "Uncategorized"
+        }
 
         val personName = extractPersonName(body)
         val title = if (!personName.isNullOrBlank()) {
@@ -383,21 +451,29 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         val bigText = "$directionLine\nAmount: $amountLine\nReason: $reasonLine"
 
-        // Create PendingIntent to launch the transparent quick-edit dialog
-        val openIntent = Intent(context, TransactionQuickEditActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(TransactionQuickEditActivity.EXTRA_TX_ID, txId)
-            putExtra(TransactionQuickEditActivity.EXTRA_SMS_BODY, body)
-            putExtra(TransactionQuickEditActivity.EXTRA_BANK_NAME, bankName)
-            putExtra(TransactionQuickEditActivity.EXTRA_AMOUNT, amountLine)
-            putExtra(TransactionQuickEditActivity.EXTRA_DIRECTION, directionLine)
-        }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val openPendingIntent = PendingIntent.getActivity(context, notifId, openIntent, flags)
+
+        val openIntent = if (isLocked) {
+            // Locked reason: Launch main app directly (no quick-edit categorization dialog)
+            Intent(context, MainActivity::class.java).apply {
+                this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        } else {
+            // Unlocked: Launch the transparent quick-edit dialog
+            Intent(context, TransactionQuickEditActivity::class.java).apply {
+                this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(TransactionQuickEditActivity.EXTRA_TX_ID, txId)
+                putExtra(TransactionQuickEditActivity.EXTRA_SMS_BODY, body)
+                putExtra(TransactionQuickEditActivity.EXTRA_BANK_NAME, bankName)
+                putExtra(TransactionQuickEditActivity.EXTRA_AMOUNT, amountLine)
+                putExtra(TransactionQuickEditActivity.EXTRA_DIRECTION, directionLine)
+            }
+        }
+        val openPendingIntent = PendingIntent.getActivity(context, notifId, openIntent, pendingFlags)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -408,8 +484,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             .setContentIntent(openPendingIntent)
             .setAutoCancel(true)
 
-        if (!attachedReason.isNullOrBlank()) {
-            // Attached Reason Case: 2 Action Buttons [ OK ] and [ Change Reason ]
+        if (isLocked) {
+            // Locked Reason Case: NO action buttons. Plain informative notification. Tapping opens the main app.
+        } else if (!attachedReason.isNullOrBlank()) {
+            // Attached Unlocked Reason Case: 2 Action Buttons [ OK ] and [ Change Reason ]
             val okIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_DISMISS
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
@@ -418,7 +496,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 context,
                 notifId * 10 + 1,
                 okIntent,
-                flags
+                pendingFlags
             )
 
             builder.addAction(0, "OK", okPendingIntent)
@@ -436,7 +514,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 context,
                 notifId * 10 + 2,
                 foodIntent,
-                flags
+                pendingFlags
             )
 
             val goodsIntent = Intent(context, NotificationActionReceiver::class.java).apply {
@@ -450,7 +528,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 context,
                 notifId * 10 + 3,
                 goodsIntent,
-                flags
+                pendingFlags
             )
 
             builder.addAction(0, "Food", foodPendingIntent)

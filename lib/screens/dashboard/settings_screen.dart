@@ -10,6 +10,10 @@ import '../../widgets/app_back_button.dart';
 import 'reason_management_screen.dart';
 import 'about_app_screen.dart';
 import '../../models/app_currency.dart';
+import '../../models/scan_window_option.dart';
+import '../../widgets/app_toast.dart';
+import '../../widgets/app_drawer.dart';
+import '../../widgets/app_list_tile.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_badges.dart';
@@ -184,6 +188,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // ── Section: Data ──────────────────────────────────
                     _sectionLabel('Data & Storage'),
                     _buildCardBase([
+                      Consumer<FinanceProvider>(
+                        builder: (context, provider, _) {
+                          return _settingsTile(
+                            context,
+                            icon: Icons.history_rounded,
+                            iconColor: AppColors.positive,
+                            label: 'SMS Scan History Range',
+                            subtitle: provider.scanWindowOption.title,
+                            onTap: () => _showScanWindowChooser(context, provider),
+                            showDivider: true,
+                          );
+                        },
+                      ),
                       _settingsTile(
                         context,
                         icon: Icons.cloud_upload_outlined,
@@ -582,5 +599,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
+  }
+
+  void _showScanWindowChooser(BuildContext context, FinanceProvider provider) {
+    AppDrawer.show(
+      context: context,
+      builder: (sheetCtx) {
+        final currentOption = provider.scanWindowOption;
+
+        return AppDrawer(
+          title: 'SMS Scan History Range',
+          subtitle: 'Choose how far back Shibre is allowed to import and refresh your banking SMS. All refreshes strictly abide by this boundary.',
+          heightFactor: null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: ScanWindowOption.values.map((option) {
+              final isSelected = option == currentOption;
+              final isRecommended = option == ScanWindowOption.thirtyDays;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: AppListTile(
+                  title: option.title,
+                  subtitle: option.subtitle,
+                  leadingIcon: _getScanOptionIcon(option),
+                  leadingColor: isSelected ? AppColors.positive : null,
+                  badge: isRecommended
+                      ? const AppBadge.warning(
+                          text: 'Recommended',
+                          size: AppBadgeSize.micro,
+                        )
+                      : null,
+                  trailing: isSelected
+                      ? const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.positive,
+                          size: 20,
+                        )
+                      : null,
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    HapticFeedback.lightImpact();
+                    AppToast.info(
+                      context,
+                      message: 'Updating Scan Range',
+                      subtitle: 'Syncing transactions for ${option.title.toLowerCase()}…',
+                    );
+                    await provider.setScanWindowOption(option, rescanImmediately: true);
+                    if (context.mounted) {
+                      AppToast.success(
+                        context,
+                        message: 'Scan Range Updated',
+                        subtitle: 'Active window: ${option.title}',
+                      );
+                    }
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  IconData _getScanOptionIcon(ScanWindowOption option) {
+    switch (option) {
+      case ScanWindowOption.todayOnly:
+        return Icons.today_rounded;
+      case ScanWindowOption.sevenDays:
+        return Icons.date_range_rounded;
+      case ScanWindowOption.thirtyDays:
+        return Icons.calendar_month_rounded;
+      case ScanWindowOption.ninetyDays:
+        return Icons.event_note_rounded;
+      case ScanWindowOption.allTime:
+        return Icons.history_rounded;
+    }
   }
 }

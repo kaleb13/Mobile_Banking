@@ -108,9 +108,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify content
-      expect(find.text('We detected a possible transaction:'), findsOneWidget);
-      expect(find.text('₹500.00'), findsOneWidget);
-      expect(find.text('Message: "Received 500 ETB"'), findsOneWidget);
+      expect(find.text('Detected Transaction'), findsOneWidget);
+      expect(find.text('500.00'), findsOneWidget);
       expect(find.text('Income'), findsOneWidget);
       expect(find.text('Expense'), findsOneWidget);
       expect(find.text('Ignore'), findsOneWidget);

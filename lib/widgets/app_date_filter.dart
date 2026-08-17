@@ -1,0 +1,565 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../theme/app_theme.dart';
+import 'app_dropdown.dart';
+import 'app_bottom_sheet.dart';
+import 'app_button.dart';
+
+/// Available preset date filter options.
+enum AppDateFilterPreset {
+  anyTime,
+  today,
+  yesterday,
+  thisWeek,
+  thisMonth,
+  thisYear,
+  customDate,
+  customRange,
+}
+
+/// Represents the active state and date range for [AppDateFilter].
+class AppDateFilterValue {
+  final AppDateFilterPreset preset;
+  final DateTime? customDate;
+  final DateTimeRange? customRange;
+
+  const AppDateFilterValue({
+    this.preset = AppDateFilterPreset.anyTime,
+    this.customDate,
+    this.customRange,
+  });
+
+  const AppDateFilterValue.anyTime()
+      : preset = AppDateFilterPreset.anyTime,
+        customDate = null,
+        customRange = null;
+
+  const AppDateFilterValue.today()
+      : preset = AppDateFilterPreset.today,
+        customDate = null,
+        customRange = null;
+
+  const AppDateFilterValue.yesterday()
+      : preset = AppDateFilterPreset.yesterday,
+        customDate = null,
+        customRange = null;
+
+  const AppDateFilterValue.thisWeek()
+      : preset = AppDateFilterPreset.thisWeek,
+        customDate = null,
+        customRange = null;
+
+  const AppDateFilterValue.thisMonth()
+      : preset = AppDateFilterPreset.thisMonth,
+        customDate = null,
+        customRange = null;
+
+  const AppDateFilterValue.thisYear()
+      : preset = AppDateFilterPreset.thisYear,
+        customDate = null,
+        customRange = null;
+
+  const AppDateFilterValue.singleDate(DateTime date)
+      : preset = AppDateFilterPreset.customDate,
+        customDate = date,
+        customRange = null;
+
+  const AppDateFilterValue.dateRange(DateTimeRange range)
+      : preset = AppDateFilterPreset.customRange,
+        customDate = null,
+        customRange = range;
+
+  bool get isDefault => preset == AppDateFilterPreset.anyTime;
+
+  /// Human-friendly display label on the pill trigger.
+  String get label {
+    switch (preset) {
+      case AppDateFilterPreset.anyTime:
+        return 'Date';
+      case AppDateFilterPreset.today:
+        return 'Today';
+      case AppDateFilterPreset.yesterday:
+        return 'Yesterday';
+      case AppDateFilterPreset.thisWeek:
+        return 'This Week';
+      case AppDateFilterPreset.thisMonth:
+        return 'This Month';
+      case AppDateFilterPreset.thisYear:
+        return 'This Year';
+      case AppDateFilterPreset.customDate:
+        return customDate != null
+            ? DateFormat('MMM d').format(customDate!)
+            : 'Date';
+      case AppDateFilterPreset.customRange:
+        if (customRange != null) {
+          if (customRange!.start.year == customRange!.end.year &&
+              customRange!.start.month == customRange!.end.month &&
+              customRange!.start.day == customRange!.end.day) {
+            return DateFormat('MMM d').format(customRange!.start);
+          }
+          return '${DateFormat('MMM d').format(customRange!.start)} - ${DateFormat('MMM d').format(customRange!.end)}';
+        }
+        return 'Date';
+    }
+  }
+
+  /// Evaluates whether a transaction [date] satisfies this filter.
+  bool matches(DateTime date) {
+    final now = DateTime.now();
+    switch (preset) {
+      case AppDateFilterPreset.anyTime:
+        return true;
+      case AppDateFilterPreset.today:
+        return date.year == now.year &&
+            date.month == now.month &&
+            date.day == now.day;
+      case AppDateFilterPreset.yesterday:
+        final yesterday = now.subtract(const Duration(days: 1));
+        return date.year == yesterday.year &&
+            date.month == yesterday.month &&
+            date.day == yesterday.day;
+      case AppDateFilterPreset.thisWeek:
+        final startOfWeek = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: now.weekday - 1));
+        return !date.isBefore(startOfWeek);
+      case AppDateFilterPreset.thisMonth:
+        return date.year == now.year && date.month == now.month;
+      case AppDateFilterPreset.thisYear:
+        return date.year == now.year;
+      case AppDateFilterPreset.customDate:
+        if (customDate == null) return true;
+        return date.year == customDate!.year &&
+            date.month == customDate!.month &&
+            date.day == customDate!.day;
+      case AppDateFilterPreset.customRange:
+        if (customRange == null) return true;
+        final start = DateTime(customRange!.start.year,
+            customRange!.start.month, customRange!.start.day);
+        final end = DateTime(customRange!.end.year, customRange!.end.month,
+            customRange!.end.day, 23, 59, 59, 999);
+        return (date.isAfter(start.subtract(const Duration(seconds: 1))) ||
+                date.isAtSameMomentAs(start)) &&
+            (date.isBefore(end.add(const Duration(seconds: 1))) ||
+                date.isAtSameMomentAs(end));
+    }
+  }
+}
+
+/// Standardized design-system Date Filter pill and modal picker component.
+///
+/// Fully rounded (pill shape), zero borders, supporting Light and Dark surfaces,
+/// quick presets, single-day picker, and custom date-range picker.
+class AppDateFilter extends StatelessWidget {
+  /// Currently selected filter value.
+  final AppDateFilterValue value;
+
+  /// Callback when date selection changes.
+  final ValueChanged<AppDateFilterValue> onChanged;
+
+  /// Visual theme variant (light for white sheets, dark for dark surfaces).
+  final AppDropdownVariant variant;
+
+  /// Trigger button height (defaults to 32).
+  final double height;
+
+  /// Border radius (defaults to 100 for 100% pill shape).
+  final double borderRadius;
+
+  /// Optional maximum width constraint for the trigger button label.
+  final double? maxWidth;
+
+  /// Custom background color override.
+  final Color? backgroundColor;
+
+  /// Custom text color override.
+  final Color? textColor;
+
+  /// Custom icon color override.
+  final Color? iconColor;
+
+  const AppDateFilter({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.variant = AppDropdownVariant.dark,
+    this.height = 32,
+    this.borderRadius = 100,
+    this.maxWidth,
+    this.backgroundColor,
+    this.textColor,
+    this.iconColor,
+  });
+
+  /// Factory constructor for white / light background surfaces.
+  factory AppDateFilter.light({
+    Key? key,
+    required AppDateFilterValue value,
+    required ValueChanged<AppDateFilterValue> onChanged,
+    double height = 32,
+    double borderRadius = 100,
+    double? maxWidth,
+    Color? backgroundColor,
+    Color? textColor,
+    Color? iconColor,
+  }) {
+    return AppDateFilter(
+      key: key,
+      value: value,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.light,
+      height: height,
+      borderRadius: borderRadius,
+      maxWidth: maxWidth,
+      backgroundColor: backgroundColor,
+      textColor: textColor,
+      iconColor: iconColor,
+    );
+  }
+
+  /// Factory constructor for dark background surfaces.
+  factory AppDateFilter.dark({
+    Key? key,
+    required AppDateFilterValue value,
+    required ValueChanged<AppDateFilterValue> onChanged,
+    double height = 32,
+    double borderRadius = 100,
+    double? maxWidth,
+    Color? backgroundColor,
+    Color? textColor,
+    Color? iconColor,
+  }) {
+    return AppDateFilter(
+      key: key,
+      value: value,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.dark,
+      height: height,
+      borderRadius: borderRadius,
+      maxWidth: maxWidth,
+      backgroundColor: backgroundColor,
+      textColor: textColor,
+      iconColor: iconColor,
+    );
+  }
+
+  void _showDatePickerSheet(BuildContext context) {
+    AppBottomSheet.show(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return _AppDateFilterSheet(
+          currentValue: value,
+          onSelected: (newValue) {
+            onChanged(newValue);
+            Navigator.pop(sheetContext);
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = variant == AppDropdownVariant.light ||
+        (variant == AppDropdownVariant.auto &&
+            Theme.of(context).brightness == Brightness.light);
+
+    final bool isDef = value.isDefault;
+
+    // Trigger background styling (Zero borders)
+    final Color triggerBg = backgroundColor ??
+        (isLight
+            ? (isDef ? AppColors.lightGreyBackground : AppColors.bgDeepLight)
+            : (isDef ? AppColors.surface : AppColors.surfaceElevated));
+
+    final Color effectiveTextColor = textColor ??
+        (isLight
+            ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
+            : (isDef ? AppColors.textSecondary : Colors.white));
+
+    final Color effectiveIconColor = iconColor ??
+        (isLight
+            ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
+            : (isDef ? AppColors.textSecondary : Colors.white));
+
+    return GestureDetector(
+      onTap: () => _showDatePickerSheet(context),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: height,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: triggerBg,
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 13,
+              color: effectiveIconColor,
+            ),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth ?? 140),
+              child: Text(
+                value.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: effectiveTextColor,
+                  fontSize: 12,
+                  fontWeight: isDef ? FontWeight.w500 : FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: effectiveIconColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Internal Bottom Sheet containing date presets and custom pickers.
+class _AppDateFilterSheet extends StatelessWidget {
+  final AppDateFilterValue currentValue;
+  final ValueChanged<AppDateFilterValue> onSelected;
+
+  const _AppDateFilterSheet({
+    required this.currentValue,
+    required this.onSelected,
+  });
+
+  Future<void> _pickSingleDate(BuildContext context) async {
+    final now = DateTime.now();
+    final initialDate = currentValue.customDate ?? now;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isAfter(now) ? now : initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.brandGreen,
+              onPrimary: AppColors.buttonPrimaryText,
+              surface: AppColors.surfaceElevated,
+              onSurface: Colors.white,
+            ),
+            dialogTheme: const DialogThemeData(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(24)),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      onSelected(AppDateFilterValue.singleDate(picked));
+    }
+  }
+
+  Future<void> _pickDateRange(BuildContext context) async {
+    final now = DateTime.now();
+    final initialRange = currentValue.customRange ??
+        DateTimeRange(
+          start: now.subtract(const Duration(days: 7)),
+          end: now,
+        );
+
+    final picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: initialRange,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.brandGreen,
+              onPrimary: AppColors.buttonPrimaryText,
+              surface: AppColors.surfaceElevated,
+              onSurface: Colors.white,
+            ),
+            dialogTheme: const DialogThemeData(
+              backgroundColor: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(24)),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      onSelected(AppDateFilterValue.dateRange(picked));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final presets = [
+      {'label': 'Any Time (All Transactions)', 'value': const AppDateFilterValue.anyTime()},
+      {'label': 'Today', 'value': const AppDateFilterValue.today()},
+      {'label': 'Yesterday', 'value': const AppDateFilterValue.yesterday()},
+      {'label': 'This Week', 'value': const AppDateFilterValue.thisWeek()},
+      {'label': 'This Month', 'value': const AppDateFilterValue.thisMonth()},
+      {'label': 'This Year', 'value': const AppDateFilterValue.thisYear()},
+    ];
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              children: [
+                const Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppColors.brandGreen,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Filter by Date',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const Spacer(),
+                if (!currentValue.isDefault)
+                  GestureDetector(
+                    onTap: () => onSelected(const AppDateFilterValue.anyTime()),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.buttonSecondary,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: const Text(
+                        'Reset',
+                        style: TextStyle(
+                          color: AppColors.brandGreen,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Quick Presets
+            ...presets.map((item) {
+              final val = item['value'] as AppDateFilterValue;
+              final isSelected = currentValue.preset == val.preset;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                child: Material(
+                  color: isSelected
+                      ? AppColors.brandGreen.withValues(alpha: 0.15)
+                      : AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    onTap: () => onSelected(val),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item['label'] as String,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSoft,
+                                fontSize: 13.5,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.brandGreen,
+                              size: 18,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+
+            const SizedBox(height: 10),
+
+            // Custom Pickers Section
+            Row(
+              children: [
+                // Single Date Picker Action Pill
+                Expanded(
+                  child: AppButton.secondary(
+                    text: currentValue.preset == AppDateFilterPreset.customDate
+                        ? currentValue.label
+                        : 'Pick Date',
+                    icon: Icons.event_outlined,
+                    height: 44,
+                    fontSize: 12.5,
+                    onPressed: () => _pickSingleDate(context),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Date Range Picker Action Pill
+                Expanded(
+                  child: AppButton.secondary(
+                    text: currentValue.preset == AppDateFilterPreset.customRange
+                        ? 'Range Active'
+                        : 'Date Range',
+                    icon: Icons.date_range_rounded,
+                    height: 44,
+                    fontSize: 12.5,
+                    onPressed: () => _pickDateRange(context),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

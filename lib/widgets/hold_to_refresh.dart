@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 
 /// Shared refresh state passed from [HoldToRefresh] down to [DynamicNotificationPill]
@@ -98,6 +99,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
     if (_refreshTriggered) return;
     _refreshTriggered = true;
     _phase = RefreshPhase.refreshing;
+    HapticFeedback.mediumImpact();
     _progressCtrl.value = 0;
     _progressCtrl.forward();
     refreshStateNotifier.value = const RefreshState(
@@ -110,6 +112,7 @@ class _HoldToRefreshState extends State<HoldToRefresh>
     } finally {
       _progressCtrl.stop();
       if (mounted) {
+        HapticFeedback.lightImpact();
         refreshStateNotifier.value = const RefreshState(
           phase: RefreshPhase.done,
           refreshPercent: 100,

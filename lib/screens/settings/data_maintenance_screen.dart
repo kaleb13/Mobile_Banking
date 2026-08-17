@@ -7,6 +7,7 @@ import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_toast.dart';
 
 class DataMaintenanceScreen extends StatefulWidget {
   const DataMaintenanceScreen({super.key});
@@ -40,13 +41,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     try {
       await context.read<FinanceProvider>().smartRefresh();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Smart Refresh complete ✓'),
-            backgroundColor: AppColors.positive,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        AppToast.success(context, message: 'Smart Refresh complete');
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -58,13 +53,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     try {
       await context.read<FinanceProvider>().fullReset();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Full reset complete ✓'),
-            backgroundColor: AppColors.positive,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        AppToast.success(context, message: 'Full reset complete');
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);

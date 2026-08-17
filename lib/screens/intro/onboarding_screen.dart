@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,10 +7,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../models/scan_window_option.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/bank_card_widget.dart';
 import '../../widgets/carousel_page_indicator.dart';
 import '../../widgets/interactive_3d_badge.dart';
+import '../../widgets/app_toast.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -20,12 +24,18 @@ class OnboardingScreen extends StatefulWidget {
 
 Color _levelGlowColor(int level) {
   switch (level) {
-    case 1: return AppColors.levelGlow1; // LV1 Indigo / Blue
-    case 2: return AppColors.levelGlow2; // LV2 Silver Cyan / Sky Blue
-    case 3: return AppColors.levelGlow3; // LV3 Royal Purple / Violet
-    case 4: return AppColors.levelGlow4; // LV4 Red / Coral
-    case 5: return AppColors.levelGlow5; // LV5 Gold / Amber
-    default: return AppColors.levelGlow1;
+    case 1:
+      return AppColors.levelGlow1;
+    case 2:
+      return AppColors.levelGlow2;
+    case 3:
+      return AppColors.levelGlow3;
+    case 4:
+      return AppColors.levelGlow4;
+    case 5:
+      return AppColors.levelGlow5;
+    default:
+      return AppColors.levelGlow1;
   }
 }
 
@@ -36,9 +46,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   int _currentPage = 0;
   bool _isTermsAccepted = false;
   bool _bgInitStarted = false;
+  ScanWindowOption _selectedScanOption = ScanWindowOption.thirtyDays;
 
+  // Pulse animation for scanner
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
+
+  // Scan progress simulator animation
+  late AnimationController _scanProgressController;
+  late Animation<double> _scanProgressAnim;
+
+  // Balance count-up animation
+  late AnimationController _balanceCountController;
+  late Animation<double> _balanceCountAnim;
+  double _targetBalance = 0.0;
+  bool _hasStartedCounting = false;
+
+  final List<String> _scanStages = [
+    'Scanning inbox for verified bank messages…',
+    'Analyzing CBE, Telebirr & BOA records…',
+    'Calculating ending balances & cash flow…',
+    'Finalizing financial level tier…',
+  ];
 
   @override
   void initState() {
@@ -50,6 +79,22 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _pulseAnim = Tween<double>(begin: 0.92, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _scanProgressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
+    _scanProgressAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _scanProgressController, curve: Curves.easeInOutCubic),
+    );
+
+    _balanceCountController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _balanceCountAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _balanceCountController, curve: Curves.easeOutCubic),
+    );
   }
 
   @override
@@ -57,11 +102,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _pageController.dispose();
     _termsScrollController.dispose();
     _pulseController.dispose();
+    _scanProgressController.dispose();
+    _balanceCountController.dispose();
     super.dispose();
   }
 
   void _nextPage() {
-    if (_currentPage < 2) {
+    if (_currentPage < 4) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeInOutCubic,
@@ -70,7 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _previousPage() {
-    if (_currentPage == 1) {
+    if (_currentPage > 0 && _currentPage < 4) {
       _pageController.previousPage(
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeInOutCubic,
@@ -81,8 +128,23 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void _kickOffBackgroundInit() {
     if (_bgInitStarted) return;
     _bgInitStarted = true;
+    _scanProgressController.forward();
     final provider = Provider.of<FinanceProvider>(context, listen: false);
-    provider.startBackgroundInit();
+    // Apply selected scan window option before initialization
+    provider.setScanWindowOption(_selectedScanOption).then((_) {
+      provider.startBackgroundInit().then((_) {
+        if (mounted) {
+          _triggerBalanceCountUp(provider.totalBalance);
+        }
+      });
+    });
+  }
+
+  void _triggerBalanceCountUp(double finalBalance) {
+    if (_hasStartedCounting) return;
+    _hasStartedCounting = true;
+    _targetBalance = finalBalance;
+    _balanceCountController.forward(from: 0.0);
   }
 
   Future<void> _handleSmsPermissionAndProceed() async {
@@ -99,13 +161,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.negative,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+    AppToast.error(
+      context,
+      message: 'Permission required',
+      subtitle: message,
     );
   }
 
@@ -114,36 +173,38 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return PopScope(
       canPop: _currentPage == 0,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _currentPage == 1) {
+        if (!didPop && _currentPage > 0 && _currentPage < 4) {
           _previousPage();
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.bgDeep,
+        backgroundColor: AppColors.background,
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // 1. Background Graphics (Only shown on Page 0)
+            // 1. Background Graphics (Shown on Page 0)
             _buildBackgroundStack(),
 
-            // 2. PageView for 3 Onboarding Pages
+            // 2. PageView for 5 Onboarding Pages
             PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
               onPageChanged: (index) {
                 setState(() => _currentPage = index);
-                if (index == 2) {
+                if (index == 4) {
                   _kickOffBackgroundInit();
                 }
               },
               children: [
                 _buildWelcomePageBody(),
+                _buildSupportedBanksPageBody(),
+                _buildScanWindowPageBody(),
                 _buildTermsPageBody(),
                 _buildLevelRevealPageBody(),
               ],
             ),
 
-            // 3. Fixed Bottom Area (3-dot Carousel Indicator + Action Button)
+            // 3. Fixed Bottom Area (Carousel Indicator + Pill Action Button)
             Positioned(
               bottom: 0,
               left: 0,
@@ -158,11 +219,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- BACKGROUND GRAPHICS ---
   Widget _buildBackgroundStack() {
-    // Only display background logo outline and gradient on the 1st screen
     if (_currentPage != 0) {
-      return Container(
-        color: AppColors.bgDeep,
-      );
+      return Container(color: AppColors.background);
     }
 
     return Stack(
@@ -173,18 +231,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [AppColors.onboardingDark, AppColors.background, AppColors.onboardingDeep],
+              colors: [
+                AppColors.onboardingDark,
+                AppColors.background,
+                AppColors.onboardingDeep,
+              ],
               stops: [0.0, 0.5, 1.0],
             ),
           ),
         ),
-        // Entire background graphic composition with 50% opacity
         Opacity(
           opacity: 0.50,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background ambient fading glow
               Positioned(
                 top: -60,
                 bottom: 60,
@@ -205,7 +265,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   ),
                 ),
               ),
-              // Green foreground icon shape
               Positioned(
                 top: -60,
                 bottom: 60,
@@ -220,7 +279,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   ),
                 ),
               ),
-              // White outline SVG overlay
               Positioned(
                 top: -60,
                 bottom: 60,
@@ -240,7 +298,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           ),
         ),
         Positioned(
-          bottom: 0, left: 0, right: 0, height: 350,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 350,
           child: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -255,7 +316,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 0: WELCOME PAGE ---
+  // --- PAGE 0: ORIGINAL HERO START SCREEN ---
   Widget _buildWelcomePageBody() {
     return SafeArea(
       child: Padding(
@@ -269,8 +330,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               style: TextStyle(
                 color: AppColors.telebirrGreen,
                 fontSize: 14,
-                fontWeight: FontWeight.w300,
-                letterSpacing: 0.3,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.4,
               ),
             ),
             const SizedBox(height: 6),
@@ -289,8 +350,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               'Shibre analyzes your income, expenses, and financial habits to estimate your current financial level. Tap Get Started to discover where you stand and begin your journey toward a stronger financial future.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.70),
-                fontSize: 13,
-                height: 1.20,
+                fontSize: 13.5,
+                height: 1.5,
               ),
             ),
             const Spacer(flex: 5),
@@ -300,7 +361,348 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 1: TERMS & PRIVACY PAGE ---
+  // --- PAGE 1: CLEAN SUPPORTED BANKS LIST ---
+  Widget _buildSupportedBanksPageBody() {
+    final supportedBanks = [
+      {'name': 'Telebirr', 'type': 'Ethio Telecom Mobile Money'},
+      {'name': 'CBE', 'type': 'Commercial Bank of Ethiopia'},
+      {'name': 'BOA', 'type': 'Bank of Abyssinia'},
+      {'name': 'CBE Birr', 'type': 'CBE Mobile Money Wallet'},
+      {'name': 'Ahadu Bank', 'type': 'Ahadu Mobile Banking'},
+      {'name': 'Dashen Bank', 'type': 'Dashen Mobile & Amole'},
+      {'name': 'Cash Wallet', 'type': 'Automatic ATM cash tracker'},
+    ];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with back arrow and title
+            Row(
+              children: [
+                AppBackButton(onPressed: _previousPage),
+                const SizedBox(width: 12),
+                const Text(
+                  'Supported Banks',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Shibre automatically syncs SMS from these supported Ethiopian institutions:',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 13.5,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Compact, clean bank tiles container
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: supportedBanks.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    thickness: 0.5,
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = supportedBanks[index];
+                    final String name = item['name']!;
+                    final String type = item['type']!;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: BankCardWidget.bankLogo(name, 26),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  type,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.45),
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.brandGreen.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: const Text(
+                              'Auto-Sync',
+                              style: TextStyle(
+                                color: AppColors.brandGreen,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Compact security footnote
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.security_rounded,
+                    color: AppColors.brandGreen,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Personal messages, private texts, and OTP codes are strictly ignored.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.60),
+                        fontSize: 11.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- PAGE 2: HISTORICAL SCAN RANGE SELECTION PAGE (NEW) ---
+  Widget _buildScanWindowPageBody() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with back arrow and title
+            Row(
+              children: [
+                AppBackButton(onPressed: _previousPage),
+                const SizedBox(width: 12),
+                const Text(
+                  'Transaction History',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Select how much past transaction history you want to import from your banking SMS:',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 13.5,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Scan Options List
+            Expanded(
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                itemCount: ScanWindowOption.values.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final option = ScanWindowOption.values[index];
+                  final bool isSelected = _selectedScanOption == option;
+                  final bool isRecommended = option == ScanWindowOption.thirtyDays;
+
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _selectedScanOption = option;
+                      });
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.brandGreen.withValues(alpha: 0.12)
+                            : AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.brandGreen.withValues(alpha: 0.20)
+                                  : AppColors.surfaceElevated,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _getScanOptionIcon(option),
+                              color: isSelected ? AppColors.brandGreen : Colors.white70,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        option.title,
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.white.withValues(alpha: 0.90),
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isRecommended)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.gold.withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(100),
+                                        ),
+                                        child: const Text(
+                                          'Recommended',
+                                          style: TextStyle(
+                                            color: AppColors.gold,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  option.subtitle,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white.withValues(alpha: 0.70)
+                                        : Colors.white.withValues(alpha: 0.45),
+                                    fontSize: 12,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected ? AppColors.brandGreen : Colors.transparent,
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                : Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: AppColors.surfaceElevated,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getScanOptionIcon(ScanWindowOption option) {
+    switch (option) {
+      case ScanWindowOption.todayOnly:
+        return Icons.today_rounded;
+      case ScanWindowOption.sevenDays:
+        return Icons.date_range_rounded;
+      case ScanWindowOption.thirtyDays:
+        return Icons.calendar_month_rounded;
+      case ScanWindowOption.ninetyDays:
+        return Icons.event_note_rounded;
+      case ScanWindowOption.allTime:
+        return Icons.history_rounded;
+    }
+  }
+
+  // --- PAGE 3: TERMS & PRIVACY PAGE ---
   Widget _buildTermsPageBody() {
     return SafeArea(
       child: Padding(
@@ -308,7 +710,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with back arrow and title in place of badge
+            // Header with back arrow and title
             Row(
               children: [
                 AppBackButton(onPressed: _previousPage),
@@ -326,7 +728,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'Please read and accept the terms below to grant access.',
+              'Please read and accept the terms below to grant access for ${_selectedScanOption.title.toLowerCase()}.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.50),
                 fontSize: 13.5,
@@ -334,7 +736,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 16),
 
-            // Scrollable Bounded Terms Card using surface color (AppColors.surface)
+            // Scrollable Bounded Terms Card using surface color
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -355,8 +757,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           'Shibre processes your bank SMS messages entirely on your device. Your financial data is stored locally and encrypted. We never transmit, sell, or share your personal or financial information with any third party.',
                         ),
                         _buildTermsSection(
-                          'SMS Permission & Access',
-                          'By granting SMS access, you allow Shibre to read banking messages from recognized senders (CBE, Telebirr, CBE Birr, Ahadu Bank). This permission is used exclusively for transaction detection, level estimation, and expense tracking.',
+                          'SMS Permission & Scan Window',
+                          'By granting SMS access, you allow Shibre to read banking messages from recognized senders (CBE, Telebirr, CBE Birr, Ahadu Bank, BOA, Dashen Bank) within your chosen window (${_selectedScanOption.title}). This permission is used exclusively for transaction detection, level estimation, and expense tracking.',
                         ),
                         _buildTermsSection(
                           'Local Storage & Backups',
@@ -403,7 +805,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         value: _isTermsAccepted,
                         activeColor: AppColors.brandGreen,
                         checkColor: Colors.white,
-                                                shape: RoundedRectangleBorder(
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
                         onChanged: (val) {
@@ -465,71 +867,108 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 2: LEVEL REVEAL & LOADING PAGE ---
+  // --- PAGE 4: LEVEL CALCULATION & DISCOVERY ANIMATION ---
   Widget _buildLevelRevealPageBody() {
     return Consumer<FinanceProvider>(
       builder: (context, provider, _) {
-        if (provider.isLoading) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ScaleTransition(
-                    scale: _pulseAnim,
-                    child: Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.telebirrGreen.withValues(alpha: 0.12),
-                                                boxShadow: [
-                          BoxShadow(
-                            color: AppColors.telebirrGreen.withValues(alpha: 0.20),
-                            blurRadius: 30,
-                            spreadRadius: 5,
+        final bool isCalculating = provider.isLoading || !_scanProgressController.isCompleted;
+
+        if (isCalculating) {
+          return AnimatedBuilder(
+            animation: _scanProgressAnim,
+            builder: (context, _) {
+              final progress = _scanProgressAnim.value;
+              final stageIndex = (progress * (_scanStages.length - 1)).floor().clamp(0, _scanStages.length - 1);
+              final stageText = _scanStages[stageIndex];
+
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ScaleTransition(
+                        scale: _pulseAnim,
+                        child: Container(
+                          width: 110,
+                          height: 110,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.telebirrGreen.withValues(alpha: 0.12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.telebirrGreen.withValues(alpha: 0.25),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
                           ),
-                        ],
+                          child: const Icon(
+                            Icons.analytics_rounded,
+                            color: AppColors.telebirrGreen,
+                            size: 48,
+                          ),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.analytics_rounded,
-                        color: AppColors.telebirrGreen,
-                        size: 48,
+                      const SizedBox(height: 36),
+                      const Text(
+                        'Calculating your financial level…',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 14),
+                      Text(
+                        stageText,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.60),
+                          fontSize: 13.5,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      // Smooth animated progress bar
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(100),
+                        child: Container(
+                          height: 6,
+                          width: 220,
+                          color: Colors.white.withValues(alpha: 0.08),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: progress.clamp(0.05, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [AppColors.brandGreen, AppColors.skyBlue],
+                                ),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 36),
-                  const Text(
-                    'Calculating your financial level…',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.4,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'We\'re scanning your banking messages and calculating your financial level and total balance.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.60),
-                      fontSize: 14,
-                      height: 1.55,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
+        }
+
+        // Trigger balance count-up animation if not yet started
+        if (!_hasStartedCounting) {
+          _triggerBalanceCountUp(provider.totalBalance);
         }
 
         final level = provider.userLevel;
         final levelName = provider.userLevelName;
         final levelDesc = provider.userLevelDescription;
-        final totalBalance = provider.totalBalance;
         final balancesMap = provider.latestBalancesMap;
         final cashBalance = provider.cashBalance;
         final glowColor = _levelGlowColor(level);
@@ -586,7 +1025,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
-                _buildTotalAmountDisplay(totalBalance),
+                AnimatedBuilder(
+                  animation: _balanceCountAnim,
+                  builder: (context, _) {
+                    final currentVal = _targetBalance * _balanceCountAnim.value;
+                    return _buildTotalAmountDisplay(currentVal);
+                  },
+                ),
                 const SizedBox(height: 8),
                 Text(
                   levelDesc,
@@ -635,13 +1080,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              Text(
-                                '${_formatAmount(totalBalance)} ETB',
-                                style: TextStyle(
-                                  color: glowColor,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                              AnimatedBuilder(
+                                animation: _balanceCountAnim,
+                                builder: (context, _) {
+                                  final currentVal = _targetBalance * _balanceCountAnim.value;
+                                  return Text(
+                                    '${_formatAmount(currentVal)} ETB',
+                                    style: TextStyle(
+                                      color: glowColor,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -662,7 +1113,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildFixedBottomSection() {
     return Consumer<FinanceProvider>(
       builder: (context, provider, _) {
-        final bool isLoadingPage2 = _currentPage == 2 && provider.isLoading;
+        final bool isCalculatingPage4 =
+            _currentPage == 4 && (provider.isLoading || !_scanProgressController.isCompleted);
 
         return SafeArea(
           top: false,
@@ -671,17 +1123,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 3-dot Morphing Carousel Indicator
+                // 5-dot Morphing Carousel Indicator
                 Center(
                   child: CarouselPageIndicator(
                     controller: _pageController,
-                    pageCount: 3,
+                    pageCount: 5,
                   ),
                 ),
                 const SizedBox(height: 18),
 
                 // Action Button
-                if (!isLoadingPage2) ...[
+                if (!isCalculatingPage4) ...[
                   _buildPillButton(
                     label: _getButtonLabelForPage(_currentPage),
                     enabled: _isButtonEnabledForPage(_currentPage),
@@ -689,8 +1141,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       if (_currentPage == 0) {
                         _nextPage();
                       } else if (_currentPage == 1) {
-                        _handleSmsPermissionAndProceed();
+                        _nextPage();
                       } else if (_currentPage == 2) {
+                        _nextPage();
+                      } else if (_currentPage == 3) {
+                        _handleSmsPermissionAndProceed();
+                      } else if (_currentPage == 4) {
                         HapticFeedback.mediumImpact();
                         final p = Provider.of<FinanceProvider>(context, listen: false);
                         p.completeOnboarding();
@@ -700,21 +1156,21 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ] else ...[
                   // Processing bar on calculating state
                   Container(
-                    height: 58,
+                    height: 54,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(32),
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const SizedBox(
-                          width: 18,
-                          height: 18,
+                          width: 16,
+                          height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.brandGreen),
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.telebirrGreen),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -722,7 +1178,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           'Analyzing transactions…',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.70),
-                            fontSize: 14,
+                            fontSize: 13.5,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -743,8 +1199,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 0:
         return 'Get started';
       case 1:
-        return 'Grant SMS permission';
+        return 'Continue';
       case 2:
+        return 'Continue to Terms';
+      case 3:
+        return 'Grant SMS permission';
+      case 4:
         return 'Open App';
       default:
         return 'Continue';
@@ -756,15 +1216,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 0:
         return true;
       case 1:
-        return _isTermsAccepted;
+        return true;
       case 2:
+        return true;
+      case 3:
+        return _isTermsAccepted;
+      case 4:
         return true;
       default:
         return false;
     }
   }
 
-  // --- BUTTON BUILDER ---
   Widget _buildPillButton({
     required String label,
     required VoidCallback? onTap,
@@ -786,8 +1249,23 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return RichText(
       text: TextSpan(
         children: [
-          TextSpan(text: whole, style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: -1.5)),
-          TextSpan(text: '.$decimal', style: TextStyle(color: Colors.white.withValues(alpha: 0.60), fontSize: 28, fontWeight: FontWeight.w600)),
+          TextSpan(
+            text: whole,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 42,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.5,
+            ),
+          ),
+          TextSpan(
+            text: '.$decimal',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.60),
+              fontSize: 28,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -799,28 +1277,39 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       child: Row(
         children: [
           Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(8)),
-            child: Icon(_bankIcon(bankName), color: Colors.white.withValues(alpha: 0.60), size: 16),
+            width: 32,
+            height: 32,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: BankCardWidget.bankLogo(bankName, 20),
+            ),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(bankName, style: TextStyle(color: Colors.white.withValues(alpha: 0.70), fontSize: 14, fontWeight: FontWeight.w500))),
-          Text('${_formatAmount(balance)} ETB', style: TextStyle(color: Colors.white.withValues(alpha: 0.80), fontSize: 14, fontWeight: FontWeight.w600)),
+          Expanded(
+            child: Text(
+              bankName,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.70),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            '${_formatAmount(balance)} ETB',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.80),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
-  }
-
-  IconData _bankIcon(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('cbe')) return Icons.account_balance;
-    if (n.contains('telebirr')) return Icons.phone_android;
-    if (n.contains('ahadu')) return Icons.account_balance_wallet;
-    if (n.contains('boa') || n.contains('abyssinia')) return Icons.domain;
-    if (n.contains('dashen')) return Icons.store;
-    if (n.contains('coop')) return Icons.groups;
-    if (n.contains('cash')) return Icons.payments;
-    return Icons.account_balance;
   }
 
   String _formatAmount(double amount) {
@@ -838,4 +1327,3 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return buf.toString();
   }
 }
-

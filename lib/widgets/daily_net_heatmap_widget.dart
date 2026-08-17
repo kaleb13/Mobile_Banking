@@ -303,13 +303,9 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                               duration: const Duration(milliseconds: 180),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.white.withValues(
-                                      alpha: isSelectedDay || isDayModeActive
-                                          ? 0.38
-                                          : 0.20),
-                                  width: 1.0,
-                                ),
+                                color: isSelectedDay || isDayModeActive
+                                    ? AppColors.buttonGlass
+                                    : AppColors.glassSurfaceSubtle,
                               ),
                             ),
                           ),

@@ -68,7 +68,30 @@ class TelebirrParser {
         lower.contains('paid amount');
   }
 
+  /// Returns true if [message] looks like a Telebirr Savings (Sanduq) SMS.
+  static bool isSavingsMessage(String message) {
+    if (BankSenders.isSecurityOrAuthMessage(message)) return false;
+    final lower = message.toLowerCase();
+    return lower.contains('saving account') || lower.contains('saving balance');
+  }
+
+  /// Extracts the Saving Account balance from a Telebirr Savings SMS if present.
+  static double? extractSavingBalance(String message) {
+    final singleLine = message.replaceAll('\n', ' ').replaceAll('\r', ' ');
+    final match = RegExp(
+            r'saving\s+balance\s+is\s+ETB\s+([0-9.,]+)',
+            caseSensitive: false)
+        .firstMatch(singleLine);
+    if (match != null) {
+      String amtStr = match.group(1)?.replaceAll(',', '').trim() ?? '';
+      if (amtStr.endsWith('.')) amtStr = amtStr.substring(0, amtStr.length - 1);
+      return double.tryParse(amtStr);
+    }
+    return null;
+  }
+
   // ── Credit Disbursement Parser ─────────────────────────────────────────────
+
 
   /// Parses a Telebirr credit disbursement SMS.
   /// Returns null if the message doesn't match.
@@ -186,18 +209,46 @@ class TelebirrParser {
     String category = 'Auto';
     double amount = 0.0;
     String senderOrRecipient = '';
+    String? reason;
 
     // A helper to extract amount safely
     double extractAmount(RegExp regex) {
       final match = regex.firstMatch(message);
       if (match != null) {
-        return double.tryParse(match.group(1)?.replaceAll(',', '') ?? '0') ??
-            0.0;
+        String amtStr = match.group(1)?.replaceAll(',', '') ?? '0';
+        if (amtStr.endsWith('.')) amtStr = amtStr.substring(0, amtStr.length - 1);
+        return double.tryParse(amtStr) ?? 0.0;
       }
       return 0.0;
     }
 
-    if (lowerMsg.contains('received')) {
+    if (lowerMsg.contains('saving account') || lowerMsg.contains('saving balance')) {
+      // Telebirr Savings (Sanduq) Deposit or Withdrawal
+      category = 'Auto';
+      reason = 'Internal Transfer';
+      senderOrRecipient = 'Telebirr Saving Account';
+
+      if (lowerMsg.contains('deposit') ||
+          lowerMsg.contains('to your saving account') ||
+          lowerMsg.contains('to your saving')) {
+        type = 'expense';
+        amount = extractAmount(RegExp(
+            r'(?:deposited|deposit|transferred)\s+ETB\s+([0-9,.]+(?:\.[0-9]+)?)',
+            caseSensitive: false));
+      } else if (lowerMsg.contains('withdraw') ||
+          lowerMsg.contains('from your saving account') ||
+          lowerMsg.contains('from your saving')) {
+        type = 'income';
+        amount = extractAmount(RegExp(
+            r'(?:withdrawn|withdraw|transferred)\s+ETB\s+([0-9,.]+(?:\.[0-9]+)?)',
+            caseSensitive: false));
+      } else {
+        type = 'expense';
+        amount = extractAmount(RegExp(
+            r'(?:ETB\s+)?([0-9,.]+(?:\.[0-9]+)?)\s+(?:to|from)\s+your\s+saving',
+            caseSensitive: false));
+      }
+    } else if (lowerMsg.contains('received')) {
       type = 'income';
       amount = extractAmount(RegExp(r'received\s+ETB\s+([0-9,.]+)'));
 
@@ -251,11 +302,14 @@ class TelebirrParser {
         senderOrRecipient = forMatch.group(1)?.trim() ?? '';
       }
     } else {
-      // Must contain received, transferred, or paid
+      // Must contain received, transferred, paid, or saving
       return null;
     }
 
     if (amount <= 0) return null; // Safety check
+
+    // Strip newlines to make tracing and regex matching resilient
+    String singleLineMsg = message.replaceAll('\n', ' ').replaceAll('\r', ' ');
 
     // 3. Extract Transaction ID
     // Supports both:
@@ -264,33 +318,47 @@ class TelebirrParser {
     String? id;
     final idRegex = RegExp(r'transaction number(?:\s+is)?\s+([A-Z0-9]+)',
         caseSensitive: false);
-    final idMatch = idRegex.firstMatch(message);
+    final idMatch = idRegex.firstMatch(singleLineMsg);
     if (idMatch != null) {
       id = idMatch.group(1);
     } else {
       return null; // A valid Telebirr message must have a transaction ID
     }
 
-    // 4. Extract Current Balance
+    // 4. Extract Current Balance (Main Telebirr / e-money Account)
     double totalBalance = 0.0;
-    // Strip newlines to make tracing easier
-    String singleLineMsg = message.replaceAll('\n', ' ').replaceAll('\r', ' ');
-    final balanceMatch =
-        RegExp(r'balance is\s+ETB\s+([0-9.,]+)', caseSensitive: false)
-            .firstMatch(singleLineMsg);
-    if (balanceMatch != null) {
+
+    // Check for explicit "telebirr / e-money Account balance is ETB ..." first (for dual-balance messages)
+    final mainAccMatch = RegExp(
+            r'(?:telebirr|e-money|e\s+money)\s+(?:account\s+)?balance\s+is\s+ETB\s+([0-9.,]+)',
+            caseSensitive: false)
+        .firstMatch(singleLineMsg);
+
+    if (mainAccMatch != null) {
       String strippedBalance =
-          balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
-      // Safety drop trailing dots if present incorrectly
+          mainAccMatch.group(1)?.replaceAll(',', '') ?? '0';
       if (strippedBalance.endsWith('.')) {
         strippedBalance =
             strippedBalance.substring(0, strippedBalance.length - 1);
       }
       totalBalance = double.tryParse(strippedBalance) ?? 0.0;
+    } else {
+      final balanceMatch =
+          RegExp(r'balance is\s+ETB\s+([0-9.,]+)', caseSensitive: false)
+              .firstMatch(singleLineMsg);
+      if (balanceMatch != null) {
+        String strippedBalance =
+            balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
+        if (strippedBalance.endsWith('.')) {
+          strippedBalance =
+              strippedBalance.substring(0, strippedBalance.length - 1);
+        }
+        totalBalance = double.tryParse(strippedBalance) ?? 0.0;
+      }
     }
 
     // 5. Extract Date
-    // Supports both:
+    // Supports:
     //   OLD: "on DD/MM/YYYY HH:mm:ss"
     //   NEW: "on YYYY-MM-DD HH:mm:ss"  (ISO-style from bank deposit messages)
     DateTime txDate = fallbackDate;
@@ -329,6 +397,8 @@ class TelebirrParser {
       date: txDate,
       sender: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderNumber,
       category: category,
+      reason: reason,
+      customReasonText: reason,
       rawMessage: message,
       isAutoDetected: true,
       totalBalance: totalBalance,

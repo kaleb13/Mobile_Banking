@@ -17,6 +17,8 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/animated_balance_text.dart';
+import '../../widgets/app_badges.dart';
 import 'transaction_detail_screen.dart';
 import 'manage_bank_screen.dart';
 
@@ -34,12 +36,15 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _searchQuery = '';
   String _typeFilter = 'All'; // All, Income, Expense
   final TextEditingController _searchController = TextEditingController();
+  final PageController _cardPageController = PageController();
+  int _cardPageIndex = 0;
   bool _isChartVisible = false;
   double? _touchedX;
 
   @override
   void dispose() {
     _searchController.dispose();
+    _cardPageController.dispose();
     super.dispose();
   }
 
@@ -198,8 +203,22 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       physics: const BouncingScrollPhysics(),
                       child: Column(
                         children: [
-                          _buildBankCard(
-                              currentBalance, monthChange, monthPercent, allTxForSender.length),
+                          if (widget.sender.senderName.toUpperCase() == 'TELEBIRR' &&
+                              provider.telebirrSavingBalance > 0)
+                            _buildTelebirrCardCarousel(
+                              currentBalance,
+                              provider.telebirrSavingBalance,
+                              monthChange,
+                              monthPercent,
+                              allTxForSender.length,
+                            )
+                          else
+                            _buildBankCard(
+                              currentBalance,
+                              monthChange,
+                              monthPercent,
+                              allTxForSender.length,
+                            ),
                           if (isLinked)
                             _buildDynamicButtons(context, currentSender)
                           else
@@ -259,6 +278,497 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         hintColor: AppColors.textSoft,
         iconColor: Colors.white70,
         closeIconColor: Colors.white,
+      ),
+    );
+  }
+
+  /// Carousel view showing both Main Telebirr Wallet & Telebirr Savings (Sanduq) Account.
+  Widget _buildTelebirrCardCarousel(
+    double mainBalance,
+    double savingBalance,
+    double change,
+    double percent,
+    int txCount,
+  ) {
+    final cardGradient = BankCardWidget.getCardGradient('Telebirr');
+    final bool isDarkTextTheme = BankCardWidget.isDarkTextTheme('Telebirr');
+    final Color textColorPrimary =
+        isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
+    final Color textColorSub = isDarkTextTheme
+        ? AppColors.darkCharcoal.withValues(alpha: 0.6)
+        : Colors.white.withValues(alpha: 0.8);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 205,
+          child: PageView(
+            controller: _cardPageController,
+            onPageChanged: (idx) {
+              setState(() {
+                _cardPageIndex = idx;
+              });
+            },
+            physics: const BouncingScrollPhysics(),
+            children: [
+              // ── 1. Main Telebirr Wallet Card ──────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomLeft,
+                      end: Alignment.topRight,
+                      colors: cardGradient,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top Row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          BankCardWidget.bankLogo(
+                            'Telebirr',
+                            38,
+                            isDarkTextTheme
+                                ? AppColors.darkCharcoal
+                                : Colors.white,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Telebirr',
+                                      style: TextStyle(
+                                        color: textColorPrimary,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2.5),
+                                      decoration: BoxDecoration(
+                                        color: isDarkTextTheme
+                                            ? Colors.black.withValues(alpha: 0.09)
+                                            : Colors.white.withValues(alpha: 0.2),
+                                        borderRadius:
+                                            BorderRadius.circular(100),
+                                      ),
+                                      child: Text(
+                                        'Main Wallet',
+                                        style: TextStyle(
+                                          color: textColorPrimary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Ethio Telecom , E- money',
+                                  style: TextStyle(
+                                    color: textColorSub,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _buildCardRefreshButton(
+                              textColorPrimary, isDarkTextTheme),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      // Large Balance Display
+                      _buildLargeBalanceDisplay(
+                          mainBalance, textColorPrimary, isDarkTextTheme),
+                      const SizedBox(height: 8),
+                      // Bottom row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '$txCount total Transactions',
+                            style: TextStyle(
+                              color: textColorSub,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          _build30DPnlChip(change, percent, textColorPrimary,
+                              isDarkTextTheme),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ── 2. Telebirr Savings Account (Sanduq) Card ──────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    gradient: const LinearGradient(
+                      begin: Alignment.bottomLeft,
+                      end: Alignment.topRight,
+                      colors: [
+                        Color(0xFF007A3D),
+                        Color(0xFF00B050),
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top Row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          BankCardWidget.bankLogo('Telebirr', 38, Colors.white),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Telebirr Saving',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2.5),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.2),
+                                        borderRadius:
+                                            BorderRadius.circular(100),
+                                      ),
+                                      child: const Text(
+                                        'Sanduq',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'High-Yield Savings Account',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _buildCardRefreshButton(Colors.white, false),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      // Large Balance Display
+                      _buildLargeBalanceDisplay(
+                          savingBalance, Colors.white, false),
+                      const SizedBox(height: 8),
+                      // Bottom row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Compounding Interest Vault',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.lock_outline_rounded,
+                                    color: Colors.white, size: 12),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Protected Vault',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Smooth Page Indicators ───────────────────────────────────────────
+        const SizedBox(height: 2),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: _cardPageIndex == 0 ? 20 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: _cardPageIndex == 0
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            const SizedBox(width: 6),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: _cardPageIndex == 1 ? 20 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: _cardPageIndex == 1
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+          ],
+        ),
+
+        // ── Combined Total Assets Summary ──────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Telebirr Net Worth',
+                      style: TextStyle(
+                        color: AppColors.textSoft,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Consumer<FinanceProvider>(
+                      builder: (context, prov, _) {
+                        final total = mainBalance + savingBalance;
+                        final fmt = NumberFormat('#,##0.00');
+                        final valStr = prov.isBalanceVisible
+                            ? 'ETB ${fmt.format(total)}'
+                            : 'ETB ****,***.**';
+                        return Text(
+                          valStr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceElevated,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: AppColors.telebirrGreen,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '2 Accounts',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLargeBalanceDisplay(
+      double balance, Color textColorPrimary, bool isDarkTextTheme) {
+    return Consumer<FinanceProvider>(
+      builder: (context, provider, child) {
+        return GestureDetector(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            provider.toggleBalanceVisibility();
+          },
+          behavior: HitTestBehavior.opaque,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: AnimatedBalanceText(
+              value: balance,
+              isMasked: !provider.isBalanceVisible,
+              integerStyle: TextStyle(
+                color: textColorPrimary,
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+                height: 1.0,
+              ),
+              decimalStyle: TextStyle(
+                color: isDarkTextTheme
+                    ? AppColors.darkCharcoal.withValues(alpha: 0.5)
+                    : Colors.white.withValues(alpha: 0.65),
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCardRefreshButton(
+      Color textColorPrimary, bool isDarkTextTheme) {
+    return GestureDetector(
+      onTap: () => _showRefreshChooser(
+        context,
+        Provider.of<FinanceProvider>(context, listen: false),
+      ),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isDarkTextTheme
+              ? Colors.black.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.refresh_rounded,
+          color: textColorPrimary,
+          size: 18,
+        ),
+      ),
+    );
+  }
+
+  Widget _build30DPnlChip(double change, double percent, Color textColorPrimary,
+      bool isDarkTextTheme) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _isChartVisible = !_isChartVisible;
+        });
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isDarkTextTheme
+              ? Colors.black.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: () => _showPNLInfo(context),
+              child: Text(
+                '30D PNL ',
+                style: TextStyle(
+                  color: textColorPrimary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Text(
+              '${change >= 0 ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())} (${percent.abs().toStringAsFixed(1)}%)',
+              style: TextStyle(
+                color: textColorPrimary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              _isChartVisible
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              color: textColorPrimary,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -330,81 +840,14 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     ],
                   ),
                 ),
-                // Top-Right Refresh Button on Bank Card
-                GestureDetector(
-                  onTap: () => _showRefreshChooser(
-                    context,
-                    Provider.of<FinanceProvider>(context, listen: false),
-                  ),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isDarkTextTheme
-                          ? Colors.black.withValues(alpha: 0.08)
-                          : Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.refresh_rounded,
-                      color: textColorPrimary,
-                      size: 18,
-                    ),
-                  ),
-                ),
+                _buildCardRefreshButton(textColorPrimary, isDarkTextTheme),
               ],
             ),
             const SizedBox(height: 18),
 
             // Large Balance Display (Integer + Decimals)
-            Consumer<FinanceProvider>(
-              builder: (context, provider, child) {
-                final fmt = NumberFormat('#,##0.00');
-                final balStr = provider.isBalanceVisible
-                    ? fmt.format(balance)
-                    : '****,***.**';
-                final parts = balStr.split('.');
-
-                return GestureDetector(
-                  onTap: provider.toggleBalanceVisibility,
-                  behavior: HitTestBehavior.opaque,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          parts[0],
-                          style: TextStyle(
-                            color: textColorPrimary,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            height: 1.0,
-                          ),
-                          maxLines: 1,
-                        ),
-                        Text(
-                          '.${parts[1]}',
-                          style: TextStyle(
-                            color: isDarkTextTheme
-                                ? AppColors.darkCharcoal
-                                    .withValues(alpha: 0.5)
-                                : Colors.white.withValues(alpha: 0.65),
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+            _buildLargeBalanceDisplay(
+                balance, textColorPrimary, isDarkTextTheme),
             const SizedBox(height: 8),
 
             // Bottom Info & Chart Toggle Row
@@ -419,56 +862,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isChartVisible = !_isChartVisible;
-                    });
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: isDarkTextTheme
-                          ? Colors.black.withValues(alpha: 0.08)
-                          : Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        GestureDetector(
-                          onTap: () => _showPNLInfo(context),
-                          child: Text(
-                            '30D PNL ',
-                            style: TextStyle(
-                              color: textColorPrimary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${change >= 0 ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())} (${percent.abs().toStringAsFixed(1)}%)',
-                          style: TextStyle(
-                            color: textColorPrimary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          _isChartVisible
-                            ? Icons.keyboard_arrow_up_rounded
-                            : Icons.keyboard_arrow_down_rounded,
-                          color: textColorPrimary,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _build30DPnlChip(
+                    change, percent, textColorPrimary, isDarkTextTheme),
               ],
             ),
           ],
@@ -689,15 +1084,22 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     }
 
     final filtered = transactions
-        .where((tx) => tx.date.isAfter(cutoff))
+        .where((tx) => tx.date.isAfter(cutoff) && tx.totalBalance > 0)
         .toList()
         .reversed
         .toList();
     if (filtered.isEmpty) return const SizedBox(height: 100);
 
-    final spots = filtered.asMap().entries.map((e) {
+    List<FlSpot> spots = filtered.asMap().entries.map((e) {
       return FlSpot(e.key.toDouble(), e.value.totalBalance);
     }).toList();
+
+    if (spots.length == 1) {
+      spots = [
+        FlSpot(0, spots.first.y),
+        FlSpot(1, spots.first.y),
+      ];
+    }
 
     // Gradient configuration
     List<double> lineStops = [0.0, 1.0];
@@ -746,7 +1148,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   _touchedX = null;
                   return;
                 }
-                _touchedX = touchResponse.lineBarSpots!.first.x;
+                final newX = touchResponse.lineBarSpots!.first.x;
+                if (_touchedX != newX) {
+                  HapticFeedback.selectionClick();
+                  _touchedX = newX;
+                }
               });
             },
             getTouchedSpotIndicator:
@@ -837,7 +1243,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
           final isSelected = _chartFilter == f;
           return GestureDetector(
-            onTap: () => setState(() => _chartFilter = f),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _chartFilter = f);
+            },
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 4),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1023,16 +1432,26 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    tx.resolvedReason ?? (isIncome ? 'Deposit' : 'Expense'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.2,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          tx.resolvedReason ?? (isIncome ? 'Deposit' : 'Expense'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                      if (tx.isBookmarked) ...[
+                        const SizedBox(width: 5),
+                        const BookmarkBadge(),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(

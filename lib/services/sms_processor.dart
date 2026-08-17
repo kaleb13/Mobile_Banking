@@ -11,6 +11,7 @@ import 'cbe_parser.dart';
 import 'cbe_birr_parser.dart';
 import 'ahadu_parser.dart';
 import 'boa_parser.dart';
+import 'dashen_parser.dart';
 import 'bank_senders.dart';
 
 /// Returns true if [msg] looks like a banking message (contains an English
@@ -130,9 +131,16 @@ Future<void> processSmsRaw({
     else if (TelebirrParser.isCreditRepayment(body)) {
       tx = await _handleTelebirrCreditRepayment(body, date);
     }
-    // ── Normal Telebirr transaction ────────────────────────────────────────
+    // ── Normal Telebirr transaction / Savings ─────────────────────────────
     else {
       tx = TelebirrParser.parse(body, date);
+      if (TelebirrParser.isSavingsMessage(body)) {
+        final savingBal = TelebirrParser.extractSavingBalance(body);
+        if (savingBal != null) {
+          await DatabaseService.instance
+              .setAppSetting('telebirr_saving_balance', savingBal.toString());
+        }
+      }
     }
   } else if (bank == 'CBE Birr') {
     tx = CbeBirrParser.parse(body, date);
@@ -146,6 +154,8 @@ Future<void> processSmsRaw({
     tx = AhaduParser.parse(body, date);
   } else if (bank == 'BOA') {
     tx = BoaParser.parse(body, date);
+  } else if (bank == 'Dashen Bank') {
+    tx = DashenParser.parse(body, date);
   } else {
     // Custom Senders matching
     final senders = await DatabaseService.instance.getSenders();
@@ -214,6 +224,16 @@ Future<void> processSmsRaw({
         reason: resolvedReasonName,
         reasonId: resolvedReasonId,
       );
+    } else if (tx.reasonId == null && tx.reason == null) {
+      final autoReason = await DatabaseService.instance.findAutoReason(tx.sender, tx.type);
+      if (autoReason != null) {
+        resolvedReasonName = autoReason.name;
+        resolvedReasonId = autoReason.id;
+        tx = tx.copyWith(
+          reason: resolvedReasonName,
+          reasonId: resolvedReasonId,
+        );
+      }
     }
 
     final insertResult = await DatabaseService.instance.insertTransaction(tx);
@@ -371,6 +391,22 @@ Future<AppTransaction?> _handleTelebirrCreditRepayment(
       totalOutstanding: info.totalOutstanding,
       linkedTransactionId: txId,
     );
+  } else {
+    // If no active loan was found (e.g. loan taken before install anchor date),
+    // record this settled loan so it appears in the Settled / Paid tab of Loan Manager
+    final settledLoan = LoanRecord(
+      loanType: 'borrowed',
+      personName: 'Ethio Telecom / CBE',
+      trackedSenderName: 'Telebirr',
+      principalAmount: info.paidAmount,
+      paidAmount: info.paidAmount,
+      loanDate: date,
+      dueDate: date,
+      linkedTransactionId: txId,
+      status: 'paid',
+      note: 'Telebirr Credit Repayment (Auto-settled)',
+    );
+    await db.insertLoanRecord(settledLoan);
   }
 
   return tx;

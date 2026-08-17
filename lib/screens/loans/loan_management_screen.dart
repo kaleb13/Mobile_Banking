@@ -59,10 +59,10 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
       _tabCtrl.animateTo(targetTab);
     }
     final lentLoans = provider.loanRecords
-        .where((l) => l.loanType == 'lent' && !l.isPaid)
+        .where((l) => l.loanType == 'lent' && !l.isPaid && (l.id == null || !provider.isLoanHidden(l.id!)))
         .toList();
     final borrowedLoans = provider.loanRecords
-        .where((l) => l.loanType == 'borrowed' && !l.isPaid)
+        .where((l) => l.loanType == 'borrowed' && !l.isPaid && (l.id == null || !provider.isLoanHidden(l.id!)))
         .toList();
     final paidLoans = provider.paidLoans;
 
@@ -414,6 +414,10 @@ class _LoanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.read<FinanceProvider>();
     final pct = loan.progressPercent;
+    final bool isAutoDetectedLoan = loan.contractNumber != null ||
+        loan.trackedSenderName?.toLowerCase() == 'telebirr' ||
+        loan.personName.toLowerCase().contains('telecom') ||
+        loan.personName.toLowerCase().contains('telebirr');
 
     return GestureDetector(
       onTap: () => _openDetail(context, provider),
@@ -540,36 +544,120 @@ class _LoanCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // Action Buttons Row: Record Payment & Delete
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton.primary(
-                    text: 'Record Payment',
-                    icon: Icons.account_balance_wallet_outlined,
-                    height: 42,
-                    onPressed: () => _showPaymentSheet(context, provider, loan),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () => _confirmDelete(context, provider),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: const BoxDecoration(
-                      color: AppColors.buttonSecondary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Colors.white70,
-                      size: 18,
+            // Action Buttons Row
+            if (showPaid || loan.isPaid) ...[
+              // Settled Loan Actions: View Details + Hide (No Record Payment, No Delete for auto-loans)
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton.secondary(
+                      text: 'View Details',
+                      icon: Icons.receipt_long_outlined,
+                      height: 42,
+                      onPressed: () => _openDetail(context, provider),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _confirmHide(context, provider),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: const BoxDecoration(
+                        color: AppColors.buttonSecondary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.visibility_off_outlined,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                  if (!isAutoDetectedLoan) ...[
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () => _confirmDelete(context, provider),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: const BoxDecoration(
+                          color: AppColors.buttonSecondary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ] else if (isAutoDetectedLoan) ...[
+              // Active Auto-detected loan: Cannot manually delete or record payment, only View Details and Hide
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton.secondary(
+                      text: 'View Details',
+                      icon: Icons.receipt_long_outlined,
+                      height: 42,
+                      onPressed: () => _openDetail(context, provider),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _confirmHide(context, provider),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: const BoxDecoration(
+                        color: AppColors.buttonSecondary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.visibility_off_outlined,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // Active Manual Loan: Record Payment + Delete
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton.primary(
+                      text: 'Record Payment',
+                      icon: Icons.account_balance_wallet_outlined,
+                      height: 42,
+                      onPressed: () => _showPaymentSheet(context, provider, loan),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () => _confirmDelete(context, provider),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: const BoxDecoration(
+                        color: AppColors.buttonSecondary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -591,6 +679,29 @@ class _LoanCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       builder: (_) => RecordPaymentSheet(loan: loan, provider: provider),
+    );
+  }
+
+  void _confirmHide(BuildContext context, FinanceProvider provider) {
+    AppConfirmDialog.show(
+      context: context,
+      title: 'Hide Loan?',
+      icon: Icons.visibility_off_outlined,
+      message:
+          'Are you sure you want to hide this loan for ${loan.personName}? It will be removed from your loan tracker list.',
+      confirmText: 'Hide',
+      onConfirm: () async {
+        if (loan.id != null) {
+          await provider.hideLoan(loan.id!);
+          if (context.mounted) {
+            AppToast.info(
+              context,
+              message: 'Loan hidden',
+              subtitle: 'You can unhide it anytime from settings',
+            );
+          }
+        }
+      },
     );
   }
 
@@ -627,6 +738,10 @@ class LoanDetailScreen extends StatelessWidget {
     final isLent = current.loanType == 'lent';
     final accentColor =
         isLent ? AppColors.positive : AppColors.warning;
+    final bool isAutoDetectedLoan = current.contractNumber != null ||
+        current.trackedSenderName?.toLowerCase() == 'telebirr' ||
+        current.personName.toLowerCase().contains('telecom') ||
+        current.personName.toLowerCase().contains('telebirr');
 
     return Scaffold(
       backgroundColor: context.themeBackground,
@@ -641,7 +756,7 @@ class LoanDetailScreen extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          if (!current.isPaid) ...[
+          if (!current.isPaid && !isAutoDetectedLoan) ...[
             AppButton.pill(
               text: 'Extend',
               icon: Icons.event_repeat_rounded,
@@ -686,7 +801,7 @@ class LoanDetailScreen extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
                     color: accentColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(100),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -701,6 +816,38 @@ class LoanDetailScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
+            ),
+          ] else ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: AppButton.pill(
+                text: 'Hide',
+                icon: Icons.visibility_off_outlined,
+                isSelected: false,
+                onPressed: () {
+                  AppConfirmDialog.show(
+                    context: context,
+                    title: 'Hide Loan?',
+                    icon: Icons.visibility_off_outlined,
+                    message:
+                        'Are you sure you want to hide this loan for ${current.personName}? It will be removed from your loan list.',
+                    confirmText: 'Hide',
+                    onConfirm: () async {
+                      if (current.id != null) {
+                        await provider.hideLoan(current.id!);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          AppToast.info(
+                            context,
+                            message: 'Loan hidden',
+                            subtitle: 'You can restore it anytime in settings',
+                          );
+                        }
+                      }
+                    },
+                  );
+                },
               ),
             ),
           ],
@@ -2267,14 +2414,9 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                     await widget.provider
                                         .approveLoanRepaymentRequest(req);
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              'Payment approved & applied ✓'),
-                                          backgroundColor: AppColors.positive,
-                                          duration: Duration(seconds: 2),
-                                        ),
+                                      AppToast.success(
+                                        context,
+                                        message: 'Payment approved & applied',
                                       );
                                     }
                                   },
@@ -2293,14 +2435,9 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                     await widget.provider
                                         .rejectLoanRepaymentRequest(req);
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content:
-                                              Text('Payment request rejected'),
-                                          backgroundColor: AppColors.textSoft,
-                                          duration: Duration(seconds: 2),
-                                        ),
+                                      AppToast.info(
+                                        context,
+                                        message: 'Payment request rejected',
                                       );
                                     }
                                   },

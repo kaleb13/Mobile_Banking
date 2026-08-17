@@ -25,6 +25,7 @@ import '../services/cbe_parser.dart';
 import '../services/cbe_birr_parser.dart';
 import '../services/ahadu_parser.dart';
 import '../services/boa_parser.dart';
+import '../services/dashen_parser.dart';
 import '../services/bank_senders.dart';
 import '../services/sms_processor.dart';
 import 'package:flutter/services.dart';
@@ -32,15 +33,51 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../main.dart' show appNavigatorKey;
 import '../widgets/level_up_modal.dart';
+import '../widgets/app_toast.dart';
 import '../screens/dashboard/transaction_detail_screen.dart';
+import '../domain/usecases/wallets/get_wallet_balances_usecase.dart';
+import '../domain/usecases/analytics/calculate_pnl_usecase.dart';
+import '../domain/usecases/analytics/get_top_expenses_usecase.dart';
+import '../domain/usecases/loans/calculate_loan_progress_usecase.dart';
+import '../domain/usecases/loans/process_loan_repayment_usecase.dart';
+import '../domain/usecases/savings/calculate_goal_feasibility_usecase.dart';
+import '../domain/usecases/savings/allocate_saving_goals_usecase.dart';
+import '../models/scan_window_option.dart';
+import '../domain/usecases/settings/get_scan_window_usecase.dart';
+import '../domain/usecases/settings/set_scan_window_usecase.dart';
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
+  final GetWalletBalancesUseCase _getWalletBalancesUseCase =
+      const GetWalletBalancesUseCase();
+  final CalculatePnlUseCase _calculatePnlUseCase =
+      const CalculatePnlUseCase();
+  final GetTopExpensesUseCase _getTopExpensesUseCase =
+      const GetTopExpensesUseCase();
+  final CalculateLoanProgressUseCase _calculateLoanProgressUseCase =
+      const CalculateLoanProgressUseCase();
+  final ProcessLoanRepaymentUseCase _processLoanRepaymentUseCase =
+      const ProcessLoanRepaymentUseCase();
+  final CalculateGoalFeasibilityUseCase _calculateGoalFeasibilityUseCase =
+      const CalculateGoalFeasibilityUseCase();
+  final AllocateSavingGoalsUseCase _allocateSavingGoalsUseCase =
+      const AllocateSavingGoalsUseCase();
+  final GetScanWindowUseCase _getScanWindowUseCase =
+      const GetScanWindowUseCase();
+  final SetScanWindowUseCase _setScanWindowUseCase =
+      const SetScanWindowUseCase();
+
+  ScanWindowOption _scanWindowOption = ScanWindowOption.thirtyDays;
+  ScanWindowOption get scanWindowOption => _scanWindowOption;
+  DateTime? _installAnchorDate;
+  DateTime? get installAnchorDate => _installAnchorDate;
+
   List<AppSender> _senders = [];
   List<AppTransaction> _transactions = [];
   List<AppNotification> _notifications = [];
   List<AppReason> _reasons = [];
   List<AppReasonLink> _reasonLinks = [];
   List<LoanRecord> _loanRecords = [];
+  Set<int> _hiddenLoanIds = {};
   Map<int, List<LoanPayment>> _loanPayments = {}; // keyed by loanId
   List<LoanRepaymentRequest> _pendingRepaymentRequests = [];
   final Map<String, String> _notifIdToBodyMap = {};
@@ -60,7 +97,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isLoading = true;
   double _totalBalance = 0;
   /// Latest known balance per bank/account name (e.g. {'CBE': 12500.0, 'Telebirr': 3200.0}).
-  Map<String, double> _latestBalancesMap = {};
+  final Map<String, double> _latestBalancesMap = {};
   double _incomeThisMonth = 0;
   double _expenseThisMonth = 0;
   double _incomeForSelectedDate = 0;
@@ -321,6 +358,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await prefs.setBool('report_monthly_enabled', value);
     notifyListeners();
   }
+
+  Future<void> setScanWindowOption(ScanWindowOption option, {bool rescanImmediately = false}) async {
+    final info = await _setScanWindowUseCase(option);
+    _scanWindowOption = info.option;
+    _installAnchorDate = info.anchorDate;
+    notifyListeners();
+    if (rescanImmediately) {
+      await refreshData();
+    }
+  }
   int get currentScreenIndex => _currentScreenIndex;
   double get pageOffset => _pageOffset;
   double? get homeSheetTopY => _homeSheetTopY;
@@ -329,7 +376,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   void setHomeSheetTopY(double y) {
     if ((_homeSheetTopY ?? -1.0) != y) {
       _homeSheetTopY = y;
-      notifyListeners();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     }
   }
 
@@ -337,7 +386,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final clamped = offset < 0 ? 0.0 : offset;
     if ((_homeTopScrollOffset - clamped).abs() > 0.5) {
       _homeTopScrollOffset = clamped;
-      notifyListeners();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+      });
     }
   }
 
@@ -477,6 +528,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.insertSender(boa);
         _senders.add(boa);
       }
+      if (!_senders.any((s) => s.senderName.toUpperCase().contains('DASHEN'))) {
+        final dashen = AppSender(id: '6', senderName: 'Dashen Bank');
+        await DatabaseService.instance.insertSender(dashen);
+        _senders.add(dashen);
+      }
     } else {
       _senders = [
         AppSender(id: '1', senderName: 'Telebirr'),
@@ -484,6 +540,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         AppSender(id: '3', senderName: 'CBE Birr'),
         AppSender(id: '4', senderName: 'Ahadu Bank'),
         AppSender(id: '5', senderName: 'BOA'),
+        AppSender(id: '6', senderName: 'Dashen Bank'),
       ];
       for (var s in _senders) {
         await DatabaseService.instance.insertSender(s);
@@ -496,23 +553,14 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _cashTransactions = await DatabaseService.instance.getCashTransactions();
     _savingGoals = await DatabaseService.instance.getSavingGoals();
 
-    // Ensure install_anchor_date is set so refreshData() never silently bails.
-    // This mirrors the same guard in init(). Without this, any user who goes
-    // through the new onboarding flow (startBackgroundInit → completeOnboarding
-    // early-return path) would never have install_anchor_date written, causing
-    // refreshData() to return immediately with no SMS scan.
-    const anchorVersion = 'v4';
-    final bool needsAnchorReset =
-        prefs.getString('anchor_version') != anchorVersion;
-    if (needsAnchorReset) {
-      await prefs.setString('install_anchor_date',
-          DateTime.now().subtract(const Duration(days: 30)).toIso8601String());
-      await prefs.setString('anchor_version', anchorVersion);
-    }
+    // Ensure install_anchor_date and scan_window_option are set
+    final scanInfo = await _getScanWindowUseCase();
+    _scanWindowOption = scanInfo.option;
+    _installAnchorDate = scanInfo.anchorDate;
 
     bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
     if (isFirstBoot && _transactions.isEmpty) {
-      final installAnchor = DateTime.now().subtract(const Duration(days: 30));
+      final installAnchor = scanInfo.anchorDate;
       List<sms_inbox.SmsMessage> allMessages =
           await SmsService().getAllMessages(since: installAnchor);
       allMessages.sort((a, b) {
@@ -551,6 +599,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
               if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
             }
             AppTransaction? tx = BoaParser.parse(msg.body!, msgDate);
+            if (tx != null) { await addTransaction(tx); }
+          } else if (bank == 'Dashen Bank') {
+            if (_userName == null) {
+              final name = DashenParser.extractOwnerName(msg.body!);
+              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
+            }
+            AppTransaction? tx = DashenParser.parse(msg.body!, msgDate);
             if (tx != null) { await addTransaction(tx); }
           }
         }
@@ -694,6 +749,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     return 0.0;
   }
 
+  /// Returns the latest known Telebirr Saving Account (Sanduq) balance.
+  /// Dynamically resolved from the most recent Telebirr saving transaction.
+  double get telebirrSavingBalance {
+    final telebirrTxs = transactionsForSender('Telebirr');
+    for (final tx in telebirrTxs) {
+      if (TelebirrParser.isSavingsMessage(tx.rawMessage)) {
+        final bal = TelebirrParser.extractSavingBalance(tx.rawMessage);
+        if (bal != null && bal > 0) return bal;
+      }
+    }
+    return 0.0;
+  }
+
   /// Centralized single source-of-truth: returns total transaction count for a sender name.
   int txCountForSender(String senderName) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
@@ -799,13 +867,16 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   // ── Loan convenience getters ──────────────────
+  Set<int> get hiddenLoanIds => Set.unmodifiable(_hiddenLoanIds);
+  bool isLoanHidden(int id) => _hiddenLoanIds.contains(id);
+
   List<LoanRecord> get activeLoans =>
-      _loanRecords.where((l) => l.status == 'active').toList();
+      _loanRecords.where((l) => l.status == 'active' && (l.id == null || !_hiddenLoanIds.contains(l.id!))).toList();
   List<LoanRecord> get overdueLoans =>
-      _loanRecords.where((l) => l.isOverdue).toList()
+      _loanRecords.where((l) => l.isOverdue && (l.id == null || !_hiddenLoanIds.contains(l.id!))).toList()
         ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
   List<LoanRecord> get paidLoans =>
-      _loanRecords.where((l) => l.isPaid).toList();
+      _loanRecords.where((l) => l.isPaid && (l.id == null || !_hiddenLoanIds.contains(l.id!))).toList();
   int get activeLoanCount => activeLoans.length;
   int get overdueLoanCount => overdueLoans.length;
 
@@ -885,28 +956,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// All-time P/L. Baseline = initial detected bank balances at first boot.
   /// Can only be negative if borrowed liabilities exceed total current assets.
-  double get overallPnl {
-    double baseline = 0;
-    if (_transactions.isNotEmpty) {
-      final Map<String, double> earliestBalances = {};
-      final sorted = List<AppTransaction>.from(_transactions)
-        ..sort((a, b) => a.date.compareTo(b.date));
-      for (final tx in sorted) {
-        if (!earliestBalances.containsKey(tx.name) && tx.totalBalance > 0) {
-          earliestBalances[tx.name] = tx.totalBalance;
-        }
-      }
-      baseline = earliestBalances.values.fold(0.0, (s, v) => s + v);
-    }
-    final currentAssets = _totalBalance;
-    final rawPnl = currentAssets - baseline;
-    final liabilityDrag = totalBorrowedLiability;
-    final adjustedPnl = rawPnl - liabilityDrag;
-    if (liabilityDrag > currentAssets) {
-      return adjustedPnl;
-    }
-    return adjustedPnl.clamp(0.0, double.infinity);
-  }
+  double get overallPnl => _calculatePnlUseCase.calculateOverallPnl(
+        transactions: _transactions,
+        currentAssets: _totalBalance,
+        totalBorrowedLiability: totalBorrowedLiability,
+      );
 
   // ── Dashboard Banner Helpers ──────────────────
   Map<String, dynamic>? get mostExpenseToday => _cachedMostExpenseToday;
@@ -921,10 +975,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     Map<String, DateTime> latestTimes = {};
 
     for (var tx in _transactions) {
-      counts[tx.name] = (counts[tx.name] ?? 0) + 1;
-      if (latestTimes[tx.name] == null ||
-          tx.date.isAfter(latestTimes[tx.name]!)) {
-        latestTimes[tx.name] = tx.date;
+      final bankKey = tx.name.trim();
+      counts[bankKey] = (counts[bankKey] ?? 0) + 1;
+      if (latestTimes[bankKey] == null ||
+          tx.date.isAfter(latestTimes[bankKey]!)) {
+        latestTimes[bankKey] = tx.date;
       }
     }
 
@@ -959,7 +1014,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
     Map<String, int> counts = {};
     for (var tx in _transactions) {
-      counts[tx.name] = (counts[tx.name] ?? 0) + 1;
+      final bankKey = tx.name.trim();
+      counts[bankKey] = (counts[bankKey] ?? 0) + 1;
     }
 
     AppSender? winner;
@@ -1103,6 +1159,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         await DatabaseService.instance.insertSender(boa);
         _senders.add(boa);
       }
+      if (!_senders.any((s) => s.senderName.toUpperCase().contains('DASHEN'))) {
+        final dashen = AppSender(id: '6', senderName: 'Dashen Bank');
+        await DatabaseService.instance.insertSender(dashen);
+        _senders.add(dashen);
+      }
     } else {
       _senders = [
         AppSender(id: '1', senderName: 'Telebirr'),
@@ -1110,6 +1171,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         AppSender(id: '3', senderName: 'CBE Birr'),
         AppSender(id: '4', senderName: 'Ahadu Bank'),
         AppSender(id: '5', senderName: 'BOA'),
+        AppSender(id: '6', senderName: 'Dashen Bank'),
       ];
       // Seed them into DB for future persistent updates
       for (var s in _senders) {
@@ -1132,7 +1194,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await _applyRecurringCashExpenses();
 
     // 2. Discover last fetch time & Install state
-    bool isFirstBoot = prefs.getBool('is_first_boot_v6') ?? true;
+    bool isFirstBoot = prefs.getBool('is_first_boot_v7') ?? true;
 
     final anchorIso = prefs.getString('custom_month_anchor_date');
     if (anchorIso != null) {
@@ -1145,26 +1207,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _currentCurrency = AppCurrency.fromCode(savedCurrencyCode);
     }
 
-    // The install_anchor_date marks the oldest boundary for message scanning.
-    // Refresh NEVER looks at messages older than this date.
-    // anchor_version guards against upgrades that stored wrong anchor dates.
-    const anchorVersion = 'v4';
-    final bool needsAnchorReset =
-        prefs.getString('anchor_version') != anchorVersion;
-    if (needsAnchorReset) {
-      // Anchor = install date MINUS 30 days exactly.
-      // The app will never access messages older than 30 days before first launch.
-      await prefs.setString('install_anchor_date',
-          DateTime.now().subtract(const Duration(days: 30)).toIso8601String());
-      await prefs.setString('anchor_version', anchorVersion);
-    }
+    final scanInfo = await _getScanWindowUseCase();
+    _scanWindowOption = scanInfo.option;
+    _installAnchorDate = scanInfo.anchorDate;
 
     DateTime? lastTxDate =
         await DatabaseService.instance.getLastTransactionDate();
 
     if (isFirstBoot || lastTxDate == null) {
-      // First boot: fetch messages within the 30-day window before install.
-      final installAnchor = DateTime.now().subtract(const Duration(days: 30));
+      // Clear old rows to ensure pristine alignment across all parsers
+      await DatabaseService.instance.deleteAllTransactions();
+
+      // First boot: fetch messages within the configured anchor window.
+      final installAnchor = scanInfo.anchorDate;
       List<sms_inbox.SmsMessage> allMessages =
           await SmsService().getAllMessages(since: installAnchor);
 
@@ -1229,11 +1284,23 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             if (tx != null) {
               await addTransaction(tx);
             }
+          } else if (bank == 'Dashen Bank') {
+            if (_userName == null) {
+              final name = DashenParser.extractOwnerName(msg.body!);
+              if (name != null) {
+                _userName = name;
+                await prefs.setString('user_name_v1', name);
+              }
+            }
+            AppTransaction? tx = DashenParser.parse(msg.body!, msgDate);
+            if (tx != null) {
+              await addTransaction(tx);
+            }
           }
         }
       }
       _isBatchProcessing = false;
-      await prefs.setBool('is_first_boot_v6', false);
+      await prefs.setBool('is_first_boot_v7', false);
     }
     // On subsequent opens we do NOT rescan SMS — the background service
     // keeps the database up to date silently. We just load from DB below.
@@ -1343,12 +1410,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           ),
         );
       } else {
-        // Never create a fake zero-balance demo transaction. Show a snackbar instead.
-        ScaffoldMessenger.of(navContext).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction is still being processed. Please try again shortly.'),
-            duration: Duration(seconds: 3),
-          ),
+        // Never create a fake zero-balance demo transaction. Show toast instead.
+        AppToast.info(
+          navContext,
+          message: 'Transaction is still being processed',
+          subtitle: 'Please try again shortly',
         );
       }
     });
@@ -1388,6 +1454,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
     _pendingRepaymentRequests =
         await DatabaseService.instance.getPendingRepaymentRequests();
+    final prefs = await SharedPreferences.getInstance();
+    final hiddenList = prefs.getStringList('hidden_loan_ids') ?? [];
+    _hiddenLoanIds =
+        hiddenList.map((e) => int.tryParse(e)).whereType<int>().toSet();
   }
 
   /// Refresh statuses for active loans whose due date has passed.
@@ -1487,7 +1557,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// Checks whether the user has crossed into a new level since the last time
   /// we showed the celebration modal. If so, shows it via the global navigator.
   Future<void> _maybeFireLevelUpModal() async {
-    if (!_levelDetectionReady || _isBatchProcessing) return;
+    if (!_isOnboardingComplete || !_levelDetectionReady || _isBatchProcessing) return;
     final currentLevel = userLevel;
     if (currentLevel <= _lastSeenLevel) return; // no level advance
 
@@ -1519,21 +1589,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// never earlier than the install anchor, so pre-install messages stay
   /// excluded regardless of the chosen window.
   Future<void> refreshData({int? lastDays}) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Use the install anchor date so we scan the FULL range since install,
-    // catching any messages that fell in gaps between already-stored transactions.
-    final anchorStr = prefs.getString('install_anchor_date');
-    final DateTime? anchorDate =
-        anchorStr != null ? DateTime.tryParse(anchorStr) : null;
-
-    if (anchorDate == null) {
-      // No anchor yet means first boot hasn't completed — nothing to do
-      return;
-    }
+    final scanInfo = await _getScanWindowUseCase();
+    _scanWindowOption = scanInfo.option;
+    _installAnchorDate = scanInfo.anchorDate;
+    final DateTime anchorDate = scanInfo.anchorDate;
 
     // Narrow to the requested window when provided, but never scan earlier
-    // than the install anchor.
+    // than the hard install anchor boundary.
     DateTime cutoff = anchorDate;
     if (lastDays != null) {
       final windowStart = DateTime.now().subtract(Duration(days: lastDays));
@@ -1569,6 +1631,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       DatabaseService.instance.getCashTransactions(),
       _loadNotifications(),
       _applyRecurringCashExpenses(),
+      _loadLoans(),
     ]);
 
     _expenseDefinitions = results[1] as List<ExpenseDefinition>;
@@ -1633,7 +1696,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           continue;
         }
 
-        // 4. Ignore messages that are ALREADY registered as transactions ONLY if categorized.
+        // 4. If message is ALREADY registered as a transaction in SQLite, prune from notifications
         final txIndex = _transactions.indexWhere((t) =>
             t.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() == bodyNormalised);
 
@@ -1655,31 +1718,20 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
                 matchedReason?.id,
               );
             }
-            idsToDelete.add(n.id);
-            continue;
           }
-
-          // If the existing transaction ALREADY has a category assigned by the user:
-          if (existingTx.reason != null &&
-              existingTx.reason!.isNotEmpty &&
-              existingTx.reason!.toLowerCase() != 'uncategorized') {
-            idsToDelete.add(n.id);
-            continue;
-          }
-
-          // Transaction exists but is STILL UNCATEGORIZED -> Keep in notifications section!
-          filtered.add(n);
+          idsToDelete.add(n.id);
           continue;
         }
 
-        // 5. Ingest raw banking notifications into transactions table if parsable
+        // 5. If message is auto-parsable, process it into transactions and prune from notifications
         final isParsable = TelebirrParser.parse(n.body, n.date) != null ||
             TelebirrParser.isCreditDisbursement(n.body) ||
             TelebirrParser.isCreditRepayment(n.body) ||
             CbeParser.parse(n.body, n.date) != null ||
             CbeBirrParser.parse(n.body, n.date) != null ||
             AhaduParser.parse(n.body, n.date) != null ||
-            BoaParser.parse(n.body, n.date) != null;
+            BoaParser.parse(n.body, n.date) != null ||
+            DashenParser.parse(n.body, n.date) != null;
 
         if (isParsable) {
           await processSmsRaw(
@@ -1688,16 +1740,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             date: n.date,
             initialReason: n.reason,
           );
-          if (n.reason != null && n.reason!.isNotEmpty) {
-            idsToDelete.add(n.id);
-            continue;
-          }
-          // Uncategorized -> Keep in notifications section!
-          filtered.add(n);
+          idsToDelete.add(n.id);
           continue;
         }
       }
 
+      // Only unparsed financial messages and system alerts reach here
       filtered.add(n);
     }
 
@@ -1888,7 +1936,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           CbeParser.parse(body, date) != null ||
           CbeBirrParser.parse(body, date) != null ||
           AhaduParser.parse(body, date) != null ||
-          BoaParser.parse(body, date) != null) {
+          BoaParser.parse(body, date) != null ||
+          DashenParser.parse(body, date) != null) {
         return;
       }
     }
@@ -1940,19 +1989,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
-  Map<String, dynamic>? _computeTopReasonMap(Map<String, double> totals) {
-    if (totals.isEmpty) return null;
-    String topReason = totals.keys.first;
-    double maxAmount = totals[topReason]!;
-    totals.forEach((key, value) {
-      if (value > maxAmount) {
-        maxAmount = value;
-        topReason = key;
-      }
-    });
-    return {'reason': topReason, 'amount': maxAmount};
-  }
-
   void _calculateStats() {
     _totalBalance = 0;
     _cashBalance = 0;
@@ -1967,9 +2003,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _todayTransactionCount = 0;
 
     DateTime now = DateTime.now();
-    Map<String, double> latestBalances = {};
-    double cashInflows = 0;
-    double cashOutflows = 0;
 
     final pausedUpper = _pausedBanks.map((b) => b.toUpperCase()).toSet();
     final Map<String, double> todayReasonTotals = {};
@@ -1980,18 +2013,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     for (var tx in _transactions) {
       // Skip transactions from paused banks entirely so they don't affect
       // balance, income/expense totals, or any other aggregation.
-      if (pausedUpper.contains(tx.name.toUpperCase())) {
+      if (pausedUpper.contains(tx.sender.toUpperCase()) ||
+          pausedUpper.contains(tx.name.toUpperCase())) {
         continue;
       }
 
-      // 1. Balance Tracking (Newest per bank)
-      if (!latestBalances.containsKey(tx.name)) {
-        if (tx.totalBalance > 0) {
-          latestBalances[tx.name] = tx.totalBalance;
-        }
-      }
-
-      // 2. Date checks
+      // Date checks
       bool isToday = tx.date.year == now.year &&
           tx.date.month == now.month &&
           tx.date.day == now.day;
@@ -2006,7 +2033,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
       bool isThisMonth = isDateInMonthOf(tx.date, now);
 
-      // 3. Category & Cash Logic
+      // Category & Cash Logic
       final resolvedReasonLower = tx.resolvedReason?.toLowerCase();
       bool isBounce = resolvedReasonLower == 'bounce' ||
           resolvedReasonLower == 'internal transfer';
@@ -2015,19 +2042,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
           tx.customReasonText?.toLowerCase() == 'cash' ||
           resolvedReasonLower == 'cash';
 
-      if (isCashTransfer) {
-        // ATM withdrawal (bank expense) is a CASH INFLOW to the wallet.
-        // Cash deposit (bank income) is a CASH OUTFLOW from the wallet.
-        if (tx.type == 'expense') {
-          cashInflows += tx.amount.abs();
-        } else {
-          cashOutflows += tx.amount.abs();
-        }
-      }
-
       if (isBounce) continue;
 
-      // 4. Summaries (exclude cash transfers from net wealth change as they are internal)
+      // Summaries (exclude cash transfers from net wealth change as they are internal)
       if (tx.type == 'income') {
         if (isThisMonth && !isCashTransfer) {
           _incomeThisMonth += tx.amount;
@@ -2061,17 +2078,17 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
 
-    _cachedMostExpenseToday = _computeTopReasonMap(todayReasonTotals);
-    _cachedMostExpenseThisMonth = _computeTopReasonMap(monthReasonTotals);
-    _cachedTopExpenseHighlight = _computeTopReasonMap(overallReasonTotals);
+    final topExpenses = _getTopExpensesUseCase.execute(
+      transactions: _transactions,
+      getTopLevelCategory: getTopLevelCategoryForTransaction,
+      isDateInMonthOf: isDateInMonthOf,
+      referenceDate: now,
+    );
+    _cachedMostExpenseToday = topExpenses.mostExpenseToday;
+    _cachedMostExpenseThisMonth = topExpenses.mostExpenseThisMonth;
+    _cachedTopExpenseHighlight = topExpenses.topExpenseHighlight;
 
-    // Process latest bank balances
-    _latestBalancesMap = Map.from(latestBalances);
-    for (var value in latestBalances.values) {
-      _totalBalance += value;
-    }
-
-    // Process Cash Transactions (Manual additions/deductions)
+    // Process Cash Transactions (Manual additions/deductions for date-filtered income/expense)
     for (var ctx in _cashTransactions) {
       bool isThisMonth = isDateInMonthOf(ctx.date, now);
       bool isSelectedDay = _isShowingAll ||
@@ -2080,22 +2097,28 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
               ctx.date.day == _selectedDate.day);
 
       if (ctx.type == 'addition') {
-        cashInflows += ctx.amount; // manual injections are inflows
         _netOverall += ctx.amount;
         if (isThisMonth) _incomeThisMonth += ctx.amount;
         if (isSelectedDay) _incomeForSelectedDate += ctx.amount;
       } else if (ctx.type == 'expense') {
-        cashOutflows += ctx.amount;
         _netOverall -= ctx.amount;
         if (isThisMonth) _expenseThisMonth += ctx.amount;
         if (isSelectedDay) _expenseForSelectedDate += ctx.amount;
       }
     }
 
-    _cashBalance = cashInflows - cashOutflows;
-    if (_cashBalance > 0) {
-      _totalBalance += _cashBalance;
-    }
+    // Process latest bank balances directly via domain use case (Single Source of Truth)
+    final walletBalances = _getWalletBalancesUseCase.execute(
+      senders: _senders,
+      transactions: _transactions,
+      cashTransactions: _cashTransactions,
+      pausedBanks: _pausedBanks,
+    );
+    _latestBalancesMap
+      ..clear()
+      ..addAll(walletBalances.latestBalancesMap);
+    _totalBalance = walletBalances.totalBalance;
+    _cashBalance = walletBalances.cashBalance;
 
     _netForSelectedDate = _incomeForSelectedDate - _expenseForSelectedDate;
 
@@ -2181,12 +2204,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// Returns the current latest total balance recorded for a given bank / sender name.
   double getLatestBalanceForBank(String bankName) {
-    for (final tx in _transactions) {
-      if (tx.name.toUpperCase() == bankName.toUpperCase() && tx.totalBalance > 0) {
-        return tx.totalBalance;
-      }
-    }
-    return 0.0;
+    return balanceForSender(bankName);
   }
 
   Future<void> addTransaction(AppTransaction transaction) async {
@@ -2401,6 +2419,20 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Toggles the bookmark/favorite status of a transaction.
+  Future<void> toggleTransactionBookmark(String transactionId) async {
+    final index = _transactions.indexWhere((t) => t.id == transactionId);
+    if (index == -1) return;
+
+    final oldTx = _transactions[index];
+    final newBookmarkedState = !oldTx.isBookmarked;
+    final newTx = oldTx.copyWith(isBookmarked: newBookmarkedState);
+
+    await DatabaseService.instance.setTransactionBookmarked(transactionId, newBookmarkedState);
+    _transactions[index] = newTx;
+    notifyListeners();
+  }
+
   Future<void> updateTransactionNote(String transactionId, String? note) async {
     final index = _transactions.indexWhere((t) => t.id == transactionId);
     if (index == -1) return;
@@ -2557,10 +2589,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> addReasonLink(
-      {required int reasonId,
-      required String linkedName,
-      required String linkType}) async {
+  Future<void> addReasonLink({
+    required int reasonId,
+    required String linkedName,
+    required String linkType,
+    LinkScope scope = LinkScope.allTransactions,
+    String? currentTransactionId,
+  }) async {
     final lowerName = linkedName.toLowerCase();
 
     // 1. Remove any existing link for exactly this name and type (so we override)
@@ -2581,30 +2616,135 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         linkedName: linkedName,
         linkType: linkType));
 
-    // 3. Retroactively apply this new reason to all matching existing transactions
+    // 3. Resolve the reason object
     final r = _reasons.firstWhere((r) => r.id == reasonId,
         orElse: () => AppReason(name: ''));
     if (r.name.isNotEmpty) {
-      bool updated = false;
-      for (int i = 0; i < _transactions.length; i++) {
-        final tx = _transactions[i];
-        final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
+      final isSub = r.isSubcategory;
+      final isTop = r.isTopLevelCategory;
+      final catId = isSub ? r.parentId : (isTop ? r.id : null);
+      final subId = isSub ? r.id : null;
 
-        if (tx.sender.toLowerCase() == lowerName &&
-            expectedLinkType == linkType) {
-          final newTx = tx.copyWith(
+      if (scope == LinkScope.allTransactions) {
+        // Retroactively apply to all matching existing transactions
+        bool updated = false;
+        for (int i = 0; i < _transactions.length; i++) {
+          final tx = _transactions[i];
+          final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
+
+          if (tx.sender.toLowerCase() == lowerName &&
+              expectedLinkType == linkType) {
+            final newTx = tx.copyWith(
+              reasonId: reasonId,
+              reason: r.name,
+              categoryId: catId,
+              subcategoryId: subId,
+              clearCustomReason: true, // override one-time reasons too
+            );
+            await DatabaseService.instance.updateTransaction(newTx);
+            _transactions[i] = newTx;
+            updated = true;
+          }
+        }
+        if (updated) {
+          _calculateStats();
+        }
+      } else if (currentTransactionId != null) {
+        // Future only, but also apply reason to the currently active transaction
+        final idx = _transactions.indexWhere((t) => t.id == currentTransactionId);
+        if (idx != -1) {
+          final newTx = _transactions[idx].copyWith(
             reasonId: reasonId,
             reason: r.name,
-            clearCustomReason: true, // override one-time reasons too
+            categoryId: catId,
+            subcategoryId: subId,
+            clearCustomReason: true,
           );
           await DatabaseService.instance.updateTransaction(newTx);
-          _transactions[i] = newTx;
-          updated = true;
+          _transactions[idx] = newTx;
+          _calculateStats();
         }
       }
-      if (updated) {
-        _calculateStats();
-      }
+    }
+
+    notifyListeners();
+  }
+
+  /// Comprehensive unlinking supporting the 3 scopes:
+  /// 1. [UnlinkScope.allTransactions]: Delete link rule + wipe reason on all matching past transactions
+  /// 2. [UnlinkScope.thisTransactionOnly]: Keep link rule intact + reset reason only on current transaction
+  /// 3. [UnlinkScope.futureTransactionsOnly]: Delete link rule + preserve historical past transactions
+  Future<void> unlinkReason({
+    required int linkId,
+    required String linkedName,
+    required String linkType,
+    required UnlinkScope scope,
+    String? currentTransactionId,
+    int? reasonId,
+  }) async {
+    final lowerName = linkedName.toLowerCase();
+
+    switch (scope) {
+      case UnlinkScope.allTransactions:
+        // 1. Delete link rule from DB & state
+        await DatabaseService.instance.deleteReasonLink(linkId);
+        _reasonLinks.removeWhere((l) => l.id == linkId);
+
+        // 2. Wipe category metadata from all matching transactions in DB
+        await DatabaseService.instance.unlinkAllTransactionsForContact(
+          contactName: linkedName,
+          reasonId: reasonId,
+        );
+
+        // 3. Update in-memory transactions
+        bool updated = false;
+        for (int i = 0; i < _transactions.length; i++) {
+          final tx = _transactions[i];
+          final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
+
+          if (tx.sender.toLowerCase() == lowerName &&
+              expectedLinkType == linkType &&
+              (reasonId == null || tx.reasonId == reasonId)) {
+            _transactions[i] = tx.copyWith(
+              clearReason: true,
+              clearReasonId: true,
+              clearCategoryId: true,
+              clearSubcategoryId: true,
+              clearCustomReason: true,
+            );
+            updated = true;
+          }
+        }
+        if (updated) {
+          _calculateStats();
+        }
+        break;
+
+      case UnlinkScope.thisTransactionOnly:
+        // Keep rule in _reasonLinks & DB!
+        // Only unlink the current individual transaction
+        if (currentTransactionId != null) {
+          final idx = _transactions.indexWhere((t) => t.id == currentTransactionId);
+          if (idx != -1) {
+            await DatabaseService.instance.unlinkSingleTransaction(currentTransactionId);
+            _transactions[idx] = _transactions[idx].copyWith(
+              clearReason: true,
+              clearReasonId: true,
+              clearCategoryId: true,
+              clearSubcategoryId: true,
+              clearCustomReason: true,
+            );
+            _calculateStats();
+          }
+        }
+        break;
+
+      case UnlinkScope.futureTransactionsOnly:
+        // Delete link rule from DB & state so future SMS are not auto-categorized
+        await DatabaseService.instance.deleteReasonLink(linkId);
+        _reasonLinks.removeWhere((l) => l.id == linkId);
+        // Do NOT alter past transactions
+        break;
     }
 
     notifyListeners();
@@ -2724,6 +2864,32 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     return withId;
   }
 
+  /// Calculates aggregated loan portfolio summary via pure domain use case.
+  LoanSummary get loanSummary =>
+      _calculateLoanProgressUseCase.calculateSummary(_loanRecords);
+
+  /// Applies loan repayment via pure domain use case.
+  LoanRepaymentResult applyLoanRepayment(LoanRecord loan, double amount) =>
+      _processLoanRepaymentUseCase.applyRepayment(loan: loan, paymentAmount: amount);
+
+  /// Calculates dynamic goal feasibility via pure domain use case.
+  GoalFeasibility calculateGoalFeasibility(SavingGoal goal) {
+    final walletResult = _getWalletBalancesUseCase.execute(
+      senders: _senders,
+      transactions: _transactions,
+      cashTransactions: _cashTransactions,
+      pausedBanks: _pausedBanks,
+    );
+    final accountTotals =
+        _allocateSavingGoalsUseCase.calculateAccountAllocationTotals(_savingGoals);
+    return _calculateGoalFeasibilityUseCase.execute(
+      goal: goal,
+      liveBalances: walletResult.latestBalancesMap,
+      totalBalance: totalBalance,
+      allGoalAllocationsForAccount: accountTotals,
+    );
+  }
+
   Future<void> loadLoans() async {
     await _loadLoans();
     notifyListeners();
@@ -2733,6 +2899,23 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await DatabaseService.instance.deleteLoanRecord(id);
     _loanRecords.removeWhere((l) => l.id == id);
     _loanPayments.remove(id);
+    _hiddenLoanIds.remove(id);
+    notifyListeners();
+  }
+
+  Future<void> hideLoan(int id) async {
+    _hiddenLoanIds = {..._hiddenLoanIds, id};
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        'hidden_loan_ids', _hiddenLoanIds.map((e) => e.toString()).toList());
+    notifyListeners();
+  }
+
+  Future<void> unhideLoan(int id) async {
+    _hiddenLoanIds = _hiddenLoanIds.where((e) => e != id).toSet();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        'hidden_loan_ids', _hiddenLoanIds.map((e) => e.toString()).toList());
     notifyListeners();
   }
 
@@ -3119,6 +3302,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
             sender: sender, body: message, date: date);
       }
       return;
+    } else if (bank == 'Dashen Bank') {
+      AppTransaction? dashenTx = DashenParser.parse(message, date);
+      if (dashenTx != null) {
+        await addTransaction(dashenTx);
+      } else {
+        await addUnrecognizedNotification(
+            sender: sender, body: message, date: date);
+      }
+      return;
     }
 
     // 1. Is sender selected?
@@ -3452,6 +3644,15 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       final bank = BankSenders.match(sender);
       AppTransaction? parsed;
       if (bank == 'Telebirr') {
+        if (TelebirrParser.isCreditDisbursement(body) ||
+            TelebirrParser.isCreditRepayment(body)) {
+          await processSmsRaw(
+            senderAddress: sender,
+            body: body,
+            date: msgDate,
+          );
+          continue;
+        }
         parsed = TelebirrParser.parse(body, msgDate);
       } else if (bank == 'CBE Birr') {
         parsed = CbeBirrParser.parse(body, msgDate);
@@ -3461,6 +3662,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         parsed = AhaduParser.parse(body, msgDate);
       } else if (bank == 'BOA') {
         parsed = BoaParser.parse(body, msgDate);
+      } else if (bank == 'Dashen Bank') {
+        parsed = DashenParser.parse(body, msgDate);
       }
 
       if (parsed == null || parsed.id == null) continue;
@@ -3543,6 +3746,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _reasons = await DatabaseService.instance.getReasons();
     _reasonLinks = await DatabaseService.instance.getReasonLinks();
     await _loadNotifications();
+    await _loadLoans();
     _calculateStats();
 
     _isLoading = false;

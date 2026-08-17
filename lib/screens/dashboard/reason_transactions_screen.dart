@@ -287,17 +287,29 @@ class ReasonTransactionsScreen extends StatelessWidget {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          _limitWords(
-                                              tx.sender.isNotEmpty
-                                                  ? tx.sender
-                                                  : tx.name,
-                                              maxWords: 2),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                _limitWords(
+                                                    tx.sender.isNotEmpty
+                                                        ? tx.sender
+                                                        : tx.name,
+                                                    maxWords: 2),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (tx.isBookmarked) ...[
+                                              const SizedBox(width: 4),
+                                              const BookmarkBadge(),
+                                            ],
+                                          ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(

@@ -36,7 +36,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 25, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 26, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -73,7 +73,8 @@ CREATE TABLE transactions (
   customReasonText TEXT,
   note TEXT,
   linkedTransactionId TEXT,
-  bankReference TEXT
+  bankReference TEXT,
+  isBookmarked INTEGER NOT NULL DEFAULT 0
 )
 ''');
 
@@ -418,6 +419,11 @@ CREATE TABLE IF NOT EXISTS app_settings (
         await db.execute('ALTER TABLE cash_transactions ADD COLUMN linkedTransactionId TEXT;');
       } catch (_) {}
     }
+    if (oldVersion < 26) {
+      try {
+        await db.execute('ALTER TABLE transactions ADD COLUMN isBookmarked INTEGER NOT NULL DEFAULT 0;');
+      } catch (_) {}
+    }
   }
 
   Future<void> _upgradeToVersion23(Database db) async {
@@ -678,6 +684,71 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       {'reason': reason, 'reasonId': reasonId},
       where: 'rawMessage = ? AND rawMessage != \'\'',
       whereArgs: [rawMessage],
+    );
+  }
+
+  /// Clears/unlinks the reason and category metadata for a single transaction.
+  Future<int> unlinkSingleTransaction(String id) async {
+    final db = await instance.database;
+    return await db.update(
+      'transactions',
+      {
+        'reason': null,
+        'reasonId': null,
+        'categoryId': null,
+        'subcategoryId': null,
+        'customReasonText': null,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Clears/unlinks reasons from all past transactions matching a given contact name.
+  Future<int> unlinkAllTransactionsForContact({
+    required String contactName,
+    int? reasonId,
+  }) async {
+    final db = await instance.database;
+    final lowerName = contactName.toLowerCase();
+    
+    if (reasonId != null) {
+      return await db.update(
+        'transactions',
+        {
+          'reason': null,
+          'reasonId': null,
+          'categoryId': null,
+          'subcategoryId': null,
+          'customReasonText': null,
+        },
+        where: 'LOWER(sender) = ? AND reasonId = ?',
+        whereArgs: [lowerName, reasonId],
+      );
+    } else {
+      return await db.update(
+        'transactions',
+        {
+          'reason': null,
+          'reasonId': null,
+          'categoryId': null,
+          'subcategoryId': null,
+          'customReasonText': null,
+        },
+        where: 'LOWER(sender) = ?',
+        whereArgs: [lowerName],
+      );
+    }
+  }
+
+  /// Sets the bookmark/favorite status for a transaction by ID.
+  Future<int> setTransactionBookmarked(String id, bool isBookmarked) async {
+    final db = await instance.database;
+    return await db.update(
+      'transactions',
+      {'isBookmarked': isBookmarked ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
@@ -1299,4 +1370,31 @@ CREATE TABLE IF NOT EXISTS saving_goals (
     return await db.delete('transaction_attachments',
         where: 'id = ?', whereArgs: [attachmentId]);
   }
+
+  // ──────────────────────────────────────────────
+  // App Settings Methods
+  // ──────────────────────────────────────────────
+  Future<void> setAppSetting(String key, String value) async {
+    final db = await instance.database;
+    await db.insert(
+      'app_settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<String?> getAppSetting(String key) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'app_settings',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return maps.first['value'] as String?;
+    }
+    return null;
+  }
 }
+

@@ -18,10 +18,12 @@ import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_note_card.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
+import 'reason_link_drawer.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
@@ -178,13 +180,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
 
     if (mounted && context.mounted && changesMade) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Details saved ✓'),
-          backgroundColor: AppColors.positive,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppToast.success(context, message: 'Details saved');
     }
   }
 
@@ -207,13 +203,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (shouldDelete == true && context.mounted) {
       await provider.deleteTransaction(widget.transaction.id!);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction deleted'),
-            backgroundColor: AppColors.negative,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        AppToast.info(context, message: 'Transaction deleted');
         Navigator.of(context).pop();
       }
     }
@@ -314,6 +304,45 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           scrolledUnderElevation: 0,
           leading: const AppBackButton(),
           actions: [
+            if (currentTx.id != null) ...[
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: currentTx.isBookmarked
+                      ? AppColors.gold.withValues(alpha: 0.15)
+                      : AppColors.buttonSecondary,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  icon: Icon(
+                    currentTx.isBookmarked
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_outline_rounded,
+                    color: currentTx.isBookmarked ? AppColors.gold : Colors.white,
+                    size: 19,
+                  ),
+                  tooltip: currentTx.isBookmarked
+                      ? 'Remove Bookmark'
+                      : 'Bookmark Transaction',
+                  onPressed: () async {
+                    await provider.toggleTransactionBookmark(currentTx.id!);
+                    if (context.mounted) {
+                      final isNowBookmarked = !currentTx.isBookmarked;
+                      if (isNowBookmarked) {
+                        AppToast.success(context, message: 'Transaction bookmarked');
+                      } else {
+                        AppToast.info(context, message: 'Bookmark removed');
+                      }
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             Theme(
               data: Theme.of(context).copyWith(
                 splashColor: Colors.white.withValues(alpha: 0.15),
@@ -445,19 +474,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                         const SizedBox(height: 18),
 
-                        // ── 1. LOAN TRACKING / CREATE LOAN / INTERNAL TRANSFER CARD (TOP MOST) ──
+                        // ── 1. LOAN TRACKING / INTERNAL TRANSFER CARD (TOP MOST) ──
                         if (linkedLoan != null) ...[
                           _buildLoanTrackingCard(context, linkedLoan, provider),
-                          const SizedBox(height: 14),
-                        ] else if (currentLabel?.toLowerCase().contains('loan') == true) ...[
-                          _buildCreateLoanCard(context, provider, currentTx),
-                          const SizedBox(height: 14),
-                        ] else if (currentLabel?.toLowerCase().contains('internal transfer') == true) ...[
-                          if (currentTx.linkedTransactionId != null) ...[
-                            _buildInternalTransferCard(context, provider, currentTx),
-                          ] else ...[
-                            _buildLinkInternalTransferCard(context, provider, currentTx),
-                          ],
                           const SizedBox(height: 14),
                         ] else if (currentTx.linkedTransactionId != null) ...[
                           _buildInternalTransferCard(context, provider, currentTx),
@@ -555,6 +574,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       bankName = 'Bank of Abyssinia S.C.';
       shortName = 'BOA';
       bg = AppColors.cardBoaBg.withValues(alpha: 0.18);
+    } else if (combined.contains('DASHEN')) {
+      iconWidget = SvgPicture.asset(
+        'assets/images/Dashen_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+      );
+      bankName = 'Dashen Bank S.C.';
+      shortName = 'Dashen';
+      bg = AppColors.cardDashenLight.withValues(alpha: 0.18);
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
       iconWidget = Image.asset('assets/images/CBE logo 1.webp', width: 24, height: 24);
       bankName = 'Commercial Bank of Ethiopia';
@@ -1177,22 +1207,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           focusColor: Colors.transparent,
           onTap: () async {
             if (linkedLoan != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('In order to change the reason, delete the loan record from Loan Manager first.'),
-                  backgroundColor: AppColors.warning,
-                  behavior: SnackBarBehavior.floating,
-                ),
+              AppToast.warning(
+                context,
+                message: 'To change reason, delete loan record first',
               );
               return;
             }
             if (isAutoLocked) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Reason is locked — this transaction was auto-created from a Telebirr credit SMS.'),
-                  backgroundColor: AppColors.warning,
-                  behavior: SnackBarBehavior.floating,
-                ),
+              AppToast.warning(
+                context,
+                message: 'Reason is locked — auto-created from SMS',
               );
               return;
             }
@@ -1294,8 +1318,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       fontSize: 11,
                       iconSize: 13,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      onPressed: () async {
-                        await provider.deleteReasonLink(activeLink.id!);
+                      onPressed: () {
+                        UnlinkReasonDrawer.show(
+                          context: context,
+                          link: activeLink,
+                          reasonName: currentLabel ?? 'Reason',
+                          contactName: widget.transaction.sender,
+                          currentTransactionId: widget.transaction.id,
+                        );
                       },
                     )
                   else
@@ -1307,11 +1337,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       fontSize: 11,
                       iconSize: 13,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                      onPressed: () async {
-                        await provider.addReasonLink(
+                      onPressed: () {
+                        LinkReasonDrawer.show(
+                          context: context,
                           reasonId: activeReasonId,
-                          linkedName: widget.transaction.sender,
+                          reasonName: currentLabel ?? 'Reason',
+                          contactName: widget.transaction.sender,
                           linkType: isIncome ? 'sender' : 'receiver',
+                          currentTransactionId: widget.transaction.id,
                         );
                       },
                     ),
@@ -1404,14 +1437,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: widget.transaction.rawMessage));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Raw message copied to clipboard'),
-                            backgroundColor: AppColors.positive,
-                            behavior: SnackBarBehavior.floating,
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
+                        AppToast.success(context, message: 'Raw message copied to clipboard');
                       },
                     ),
                     const SizedBox(width: 8),
@@ -1687,7 +1713,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               onTap: () async {
                 Navigator.pop(ctx);
                 if (!mounted) return;
-                final messenger = ScaffoldMessenger.of(context);
                 final confirm = await AppConfirmDialog.show(
                   context: context,
                   title: 'Delete Loan Record?',
@@ -1702,180 +1727,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 );
                 if (confirm == true && mounted) {
                   await provider.deleteLoan(loan.id!);
-                  if (mounted) {
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Loan record deleted. Reason editing is now unlocked.'),
-                        backgroundColor: AppColors.overlay,
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                  if (mounted && context.mounted) {
+                    AppToast.info(
+                      context,
+                      message: 'Loan record deleted',
+                      subtitle: 'Reason editing is now unlocked',
                     );
                   }
                 }
               },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCreateLoanCard(
-      BuildContext context, FinanceProvider provider, AppTransaction tx) {
-    return GestureDetector(
-      onTap: () {
-        AppBottomSheet.show(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => AddLoanSheet(
-            provider: provider,
-            linkedTransactionId: tx.id,
-            prefilledAmount: tx.amount,
-            prefilledName: tx.sender,
-            prefilledTrackedSender: tx.sender,
-            prefilledType:
-                tx.type == 'expense' ? 'lent' : 'borrowed',
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.positive.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.handshake_outlined,
-                  color: AppColors.positive, size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Track as Loan',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Create loan record to track repayments',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            AppButton.primary(
-              text: 'Create',
-              fullWidth: false,
-              height: 32,
-              fontSize: 11,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              onPressed: () {
-                AppBottomSheet.show(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => AddLoanSheet(
-                    provider: provider,
-                    linkedTransactionId: tx.id,
-                    prefilledAmount: tx.amount,
-                    prefilledName: tx.sender,
-                    prefilledTrackedSender: tx.sender,
-                    prefilledType:
-                        tx.type == 'expense' ? 'lent' : 'borrowed',
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openInternalTransferPicker(
-      BuildContext context, FinanceProvider provider, AppTransaction tx) {
-    AppBottomSheet.show(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => InternalTransferPickerSheet(
-        sourceTransaction: tx,
-        provider: provider,
-      ),
-    );
-  }
-
-  Widget _buildLinkInternalTransferCard(
-      BuildContext context, FinanceProvider provider, AppTransaction tx) {
-    return GestureDetector(
-      onTap: () => _openInternalTransferPicker(context, provider, tx),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.positive.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.sync_alt,
-                  color: AppColors.positive, size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Link Internal Transfer',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Tap to link matching transfer between accounts',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            AppButton.primary(
-              text: 'Link',
-              fullWidth: false,
-              height: 32,
-              fontSize: 11,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              onPressed: () =>
-                  _openInternalTransferPicker(context, provider, tx),
             ),
           ],
         ),
@@ -1947,7 +1807,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 iconSize: 12,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                 onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
                   final shouldUnlink = await AppConfirmDialog.show(
                     context: context,
                     title: 'Unlink Transfer?',
@@ -1963,13 +1822,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   if (shouldUnlink == true && context.mounted) {
                     await provider.unlinkInternalTransfer(currentTx.id!);
                     if (context.mounted) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Internal transfer unlinked'),
-                          backgroundColor: AppColors.negative,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      AppToast.info(context, message: 'Internal transfer unlinked');
                     }
                   }
                 },

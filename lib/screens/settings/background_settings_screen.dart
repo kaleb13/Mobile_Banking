@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_toast.dart';
 
 class BackgroundSettingsScreen extends StatefulWidget {
   const BackgroundSettingsScreen({super.key});
@@ -120,11 +121,9 @@ class _BackgroundSettingsScreenState extends State<BackgroundSettingsScreen>
     final status = await Permission.ignoreBatteryOptimizations.request();
     if (status.isGranted) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Battery optimization successfully disabled!'),
-            backgroundColor: AppColors.positive,
-          ),
+        AppToast.success(
+          context,
+          message: 'Battery optimization disabled',
         );
       }
     } else {

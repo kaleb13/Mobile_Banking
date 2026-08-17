@@ -12,7 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_badges.dart';
+import '../../widgets/app_toast.dart';
 import 'manual_transaction_sheet.dart';
 
 /// A pill widget that morphs in-place into a full notifications panel.
@@ -826,13 +826,13 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
     final String formattedDate = DateFormat('MMM d, HH:mm').format(notif.date);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       child: Slidable(
         key: Key(notif.id),
         direction: Axis.horizontal,
         endActionPane: ActionPane(
           motion: const BehindMotion(),
-          extentRatio: isSystem ? 0.28 : 0.48,
+          extentRatio: 0.28,
           dismissible: DismissiblePane(
             onDismissed: () => provider.deleteNotification(notif.id),
           ),
@@ -848,101 +848,31 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: isSystem
-                    ? Column(
-                        children: [
-                          Expanded(
-                            child: _buildGridActionButton(
-                              onTap: () => provider.deleteNotification(notif.id),
-                              icon: Icons.delete_rounded,
-                              label: 'Delete',
-                              color: AppColors.negative,
-                            ),
-                          ),
-                          Divider(
-                            height: 1,
-                            thickness: 0.5,
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                          Expanded(
-                            child: _buildGridActionButton(
-                              onTap: () => provider.ignoreNotification(notif.id),
-                              icon: Icons.block_rounded,
-                              label: 'Ignore',
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          // Top Row (Delete & Insert)
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _buildGridActionButton(
-                                    onTap: () =>
-                                        provider.deleteNotification(notif.id),
-                                    icon: Icons.delete_rounded,
-                                    label: 'Delete',
-                                    color: AppColors.negative,
-                                  ),
-                                ),
-                                VerticalDivider(
-                                  width: 1,
-                                  thickness: 0.5,
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                                Expanded(
-                                  child: _buildGridActionButton(
-                                    onTap: () => _showManualInsert(
-                                        context, provider, notif),
-                                    icon: Icons.add_circle_outline_rounded,
-                                    label: 'Insert',
-                                    color: AppColors.positive,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Divider(
-                            height: 1,
-                            thickness: 0.5,
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                          // Bottom Row (Inform & Ignore)
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _buildGridActionButton(
-                                    onTap: () => _informDeveloper(
-                                        context, notif.body),
-                                    icon: Icons.telegram_rounded,
-                                    label: 'Inform',
-                                    color: const Color(0xFF0284C7),
-                                  ),
-                                ),
-                                VerticalDivider(
-                                  width: 1,
-                                  thickness: 0.5,
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                                Expanded(
-                                  child: _buildGridActionButton(
-                                    onTap: () => provider
-                                        .ignoreNotification(notif.id),
-                                    icon: Icons.block_rounded,
-                                    label: 'Ignore',
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: _buildGridActionButton(
+                        onTap: () => provider.deleteNotification(notif.id),
+                        icon: Icons.delete_rounded,
+                        label: 'Delete',
+                        color: AppColors.negative,
                       ),
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                    Expanded(
+                      child: _buildGridActionButton(
+                        onTap: () => provider.ignoreNotification(notif.id),
+                        icon: Icons.block_rounded,
+                        label: 'Ignore',
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -954,7 +884,7 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
             });
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(18),
@@ -963,10 +893,16 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Top Row: Sender + Date
                 Row(
                   children: [
-                    const Icon(Icons.notifications_sharp,
-                        color: Colors.white, size: 16),
+                    Icon(
+                      isSystem
+                          ? Icons.notifications_active_rounded
+                          : Icons.sms_outlined,
+                      color: isSystem ? AppColors.amber : Colors.white,
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -980,40 +916,75 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    Text(
+                      formattedDate,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontSize: 11,
+                      ),
+                      maxLines: 1,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
+
+                // Badge + Description for Unparsed Financial SMS
+                if (!isSystem) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: AppColors.amber,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Unrecognized financial format. You can inform the developer to add automatic support for this message.',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11.5,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Raw SMS Message Body
                 Text(
                   notif.body,
-                  maxLines: 4,
+                  maxLines: 5,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.72),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
                     height: 1.45,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    AppBadge.neutral(
-                      text: isSystem ? 'System Message' : 'Unregistered',
-                      size: AppBadgeSize.small,
-                    ),
-                    Flexible(
-                      child: Text(
-                        formattedDate,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.45),
-                          fontSize: 11,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+
+                // Single "Inform Developer" Button (for unparsed financial SMS)
+                if (!isSystem) ...[
+                  const SizedBox(height: 12),
+                  AppButton.secondary(
+                    text: 'Inform Developer',
+                    icon: Icons.send_rounded,
+                    height: 38,
+                    fullWidth: true,
+                    onPressed: () => _informDeveloper(context, notif.body),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1060,12 +1031,10 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
         'I found a transaction message that was not automatically categorized. Sharing it here for feedback:\n\n```$rawMessage```';
     await Clipboard.setData(ClipboardData(text: template));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Message copied! Please paste it in the chat.'),
-          backgroundColor: AppColors.positive,
-          duration: Duration(seconds: 2),
-        ),
+      AppToast.success(
+        context,
+        message: 'Message copied',
+        subtitle: 'Please paste it in the chat',
       );
     }
     final String encodedMsg = Uri.encodeComponent(template);

@@ -14,6 +14,8 @@ import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/daily_net_heatmap_widget.dart';
 import '../../widgets/custom_progress_bar.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_toast.dart';
 import 'category_detail_screen.dart';
 import 'reason_transactions_screen.dart';
 
@@ -191,6 +193,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   void _onPeriodChanged(PeriodFilter period) {
     if (_selectedPeriod == period) return;
+    HapticFeedback.selectionClick();
     _changeFilter(() {
       _selectedPeriod = period;
       _selectedHeatmapDay = null;
@@ -203,6 +206,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   void _onSubPeriodChanged(int index) {
     if (_selectedSubPeriodIndex == index) return;
+    HapticFeedback.selectionClick();
     _changeFilter(() {
       _selectedSubPeriodIndex = index;
       _selectedHeatmapDay = null;
@@ -212,6 +216,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // ─── Color Mapping for Categories & Defined/Custom Reasons ───────────────────
   Color _getReasonColor(String category) {
     final cat = category.trim().toLowerCase();
+
+    // 0. Uncategorized & other fallback color
+    if (cat == 'uncategorized' || cat == 'other' || cat == 'other cash' || cat.isEmpty) {
+      return const Color(0xFF64748B); // Slate Gray
+    }
 
     // 1. Explicit distinct color mapping for defined system reasons
     if (cat == 'food' || cat.contains('restaurant') || cat.contains('dining')) {
@@ -298,8 +307,77 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return fallbackPalette[hash.abs() % fallbackPalette.length];
   }
 
+  String _resolveTxCategoryName(AppTransaction tx, FinanceProvider provider) {
+    if (tx.categoryId != null) {
+      final cat = provider.reasons.where((r) => r.id == tx.categoryId).firstOrNull;
+      if (cat != null) return cat.name;
+    }
+
+    if (tx.reasonId != null) {
+      final r = provider.reasons.where((r) => r.id == tx.reasonId).firstOrNull;
+      if (r != null) {
+        if (r.isSubcategory && r.parentId != null) {
+          final p = provider.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
+          if (p != null) return p.name;
+        }
+        return r.name;
+      }
+    }
+
+    final raw = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
+    if (raw.isNotEmpty) {
+      final matchedReason = provider.reasons
+          .where((r) => r.name.toLowerCase() == raw.toLowerCase())
+          .firstOrNull;
+      if (matchedReason != null) {
+        if (matchedReason.isSubcategory && matchedReason.parentId != null) {
+          final p = provider.reasons
+              .where((pr) => pr.id == matchedReason.parentId)
+              .firstOrNull;
+          if (p != null) return p.name;
+        }
+        return matchedReason.name;
+      }
+      return _normalizeCategoryName(raw);
+    }
+
+    return 'Uncategorized';
+  }
+
+  String _resolveCashTxCategoryName(CashTransaction ctx, FinanceProvider provider) {
+    if (ctx.reasonId != null) {
+      final r = provider.reasons.where((res) => res.id == ctx.reasonId).firstOrNull;
+      if (r != null) {
+        if (r.isSubcategory && r.parentId != null) {
+          final p = provider.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
+          if (p != null) return p.name;
+        }
+        return r.name;
+      }
+    }
+
+    final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
+    if (raw.isNotEmpty) {
+      final matchedReason = provider.reasons
+          .where((r) => r.name.toLowerCase() == raw.toLowerCase())
+          .firstOrNull;
+      if (matchedReason != null) {
+        if (matchedReason.isSubcategory && matchedReason.parentId != null) {
+          final p = provider.reasons
+              .where((pr) => pr.id == matchedReason.parentId)
+              .firstOrNull;
+          if (p != null) return p.name;
+        }
+        return matchedReason.name;
+      }
+      return _normalizeCategoryName(raw);
+    }
+
+    return 'Uncategorized';
+  }
+
   // ─── Filter Data for Selected Period & Month ────────────────────────────────
-    ({
+  ({
     List<CategoryArcItem> categories,
     double chartTotal,
     double totalIncome,
@@ -339,16 +417,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final Map<String, double> categoryIncome = {};
 
     if (_drilledCategory == null) {
-      // Level 1: Top-Level Categories ONLY
+      // Level 1: Top-Level Categories ONLY (Uncategorized always included)
       for (var tx in filteredBankTxs) {
-        final parentReason = provider.resolveTopLevelCategoryFor(tx);
-        final String categoryLabel;
-        if (parentReason != null) {
-          categoryLabel = parentReason.name;
-        } else {
-          final rawCat = tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'Other';
-          categoryLabel = _normalizeCategoryName(rawCat);
-        }
+        final categoryLabel = _resolveTxCategoryName(tx, provider);
 
         if (tx.type == 'expense') {
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
@@ -358,43 +429,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
+        final categoryLabel = _resolveCashTxCategoryName(tx, provider);
+
         if (tx.type == 'expense') {
-          final parentReason = provider.resolveTopLevelCategory(
-            reasonId: tx.reasonId,
-            reasonName: tx.reasonName ?? tx.description,
-          );
-          final String categoryLabel;
-          if (parentReason != null) {
-            categoryLabel = parentReason.name;
-          } else {
-            final rawCat = tx.reasonName ?? tx.description ?? 'Other';
-            categoryLabel = _normalizeCategoryName(rawCat);
-          }
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
         } else if (tx.type == 'addition') {
-          // Only add to category income if it has an explicit reason (not generic wallet add)
-          if (tx.reasonId != null || (tx.reasonName != null && tx.reasonName!.isNotEmpty)) {
-            final parentReason = provider.resolveTopLevelCategory(
-              reasonId: tx.reasonId,
-              reasonName: tx.reasonName,
-            );
-            final categoryLabel = parentReason?.name ?? _normalizeCategoryName(tx.reasonName!);
-            categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
-          }
+          categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
         }
       }
     } else {
       // Level 2: Subcategories inside _drilledCategory
       final categoryName = _drilledCategory!.name.toLowerCase();
       for (var tx in filteredBankTxs) {
-        final parentReason = provider.resolveTopLevelCategoryFor(tx);
-        final matchesParent = (parentReason != null && parentReason.id == _drilledCategory!.id) ||
-            (parentReason != null && parentReason.name.toLowerCase() == categoryName) ||
-            tx.categoryId == _drilledCategory!.id;
-
-        if (matchesParent) {
+        final parentCat = _resolveTxCategoryName(tx, provider);
+        if (parentCat.toLowerCase() == categoryName) {
           String subName = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'General').trim();
-          if (subName.toLowerCase() == categoryName) {
+          if (subName.isEmpty || subName.toLowerCase() == categoryName) {
             subName = 'General';
           }
           if (tx.type == 'expense') {
@@ -406,22 +456,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        final parentReason = provider.resolveTopLevelCategory(
-          reasonId: tx.reasonId,
-          reasonName: tx.reasonName ?? tx.description,
-        );
-        final matchesParent = (parentReason != null && parentReason.id == _drilledCategory!.id) ||
-            (parentReason != null && parentReason.name.toLowerCase() == categoryName) ||
-            tx.reasonId == _drilledCategory!.id;
-
-        if (matchesParent) {
+        final parentCat = _resolveCashTxCategoryName(tx, provider);
+        if (parentCat.toLowerCase() == categoryName) {
           String subName = (tx.reasonName ?? tx.description ?? 'General').trim();
-          if (subName.toLowerCase() == categoryName) {
+          if (subName.isEmpty || subName.toLowerCase() == categoryName) {
             subName = 'General';
           }
           if (tx.type == 'expense') {
             categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
-          } else if (tx.type == 'addition' && tx.reasonId != null) {
+          } else if (tx.type == 'addition') {
             categoryIncome[subName] = (categoryIncome[subName] ?? 0) + tx.amount;
           }
         }
@@ -435,7 +478,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     } else if (_selectedAnalysisType == 'Income') {
       categorySums.addAll(categoryIncome);
     } else {
-      // 'All' mode -> Net Spending mode: Gross Expense minus Matching Category Income
+      // 'All' mode -> Net mode: Gross Expense minus Matching Category Income (always include active categories)
       final allCategories = {...categoryExpenses.keys, ...categoryIncome.keys};
       for (final cat in allCategories) {
         final exp = categoryExpenses[cat] ?? 0.0;
@@ -443,6 +486,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final net = exp - inc;
         if (net > 0) {
           categorySums[cat] = net;
+        } else if (exp > 0) {
+          categorySums[cat] = exp;
+        } else if (inc > 0) {
+          categorySums[cat] = inc;
         }
       }
     }
@@ -578,7 +625,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   String _normalizeCategoryName(String raw) {
     final trimmed = raw.trim();
-    if (trimmed.isEmpty) return 'Uncategorized';
+    if (trimmed.isEmpty ||
+        trimmed.toLowerCase() == 'other' ||
+        trimmed.toLowerCase() == 'other cash' ||
+        trimmed.toLowerCase() == 'uncategorized' ||
+        trimmed.toLowerCase() == 'none') {
+      return 'Uncategorized';
+    }
 
     final r = trimmed.toLowerCase();
 
@@ -714,15 +767,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return '${trimmed.substring(0, 14)}..';
   }
 
-  String _formatShortCurrency(double amount) {
-    if (amount >= 1000000) {
-      return '${(amount / 1000000).toStringAsFixed(1)}M';
-    } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(1)}K';
-    }
-    return amount.toStringAsFixed(0);
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
@@ -821,15 +865,21 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       ),
                       const SizedBox(height: 28),
 
-                      // ── 5. Circular Segmented Morphing Ring Donut Chart ───
-                      Center(
-                        child: _buildCircularMorphingChart(data.categories, data.chartTotal),
+                      // ── 5. Standalone Segmented Distribution Bar ──────────────────────────
+                      _buildStandaloneSegmentedBar(
+                        data.categories,
+                        data.chartTotal,
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 14),
 
-                      // ── 6. Category Breakdown 2-Column Grid ────────────────
-                      _buildCategoryLegendGrid(data.categories, provider.isBalanceVisible),
-                      const SizedBox(height: 32),
+                      // ── 6. Category Breakdown & Go Deeper Card ────────────────────────────
+                      _buildCategoryBreakdownCard(
+                        data.categories,
+                        data.chartTotal,
+                        data.netPnl,
+                        provider.isBalanceVisible,
+                      ),
+                      const SizedBox(height: 28),
 
                       // ── 7. Redesigned Reason Analysis Section ──────────────
                       _buildReasonBreakdownSection(
@@ -1236,319 +1286,459 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 4. Circular Segmented Morphing Ring Donut Chart ───────────────────────
-  Widget _buildCircularMorphingChart(List<CategoryArcItem> targetCategories, double targetTotal) {
+  // ── 4. Standalone Segmented Morphing Distribution Bar ──────────────────────
+  Widget _buildStandaloneSegmentedBar(
+    List<CategoryArcItem> targetCategories,
+    double targetTotal,
+  ) {
     return AnimatedBuilder(
       animation: _morphAnim,
       builder: (context, child) {
         final progress = _morphAnim.value;
-        final currentTotal = _previousTotal + (targetTotal - _previousTotal) * progress;
 
-        final isCategorySelected =
-            _selectedArcIndex != null && _selectedArcIndex! < targetCategories.length;
-        final selectedItem = isCategorySelected ? targetCategories[_selectedArcIndex!] : null;
+        return Container(
+          width: double.infinity,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final barWidth = constraints.maxWidth;
 
-        final displayTotal = selectedItem != null ? selectedItem.amount : currentTotal;
-        final displayLabel = selectedItem != null
-            ? selectedItem.label
-            : (_drilledCategory != null
-                ? _drilledCategory!.name
-                : _getAnalysisTypeLabel(_selectedAnalysisType).toUpperCase());
+              return GestureDetector(
+                onTapUp: (details) {
+                  if (targetCategories.isEmpty) return;
+                  final tapX = details.localPosition.dx.clamp(0.0, barWidth);
 
-        return Column(
-          children: [
-            if (_drilledCategory != null)
-              GestureDetector(
-                onTap: () {
-                  _changeFilter(() {
-                    _drilledCategory = null;
-                    _selectedArcIndex = null;
+                  final totalAmt = targetCategories.fold<double>(
+                      0.0, (s, c) => s + c.amount);
+                  if (totalAmt <= 0) return;
+
+                  const double inset = 3.5;
+                  const double gap = 3.5;
+                  final double usableWidth = max(0.0, barWidth - (inset * 2));
+                  final int validCount =
+                      targetCategories.where((s) => s.amount > 0.0001).length;
+                  final double totalGaps =
+                      validCount > 1 ? (validCount - 1) * gap : 0.0;
+                  final double availableWidth =
+                      max(0.0, usableWidth - totalGaps);
+
+                  double cumX = inset;
+                  int clickedIndex = -1;
+                  for (int i = 0; i < targetCategories.length; i++) {
+                    if (targetCategories[i].amount <= 0.0001) continue;
+                    final segW = (targetCategories[i].amount / totalAmt) *
+                        availableWidth;
+                    if (tapX >= cumX && tapX <= cumX + segW + gap) {
+                      clickedIndex = i;
+                      break;
+                    }
+                    cumX += segW + gap;
+                  }
+
+                  setState(() {
+                    _selectedArcIndex = (clickedIndex == _selectedArcIndex)
+                        ? null
+                        : clickedIndex;
                   });
                 },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.positive.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.arrow_back_rounded, color: AppColors.positive, size: 14),
-                      const SizedBox(width: 6),
-                      Text(
-                        '← Top Categories (${_drilledCategory!.name})',
-                        style: const TextStyle(
-                          color: AppColors.positive,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                child: CustomPaint(
+                  size: Size(barWidth, 48),
+                  painter: MorphingSegmentedBarPainter(
+                    oldItems: _previousCategories,
+                    newItems: targetCategories,
+                    oldTotal: _previousTotal,
+                    newTotal: targetTotal,
+                    progress: progress,
+                    selectedIndex: _selectedArcIndex,
                   ),
                 ),
-              ),
-            GestureDetector(
-              onTapUp: (details) {
-                if (targetCategories.isEmpty) return;
-                final dx = details.localPosition.dx - 110;
-                final dy = details.localPosition.dy - 110;
-                final dist = sqrt(dx * dx + dy * dy);
-                if (dist < 40 || dist > 110) {
-                  // Center tap or outside ring tap -> reset selection
-                  setState(() => _selectedArcIndex = null);
-                  return;
-                }
-
-                var angle = atan2(dy, dx);
-                if (angle < -pi / 2) {
-                  angle += 2 * pi;
-                }
-
-                double startAngle = -pi / 2;
-                final totalAmt = targetCategories.fold(0.0, (s, c) => s + c.amount);
-                if (totalAmt <= 0) return;
-
-                int clickedIndex = -1;
-                for (int i = 0; i < targetCategories.length; i++) {
-                  final sweep = (targetCategories[i].amount / totalAmt) * (2 * pi);
-                  if (angle >= startAngle && angle <= startAngle + sweep) {
-                    clickedIndex = i;
-                    break;
-                  }
-                  startAngle += sweep;
-                }
-
-                setState(() {
-                  _selectedArcIndex = (clickedIndex == _selectedArcIndex) ? null : clickedIndex;
-                });
-              },
-              child: CustomPaint(
-                size: const Size(220, 220),
-                painter: MorphingRingPainter(
-                  oldItems: _previousCategories,
-                  newItems: targetCategories,
-                  oldTotal: _previousTotal,
-                  newTotal: targetTotal,
-                  progress: progress,
-                  selectedIndex: _selectedArcIndex,
-                ),
-                child: SizedBox(
-                  width: 220,
-                  height: 220,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          displayLabel,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: selectedItem != null ? selectedItem.color : Colors.white54,
-                            fontSize: selectedItem != null ? 12 : 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        CurrencyTextWidget(
-                          amount: displayTotal,
-                          customFormattedStr: _formatShortCurrency(displayTotal),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
-                          ),
-                          iconSize: 18,
-                        ),
-                        if (selectedItem != null && _drilledCategory == null) Builder(
-                          builder: (ctx) {
-                            final provider = Provider.of<FinanceProvider>(ctx, listen: false);
-                            final labelLower = selectedItem.label.toLowerCase();
-
-                            final isSpecial = ['loan', 'bounce', 'internal transfer', 'cash'].contains(labelLower) ||
-                                provider.specialReasons.any((r) => r.name.toLowerCase() == labelLower);
-
-                            if (isSpecial) return const SizedBox.shrink();
-
-                            final foundReason = provider.topLevelCategories.firstWhere(
-                              (r) => r.name.toLowerCase() == labelLower,
-                              orElse: () => AppReason(name: selectedItem.label),
-                            );
-
-                            final hasSubcategories = foundReason.id != null &&
-                                provider.subcategoriesFor(foundReason.id!).isNotEmpty;
-
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: GestureDetector(
-                                onTap: () {
-                                  if (!hasSubcategories) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('No subcategories found for this category'),
-                                        backgroundColor: AppColors.warning,
-                                        behavior: SnackBarBehavior.floating,
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                    return;
-                                  }
-                                  _changeFilter(() {
-                                    _drilledCategory = foundReason;
-                                    _selectedArcIndex = null;
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: hasSubcategories
-                                        ? AppColors.positive
-                                        : Colors.white.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Go Deeper',
-                                        style: TextStyle(
-                                          color: hasSubcategories ? Colors.white : Colors.white38,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        color: hasSubcategories ? Colors.white : Colors.white38,
-                                        size: 14,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         );
       },
     );
   }
 
-  // ── 5. Category Breakdown 2-Column Grid ───────────────────────────────────
-  Widget _buildCategoryLegendGrid(List<CategoryArcItem> categories, bool isBalanceVisible) {
-    if (categories.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Center(
-          child: Row(
+  // ── 5. Category Breakdown & Go Deeper Card ────────────────────────────────
+  Widget _buildCategoryBreakdownCard(
+    List<CategoryArcItem> targetCategories,
+    double targetTotal,
+    double netPnl,
+    bool isBalanceVisible,
+  ) {
+    return AnimatedBuilder(
+      animation: _morphAnim,
+      builder: (context, child) {
+        final progress = _morphAnim.value;
+        final currentTotal =
+            _previousTotal + (targetTotal - _previousTotal) * progress;
+
+        final isCategorySelected = _selectedArcIndex != null &&
+            _selectedArcIndex! < targetCategories.length;
+        final selectedItem =
+            isCategorySelected ? targetCategories[_selectedArcIndex!] : null;
+
+        final displayTotal =
+            selectedItem != null ? selectedItem.amount : currentTotal;
+        final displayLabel = selectedItem != null
+            ? selectedItem.label
+            : (_drilledCategory != null
+                ? _drilledCategory!.name
+                : '${_getAnalysisTypeLabel(_selectedAnalysisType).toUpperCase()} BREAKDOWN');
+
+        final double selectedPct = (targetTotal > 0 && selectedItem != null)
+            ? (selectedItem.amount / targetTotal) * 100
+            : 100.0;
+
+        final fmt = NumberFormat('#,##0.00');
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline_rounded, color: Colors.white38, size: 16),
-              SizedBox(width: 8),
-              Text(
-                'No transactions recorded for this period',
-                style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
+              // ── Top Header / Hero Row ──
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Left Side: Back button (if drilled) OR selected item / title
+                  if (_drilledCategory != null) ...[
+                    AppButton.secondary(
+                      text: '← Top Categories',
+                      height: 28,
+                      fontSize: 10.5,
+                      fullWidth: false,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      onPressed: () {
+                        _changeFilter(() {
+                          _drilledCategory = null;
+                          _selectedArcIndex = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (selectedItem != null) ...[
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: selectedItem.color,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                            ],
+                            Flexible(
+                              child: Text(
+                                displayLabel,
+                                style: TextStyle(
+                                  color: selectedItem != null
+                                      ? selectedItem.color
+                                      : AppColors.textSecondary,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.4,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (selectedItem != null) ...[
+                              const SizedBox(width: 5),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: selectedItem.color
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                child: Text(
+                                  '${selectedPct.toStringAsFixed(1)}%',
+                                  style: TextStyle(
+                                    color: selectedItem.color,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 1),
+                        isBalanceVisible
+                            ? CurrencyTextWidget(
+                                amount: displayTotal,
+                                customFormattedStr: fmt.format(displayTotal),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
+                                iconSize: 14,
+                              )
+                            : const Text(
+                                '****',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
+
+                  // Right Side: Go Deeper Button or Clear Selection
+                  if (selectedItem != null) ...[
+                    if (_drilledCategory == null)
+                      Builder(
+                        builder: (ctx) {
+                          final provider =
+                              Provider.of<FinanceProvider>(ctx, listen: false);
+                          final labelLower = selectedItem.label.toLowerCase();
+
+                          final isSpecial = ['loan', 'bounce', 'internal transfer', 'cash', 'uncategorized']
+                                  .contains(labelLower) ||
+                              provider.specialReasons.any(
+                                  (r) => r.name.toLowerCase() == labelLower);
+
+                          if (isSpecial) return const SizedBox.shrink();
+
+                          final foundReason =
+                              provider.topLevelCategories.firstWhere(
+                            (r) => r.name.toLowerCase() == labelLower,
+                            orElse: () => AppReason(name: selectedItem.label),
+                          );
+
+                          final hasSubcategories = foundReason.id != null &&
+                              provider
+                                  .subcategoriesFor(foundReason.id!)
+                                  .isNotEmpty;
+
+                          return AppButton.primary(
+                            text: 'Go Deeper',
+                            trailingIcon: Icons.chevron_right_rounded,
+                            height: 28,
+                            fontSize: 10.5,
+                            iconSize: 13,
+                            fullWidth: false,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                            onPressed: () {
+                              if (!hasSubcategories) {
+                                AppToast.warning(
+                                  ctx,
+                                  message: 'No subcategories found for this category',
+                                );
+                                return;
+                              }
+                              _changeFilter(() {
+                                _drilledCategory = foundReason;
+                                _selectedArcIndex = null;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedArcIndex = null),
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.buttonSecondary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: AppColors.textSecondary,
+                          size: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // ── 2-Column Breakdown List (Hugs Content Naturally) ──
+              if (targetCategories.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'No transactions recorded for this period',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (int i = 0; i < targetCategories.length; i += 2) ...[
+                      if (i > 0) const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildBreakdownTile(
+                              item: targetCategories[i],
+                              index: i,
+                              targetTotal: targetTotal,
+                              isBalanceVisible: isBalanceVisible,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (i + 1 < targetCategories.length)
+                            Expanded(
+                              child: _buildBreakdownTile(
+                                item: targetCategories[i + 1],
+                                index: i + 1,
+                                targetTotal: targetTotal,
+                                isBalanceVisible: isBalanceVisible,
+                              ),
+                            )
+                          else
+                            const Expanded(child: SizedBox.shrink()),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBreakdownTile({
+    required CategoryArcItem item,
+    required int index,
+    required double targetTotal,
+    required bool isBalanceVisible,
+  }) {
+    final isSelected = _selectedArcIndex == index;
+    final double pct =
+        targetTotal > 0 ? (item.amount / targetTotal) * 100 : 0.0;
+    final String pctStr = pct.toStringAsFixed(1);
+    final String numStr = NumberFormat('#,##0.00').format(item.amount);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedArcIndex =
+                (_selectedArcIndex == index) ? null : index;
+          });
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? item.color.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              // Vertical Line Indicator
+              Container(
+                width: 3.0,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: item.color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Name and Amount (NO currency symbol)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.label,
+                      style: TextStyle(
+                        color:
+                            isSelected ? Colors.white : AppColors.textSoft,
+                        fontSize: 11.5,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      isBalanceVisible ? numStr : '****',
+                      style: TextStyle(
+                        color: isSelected
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Percentage Pill Badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 6, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? item.color.withValues(alpha: 0.25)
+                      : AppColors.buttonSecondary,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  '$pctStr %',
+                  style: TextStyle(
+                    color:
+                        isSelected ? Colors.white : AppColors.textSoft,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-      );
-    }
-
-    final fmt = NumberFormat('#,##0');
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: categories.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 4.2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 6,
       ),
-      itemBuilder: (context, index) {
-        final item = categories[index];
-        final isSelected = _selectedArcIndex == index;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            setState(() {
-              _selectedArcIndex = (_selectedArcIndex == index) ? null : index;
-            });
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color: isSelected ? item.color.withValues(alpha: 0.18) : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                // Rounded color dot
-                Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: item.color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    item.label,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.white70,
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                isBalanceVisible
-                    ? CurrencyTextWidget(
-                        amount: item.amount,
-                        style: TextStyle(
-                          color: isSelected ? AppColors.positive : Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.2,
-                        ),
-                        customFormattedStr: fmt.format(item.amount),
-                      )
-                    : const Text(
-                        '****',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -2137,7 +2327,7 @@ class CategoryArcItem {
   });
 }
 
-class MorphingRingPainter extends CustomPainter {
+class MorphingSegmentedBarPainter extends CustomPainter {
   final List<CategoryArcItem> oldItems;
   final List<CategoryArcItem> newItems;
   final double oldTotal;
@@ -2145,7 +2335,7 @@ class MorphingRingPainter extends CustomPainter {
   final double progress; // 0.0 to 1.0 morphing animation value
   final int? selectedIndex;
 
-  MorphingRingPainter({
+  MorphingSegmentedBarPainter({
     required this.oldItems,
     required this.newItems,
     required this.oldTotal,
@@ -2156,22 +2346,17 @@ class MorphingRingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = min(size.width, size.height) / 2 - 20;
-
-    final Map<String, CategoryArcItem> oldMap = {for (var item in oldItems) item.label: item};
-    final Map<String, CategoryArcItem> newMap = {for (var item in newItems) item.label: item};
+    final Map<String, CategoryArcItem> oldMap = {
+      for (var item in oldItems) item.label: item
+    };
+    final Map<String, CategoryArcItem> newMap = {
+      for (var item in newItems) item.label: item
+    };
     final Set<String> allLabels = {...oldMap.keys, ...newMap.keys};
 
-    const normalStrokeWidth = 24.0;
-    final capAngularExtension = normalStrokeWidth / baseRadius;
-    const desiredGapAngle = 0.035;
-    final fullSegmentGap = capAngularExtension + desiredGapAngle;
-
+    final List<({String label, double amount, Color color, double weight})>
+        activeSegments = [];
     double totalInterpolatedAmount = 0.0;
-    double totalGapAngle = 0.0;
-
-    final List<({String label, double amount, Color color, double weight})> activeSegments = [];
 
     for (final label in allLabels) {
       final oldItem = oldMap[label];
@@ -2195,57 +2380,77 @@ class MorphingRingPainter extends CustomPainter {
           weight: weight,
         ));
         totalInterpolatedAmount += max(0.0, currentAmt);
-        totalGapAngle += weight * fullSegmentGap;
       }
     }
 
-    if (activeSegments.length <= 1) {
-      totalGapAngle = 0.0;
-    }
+    // Outer container background (rounded capsule track)
+    const double barCornerRadius = 14.0;
+    final trackRRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      const Radius.circular(barCornerRadius),
+    );
 
-    if (totalInterpolatedAmount <= 0) {
-      final basePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = normalStrokeWidth
-        ..color = Colors.white.withValues(alpha: 0.1);
-      canvas.drawCircle(center, baseRadius, basePaint);
+    final bgPaint = Paint()
+      ..color = AppColors.surface
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(trackRRect, bgPaint);
+
+    if (totalInterpolatedAmount <= 0 || activeSegments.isEmpty) {
       return;
     }
 
-    final availableAngle = max(0.0, (2 * pi) - totalGapAngle);
-    double startAngle = -pi / 2;
+    // Clip to track capsule
+    canvas.save();
+    canvas.clipRRect(trackRRect);
+
+    // Padding inside the track so segments sit cleanly inside
+    const double inset = 3.5;
+    const double gap = 3.5;
+    final double usableWidth = max(0.0, size.width - (inset * 2));
+    final double usableHeight = max(0.0, size.height - (inset * 2));
+
+    final int validCount =
+        activeSegments.where((s) => s.amount > 0.0001).length;
+    final double totalGaps = validCount > 1 ? (validCount - 1) * gap : 0.0;
+    final double availableWidth = max(0.0, usableWidth - totalGaps);
+
+    double currentX = inset;
 
     for (int i = 0; i < activeSegments.length; i++) {
       final item = activeSegments[i];
-      if (item.amount <= 0 && item.weight <= 0) continue;
+      if (item.amount <= 0.0001 && item.weight <= 0.0001) continue;
 
-      final targetSweep = (item.amount / totalInterpolatedAmount) * availableAngle;
-      final sweepAngle = max(0.0, targetSweep);
+      final double segWidth =
+          (item.amount / totalInterpolatedAmount) * availableWidth;
+      if (segWidth <= 0.001) continue;
 
       final isSelected = selectedIndex == i;
-      final currentStrokeWidth = isSelected ? 30.0 : normalStrokeWidth;
-      final currentRadius = isSelected ? baseRadius + 4.0 : baseRadius;
+      final isAnySelected = selectedIndex != null;
 
-      final arcPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = currentStrokeWidth
-        ..strokeCap = StrokeCap.round
-        ..color = item.color;
+      final segPaint = Paint()
+        ..color = isSelected
+            ? item.color
+            : (isAnySelected
+                ? item.color.withValues(alpha: 0.35)
+                : item.color)
+        ..style = PaintingStyle.fill;
 
-      final rect = Rect.fromCircle(center: center, radius: currentRadius);
+      final segRect = Rect.fromLTWH(currentX, inset, segWidth, usableHeight);
+      final segRRect = RRect.fromRectAndRadius(
+        segRect,
+        const Radius.circular(8),
+      );
 
-      if (sweepAngle > 0.0001) {
-        final drawStartAngle = startAngle + (activeSegments.length > 1 ? capAngularExtension / 2 : 0.0);
-        canvas.drawArc(rect, drawStartAngle, sweepAngle, false, arcPaint);
-      }
+      canvas.drawRRect(segRRect, segPaint);
 
-      final gapForThisSegment = activeSegments.length > 1 ? item.weight * fullSegmentGap : 0.0;
-      startAngle += sweepAngle + gapForThisSegment;
+      currentX += segWidth + gap;
     }
+
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant MorphingRingPainter oldDelegate) {
+  bool shouldRepaint(covariant MorphingSegmentedBarPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.oldItems != oldItems ||
         oldDelegate.newItems != newItems ||

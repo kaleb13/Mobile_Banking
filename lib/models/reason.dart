@@ -95,3 +95,25 @@ class AppReasonLink {
     );
   }
 }
+
+/// Scope options when creating an auto-link rule for a counterparty.
+enum LinkScope {
+  /// Applies the category to all matching past transactions AND auto-categorizes all future transactions.
+  allTransactions,
+
+  /// Keeps past transactions unchanged, but auto-categorizes all future incoming transactions.
+  futureTransactionsOnly,
+}
+
+/// Scope options when removing/unlinking a category for a counterparty.
+enum UnlinkScope {
+  /// Completely deletes the link rule and resets all matching past transactions to Uncategorized.
+  allTransactions,
+
+  /// Unlinks only the current individual transaction; keeps the persistent rule for other past and future transactions.
+  thisTransactionOnly,
+
+  /// Deletes the link rule so future transactions are not auto-categorized, but keeps existing past transactions categorized.
+  futureTransactionsOnly,
+}
+

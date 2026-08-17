@@ -8,6 +8,9 @@ import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_date_filter.dart';
+import '../../widgets/app_badges.dart';
+import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -24,9 +27,11 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
   String _typeFilter = 'All';
-  String _dateFilter = 'Any Time';
+  bool _isBookmarkedOnly = false;
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
   String _senderFilter = 'All Senders';
   String _bankFilter = 'All Banks';
+  String _sortBy = 'Date: Newest';
 
   @override
   void initState() {
@@ -42,6 +47,28 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  bool get _hasActiveFilters =>
+      _searchQuery.isNotEmpty ||
+      _isBookmarkedOnly ||
+      _typeFilter != 'All' ||
+      _sortBy != 'Date: Newest' ||
+      !_dateFilterValue.isDefault ||
+      _senderFilter != 'All Senders' ||
+      _bankFilter != 'All Banks';
+
+  void _clearAllFilters() {
+    setState(() {
+      _searchQuery = '';
+      _searchController.clear();
+      _isBookmarkedOnly = false;
+      _typeFilter = 'All';
+      _sortBy = 'Date: Newest';
+      _dateFilterValue = const AppDateFilterValue.anyTime();
+      _senderFilter = 'All Senders';
+      _bankFilter = 'All Banks';
+    });
   }
 
   @override
@@ -64,78 +91,36 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       _bankFilter = 'All Banks';
     }
 
-    final filteredTransactions = allTransactions.where((tx) {
-      if (_typeFilter == 'Incoming' && tx.type != 'income') return false;
-      if (_typeFilter == 'Outgoing' && tx.type != 'expense') return false;
-
-      if (_senderFilter != 'All Senders' && tx.sender != _senderFilter) {
-        return false;
-      }
-
-      if (_bankFilter != 'All Banks' && tx.name != _bankFilter) {
-        return false;
-      }
-
-      if (_dateFilter != 'Any Time') {
-        final now = DateTime.now();
-        final txDate = tx.date;
-        if (_dateFilter == 'Today') {
-          if (txDate.year != now.year ||
-              txDate.month != now.month ||
-              txDate.day != now.day) {
-            return false;
-          }
-        } else if (_dateFilter == 'This Week') {
-          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-          final startOfToday =
-              DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-          if (txDate.isBefore(startOfToday)) return false;
-        } else if (_dateFilter == 'This Month') {
-          if (txDate.year != now.year || txDate.month != now.month) {
-            return false;
-          }
-        }
-      }
-
-      if (_searchQuery.isNotEmpty) {
-        final searchLower = _searchQuery.toLowerCase();
-        final nameStr = tx.name.toLowerCase();
-        final senderStr = tx.sender.toLowerCase();
-        final reasonStr = tx.reason?.toLowerCase() ?? '';
-        final customReasonStr = tx.customReasonText?.toLowerCase() ?? '';
-        final amountStr = tx.amount.toString();
-        final rawStr = tx.rawMessage.toLowerCase();
-
-        final matchesSearch = nameStr.contains(searchLower) ||
-            senderStr.contains(searchLower) ||
-            reasonStr.contains(searchLower) ||
-            customReasonStr.contains(searchLower) ||
-            amountStr.contains(searchLower) ||
-            rawStr.contains(searchLower);
-
-        return matchesSearch;
-      }
-      return true;
-    }).toList();
+    final filteredTransactions = const FilterTransactionsUseCase().execute(
+      transactions: allTransactions,
+      params: FilterTransactionsParams(
+        bankFilter: _bankFilter,
+        senderFilter: _senderFilter,
+        typeFilter: _typeFilter,
+        dateFilter: _dateFilterValue,
+        searchQuery: _searchQuery,
+        sortBy: _sortBy,
+        onlyBookmarked: _isBookmarkedOnly,
+      ),
+    );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: Colors.white,
         body: SafeArea(
           child: Column(
             children: [
               _buildSearchHeader(context),
               _buildFilterRow(allSenders, allBanks),
+              const SizedBox(height: 6),
               Expanded(
-                child: _searchQuery.isEmpty &&
-                        _typeFilter == 'All' &&
-                        _dateFilter == 'Any Time' &&
-                        _senderFilter == 'All Senders' &&
-                        _bankFilter == 'All Banks'
+                child: !_hasActiveFilters && filteredTransactions.isEmpty
                     ? _buildInitialState()
                     : _buildSearchResults(filteredTransactions, provider),
               ),
@@ -149,40 +134,76 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   Widget _buildSearchHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: AppSearchBar(
-        mode: AppSearchBarMode.bar,
-        controller: _searchController,
-        focusNode: _searchFocusNode,
-        autofocus: true,
-        hint: 'Search by sender, bank, or reason...',
-        onChanged: (val) {
-          setState(() {
-            _searchQuery = val;
-          });
-        },
-        onClear: () {
-          setState(() {
-            _searchQuery = '';
-          });
-        },
-        trailing: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          behavior: HitTestBehavior.opaque,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4.0),
-            child: Icon(
-              Icons.close_rounded,
-              color: Colors.white,
-              size: 20,
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: AppColors.lightGreyBackground,
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.darkCharcoal,
+                  size: 16,
+                ),
+              ),
             ),
           ),
-        ),
-        backgroundColor: AppColors.surfaceElevated,
-        textColor: Colors.white,
-        hintColor: AppColors.textSoft,
-        iconColor: AppColors.textSoft,
-        height: 46,
-        borderRadius: 23,
+          const SizedBox(width: 8),
+          Expanded(
+            child: AppSearchBar(
+              mode: AppSearchBarMode.bar,
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              autofocus: true,
+              hint: 'Search by sender, bank, or reason...',
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                });
+              },
+              onClear: () {
+                setState(() {
+                  _searchQuery = '';
+                });
+              },
+              backgroundColor: AppColors.lightGreyBackground,
+              textColor: AppColors.darkCharcoal,
+              hintColor: AppColors.greyText,
+              iconColor: AppColors.darkGreyText,
+              height: 44,
+              borderRadius: 22,
+            ),
+          ),
+          if (_hasActiveFilters) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _clearAllFilters,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.lightGreyBackground,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Text(
+                  'Reset',
+                  style: TextStyle(
+                    color: AppColors.negative,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -195,23 +216,93 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         physics: const BouncingScrollPhysics(),
         child: Row(
           children: [
-            _buildFilterDropdown(
+            // ── Bookmark Toggle Filter Pill ──
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _isBookmarkedOnly = !_isBookmarkedOnly;
+                });
+              },
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: _isBookmarkedOnly
+                      ? AppColors.gold.withValues(alpha: 0.16)
+                      : AppColors.lightGreyBackground,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _isBookmarkedOnly
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      size: 15,
+                      color: _isBookmarkedOnly
+                          ? AppColors.gold
+                          : AppColors.darkGreyText,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Bookmarked',
+                      style: TextStyle(
+                        color: _isBookmarkedOnly
+                            ? AppColors.gold
+                            : AppColors.darkCharcoal,
+                        fontSize: 12,
+                        fontWeight: _isBookmarkedOnly
+                            ? FontWeight.bold
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    if (_isBookmarkedOnly) ...[
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 13,
+                        color: AppColors.gold,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildWhiteFilterDropdown(
+              value: _sortBy,
+              items: const [
+                'Date: Newest',
+                'Date: Oldest',
+                'Amount: High-Low',
+                'Amount: Low-High',
+                'Name: A-Z',
+              ],
+              maxWidth: 130,
+              onChanged: (val) {
+                if (val != null) setState(() => _sortBy = val);
+              },
+            ),
+            const SizedBox(width: 8),
+            _buildWhiteFilterDropdown(
               value: _typeFilter,
-              items: const ['All', 'Incoming', 'Outgoing'],
+              items: const ['All', 'Bookmarked', 'Incoming', 'Outgoing'],
               onChanged: (val) {
                 if (val != null) setState(() => _typeFilter = val);
               },
             ),
             const SizedBox(width: 8),
-            _buildFilterDropdown(
-              value: _dateFilter,
-              items: const ['Any Time', 'Today', 'This Week', 'This Month'],
+            AppDateFilter.light(
+              value: _dateFilterValue,
               onChanged: (val) {
-                if (val != null) setState(() => _dateFilter = val);
+                setState(() => _dateFilterValue = val);
               },
             ),
             const SizedBox(width: 8),
-            _buildFilterDropdown(
+            _buildWhiteFilterDropdown(
               value: _bankFilter,
               items: banks,
               maxWidth: 90,
@@ -220,7 +311,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
               },
             ),
             const SizedBox(width: 8),
-            _buildFilterDropdown(
+            _buildWhiteFilterDropdown(
               value: _senderFilter,
               items: senders,
               maxWidth: 100,
@@ -234,7 +325,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     );
   }
 
-  Widget _buildFilterDropdown({
+  Widget _buildWhiteFilterDropdown({
     required String value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
@@ -244,9 +335,8 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       value: value,
       items: items,
       onChanged: onChanged,
-      variant: AppDropdownVariant.dark,
+      variant: AppDropdownVariant.light,
       maxWidth: maxWidth,
-      icon: Icons.unfold_more_rounded,
     );
   }
 
@@ -255,13 +345,19 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_rounded,
-              size: 64, color: Colors.white.withValues(alpha: 0.05)),
-          const SizedBox(height: 16),
-          Text(
+          Icon(
+            Icons.search_rounded,
+            size: 56,
+            color: AppColors.mediumGreyText.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 12),
+          const Text(
             'Search by name, amount, or reason',
             style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.2), fontSize: 14),
+              color: AppColors.mediumGreyText,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ],
       ),
@@ -275,128 +371,214 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_rounded,
-                size: 64, color: Colors.white.withValues(alpha: 0.05)),
-            const SizedBox(height: 16),
+            Icon(
+              Icons.search_off_rounded,
+              size: 56,
+              color: AppColors.mediumGreyText.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 12),
             const Text(
               'No transactions found',
-              style: TextStyle(color: AppColors.textSoft, fontSize: 14),
+              style: TextStyle(
+                color: AppColors.greyText,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    return ListView.separated(
+      padding: const EdgeInsets.only(top: 4, bottom: 24),
+      physics: const BouncingScrollPhysics(),
       itemCount: transactions.length,
+      separatorBuilder: (context, index) => const Divider(
+        height: 1,
+        thickness: 0.5,
+        indent: 72,
+        endIndent: 20,
+        color: AppColors.lightGreySurface,
+      ),
       itemBuilder: (context, index) {
         final tx = transactions[index];
-        final bool isIncome = tx.type == 'income';
-        final String amountStr = NumberFormat('#,##0.0').format(tx.amount);
-
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => TransactionDetailScreen(transaction: tx)),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                _buildAvatar(tx),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isIncome ? 'Deposit' : 'Transferred',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${isIncome ? 'From' : 'For'} ${tx.sender}',
-                        style: const TextStyle(
-                            color: AppColors.textSoft, fontSize: 11),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      provider.isBalanceVisible
-                          ? '${isIncome ? '+' : '-'}$amountStr'
-                          : '****',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      DateFormat('MMM d, HH:mm').format(tx.date),
-                      style: const TextStyle(
-                          color: AppColors.textSoft, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
+        final bool isLatest = index == 0;
+        return _buildWhiteTransactionItem(context, tx, isLatest);
       },
     );
   }
 
-  Widget _buildAvatar(AppTransaction tx) {
-    final nameUp = tx.name.toUpperCase();
-    Widget? img;
-    if (nameUp == 'CBE') {
+  Widget _buildWhiteTransactionItem(
+      BuildContext context, AppTransaction tx, bool isLatest) {
+    final bool isIncome = tx.type == 'income';
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final String amountStr = provider.isBalanceVisible
+        ? NumberFormat('#,##0.1').format(tx.amount)
+        : '****';
+    final String label = isIncome ? 'Deposit' : 'Transferred';
+    final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TransactionDetailScreen(transaction: tx),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        color: Colors.white,
+        child: Row(
+          children: [
+            _buildBankAvatarSmallWhite(tx.name),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                            color: AppColors.darkCharcoal,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      if (tx.isBookmarked)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: BookmarkBadge(),
+                        ),
+                      if (tx.isAutoDetected && isLatest)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: NewBadge(),
+                        ),
+                      if (tx.reasonId == null &&
+                          (tx.customReasonText == null ||
+                              tx.customReasonText!.isEmpty) &&
+                          (tx.reason == null || tx.reason!.isEmpty))
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: ReasonBadge(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subLabel,
+                    style: const TextStyle(
+                      color: AppColors.mediumGreyText,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${isIncome ? '+' : '-'}$amountStr',
+                  style: const TextStyle(
+                    color: AppColors.darkCharcoal,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('MMM d, HH:mm').format(tx.date),
+                  style: const TextStyle(
+                    color: AppColors.mediumGreyText,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBankAvatarSmallWhite(String bankName) {
+    final nameUp = bankName.toUpperCase();
+    Widget img;
+    Color bgColor = AppColors.lightGreyBackground;
+
+    if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
       img = Image.asset('assets/images/CBE logo 1.webp', width: 22, height: 22);
+      bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
-      img =
-          Image.asset('assets/images/Telebirr Logo.png', width: 22, height: 22);
+      img = Image.asset(
+        'assets/images/Telebirr Logo.png',
+        width: 22,
+        height: 22,
+        color: AppColors.telebirrGreen,
+        colorBlendMode: BlendMode.srcIn,
+      );
+      bgColor = AppColors.telebirrGreenSoft;
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      img =
-          Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
+      img = Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
+      bgColor = AppColors.cbeBirrPink.withValues(alpha: 0.10);
     } else if (nameUp.contains('AHADU')) {
-      img =
-          SvgPicture.asset('assets/images/Ahadu_Logo.svg', width: 22, height: 22, fit: BoxFit.contain);
-    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
-      img =
-          SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 22, height: 22, fit: BoxFit.contain);
+      img = SvgPicture.asset('assets/images/Ahadu_Logo.svg',
+          width: 22, height: 22, fit: BoxFit.contain);
+      bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.10);
+    } else if (nameUp.contains('ABYSSINIA') ||
+        nameUp == 'BOA' ||
+        nameUp.contains('BOA')) {
+      img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg',
+          width: 22, height: 22, fit: BoxFit.contain);
+      bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
+    } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
+      img = SvgPicture.asset('assets/images/Dashen_Bank_Logo.svg',
+          width: 22, height: 22, fit: BoxFit.contain,
+          colorFilter: const ColorFilter.mode(AppColors.cardDashenDark, BlendMode.srcIn));
+      bgColor = AppColors.cardDashenLight.withValues(alpha: 0.15);
+    } else if (nameUp.contains('CASH')) {
+      img = SvgPicture.asset('assets/images/Wallet Icon.svg',
+          width: 20, height: 20, fit: BoxFit.contain,
+          colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn));
+      bgColor = AppColors.positive.withValues(alpha: 0.12);
+    } else {
+      img = Text(
+        bankName.substring(0, min(1, bankName.length)).toUpperCase(),
+        style: const TextStyle(
+            color: AppColors.darkCharcoal,
+            fontSize: 11,
+            fontWeight: FontWeight.bold),
+      );
     }
 
     return Container(
-      width: 40,
-      height: 40,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: bgColor,
         shape: BoxShape.circle,
       ),
-      child: Center(
-        child: img ??
-            Text(
-              tx.name.substring(0, min(1, tx.name.length)).toUpperCase(),
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
-      ),
+      child: Center(child: img),
     );
   }
 }

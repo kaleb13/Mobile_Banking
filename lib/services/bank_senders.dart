@@ -7,7 +7,7 @@ import 'telebirr_parser.dart';
 /// person types or forwards a real bank message (e.g. a CBE/Telebirr receipt)
 /// from their own phone. Such a message arrives with the sender set to a normal
 /// phone number, while genuine bank messages arrive from a registered
-/// alphanumeric sender ID ("CBE", "Telebirr", "CBEBirr") or Telebirr's "127"
+/// alphanumeric sender ID ("CBE", "Telebirr", "CBEBirr", "DashenBank") or Telebirr's "127"
 /// short-code — IDs an ordinary user cannot send from.
 class BankSenders {
   BankSenders._();
@@ -17,7 +17,7 @@ class BankSenders {
   /// 3 digits, so it never matches this and stays valid below.
   static final RegExp _phoneNumber = RegExp(r'^\+?[0-9]{7,15}$');
 
-  /// Returns the canonical bank name ('Telebirr' | 'CBE' | 'CBE Birr') when
+  /// Returns the canonical bank name ('Telebirr' | 'CBE' | 'CBE Birr' | 'Ahadu Bank' | 'BOA' | 'Dashen Bank') when
   /// [sender] is a trusted bank sender ID, otherwise null.
   static String? match(String? sender) {
     if (sender == null) return null;
@@ -37,6 +37,7 @@ class BankSenders {
     if (up.contains('CBE')) return 'CBE';
     if (up.contains('AHADU')) return 'Ahadu Bank';
     if (up == 'BOA' || up.contains('ABYSSINIA') || up.startsWith('BOA')) return 'BOA';
+    if (up.contains('DASHEN') || up.contains('AMOLE')) return 'Dashen Bank';
     return null;
   }
 
@@ -115,7 +116,18 @@ class BankSenders {
       return true;
     }
 
+    // ── Amharic PIN / Password / Security / OTP patterns ─────────────────────
+    if (lower.contains('የይለፍ ቃል') ||
+        lower.contains('የይለፍ ቃልዎ') ||
+        lower.contains('ሚስጥር ቁጥር') ||
+        lower.contains('ሚስጥራዊ ቁጥር') ||
+        lower.contains('የይለፍ ቁጥር') ||
+        lower.contains('የማረጋገጫ ኮድ') ||
+        lower.contains('የማረጋገጫ ቁጥር') ||
+        (lower.contains('ኮድ') && (lower.contains('አይስጡ') || lower.contains('አያጋሩ')))) {
+      return true;
+    }
+
     return false;
   }
-
 }

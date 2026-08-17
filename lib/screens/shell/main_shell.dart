@@ -10,6 +10,7 @@ import '../loans/loan_management_screen.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bank_card_widget.dart';
+import '../../widgets/app_toast.dart';
 import 'custom_bottom_nav_bar.dart';
 
 class MainShell extends StatefulWidget {
@@ -106,20 +107,7 @@ class _MainShellState extends State<MainShell> {
     if (isFirstPress) {
       _lastBackPressTime = now;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Press back again to exit',
-              style: TextStyle(color: Colors.white, fontSize: 13),
-            ),
-            backgroundColor: AppColors.overlay,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        AppToast.info(context, message: 'Press back again to exit');
       }
       return false;
     }

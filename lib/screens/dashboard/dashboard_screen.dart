@@ -10,7 +10,6 @@ import 'dart:math';
 import 'transaction_detail_screen.dart';
 import 'notifications_screen.dart';
 import '../../models/transaction.dart';
-import '../../models/cash_transaction.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/currency_symbol_widget.dart';
@@ -20,8 +19,12 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_date_filter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../domain/usecases/analytics/get_balance_history_usecase.dart';
+import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
+import '../../widgets/animated_balance_text.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -35,9 +38,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = '';
   String _typeFilter = 'All';
-  String _dateFilter = 'Any Time';
+  bool _isBookmarkedOnly = false;
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
   String _senderFilter = 'All Senders';
   String _bankFilter = 'All Banks';
+  String _sortBy = 'Date: Newest';
   bool _isSearchActive = false;
   bool _isFilterExpanded = false;
   final DraggableScrollableController _sheetController =
@@ -409,13 +414,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBalanceCard(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    final formatter = NumberFormat('#,##0');
-    final String fullyFormatted = provider.isBalanceVisible
-        ? formatter.format(provider.totalBalance.floor())
-        : '****,***';
-    final String decimals = provider.isBalanceVisible
-        ? (provider.totalBalance % 1).toStringAsFixed(2).split('.')[1]
-        : '**';
 
     final netVal = _isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall;
     final pctVal = _isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall;
@@ -436,7 +434,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   // Label + Visibility icon
                   GestureDetector(
-                    onTap: provider.toggleBalanceVisibility,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      provider.toggleBalanceVisibility();
+                    },
                     behavior: HitTestBehavior.opaque,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -445,26 +446,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           'Total balance',
                           style: TextStyle(
                             color: AppColors.textSecondary,
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w400,
                           ),
                         ),
                         const SizedBox(width: 6),
                         Icon(
                           provider.isBalanceVisible
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          color: AppColors.textSecondary,
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                           size: 15,
+                          color: AppColors.textSecondary,
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 6),
 
-                  // Large Balance Display (Auto-scales down for high amounts e.g. 1M+ so it never truncates)
+                  // Large Animated Balance Display (Auto-scales down for high amounts e.g. 1M+ so it never truncates)
                   GestureDetector(
-                    onTap: provider.toggleBalanceVisibility,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      provider.toggleBalanceVisibility();
+                    },
                     behavior: HitTestBehavior.opaque,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -483,26 +487,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            fullyFormatted,
-                            style: const TextStyle(
+                          AnimatedBalanceText(
+                            value: provider.totalBalance,
+                            isMasked: !provider.isBalanceVisible,
+                            integerStyle: const TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 38,
                               fontWeight: FontWeight.w800,
                               letterSpacing: -1.0,
                               height: 1.05,
                             ),
-                            maxLines: 1,
-                          ),
-                          Text(
-                            '.$decimals',
-                            style: const TextStyle(
+                            decimalStyle: const TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 24,
                               fontWeight: FontWeight.w600,
                               height: 1.05,
                             ),
-                            maxLines: 1,
                           ),
                         ],
                       ),
@@ -547,6 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () {
+                            HapticFeedback.selectionClick();
                             setState(() {
                               _isOverallChartVisible = !_isOverallChartVisible;
                             });
@@ -692,154 +693,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildOverallChartContent(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
-    List<FlSpot> spots = [];
-    int daysLimit = 30;
-    if (_chartFilter == '1D') {
-      daysLimit = 2; // need at least 2 points to draw a line
-    } else if (_chartFilter == '7D') {
-      daysLimit = 7;
-    } else if (_chartFilter == '30D') {
-      daysLimit = 30;
-    } else if (_chartFilter == '180D') {
-      daysLimit = 180;
-    } else if (_chartFilter == '360D') {
-      daysLimit = 360;
-    }
-
-    DateTime now = DateTime.now();
-    // Normalize "now" to midnight today to prevent data jitter based on the current time.
+    final DateTime now = DateTime.now();
     final DateTime todayMidnight = DateTime(now.year, now.month, now.day);
 
-    // Clip daysLimit to actual data range so the chart fills its width.
-    if (provider.transactions.isNotEmpty ||
-        provider.cashTransactions.isNotEmpty) {
-      DateTime? firstTx;
-      if (provider.transactions.isNotEmpty) {
-        firstTx = provider.transactions
-            .map((t) => t.date)
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-      }
-      if (provider.cashTransactions.isNotEmpty) {
-        final firstCash = provider.cashTransactions
-            .map((t) => t.date)
-            .reduce((a, b) => a.isBefore(b) ? a : b);
-        if (firstTx == null || firstCash.isBefore(firstTx)) {
-          firstTx = firstCash;
-        }
-      }
-      if (firstTx != null) {
-        // Difference from midnight of the first transaction day
-        final firstDateMidnight =
-            DateTime(firstTx.year, firstTx.month, firstTx.day);
-        final daysSinceFirst =
-            todayMidnight.difference(firstDateMidnight).inDays + 1;
-        daysLimit = daysSinceFirst.clamp(2, daysLimit);
-      }
-    }
-
-    // Re-calculate chartStart based on the potentially clipped daysLimit
-    final DateTime actualChartStart =
-        todayMidnight.subtract(Duration(days: daysLimit - 1));
-
-    // Sort all transactions oldest-first
-    final sortedTxs = List.from(provider.transactions)
-      ..sort((a, b) => a.date.compareTo(b.date));
-    final sortedCashTxs = List.from(provider.cashTransactions)
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    // Walk day by day.
-    final Map<String, double> lastKnownBalance = {};
-    double currentCashBalance = 0;
-
-    // A helper to detect if a bank transaction is a cash transfer
-    bool isCashTransfer(AppTransaction tx) {
-      return tx.reason?.toLowerCase() == 'cash' ||
-          tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash';
-    }
-
-    // Pre-seed with balances from transactions strictly BEFORE the chart window
-    for (final tx in sortedTxs) {
-      if (tx.date.isBefore(actualChartStart)) {
-        if (tx.totalBalance > 0) {
-          lastKnownBalance[tx.name] = tx.totalBalance;
-        }
-        if (isCashTransfer(tx)) {
-          if (tx.type == 'expense') {
-            currentCashBalance += tx.amount.abs();
-          } else {
-            currentCashBalance -= tx.amount.abs();
-          }
-        }
-      }
-    }
-    for (final ctx in sortedCashTxs) {
-      if (ctx.date.isBefore(actualChartStart)) {
-        if (ctx.type == 'addition') {
-          currentCashBalance += ctx.amount;
-        } else {
-          currentCashBalance -= ctx.amount;
-        }
-      }
-    }
-
-    // Build lists of transactions grouped by their day key for fast lookup
-    final Map<String, List<AppTransaction>> txsByDay = {};
-    for (final tx in sortedTxs) {
-      if (!tx.date.isBefore(actualChartStart)) {
-        final key = '${tx.date.year}-${tx.date.month}-${tx.date.day}';
-        txsByDay.putIfAbsent(key, () => []);
-        txsByDay[key]!.add(tx);
-      }
-    }
-    final Map<String, List<CashTransaction>> cashTxsByDay = {};
-    for (final ctx in sortedCashTxs) {
-      if (!ctx.date.isBefore(actualChartStart)) {
-        final key = '${ctx.date.year}-${ctx.date.month}-${ctx.date.day}';
-        cashTxsByDay.putIfAbsent(key, () => []);
-        cashTxsByDay[key]!.add(ctx);
-      }
-    }
-
-    for (int i = 0; i < daysLimit; i++) {
-      final d = actualChartStart.add(Duration(days: i));
-      final key = '${d.year}-${d.month}-${d.day}';
-
-      // Update bank balances with any transactions on this day
-      final dayTxs = txsByDay[key];
-      if (dayTxs != null) {
-        for (final tx in dayTxs) {
-          if (tx.totalBalance > 0) {
-            lastKnownBalance[tx.name] = tx.totalBalance;
-          }
-          if (isCashTransfer(tx)) {
-            if (tx.type == 'expense') {
-              currentCashBalance += tx.amount.abs();
-            } else {
-              currentCashBalance -= tx.amount.abs();
-            }
-          }
-        }
-      }
-
-      // Update cash balance with manual transactions on this day
-      final dayCashTxs = cashTxsByDay[key];
-      if (dayCashTxs != null) {
-        for (final ctx in dayCashTxs) {
-          if (ctx.type == 'addition') {
-            currentCashBalance += ctx.amount;
-          } else {
-            currentCashBalance -= ctx.amount;
-          }
-        }
-      }
-
-      // Sum all banks' latest known balances + cash balance
-      final bankTotal = lastKnownBalance.values.fold(0.0, (sum, v) => sum + v);
-      final totalBal =
-          bankTotal + (currentCashBalance > 0 ? currentCashBalance : 0);
-      spots.add(FlSpot(i.toDouble(), totalBal));
-    }
+    // Use domain use case for single source-of-truth balance history simulation
+    final historyResult = const GetBalanceHistoryUseCase().execute(
+      transactions: provider.transactions,
+      cashTransactions: provider.cashTransactions,
+      filter: _chartFilter,
+      referenceDate: todayMidnight,
+    );
+    final List<FlSpot> spots = List.from(historyResult.spots);
 
     // ── Gradient configuration ──────────────────────────────────────────────
     // LINE  : always left→right so stops map to horizontal chart positions.
@@ -898,7 +762,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _touchedX = null;
                       return;
                     }
-                    _touchedX = touchResponse.lineBarSpots!.first.x;
+                    final newX = touchResponse.lineBarSpots!.first.x;
+                    if (_touchedX != newX) {
+                      HapticFeedback.selectionClick();
+                      _touchedX = newX;
+                    }
                   });
                 },
                 getTouchedSpotIndicator:
@@ -987,7 +855,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
               final isSelected = _chartFilter == f;
               return GestureDetector(
-                onTap: () => setState(() => _chartFilter = f),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _chartFilter = f);
+                },
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   padding:
@@ -1057,9 +928,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       {
         'title': 'THE MOST AFFECTED ACCOUNT',
         'main': mostAffected?.senderName ?? 'N/A',
-        'bgColor': AppColors.cardDashenBg,
-        'darkIconColor': AppColors.cardDashenDarkIcon,
-        'titleColor': AppColors.cardDashenTitle,
+        'bgColor': AppColors.cardBoaBg,
+        'darkIconColor': AppColors.cardBoaDarkIcon,
+        'titleColor': AppColors.textPrimary,
         'iconData': Icons.account_balance,
         'isBankIcon': true,
         'bankName': mostAffected?.senderName,
@@ -1231,60 +1102,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _bankFilter = 'All Banks';
     }
 
-    final transactionsList = allTransactions.where((tx) {
-      if (_typeFilter == 'Incoming' && tx.type != 'income') return false;
-      if (_typeFilter == 'Outgoing' && tx.type != 'expense') return false;
-
-      if (_senderFilter != 'All Senders' && tx.sender != _senderFilter) {
-        return false;
-      }
-
-      if (_bankFilter != 'All Banks' && tx.name != _bankFilter) {
-        return false;
-      }
-
-      if (_dateFilter != 'Any Time') {
-        final now = DateTime.now();
-        final txDate = tx.date;
-        if (_dateFilter == 'Today') {
-          if (txDate.year != now.year ||
-              txDate.month != now.month ||
-              txDate.day != now.day) {
-            return false;
-          }
-        } else if (_dateFilter == 'This Week') {
-          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-          final startOfToday =
-              DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-          if (txDate.isBefore(startOfToday)) return false;
-        } else if (_dateFilter == 'This Month') {
-          if (txDate.year != now.year || txDate.month != now.month) {
-            return false;
-          }
-        }
-      }
-
-      if (_searchQuery.isNotEmpty) {
-        final searchLower = _searchQuery.toLowerCase();
-        final nameStr = tx.name.toLowerCase();
-        final senderStr = tx.sender.toLowerCase();
-        final reasonStr = tx.reason?.toLowerCase() ?? '';
-        final customReasonStr = tx.customReasonText?.toLowerCase() ?? '';
-        final amountStr = tx.amount.toString();
-        final rawStr = tx.rawMessage.toLowerCase();
-
-        final matchesSearch = nameStr.contains(searchLower) ||
-            senderStr.contains(searchLower) ||
-            reasonStr.contains(searchLower) ||
-            customReasonStr.contains(searchLower) ||
-            amountStr.contains(searchLower) ||
-            rawStr.contains(searchLower);
-
-        return matchesSearch;
-      }
-
-      return true;
-    }).toList();
+    final transactionsList = const FilterTransactionsUseCase().execute(
+      transactions: allTransactions,
+      params: FilterTransactionsParams(
+        bankFilter: _bankFilter,
+        senderFilter: _senderFilter,
+        typeFilter: _typeFilter,
+        dateFilter: _dateFilterValue,
+        searchQuery: _searchQuery,
+        sortBy: _sortBy,
+        onlyBookmarked: _isBookmarkedOnly,
+      ),
+    );
 
     final mediaQuery = MediaQuery.of(context);
     final screenHeight = mediaQuery.size.height;
@@ -1442,24 +1271,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     physics: const BouncingScrollPhysics(),
                     child: Row(
                       children: [
+                        // ── Bookmark Toggle Filter Pill ──
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isBookmarkedOnly = !_isBookmarkedOnly;
+                            });
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            height: 36,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: _isBookmarkedOnly
+                                  ? AppColors.gold.withValues(alpha: 0.16)
+                                  : AppColors.lightGreyBackground,
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _isBookmarkedOnly
+                                      ? Icons.bookmark_rounded
+                                      : Icons.bookmark_border_rounded,
+                                  size: 15,
+                                  color: _isBookmarkedOnly
+                                      ? AppColors.gold
+                                      : AppColors.darkGreyText,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Bookmarked',
+                                  style: TextStyle(
+                                    color: _isBookmarkedOnly
+                                        ? AppColors.gold
+                                        : AppColors.darkCharcoal,
+                                    fontSize: 12,
+                                    fontWeight: _isBookmarkedOnly
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                                if (_isBookmarkedOnly) ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 13,
+                                    color: AppColors.gold,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildWhiteFilterDropdown(
+                          value: _sortBy,
+                          items: const [
+                            'Date: Newest',
+                            'Date: Oldest',
+                            'Amount: High-Low',
+                            'Amount: Low-High',
+                            'Name: A-Z',
+                          ],
+                          maxWidth: 130,
+                          onChanged: (val) {
+                            if (val != null) setState(() => _sortBy = val);
+                          },
+                        ),
+                        const SizedBox(width: 8),
                         _buildWhiteFilterDropdown(
                           value: _typeFilter,
-                          items: const ['All', 'Incoming', 'Outgoing'],
+                          items: const ['All', 'Bookmarked', 'Incoming', 'Outgoing'],
                           onChanged: (val) {
                             if (val != null) setState(() => _typeFilter = val);
                           },
                         ),
                         const SizedBox(width: 8),
-                        _buildWhiteFilterDropdown(
-                          value: _dateFilter,
-                          items: const [
-                            'Any Time',
-                            'Today',
-                            'This Week',
-                            'This Month'
-                          ],
+                        AppDateFilter.light(
+                          value: _dateFilterValue,
                           onChanged: (val) {
-                            if (val != null) setState(() => _dateFilter = val);
+                            setState(() => _dateFilterValue = val);
                           },
                         ),
                         const SizedBox(width: 8),
@@ -1529,7 +1423,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? NumberFormat('#,##0.1').format(tx.amount)
         : '****';
     final String label = isIncome ? 'Deposit' : 'Transferred';
-    final subLabel = isIncome ? 'From ${tx.sender}' : 'For ${tx.sender}';
+    final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
     return InkWell(
       onTap: () {
@@ -1567,6 +1461,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(width: 5),
+                      if (tx.isBookmarked)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4.0),
+                          child: BookmarkBadge(),
+                        ),
                       if (tx.isAutoDetected && isLatest)
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),
@@ -1618,7 +1517,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Widget img;
     Color bgColor = AppColors.lightGreyBackground;
 
-    if (nameUp == 'CBE') {
+    if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
       img = Image.asset('assets/images/CBE logo 1.webp', width: 22, height: 22);
       bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
@@ -1639,6 +1538,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
+    } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
+      img = SvgPicture.asset(
+        'assets/images/Dashen_Bank_Logo.svg',
+        width: 22,
+        height: 22,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(AppColors.cardDashenDark, BlendMode.srcIn),
+      );
+      bgColor = AppColors.cardDashenLight.withValues(alpha: 0.15);
+    } else if (nameUp.contains('CASH')) {
+      img = SvgPicture.asset(
+        'assets/images/Wallet Icon.svg',
+        width: 20,
+        height: 20,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn),
+      );
+      bgColor = AppColors.positive.withValues(alpha: 0.12);
     } else {
       img = Text(
         bankName.substring(0, min(1, bankName.length)).toUpperCase(),

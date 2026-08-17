@@ -10,9 +10,10 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_date_filter.dart';
+import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -29,8 +30,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   late TextEditingController _searchController;
   String _searchQuery = '';
   String _selectedSender = 'All';
-  DateTimeRange? _selectedDateRange;
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
   String _selectedType = 'All';
+  bool _isBookmarkedOnly = false;
+  String _sortBy = 'Date: Newest';
   int _searchLabelIndex = 0;
   Timer? _searchLabelTimer;
 
@@ -86,36 +89,17 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final senderNames = ['All', ...provider.senders.map((s) => s.senderName)];
 
     // Filter logic
-    final filteredTransactions = allTransactions.where((tx) {
-      bool matchesSearch = false;
-      if (_searchQuery.toLowerCase() == 'uncategorized') {
-        matchesSearch = tx.resolvedReason == null || tx.resolvedReason!.isEmpty;
-      } else if (_searchQuery.isEmpty) {
-        matchesSearch = true;
-      } else {
-        final query = _searchQuery.toLowerCase();
-        matchesSearch =
-            tx.sender.toLowerCase().contains(query) ||
-            (tx.reason?.toLowerCase().contains(query) ?? false) ||
-            (tx.customReasonText?.toLowerCase().contains(query) ?? false) ||
-            (tx.resolvedReason?.toLowerCase().contains(query) ?? false);
-      }
-
-      final matchesSender =
-          _selectedSender == 'All' || tx.name == _selectedSender;
-
-      final matchesType = _selectedType == 'All' ||
-          (_selectedType == 'Income' && tx.type == 'income') ||
-          (_selectedType == 'Expense' && tx.type == 'expense');
-
-      final matchesDate = _selectedDateRange == null ||
-          (tx.date.isAfter(_selectedDateRange!.start
-                  .subtract(const Duration(seconds: 1))) &&
-              tx.date.isBefore(
-                  _selectedDateRange!.end.add(const Duration(days: 1))));
-
-      return matchesSearch && matchesSender && matchesType && matchesDate;
-    }).toList();
+    final filteredTransactions = const FilterTransactionsUseCase().execute(
+      transactions: allTransactions,
+      params: FilterTransactionsParams(
+        bankFilter: _selectedSender,
+        typeFilter: _selectedType,
+        dateFilter: _dateFilterValue,
+        searchQuery: _searchQuery,
+        sortBy: _sortBy,
+        onlyBookmarked: _isBookmarkedOnly,
+      ),
+    );
 
     final double totalSum = filteredTransactions.fold<double>(0, (s, t) => s + t.amount);
 
@@ -193,7 +177,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                   ],
                 ),
               ),
-              if (_searchQuery.isNotEmpty || _selectedSender != 'All' || _selectedType != 'All' || _selectedDateRange != null)
+              if (_searchQuery.isNotEmpty || _selectedSender != 'All' || _selectedType != 'All' || !_dateFilterValue.isDefault || _sortBy != 'Date: Newest')
                 AppButton.destructive(
                   text: 'Clear',
                   fullWidth: false,
@@ -206,7 +190,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       _searchController.clear();
                       _selectedSender = 'All';
                       _selectedType = 'All';
-                      _selectedDateRange = null;
+                      _sortBy = 'Date: Newest';
+                      _dateFilterValue = const AppDateFilterValue.anyTime();
                     });
                   },
                 ),
@@ -246,7 +231,68 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
-                _buildDateFilterChip(),
+                // ── Bookmark Filter Toggle Pill ──
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isBookmarkedOnly = !_isBookmarkedOnly;
+                    });
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: _isBookmarkedOnly
+                          ? AppColors.gold.withValues(alpha: 0.18)
+                          : AppColors.surface,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _isBookmarkedOnly
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                          size: 15,
+                          color: _isBookmarkedOnly
+                              ? AppColors.gold
+                              : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Bookmarked',
+                          style: TextStyle(
+                            color: _isBookmarkedOnly
+                                ? AppColors.gold
+                                : AppColors.textPrimary,
+                            fontSize: 12,
+                            fontWeight: _isBookmarkedOnly ? FontWeight.bold : FontWeight.w500,
+                          ),
+                        ),
+                        if (_isBookmarkedOnly) ...[
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 13,
+                            color: AppColors.gold,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildSortDropdown(),
+                const SizedBox(width: 8),
+                AppDateFilter.dark(
+                  value: _dateFilterValue,
+                  onChanged: (val) {
+                    setState(() => _dateFilterValue = val);
+                  },
+                ),
                 const SizedBox(width: 8),
                 _buildSenderDropdown(senderNames),
                 const SizedBox(width: 8),
@@ -259,18 +305,27 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildDateFilterChip() {
-    final bool isSelected = _selectedDateRange != null;
-    final String dateText = _selectedDateRange == null
-        ? 'Date'
-        : '${DateFormat('MMM d').format(_selectedDateRange!.start)} - ${DateFormat('MMM d').format(_selectedDateRange!.end)}';
-
-    return AppButton.pill(
-      text: dateText,
-      icon: Icons.calendar_today_rounded,
-      trailingIcon: Icons.keyboard_arrow_down_rounded,
-      isSelected: isSelected,
-      onPressed: _pickDateRange,
+  Widget _buildSortDropdown() {
+    return AppDropdown.simple(
+      value: _sortBy,
+      items: const [
+        'Date: Newest',
+        'Date: Oldest',
+        'Amount: High-Low',
+        'Amount: Low-High',
+        'Name: A-Z',
+      ],
+      onChanged: (val) {
+        if (val != null) setState(() => _sortBy = val);
+      },
+      variant: AppDropdownVariant.dark,
+      maxWidth: 130,
+      borderRadius: 100,
+      prefix: Icon(
+        Icons.sort_rounded,
+        size: 14,
+        color: _sortBy != 'Date: Newest' ? Colors.white : AppColors.textSecondary,
+      ),
     );
   }
 
@@ -295,7 +350,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildTypeDropdown() {
     return AppDropdown.simple(
       value: _selectedType,
-      items: const ['All', 'Income', 'Expense'],
+      items: const ['All', 'Bookmarked', 'Income', 'Expense'],
       onChanged: (type) {
         if (type != null) setState(() => _selectedType = type);
       },
@@ -310,147 +365,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Future<void> _pickDateRange() async {
-    AppBottomSheet.show(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Select Date Range',
-                    style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 24),
-                  _buildPresetItem(
-                    'All Time',
-                    null,
-                    setModalState,
-                  ),
-                  _buildPresetItem(
-                    'Today',
-                    DateTimeRange(
-                      start: DateTime(DateTime.now().year, DateTime.now().month,
-                          DateTime.now().day),
-                      end: DateTime(DateTime.now().year, DateTime.now().month,
-                          DateTime.now().day),
-                    ),
-                    setModalState,
-                  ),
-                  _buildPresetItem(
-                    'Yesterday',
-                    DateTimeRange(
-                      start: DateTime.now().subtract(const Duration(days: 1)),
-                      end: DateTime.now().subtract(const Duration(days: 1)),
-                    ),
-                    setModalState,
-                  ),
-                  _buildPresetItem(
-                    'This Month',
-                    DateTimeRange(
-                      start: DateTime(
-                          DateTime.now().year, DateTime.now().month, 1),
-                      end: DateTime.now(),
-                    ),
-                    setModalState,
-                  ),
-                  const SizedBox(height: 12),
-                  const Divider(color: AppColors.border),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: () async {
-                      final picked = await showDateRangePicker(
-                        context: context,
-                        initialDateRange: _selectedDateRange,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                        builder: (context, child) {
-                          return Theme(
-                            data: ThemeData.dark().copyWith(
-                              colorScheme: const ColorScheme.dark(
-                                primary: AppColors.gold,
-                                onPrimary: AppColors.textPrimary,
-                                surface: AppColors.bgMid,
-                                onSurface: AppColors.textPrimary,
-                              ),
-                              dialogTheme: const DialogThemeData(
-                                  backgroundColor: AppColors.bgDeep),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-                      if (picked != null) {
-                        if (!context.mounted) return;
-                        setState(() => _selectedDateRange = picked);
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.date_range_rounded,
-                              color: AppColors.gold),
-                          SizedBox(width: 12),
-                          Text(
-                            'Custom Range...',
-                            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                          ),
-                          Spacer(),
-                          Icon(Icons.arrow_forward_ios_rounded,
-                              color: AppColors.textSecondary, size: 14),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                      height: MediaQuery.of(context).viewInsets.bottom + 20),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
-  Widget _buildPresetItem(
-      String title, DateTimeRange? range, StateSetter setModalState) {
-    final bool isSelected = (range == null && _selectedDateRange == null) ||
-        (range != null &&
-            _selectedDateRange != null &&
-            _selectedDateRange!.start.day == range.start.day &&
-            _selectedDateRange!.end.day == range.end.day &&
-            _selectedDateRange!.start.month == range.start.month);
-
-    return ListTile(
-      title: Text(title, style: const TextStyle(color: AppColors.textPrimary)),
-      trailing: isSelected
-          ? const Icon(Icons.check, color: AppColors.gold)
-          : null,
-      onTap: () {
-        setState(() => _selectedDateRange = range);
-        Navigator.pop(context);
-      },
-    );
-  }
 
   // ── Cardless Transaction List ──────────────────────────────────────────────
   Widget _buildTransactionList(
@@ -492,7 +407,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       BuildContext context, AppTransaction tx, FinanceProvider provider) {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Deposit' : 'Transferred';
-    final String subLabel = isIncome ? 'From ${tx.sender}' : 'For ${tx.sender}';
+    final String subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
     return Material(
       color: Colors.transparent,
@@ -530,6 +445,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (tx.isBookmarked)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6.0),
+                            child: BookmarkBadge(),
+                          ),
                         if (tx.reasonId == null &&
                             (tx.customReasonText == null ||
                                 tx.customReasonText!.isEmpty) &&
@@ -583,7 +503,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     Widget img;
     Color bgColor = AppColors.buttonSecondary;
 
-    if (nameUp == 'CBE') {
+    if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
       img = Image.asset('assets/images/CBE logo 1.webp',
           width: 20, height: 20, fit: BoxFit.contain);
       bgColor = const Color(0xFF6B4C9A).withValues(alpha: 0.20);
@@ -603,6 +523,16 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg',
           width: 20, height: 20, fit: BoxFit.contain);
       bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
+    } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
+      img = SvgPicture.asset('assets/images/Dashen_Bank_Logo.svg',
+          width: 20, height: 20, fit: BoxFit.contain,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn));
+      bgColor = AppColors.cardDashenDark.withValues(alpha: 0.35);
+    } else if (nameUp.contains('CASH')) {
+      img = SvgPicture.asset('assets/images/Wallet Icon.svg',
+          width: 18, height: 18, fit: BoxFit.contain,
+          colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn));
+      bgColor = AppColors.positive.withValues(alpha: 0.15);
     } else {
       img = Text(
         bankName.substring(0, min(1, bankName.length)).toUpperCase(),

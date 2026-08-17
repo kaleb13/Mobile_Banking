@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_toast.dart';
 
 class IntroScreen extends StatelessWidget {
   const IntroScreen({super.key});
@@ -48,12 +49,10 @@ class IntroScreen extends StatelessWidget {
                 onPressed: () async {
                   await provider.requestPermission();
                   if (!provider.hasPermission && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Permission denied. The app requires SMS access to function.'),
-                        backgroundColor: Colors.redAccent,
-                      ),
+                    AppToast.error(
+                      context,
+                      message: 'Permission denied',
+                      subtitle: 'SMS access is required to function',
                     );
                   }
                 },

@@ -224,3 +224,26 @@ class ReasonBadge extends StatelessWidget {
     );
   }
 }
+
+/// Standard Gold/Amber Filled Bookmark Icon Badge for Bookmarked Transactions
+class BookmarkBadge extends StatelessWidget {
+  final double size;
+  const BookmarkBadge({super.key, this.size = 11.0});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.16),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.bookmark_rounded,
+        color: AppColors.gold,
+        size: size,
+      ),
+    );
+  }
+}
+

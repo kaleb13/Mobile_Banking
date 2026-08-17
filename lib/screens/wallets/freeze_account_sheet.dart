@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_toast.dart';
 import '../../widgets/bank_card_widget.dart';
 
 class FreezeAccountBottomSheet extends StatefulWidget {
@@ -74,7 +75,6 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
             : Icons.pause_circle_rounded,
         height: 50,
         onPressed: () async {
-          final messenger = ScaffoldMessenger.of(context);
           final String name = activeSenderName;
           final bool wasPaused = isPaused;
 
@@ -82,24 +82,14 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
 
           if (wasPaused) {
             await provider.resumeTracking(name);
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('$name tracking resumed'),
-                backgroundColor: AppColors.brandGreen,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            if (context.mounted) {
+              AppToast.success(context, message: '$name tracking resumed');
+            }
           } else {
             await provider.pauseTracking(name);
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text('$name tracking paused'),
-                backgroundColor: AppColors.pausedBadge,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 2),
-              ),
-            );
+            if (context.mounted) {
+              AppToast.info(context, message: '$name tracking paused');
+            }
           }
         },
       ),

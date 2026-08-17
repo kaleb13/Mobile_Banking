@@ -8,6 +8,7 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_toast.dart';
 import '../dashboard/reason_selection_sheet.dart';
 
 class AddEditExpenseDefinitionScreen extends StatefulWidget {
@@ -85,8 +86,7 @@ class _AddEditExpenseDefinitionScreenState
 
   void _saveDefinition() {
     if (_selectedReason == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Please select a reason (category) first.')));
+      AppToast.warning(context, message: 'Please select a reason (category) first');
       return;
     }
 
@@ -102,30 +102,37 @@ class _AddEditExpenseDefinitionScreenState
     if (_isRecurring) {
       timesPerDay = int.tryParse(_timesPerDayController.text.trim()) ?? 1;
       if (timesPerDay < 1 || timesPerDay > 24) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Please enter a valid number of times per day (1-24).')));
+        AppToast.warning(
+          context,
+          message: 'Please enter a valid number of times per day (1-24)',
+        );
         return;
       }
 
       if (_recurringType == 'interval') {
         intervalDays = int.tryParse(_intervalDaysController.text.trim());
         if (intervalDays == null || intervalDays <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Please enter a valid interval in days.')));
+          AppToast.warning(
+            context,
+            message: 'Please enter a valid interval in days',
+          );
           return;
         }
       } else if (_recurringType == 'specific_day') {
         specificDay = int.tryParse(_specificDayController.text.trim());
         if (specificDay == null || specificDay < 1 || specificDay > 31) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Please enter a valid day between 1 and 31.')));
+          AppToast.warning(
+            context,
+            message: 'Please enter a valid day between 1 and 31',
+          );
           return;
         }
       } else if (_recurringType == 'days_of_week') {
         if (_selectedDays.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please select at least one day.')));
+          AppToast.warning(
+            context,
+            message: 'Please select at least one day',
+          );
           return;
         }
       }

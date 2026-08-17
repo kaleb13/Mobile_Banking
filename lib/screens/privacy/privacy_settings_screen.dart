@@ -187,14 +187,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
   }
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(color: Colors.white, fontSize: 13)),
-      backgroundColor: AppColors.overlay,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      duration: const Duration(seconds: 2),
-    ));
+    AppToast.info(context, message: msg);
   }
 
   String get _pinFlowTitle {

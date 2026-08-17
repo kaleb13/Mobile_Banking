@@ -23,6 +23,7 @@ class AppTransaction {
 
   final String? linkedTransactionId; // points to another transaction for internal transfers
   final String? bankReference; // original reference number from the bank SMS
+  final bool isBookmarked;
 
   AppTransaction({
     this.id,
@@ -44,21 +45,23 @@ class AppTransaction {
     this.attachments = const [],
     this.linkedTransactionId,
     this.bankReference,
+    this.isBookmarked = false,
   });
 
   /// Resolved display label: prefer reason name from `reason` field (pre-resolved),
   /// fallback to customReasonText.
   String? get resolvedReason => reason ?? customReasonText;
 
-  /// True when this transaction was auto-created from a Telebirr credit or
-  /// repayment SMS. The reason is pre-set to "Loan" and cannot be changed
-  /// by the user.
+  /// True when this transaction was auto-created from a Telebirr credit,
+  /// repayment, or Savings Account SMS. The reason cannot be changed by the user.
   bool get isReasonLocked {
     if (!isAutoDetected) return false;
     final lower = rawMessage.toLowerCase();
     return lower.contains('credit request') ||
         lower.contains('outstanding credit amount') ||
-        lower.contains('contract number');
+        lower.contains('contract number') ||
+        lower.contains('saving account') ||
+        lower.contains('saving balance');
   }
 
   Map<String, dynamic> toMap() {
@@ -82,6 +85,7 @@ class AppTransaction {
       'note': note,
       'linkedTransactionId': linkedTransactionId,
       'bankReference': bankReference,
+      'isBookmarked': isBookmarked ? 1 : 0,
     };
   }
 
@@ -109,6 +113,7 @@ class AppTransaction {
       attachments: attachments,
       linkedTransactionId: map['linkedTransactionId'] as String?,
       bankReference: map['bankReference'] as String?,
+      isBookmarked: (map['isBookmarked'] as int? ?? 0) == 1,
     );
   }
 
@@ -131,6 +136,7 @@ class AppTransaction {
     double? totalBalance,
     String? bankReference,
     bool clearBankReference = false,
+    bool? isBookmarked,
   }) {
     return AppTransaction(
       id: id,
@@ -158,6 +164,7 @@ class AppTransaction {
       bankReference: clearBankReference
           ? null
           : (bankReference ?? this.bankReference),
+      isBookmarked: isBookmarked ?? this.isBookmarked,
     );
   }
 }

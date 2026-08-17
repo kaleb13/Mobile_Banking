@@ -5,6 +5,7 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_toast.dart';
 
 class InternalTransferPickerSheet extends StatelessWidget {
   final AppTransaction sourceTransaction;
@@ -74,13 +75,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
                           sourceTransaction.id!, tx.id!);
                       if (context.mounted) {
                         Navigator.pop(context); // close sheet
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Internal transfer linked! ✓'),
-                            backgroundColor: AppColors.positive,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
+                        AppToast.success(context, message: 'Internal transfer linked');
                       }
                     },
                     leading: Container(
