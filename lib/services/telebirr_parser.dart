@@ -3,45 +3,6 @@ import '../models/transaction.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Result types for Telebirr Credit SMS parsing
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Parsed data from a Telebirr credit DISBURSEMENT message.
-/// e.g. "Your credit request with DGV0EMRXKY contract number is successful..."
-class TelebirrCreditInfo {
-  final String contractNumber;
-  final double creditAmount;
-  final double facilitationFee;
-  final DateTime dueDate;
-  final double? availableCreditLimit;
-
-  const TelebirrCreditInfo({
-    required this.contractNumber,
-    required this.creditAmount,
-    required this.facilitationFee,
-    required this.dueDate,
-    this.availableCreditLimit,
-  });
-}
-
-/// Parsed data from a Telebirr credit REPAYMENT message.
-/// e.g. "your outstanding Credit amount has been paid successfully..."
-class TelebirrRepaymentInfo {
-  final double paidAmount;
-  final double totalOutstanding;
-  final double monthlyOutstanding;
-
-  const TelebirrRepaymentInfo({
-    required this.paidAmount,
-    required this.totalOutstanding,
-    required this.monthlyOutstanding,
-  });
-
-  /// True when the loan is fully settled (no outstanding balance).
-  bool get isFullySettled => totalOutstanding <= 0.0;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // TelebirrParser
 // ─────────────────────────────────────────────────────────────────────────────
 class TelebirrParser {
@@ -49,24 +10,6 @@ class TelebirrParser {
   static const String senderName = "Telebirr";
 
   // ── Quick checks ──────────────────────────────────────────────────────────
-
-  /// Returns true if [message] looks like a Telebirr credit DISBURSEMENT SMS.
-  static bool isCreditDisbursement(String message) {
-    if (BankSenders.isSecurityOrAuthMessage(message)) return false;
-    final lower = message.toLowerCase();
-    return lower.contains('credit request') &&
-        lower.contains('contract number') &&
-        (lower.contains('credit amount') || lower.contains('facilitation fee'));
-  }
-
-  /// Returns true if [message] looks like a Telebirr credit REPAYMENT SMS.
-  static bool isCreditRepayment(String message) {
-    if (BankSenders.isSecurityOrAuthMessage(message)) return false;
-    final lower = message.toLowerCase();
-    return lower.contains('outstanding credit amount') &&
-        lower.contains('paid successfully') &&
-        lower.contains('paid amount');
-  }
 
   /// Returns true if [message] looks like a Telebirr Savings (Sanduq) SMS.
   static bool isSavingsMessage(String message) {
@@ -88,107 +31,6 @@ class TelebirrParser {
       return double.tryParse(amtStr);
     }
     return null;
-  }
-
-  // ── Credit Disbursement Parser ─────────────────────────────────────────────
-
-
-  /// Parses a Telebirr credit disbursement SMS.
-  /// Returns null if the message doesn't match.
-  static TelebirrCreditInfo? parseCreditDisbursement(
-      String message, DateTime fallbackDate) {
-    if (!isCreditDisbursement(message)) return null;
-
-    // Contract number: "with DGV0EMRXKY contract number"
-    final contractMatch =
-        RegExp(r'with\s+([A-Z0-9]+)\s+contract number', caseSensitive: false)
-            .firstMatch(message);
-    final contractNumber = contractMatch?.group(1);
-    if (contractNumber == null) return null;
-
-    // Credit amount: "credit amount is ETB 500.00"
-    final creditMatch =
-        RegExp(r'credit amount is ETB\s+([0-9,.]+)', caseSensitive: false)
-            .firstMatch(message);
-    final creditAmount =
-        double.tryParse(creditMatch?.group(1)?.replaceAll(',', '') ?? '') ?? 0;
-    if (creditAmount <= 0) return null;
-
-    // Facilitation fee: "facilitation fee ETB 6.25"
-    final feeMatch =
-        RegExp(r'facilitation fee ETB\s+([0-9,.]+)', caseSensitive: false)
-            .firstMatch(message);
-    final facilitationFee =
-        double.tryParse(feeMatch?.group(1)?.replaceAll(',', '') ?? '') ?? 0.0;
-
-    // Due date: "due date 10/08/2026"
-    DateTime dueDate = fallbackDate.add(const Duration(days: 30));
-    final dueDateMatch =
-        RegExp(r'due date\s+(\d{2}/\d{2}/\d{4})', caseSensitive: false)
-            .firstMatch(message);
-    if (dueDateMatch != null) {
-      try {
-        dueDate = DateFormat('dd/MM/yyyy').parse(dueDateMatch.group(1)!);
-      } catch (_) {}
-    }
-
-    // Available credit limit (optional): "Your current available credit limit ETB400.00"
-    double? availableLimit;
-    final limitMatch = RegExp(
-            r'available credit limit\s+ETB\s*([0-9,.]+)',
-            caseSensitive: false)
-        .firstMatch(message);
-    if (limitMatch != null) {
-      availableLimit =
-          double.tryParse(limitMatch.group(1)?.replaceAll(',', '') ?? '');
-    }
-
-    return TelebirrCreditInfo(
-      contractNumber: contractNumber,
-      creditAmount: creditAmount,
-      facilitationFee: facilitationFee,
-      dueDate: dueDate,
-      availableCreditLimit: availableLimit,
-    );
-  }
-
-  // ── Credit Repayment Parser ────────────────────────────────────────────────
-
-  /// Parses a Telebirr credit repayment/settlement SMS.
-  /// Returns null if the message doesn't match.
-  static TelebirrRepaymentInfo? parseCreditRepayment(
-      String message, DateTime fallbackDate) {
-    if (!isCreditRepayment(message)) return null;
-
-    // Paid amount: "The paid amount is ETB 509.85"
-    final paidMatch =
-        RegExp(r'paid amount is ETB\s+([0-9,.]+)', caseSensitive: false)
-            .firstMatch(message);
-    final paidAmount =
-        double.tryParse(paidMatch?.group(1)?.replaceAll(',', '') ?? '') ?? 0.0;
-
-    // Monthly outstanding: "monthly outstanding amount is ETB 0.00"
-    final monthlyMatch = RegExp(
-            r'monthly outstanding amount is ETB\s+([0-9,.]+)',
-            caseSensitive: false)
-        .firstMatch(message);
-    final monthlyOutstanding =
-        double.tryParse(monthlyMatch?.group(1)?.replaceAll(',', '') ?? '') ??
-            0.0;
-
-    // Total outstanding: "total outstanding amount is ETB 0.00"
-    final totalMatch = RegExp(
-            r'total outstanding amount is ETB\s+([0-9,.]+)',
-            caseSensitive: false)
-        .firstMatch(message);
-    final totalOutstanding =
-        double.tryParse(totalMatch?.group(1)?.replaceAll(',', '') ?? '') ?? 0.0;
-
-    return TelebirrRepaymentInfo(
-      paidAmount: paidAmount,
-      totalOutstanding: totalOutstanding,
-      monthlyOutstanding: monthlyOutstanding,
-    );
   }
 
   // ── Standard Transaction Parser ────────────────────────────────────────────

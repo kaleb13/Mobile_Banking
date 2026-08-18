@@ -17,6 +17,7 @@ class AppCapsuleTabBar extends StatelessWidget {
   final double indicatorRadius;
 
   final bool expandTabs;
+  final Color? backgroundColor;
 
   const AppCapsuleTabBar({
     super.key,
@@ -31,11 +32,15 @@ class AppCapsuleTabBar extends StatelessWidget {
     this.borderRadius = 24,
     this.indicatorRadius = 20,
     this.expandTabs = true,
+    this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final capsuleBg = context.themeSurface;
+    final capsuleBg = backgroundColor ??
+        (context.isLightMode
+            ? AppColors.tabBackgroundLight
+            : AppColors.tabBackground);
     final activeTextColor = context.isLightMode
         ? AppColors.textPrimaryLight
         : AppColors.surface;

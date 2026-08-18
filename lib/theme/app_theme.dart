@@ -29,6 +29,8 @@ class AppColors {
   static const Color glassSurfaceModal  = Color(0xE0111821); // 88% dark modal surface glass
   static const double glassBlurSigma    = 20.0; // Centralized glass blur radius
   static const Color destructiveSurface = Color(0x24E11D48); // 14% destructive soft surface
+  static const Color tabBackground      = Color(0xFF09101A); // Deep recessed navy track for capsule tabs
+  static const Color tabBackgroundLight = Color(0xFFE2E8F0); // Inset slate track for light theme capsule tabs
 
   // ── Button Palette ────────────────────────────────────────────────────────
   static const Color buttonPrimary          = Color(0xFFFFFFFF); // Primary button pure crisp white (#FFFFFF)

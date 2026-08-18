@@ -51,12 +51,13 @@ class ProcessLoanRepaymentUseCase {
     }
 
     final txSenderLower = transaction.sender.toLowerCase().trim();
+    final txNameLower = transaction.name.toLowerCase().trim();
     for (final loan in activeLoans) {
-      if (loan.trackedSenderName != null &&
-          loan.trackedSenderName!.toLowerCase().trim() == txSenderLower) {
+      final personLower = loan.personName.toLowerCase().trim();
+      if (txNameLower.isNotEmpty && (txNameLower == personLower || txNameLower.contains(personLower) || personLower.contains(txNameLower))) {
         return loan;
       }
-      if (loan.personName.toLowerCase().trim() == txSenderLower) {
+      if (txSenderLower == personLower || txSenderLower.contains(personLower) || personLower.contains(txSenderLower)) {
         return loan;
       }
     }

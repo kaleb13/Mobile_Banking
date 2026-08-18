@@ -10,9 +10,11 @@ import '../../theme/app_theme.dart';
 import '../../models/scan_window_option.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_badges.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/carousel_page_indicator.dart';
 import '../../widgets/interactive_3d_badge.dart';
+import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/app_toast.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -46,7 +48,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   int _currentPage = 0;
   bool _isTermsAccepted = false;
   bool _bgInitStarted = false;
-  ScanWindowOption _selectedScanOption = ScanWindowOption.thirtyDays;
+  ScanWindowOption _selectedScanOption = ScanWindowOption.sevenDays;
 
   // Pulse animation for scanner
   late AnimationController _pulseController;
@@ -61,13 +63,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   late Animation<double> _balanceCountAnim;
   double _targetBalance = 0.0;
   bool _hasStartedCounting = false;
-
-  final List<String> _scanStages = [
-    'Scanning inbox for verified bank messages…',
-    'Analyzing CBE, Telebirr & BOA records…',
-    'Calculating ending balances & cash flow…',
-    'Finalizing financial level tier…',
-  ];
 
   @override
   void initState() {
@@ -325,32 +320,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Spacer(flex: 3),
-            Text(
-              'Shibre',
-              style: TextStyle(
-                color: AppColors.telebirrGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0.4,
-              ),
+            const AppBadge.success(
+              text: 'SMART FINANCIAL TRACKING',
+              size: AppBadgeSize.small,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
             const Text(
-              'Manage your\nfinances with smart\ntracking.',
+              'Manage your finances\nwith clarity.',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 34,
+                fontSize: 28,
                 fontWeight: FontWeight.w800,
-                height: 1.15,
-                letterSpacing: -0.8,
+                height: 1.2,
+                letterSpacing: -0.6,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
-              'Shibre analyzes your income, expenses, and financial habits to estimate your current financial level. Tap Get Started to discover where you stand and begin your journey toward a stronger financial future.',
+              'Automatically analyze bank SMS, track spending, and discover your financial level in real time.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.70),
-                fontSize: 13.5,
+                color: Colors.white.withValues(alpha: 0.65),
+                fontSize: 13,
                 height: 1.5,
               ),
             ),
@@ -441,7 +431,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Center(
-                              child: BankCardWidget.bankLogo(name, 26),
+                              child: BankCardWidget.bankLogo(name, 26, Colors.white),
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -468,20 +458,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.brandGreen.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: const Text(
-                              'Auto-Sync',
-                              style: TextStyle(
-                                color: AppColors.brandGreen,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                          const AppBadge.success(
+                            text: 'Auto-Sync',
+                            size: AppBadgeSize.micro,
                           ),
                         ],
                       ),
@@ -561,16 +540,33 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 16),
 
-            // Scan Options List
+            // Scan Options List (Compact, sleek cards)
             Expanded(
               child: ListView.separated(
                 physics: const BouncingScrollPhysics(),
                 itemCount: ScanWindowOption.values.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final option = ScanWindowOption.values[index];
                   final bool isSelected = _selectedScanOption == option;
-                  final bool isRecommended = option == ScanWindowOption.thirtyDays;
+
+                  Widget? badgeWidget;
+                  if (option == ScanWindowOption.sevenDays) {
+                    badgeWidget = const AppBadge.success(
+                      text: 'Recommended',
+                      size: AppBadgeSize.micro,
+                    );
+                  } else if (option == ScanWindowOption.todayOnly) {
+                    badgeWidget = const AppBadge.neutral(
+                      text: 'Instant',
+                      size: AppBadgeSize.micro,
+                    );
+                  } else if (option.isHeavyLoad) {
+                    badgeWidget = const AppBadge.destructive(
+                      text: 'Heavy Load',
+                      size: AppBadgeSize.micro,
+                    );
+                  }
 
                   return GestureDetector(
                     onTap: () {
@@ -581,18 +577,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     },
                     behavior: HitTestBehavior.opaque,
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.all(16),
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.brandGreen.withValues(alpha: 0.12)
                             : AppColors.surface,
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? AppColors.brandGreen.withValues(alpha: 0.20)
@@ -602,10 +598,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             child: Icon(
                               _getScanOptionIcon(option),
                               color: isSelected ? AppColors.brandGreen : Colors.white70,
-                              size: 20,
+                              size: 18,
                             ),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -619,54 +615,43 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                           color: isSelected
                                               ? Colors.white
                                               : Colors.white.withValues(alpha: 0.90),
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ),
-                                    if (isRecommended)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.gold.withValues(alpha: 0.18),
-                                          borderRadius: BorderRadius.circular(100),
-                                        ),
-                                        child: const Text(
-                                          'Recommended',
-                                          style: TextStyle(
-                                            color: AppColors.gold,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
+                                    if (badgeWidget != null) ...[
+                                      const SizedBox(width: 6),
+                                      badgeWidget,
+                                    ],
                                   ],
                                 ),
-                                const SizedBox(height: 3),
+                                const SizedBox(height: 2),
                                 Text(
                                   option.subtitle,
                                   style: TextStyle(
                                     color: isSelected
                                         ? Colors.white.withValues(alpha: 0.70)
                                         : Colors.white.withValues(alpha: 0.45),
-                                    fontSize: 12,
-                                    height: 1.3,
+                                    fontSize: 11.5,
+                                    height: 1.25,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(width: 10),
                           Container(
-                            width: 22,
-                            height: 22,
+                            width: 20,
+                            height: 20,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isSelected ? AppColors.brandGreen : Colors.transparent,
                             ),
                             child: isSelected
-                                ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                ? const Icon(Icons.check, color: Colors.white, size: 13)
                                 : Container(
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
@@ -679,6 +664,36 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     ),
                   );
                 },
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Performance advice card
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.speed_rounded,
+                    color: AppColors.brandGreen,
+                    size: 15,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '7 Days or Today is recommended for instant setup and maximum smoothness across all phones.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -871,94 +886,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildLevelRevealPageBody() {
     return Consumer<FinanceProvider>(
       builder: (context, provider, _) {
-        final bool isCalculating = provider.isLoading || !_scanProgressController.isCompleted;
+        final bool isCalculating = provider.isLoading || (!provider.scanProgress.isComplete && provider.transactions.isEmpty);
 
         if (isCalculating) {
-          return AnimatedBuilder(
-            animation: _scanProgressAnim,
-            builder: (context, _) {
-              final progress = _scanProgressAnim.value;
-              final stageIndex = (progress * (_scanStages.length - 1)).floor().clamp(0, _scanStages.length - 1);
-              final stageText = _scanStages[stageIndex];
-
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ScaleTransition(
-                        scale: _pulseAnim,
-                        child: Container(
-                          width: 110,
-                          height: 110,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.telebirrGreen.withValues(alpha: 0.12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.telebirrGreen.withValues(alpha: 0.25),
-                                blurRadius: 30,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.analytics_rounded,
-                            color: AppColors.telebirrGreen,
-                            size: 48,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 36),
-                      const Text(
-                        'Calculating your financial level…',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        stageText,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.60),
-                          fontSize: 13.5,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      // Smooth animated progress bar
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(100),
-                        child: Container(
-                          height: 6,
-                          width: 220,
-                          color: Colors.white.withValues(alpha: 0.08),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: progress.clamp(0.05, 1.0),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [AppColors.brandGreen, AppColors.skyBlue],
-                                ),
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
+          return _buildMinimalistCalculatingView(provider);
         }
 
         // Trigger balance count-up animation if not yet started
@@ -1109,12 +1040,166 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  Widget _buildMinimalistCalculatingView(FinanceProvider provider) {
+    final scanProgress = provider.scanProgress;
+    final double pct = scanProgress.progress > 0
+        ? scanProgress.progress.clamp(0.05, 1.0)
+        : _scanProgressAnim.value.clamp(0.05, 1.0);
+    final String stageText = scanProgress.stage.isNotEmpty
+        ? scanProgress.stage
+        : 'Analyzing verified banking records…';
+    final banks = scanProgress.scannedBanks;
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Minimalistic Indicator Icon
+            ScaleTransition(
+              scale: _pulseAnim,
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.brandGreen.withValues(alpha: 0.12),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.auto_graph_rounded,
+                  color: AppColors.brandGreen,
+                  size: 26,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            const Text(
+              'Calculating Your Financial Tier',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Percentage at Top of Progress Bar
+            Text(
+              '${(pct * 100).toInt()}%',
+              style: const TextStyle(
+                color: AppColors.brandGreen,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Standard Design System Progress Bar (CustomProgressBar)
+            SizedBox(
+              width: 250,
+              child: CustomProgressBar(
+                progress: pct,
+                height: 8,
+                progressColor: AppColors.brandGreen,
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(100),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Active Reading Status
+            Text(
+              stageText,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.60),
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+
+            // Dynamic Discovered Banks Listing
+            if (banks.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'DISCOVERED ACCOUNTS (${banks.length})',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...banks.map((b) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Center(
+                            child: BankCardWidget.bankLogo(b.bankName, 18, Colors.white),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            b.bankName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        AppBadge.success(
+                          text: '${b.transactionCount} msgs',
+                          size: AppBadgeSize.micro,
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   // --- FIXED BOTTOM SECTION ---
   Widget _buildFixedBottomSection() {
     return Consumer<FinanceProvider>(
       builder: (context, provider, _) {
         final bool isCalculatingPage4 =
-            _currentPage == 4 && (provider.isLoading || !_scanProgressController.isCompleted);
+            _currentPage == 4 && (provider.isLoading || (!provider.scanProgress.isComplete && provider.transactions.isEmpty));
 
         return SafeArea(
           top: false,
@@ -1285,7 +1370,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
-              child: BankCardWidget.bankLogo(bankName, 20),
+              child: BankCardWidget.bankLogo(bankName, 20, Colors.white),
             ),
           ),
           const SizedBox(width: 12),

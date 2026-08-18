@@ -38,7 +38,7 @@ void main() {
       expect(ScanWindowOption.fromString('thirtyDays'), ScanWindowOption.thirtyDays);
       expect(ScanWindowOption.fromString('ninetyDays'), ScanWindowOption.ninetyDays);
       expect(ScanWindowOption.fromString('allTime'), ScanWindowOption.allTime);
-      expect(ScanWindowOption.fromString('unknown_key'), ScanWindowOption.thirtyDays);
+      expect(ScanWindowOption.fromString('unknown_key'), ScanWindowOption.sevenDays);
     });
   });
 
@@ -47,11 +47,11 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('GetScanWindowUseCase defaults to 30 days if unset', () async {
+    test('GetScanWindowUseCase defaults to 7 days if unset', () async {
       const getUseCase = GetScanWindowUseCase();
       final info = await getUseCase();
 
-      expect(info.option, ScanWindowOption.thirtyDays);
+      expect(info.option, ScanWindowOption.sevenDays);
       expect(info.anchorDate.isBefore(DateTime.now()), isTrue);
     });
 

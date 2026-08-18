@@ -43,15 +43,15 @@ enum ScanWindowOption {
   String get subtitle {
     switch (this) {
       case ScanWindowOption.todayOnly:
-        return 'Zero history. Starts importing from today without past messages.';
+        return 'Starts fresh from today with zero past history.';
       case ScanWindowOption.sevenDays:
-        return 'Imports the past 7 days of banking transactions.';
+        return 'Imports the last 7 days of transactions.';
       case ScanWindowOption.thirtyDays:
-        return 'Recommended. Imports the last 30 days for balanced analytics.';
+        return 'Imports past 30 days of transactions.';
       case ScanWindowOption.ninetyDays:
-        return 'Imports the past 3 months for comprehensive history.';
+        return 'Imports past 90 days. May take longer.';
       case ScanWindowOption.allTime:
-        return 'Imports all banking SMS found on your device.';
+        return 'Imports all device SMS. High processing load.';
     }
   }
 
@@ -71,7 +71,27 @@ enum ScanWindowOption {
     }
   }
 
-  /// Parse from persisted key
+  /// Badge tag for UI selection cards
+  String? get badgeLabel {
+    switch (this) {
+      case ScanWindowOption.todayOnly:
+        return 'Lightest';
+      case ScanWindowOption.sevenDays:
+        return 'Recommended';
+      case ScanWindowOption.thirtyDays:
+        return null;
+      case ScanWindowOption.ninetyDays:
+        return 'Heavy Load';
+      case ScanWindowOption.allTime:
+        return 'Heavy Load';
+    }
+  }
+
+  /// Whether this option represents a heavy scan on older/busy phones
+  bool get isHeavyLoad =>
+      this == ScanWindowOption.ninetyDays || this == ScanWindowOption.allTime;
+
+  /// Parse from persisted key (defaults to recommended 7 days)
   static ScanWindowOption fromString(String? key) {
     switch (key) {
       case 'todayOnly':
@@ -85,7 +105,7 @@ enum ScanWindowOption {
       case 'allTime':
         return ScanWindowOption.allTime;
       default:
-        return ScanWindowOption.thirtyDays;
+        return ScanWindowOption.sevenDays;
     }
   }
 

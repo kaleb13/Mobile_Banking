@@ -146,7 +146,7 @@ class ProfileHubScreen extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(22),
-                                                              ),
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -175,23 +175,11 @@ class ProfileHubScreen extends StatelessWidget {
                                           ),
                                         ],
                                       ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 9, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.positive.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                        child: Text(
-                                          nextLvName != null
-                                              ? '${(progress * 100).toStringAsFixed(1)}%'
-                                              : 'MAX',
-                                          style: const TextStyle(
-                                            color: AppColors.positive,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                                      AppBadge.success(
+                                        text: nextLvName != null
+                                            ? '${(progress * 100).toStringAsFixed(1)}%'
+                                            : 'MAX',
+                                        size: AppBadgeSize.small,
                                       ),
                                     ],
                                   ),

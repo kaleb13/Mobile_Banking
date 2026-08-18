@@ -54,7 +54,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         String? errorMsg;
         return StatefulBuilder(builder: (ctx, setInner) {
           return AlertDialog(
-            backgroundColor: AppColors.bgMid,
+            backgroundColor: AppColors.surface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(
               existing == null

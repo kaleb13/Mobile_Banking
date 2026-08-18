@@ -27,3 +27,4 @@ export 'app_date_filter.dart';
 export 'app_drawer.dart';
 export 'bank_card_action_modal.dart';
 export 'app_toast.dart';
+export 'bank_avatar.dart';

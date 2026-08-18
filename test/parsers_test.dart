@@ -55,14 +55,21 @@ void main() {
   });
 
   group('TelebirrParser', () {
-    test('identifies credit disbursement SMS', () {
-      const sms = "Your credit request with DGV0EMRXKY contract number is successful. Credit amount 1000 ETB, facilitation fee 20 ETB.";
-      expect(TelebirrParser.isCreditDisbursement(sms), isTrue);
+    test('identifies savings balance message', () {
+      const sms = "Your saving balance is ETB 1,500.00 in Sanduq.";
+      expect(TelebirrParser.isSavingsMessage(sms), isTrue);
+      expect(TelebirrParser.extractSavingBalance(sms), equals(1500.00));
     });
 
-    test('identifies credit repayment SMS', () {
-      const sms = "your outstanding Credit amount has been paid successfully. Paid amount 500 ETB.";
-      expect(TelebirrParser.isCreditRepayment(sms), isTrue);
+    test('parses standard money received transaction', () {
+      const sms =
+          "You have received ETB 250.00 from Abebe Bikila (251911223344) on 20/04/2026. Your transaction number is TB12345. Current balance is ETB 1,000.00.";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(250.00));
+      expect(tx.type, equals('income'));
+      expect(tx.name, equals('Telebirr'));
+      expect(tx.id, equals('TB12345'));
     });
   });
 

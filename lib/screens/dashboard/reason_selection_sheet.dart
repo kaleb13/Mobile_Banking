@@ -205,11 +205,9 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
           ),
           const SizedBox(height: 8),
 
-          // ── Sticky Floating "Save Changes" Button (Fully Rounded Pill) ──
-          Container(
-            width: double.infinity,
+          // ── Sticky "Save Changes" Button (Fully Rounded Pill) ──
+          Padding(
             padding: const EdgeInsets.only(top: 8),
-            color: AppColors.bgMid,
             child: AppButton.primary(
               height: 48,
               text: _selectedReason != null

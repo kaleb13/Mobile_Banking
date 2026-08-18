@@ -12,6 +12,39 @@ import 'telebirr_parser.dart';
 class BankSenders {
   BankSenders._();
 
+  /// Comprehensive list of standard bank sender search keywords used to query
+  /// the native Android SMS provider without querying arbitrary personal messages.
+  static const List<String> standardBankKeywords = [
+    'telebirr',
+    '127',
+    'cbe',
+    'cbebirr',
+    'cbe birr',
+    'ahadu',
+    'boa',
+    'abyssinia',
+    'dashen',
+    'amole',
+    'wegagen',
+    'oromia',
+    'enat',
+    'awash',
+    'hibret',
+    'nib',
+    'zemen',
+    'coop',
+    'lion',
+    'sinqe',
+    'siinqee',
+    'tsehay',
+    'amhara',
+    'bunna',
+    'berhan',
+    'global',
+    'hijra',
+    'zamzam',
+  ];
+
   /// Phone numbers (7–15 digits, optional leading '+') belong to ordinary
   /// people, never to a bank's registered sender ID. Telebirr's "127" is only
   /// 3 digits, so it never matches this and stays valid below.

@@ -15,9 +15,9 @@ import '../../widgets/bank_card_widget.dart';
 import '../../widgets/daily_net_heatmap_widget.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/app_badges.dart';
 import '../../widgets/app_toast.dart';
 import 'category_detail_screen.dart';
-import 'reason_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
 enum PeriodFilter { day, week, month, quarter, year }
@@ -49,6 +49,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // Track previous category state for seamless morphing transitions
   List<CategoryArcItem> _previousCategories = [];
   double _previousTotal = 0.0;
+  dynamic _cachedAnalyticsData;
+  String _lastAnalyticsCacheKey = '';
 
   DateTime _getSynchronizedTargetDate() {
     final now = DateTime.now();
@@ -767,10 +769,20 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return '${trimmed.substring(0, 14)}..';
   }
 
+  dynamic _getCachedFilteredAnalyticsData(FinanceProvider provider) {
+    final key = '${provider.transactions.length}_${provider.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}';
+    if (_cachedAnalyticsData != null && _lastAnalyticsCacheKey == key) {
+      return _cachedAnalyticsData;
+    }
+    _cachedAnalyticsData = _getFilteredAnalyticsData(provider);
+    _lastAnalyticsCacheKey = key;
+    return _cachedAnalyticsData;
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
-    final data = _getFilteredAnalyticsData(provider);
+    final data = _getCachedFilteredAnalyticsData(provider);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -827,7 +839,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                           _changeFilter(() {
                             if (day != null && _selectedPeriod == PeriodFilter.day) {
                               final now = DateTime.now();
-                              final diff = now.difference(day).inDays;
+                              final todayMidnight = DateTime(now.year, now.month, now.day);
+                              final dayMidnight = DateTime(day.year, day.month, day.day);
+                              final diff = todayMidnight.difference(dayMidnight).inDays;
                               if (diff >= 0 && diff < 14) {
                                 _selectedSubPeriodIndex = 13 - diff;
                                 if (_subPeriodScrollController.hasClients) {
@@ -1127,33 +1141,18 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         ),
                 ],
               ),
-              // Net Status Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (isPositiveNet ? AppColors.positive : AppColors.negative).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                                  ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isPositiveNet ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                      color: isPositiveNet ? AppColors.positive : AppColors.negative,
-                      size: 15,
+              // Net Status Badge (AppBadge component)
+              isPositiveNet
+                  ? const AppBadge.success(
+                      text: 'Net Savings',
+                      icon: Icons.trending_up_rounded,
+                      size: AppBadgeSize.medium,
+                    )
+                  : const AppBadge.destructive(
+                      text: 'Net Deficit',
+                      icon: Icons.trending_down_rounded,
+                      size: AppBadgeSize.medium,
                     ),
-                    const SizedBox(width: 5),
-                    Text(
-                      isPositiveNet ? 'Net Savings' : 'Net Deficit',
-                      style: TextStyle(
-                        color: isPositiveNet ? AppColors.positive : AppColors.negative,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1922,24 +1921,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
 
-    if (_selectedAnalysisType == 'Income') {
-      for (var t in filteredBankTxs.where((t) => t.type == 'income')) {
-        processBankTx(t);
+    for (var t in filteredBankTxs) {
+      if (t.reason?.toLowerCase() == 'cash' ||
+          t.customReasonText?.toLowerCase() == 'cash' ||
+          t.resolvedReason?.toLowerCase() == 'cash') {
+        continue;
       }
-      for (var ctx in filteredCashTxs.where((t) => t.type == 'addition')) {
-        processCashTx(ctx);
-      }
-    } else {
-      for (var t in filteredBankTxs.where((t) =>
-          t.type == 'expense' &&
-          t.reason?.toLowerCase() != 'cash' &&
-          t.customReasonText?.toLowerCase() != 'cash' &&
-          t.resolvedReason?.toLowerCase() != 'cash')) {
-        processBankTx(t);
-      }
-      for (var ctx in filteredCashTxs.where((t) => t.type == 'expense')) {
-        processCashTx(ctx);
-      }
+      processBankTx(t);
+    }
+    for (var ctx in filteredCashTxs) {
+      processCashTx(ctx);
     }
 
     if (categoryMap.isEmpty) {
@@ -1973,12 +1964,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final categoryList = categoryMap.values.map((acc) {
       final subList = acc.subcategories.values.map((sAcc) {
         double sTotal = 0.0;
-        for (final t in sAcc.bankTxs) {
-          sTotal += t.amount;
+        if (_selectedAnalysisType == 'Income') {
+          for (final t in sAcc.bankTxs.where((t) => t.type == 'income')) {
+            sTotal += t.amount;
+          }
+          for (final ct in sAcc.cashTxs.where(
+              (ct) => ct.type == 'addition' || ct.type == 'income')) {
+            sTotal += ct.amount;
+          }
+        } else {
+          for (final t in sAcc.bankTxs.where((t) => t.type == 'expense')) {
+            sTotal += t.amount;
+          }
+          for (final ct in sAcc.cashTxs.where((ct) => ct.type == 'expense')) {
+            sTotal += ct.amount;
+          }
         }
-        for (final ct in sAcc.cashTxs) {
-          sTotal += ct.amount;
-        }
+
         return SubcategoryAnalysisItem(
           name: sAcc.name,
           reason: sAcc.reason,
@@ -1990,11 +1992,21 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
 
       double catTotal = 0.0;
-      for (final t in acc.allBankTxs) {
-        catTotal += t.amount;
-      }
-      for (final ct in acc.allCashTxs) {
-        catTotal += ct.amount;
+      if (_selectedAnalysisType == 'Income') {
+        for (final t in acc.allBankTxs.where((t) => t.type == 'income')) {
+          catTotal += t.amount;
+        }
+        for (final ct in acc.allCashTxs
+            .where((ct) => ct.type == 'addition' || ct.type == 'income')) {
+          catTotal += ct.amount;
+        }
+      } else {
+        for (final t in acc.allBankTxs.where((t) => t.type == 'expense')) {
+          catTotal += t.amount;
+        }
+        for (final ct in acc.allCashTxs.where((ct) => ct.type == 'expense')) {
+          catTotal += ct.amount;
+        }
       }
 
       return (
@@ -2009,7 +2021,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         subcategories: subList,
         totalTxCount: acc.allBankTxs.length + acc.allCashTxs.length,
       );
-    }).where((c) => c.totalTxCount > 0).toList()
+    }).where((c) => c.totalAmount > 0).toList()
       ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
 
     final totalSum = categoryList.fold<double>(0, (s, e) => s + e.totalAmount);
@@ -2067,40 +2079,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
-                  if (hasSubcategories) {
-                    // Scenario 1: Category HAS subcategories -> Open CategoryDetailScreen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CategoryDetailScreen(
-                          categoryName: cat.categoryName,
-                          categoryReason: cat.categoryReason,
-                          categoryColor: color,
-                          totalAmount: cat.totalAmount,
-                          periodLabel: periodSubtitle,
-                          directBankTransactions: cat.directBankTxs,
-                          directCashTransactions: cat.directCashTxs,
-                          allBankTransactions: cat.allBankTxs,
-                          allCashTransactions: cat.allCashTxs,
-                          subcategories: cat.subcategories,
-                        ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CategoryDetailScreen(
+                        categoryName: cat.categoryName,
+                        categoryReason: cat.categoryReason,
+                        categoryColor: color,
+                        totalAmount: cat.totalAmount,
+                        periodLabel: periodSubtitle,
+                        directBankTransactions: cat.directBankTxs,
+                        directCashTransactions: cat.directCashTxs,
+                        allBankTransactions: cat.allBankTxs,
+                        allCashTransactions: cat.allCashTxs,
+                        subcategories: cat.subcategories,
                       ),
-                    );
-                  } else {
-                    // Scenario 2: Category has NO subcategories -> Go straight to ReasonTransactionsScreen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ReasonTransactionsScreen(
-                          title: cat.categoryName,
-                          reason: cat.categoryReason,
-                          periodSubtitle: periodSubtitle,
-                          transactions: cat.allBankTxs,
-                          cashTransactions: cat.allCashTxs,
-                        ),
-                      ),
-                    );
-                  }
+                    ),
+                  );
                 },
                 child: Container(
                   padding: const EdgeInsets.all(14),

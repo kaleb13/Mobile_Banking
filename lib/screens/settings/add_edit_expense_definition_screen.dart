@@ -498,7 +498,7 @@ class _AddEditExpenseDefinitionScreenState
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        backgroundColor: AppColors.bgMid,
+        backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('New Reason', style: TextStyle(color: Colors.white)),
         content: TextField(

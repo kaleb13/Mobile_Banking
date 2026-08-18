@@ -34,8 +34,8 @@ class AppDrawer extends StatelessWidget {
     this.trailingHeader,
     required this.child,
     this.bottomAction,
-    this.heightFactor = 0.85,
-    this.maxHeightFactor = 0.95,
+    this.heightFactor,
+    this.maxHeightFactor = 0.90,
     this.backgroundColor = AppColors.surfaceElevated,
     this.topRadius = 28.0,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -71,6 +71,20 @@ class AppDrawer extends StatelessWidget {
     final double? targetHeight = heightFactor != null ? screenHeight * heightFactor! : null;
     final double maxHeight = screenHeight * maxHeightFactor;
 
+    Widget bodyWidget;
+    if (heightFactor != null) {
+      bodyWidget = isBodyScrollable ? Expanded(child: child) : child;
+    } else {
+      bodyWidget = isBodyScrollable
+          ? Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: child,
+              ),
+            )
+          : child;
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.vertical(top: Radius.circular(topRadius)),
       clipBehavior: Clip.antiAlias,
@@ -90,94 +104,87 @@ class AppDrawer extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(topRadius)),
         ),
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: heightFactor == null ? MainAxisSize.min : MainAxisSize.max,
-        children: [
-          // ── Drag Handle (No close X button) ───────────────────────────
-          if (showDragHandle)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InteractiveDragHandle(
-                  color: Colors.white.withValues(alpha: 0.25),
-                  onTap: () => Navigator.pop(context),
-                  onVerticalDragUpdate: (details) {
-                    if ((details.primaryDelta ?? 0) > 3) {
-                      Navigator.pop(context);
-                    }
-                  },
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-
-          // ── Hero / Header Card (if provided) ─────────────────────────
-          if (headerCard != null) ...[
-            headerCard!,
-            const SizedBox(height: 12),
-          ] else if (title != null && title!.isNotEmpty) ...[
-            // ── Standard Title Row ──────────────────────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (subtitle != null && subtitle!.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Text(
-                          subtitle!,
-                          style: const TextStyle(
-                            color: AppColors.textSoft,
-                            fontSize: 12,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: heightFactor == null ? MainAxisSize.min : MainAxisSize.max,
+          children: [
+            // ── Drag Handle (No close X button) ───────────────────────────
+            if (showDragHandle)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: InteractiveDragHandle(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    onTap: () => Navigator.pop(context),
+                    onVerticalDragUpdate: (details) {
+                      if ((details.primaryDelta ?? 0) > 3) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    padding: EdgeInsets.zero,
                   ),
                 ),
-                if (trailingHeader != null) trailingHeader!,
-              ],
-            ),
-            const SizedBox(height: 14),
-          ],
+              ),
 
-          // ── Body Content ──────────────────────────────────────────────
-          if (isBodyScrollable)
-            Expanded(
-              child: child,
-            )
-          else
-            child,
+            // ── Hero / Header Card (if provided) ─────────────────────────
+            if (headerCard != null) ...[
+              headerCard!,
+              const SizedBox(height: 12),
+            ] else if (title != null && title!.isNotEmpty) ...[
+              // ── Standard Title Row ──────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (subtitle != null && subtitle!.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle!,
+                            style: const TextStyle(
+                              color: AppColors.textSoft,
+                              fontSize: 12,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (trailingHeader != null) trailingHeader!,
+                ],
+              ),
+              const SizedBox(height: 14),
+            ],
 
-          // ── Dedicated Sticky Bottom Action Sheet / Button Bar ────────
-          if (bottomAction != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(top: 8),
-              color: backgroundColor,
-              child: bottomAction!,
-            ),
+            // ── Body Content (Content-wrapped or Expanded) ────────────────
+            bodyWidget,
+
+            // ── Dedicated Sticky Bottom Action Sheet / Button Bar ────────
+            if (bottomAction != null) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: bottomAction!,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 /// Standardized card placed beneath the drag handle in an [AppDrawer].

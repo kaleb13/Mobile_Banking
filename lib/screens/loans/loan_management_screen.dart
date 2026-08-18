@@ -22,8 +22,6 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   // 0 = Lent (I gave money), 1 = Borrowed (I owe), 2 = Paid
-  static const _tabs = ['Lent Out', 'Borrowed', 'Settled'];
-
   static const _lentColor = AppColors.positive; // green
   static const _borrowColor = AppColors.warning; // amber
   static const _paidColor = AppColors.textSoft; // 80% white (was muted blue)
@@ -59,10 +57,10 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
       _tabCtrl.animateTo(targetTab);
     }
     final lentLoans = provider.loanRecords
-        .where((l) => l.loanType == 'lent' && !l.isPaid && (l.id == null || !provider.isLoanHidden(l.id!)))
+        .where((l) => l.loanType == 'lent' && !l.isPaid)
         .toList();
     final borrowedLoans = provider.loanRecords
-        .where((l) => l.loanType == 'borrowed' && !l.isPaid && (l.id == null || !provider.isLoanHidden(l.id!)))
+        .where((l) => l.loanType == 'borrowed' && !l.isPaid)
         .toList();
     final paidLoans = provider.paidLoans;
 
@@ -73,68 +71,42 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
         borrowedLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle(
+      value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness:
-            context.isLightMode ? Brightness.dark : Brightness.light,
-        systemNavigationBarIconBrightness:
-            context.isLightMode ? Brightness.dark : Brightness.light,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
         extendBody: true,
-        backgroundColor: context.themeBackground,
+        backgroundColor: AppColors.background,
         body: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: BoxDecoration(
-            gradient: context.isLightMode
-                ? const LinearGradient(
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
-                    colors: [
-                      AppColors.backgroundLight,
-                      AppColors.bgMidLight,
-                    ],
-                  )
-                : const LinearGradient(
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
-                    colors: [
-                      AppColors.background,
-                      AppColors.bgMid,
-                    ],
-                  ),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              colors: [
+                AppColors.background,
+                AppColors.bgMid,
+              ],
+            ),
           ),
           child: Column(
             children: [
-              SafeArea(
-                bottom: false,
-                child: _LoanHeader(
-                  totalLent: totalLent,
-                  totalBorrowed: totalBorrowed,
-                  provider: provider,
-                ),
+              // ── Drawer-Style Top Card (Title, Add Button, Metrics, & Tabs) ──
+              _LoanTopDrawerCard(
+                totalLent: totalLent,
+                totalBorrowed: totalBorrowed,
+                lentCount: lentLoans.length,
+                borrowedCount: borrowedLoans.length,
+                settledCount: paidLoans.length,
+                tabController: _tabCtrl,
+                provider: provider,
               ),
 
-              // ── Pending Approvals Banner ───────────────────────────────────
-              if (provider.pendingRepaymentRequests.isNotEmpty)
-                _PendingApprovalsBanner(
-                  requests: provider.pendingRepaymentRequests,
-                  loans: provider.loanRecords,
-                  provider: provider,
-                ),
-
-              // ── Tab bar ─────────────────────────────────────────────────────────────
-              AppCapsuleTabBar(
-                tabs: _tabs,
-                controller: _tabCtrl,
-                height: 44,
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                fontSize: 13,
-              ),
-
-              // ── Tab views ─────────────────────────────────────────────────
+              // ── Tab views ──
               Expanded(
                 child: TabBarView(
                   controller: _tabCtrl,
@@ -165,57 +137,123 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
             ],
           ),
         ),
-        floatingActionButton: null,
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Summary Header (Plain text without cards)
+// Drawer-Style Top Card
 // ─────────────────────────────────────────────────────────────────────────────
-class _LoanHeader extends StatelessWidget {
+class _LoanTopDrawerCard extends StatelessWidget {
   final double totalLent;
   final double totalBorrowed;
+  final int lentCount;
+  final int borrowedCount;
+  final int settledCount;
+  final TabController tabController;
   final FinanceProvider provider;
 
-  const _LoanHeader({
+  const _LoanTopDrawerCard({
     required this.totalLent,
     required this.totalBorrowed,
+    required this.lentCount,
+    required this.borrowedCount,
+    required this.settledCount,
+    required this.tabController,
     required this.provider,
   });
 
-  Widget _buildAmountText(BuildContext context, double amount) {
+  Widget _buildMetricCard({
+    required BuildContext context,
+    required String title,
+    required double amount,
+    required int count,
+    required bool isLent,
+    required VoidCallback onTap,
+  }) {
     final fmt = NumberFormat('#,##0.00');
     final formattedStr = fmt.format(amount);
     final parts = formattedStr.split('.');
     final intPart = parts[0];
     final fracPart = parts.length > 1 ? '.${parts[1]}' : '.00';
+    final accentColor = isLent ? AppColors.positive : AppColors.warning;
 
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.center,
-      child: RichText(
-        text: TextSpan(
-          children: [
-            TextSpan(
-              text: intPart,
-              style: TextStyle(
-                color: context.themeTextPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.4,
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (isLent)
+                    const AppBadge.success(
+                      text: 'Lent Out',
+                      size: AppBadgeSize.micro,
+                    )
+                  else
+                    const AppBadge.warning(
+                      text: 'Borrowed',
+                      size: AppBadgeSize.micro,
+                    ),
+                  Text(
+                    '$count ${count == 1 ? (isLent ? 'loan' : 'debt') : (isLent ? 'loans' : 'debts')}',
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            TextSpan(
-              text: '$fracPart ETB',
-              style: TextStyle(
-                color: context.themeTextSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      isLent ? '+' : '-',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      intPart,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      '$fracPart ETB',
+                      style: const TextStyle(
+                        color: AppColors.textSoft,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -223,88 +261,106 @@ class _LoanHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row: Title on Left, Add Loan button on Right
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(28),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Loan Tracker',
-                style: TextStyle(
-                  color: context.themeTextPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.5,
-                ),
+              // Header Row: Title on Left, Add Loan button on Right
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Loan Tracker',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  AppButton.primary(
+                    text: 'Add Loan',
+                    icon: Icons.add_rounded,
+                    fullWidth: false,
+                    height: 32,
+                    fontSize: 12,
+                    iconSize: 15,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    onPressed: () {
+                      AppBottomSheet.show(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => AddLoanSheet(provider: provider),
+                      );
+                    },
+                  ),
+                ],
               ),
-              AppButton.primary(
-                text: 'Add Loan',
-                icon: Icons.add,
-                fullWidth: false,
-                height: 28,
-                fontSize: 11.5,
-                iconSize: 13,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                onPressed: () {
-                  AppBottomSheet.show(
+              const SizedBox(height: 14),
+
+              // Summary metric cards (Lent Out and Borrowed)
+              Row(
+                children: [
+                  _buildMetricCard(
                     context: context,
-                    isScrollControlled: true,
-                    builder: (_) => AddLoanSheet(provider: provider),
-                  );
-                },
+                    title: 'Lent Out',
+                    amount: totalLent,
+                    count: lentCount,
+                    isLent: true,
+                    onTap: () => tabController.animateTo(0),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildMetricCard(
+                    context: context,
+                    title: 'Borrowed',
+                    amount: totalBorrowed,
+                    count: borrowedCount,
+                    isLent: false,
+                    onTap: () => tabController.animateTo(1),
+                  ),
+                ],
+              ),
+
+              // Pending approvals inside header drawer
+              if (provider.pendingRepaymentRequests.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _PendingApprovalsBanner(
+                  requests: provider.pendingRepaymentRequests,
+                  loans: provider.loanRecords,
+                  provider: provider,
+                ),
+              ],
+
+              const SizedBox(height: 14),
+
+              // Capsule Tab Bar inside the bottom of the card
+              AppCapsuleTabBar(
+                tabs: const [
+                  'Lent Out',
+                  'Borrowed',
+                  'Settled',
+                ],
+                controller: tabController,
+                height: 42,
+                fontSize: 13,
+                backgroundColor: AppColors.tabBackground,
+                margin: EdgeInsets.zero,
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Summary metrics with badges & center divider
-          Row(
-            children: [
-              // Lent Out Column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const AppBadge.success(
-                      text: 'Lent Out',
-                      icon: Icons.arrow_upward,
-                      size: AppBadgeSize.small,
-                    ),
-                    const SizedBox(height: 6),
-                    _buildAmountText(context, totalLent),
-                  ],
-                ),
-              ),
-
-              // Center Divider
-              Container(
-                height: 30,
-                width: 1,
-                color: context.themeBorder,
-              ),
-
-              // Borrowed Column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const AppBadge.warning(
-                      text: 'Borrowed',
-                      icon: Icons.arrow_downward,
-                      size: AppBadgeSize.small,
-                    ),
-                    const SizedBox(height: 6),
-                    _buildAmountText(context, totalBorrowed),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -414,10 +470,6 @@ class _LoanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.read<FinanceProvider>();
     final pct = loan.progressPercent;
-    final bool isAutoDetectedLoan = loan.contractNumber != null ||
-        loan.trackedSenderName?.toLowerCase() == 'telebirr' ||
-        loan.personName.toLowerCase().contains('telecom') ||
-        loan.personName.toLowerCase().contains('telebirr');
 
     return GestureDetector(
       onTap: () => _openDetail(context, provider),
@@ -521,7 +573,9 @@ class _LoanCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Watching: ${loan.trackedSenderName ?? loan.personName}',
+                    loan.loanType == 'lent'
+                        ? 'Borrower: ${loan.personName}'
+                        : 'Lender: ${loan.personName}',
                     style: const TextStyle(
                       color: Colors.white60,
                       fontSize: 11,
@@ -546,7 +600,7 @@ class _LoanCard extends StatelessWidget {
 
             // Action Buttons Row
             if (showPaid || loan.isPaid) ...[
-              // Settled Loan Actions: View Details + Hide (No Record Payment, No Delete for auto-loans)
+              // Settled Loan Actions: View Details + Delete
               Row(
                 children: [
                   Expanded(
@@ -559,7 +613,7 @@ class _LoanCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
-                    onTap: () => _confirmHide(context, provider),
+                    onTap: () => _confirmDelete(context, provider),
                     child: Container(
                       width: 42,
                       height: 42,
@@ -568,57 +622,7 @@ class _LoanCard extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.visibility_off_outlined,
-                        color: Colors.white70,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  if (!isAutoDetectedLoan) ...[
-                    const SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: () => _confirmDelete(context, provider),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: const BoxDecoration(
-                          color: AppColors.buttonSecondary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.delete_outline_rounded,
-                          color: Colors.white70,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ] else if (isAutoDetectedLoan) ...[
-              // Active Auto-detected loan: Cannot manually delete or record payment, only View Details and Hide
-              Row(
-                children: [
-                  Expanded(
-                    child: AppButton.secondary(
-                      text: 'View Details',
-                      icon: Icons.receipt_long_outlined,
-                      height: 42,
-                      onPressed: () => _openDetail(context, provider),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: () => _confirmHide(context, provider),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: const BoxDecoration(
-                        color: AppColors.buttonSecondary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.visibility_off_outlined,
+                        Icons.delete_outline_rounded,
                         color: Colors.white70,
                         size: 18,
                       ),
@@ -627,7 +631,7 @@ class _LoanCard extends StatelessWidget {
                 ],
               ),
             ] else ...[
-              // Active Manual Loan: Record Payment + Delete
+              // Active Loan Actions: Record Payment + Delete
               Row(
                 children: [
                   Expanded(
@@ -682,29 +686,6 @@ class _LoanCard extends StatelessWidget {
     );
   }
 
-  void _confirmHide(BuildContext context, FinanceProvider provider) {
-    AppConfirmDialog.show(
-      context: context,
-      title: 'Hide Loan?',
-      icon: Icons.visibility_off_outlined,
-      message:
-          'Are you sure you want to hide this loan for ${loan.personName}? It will be removed from your loan tracker list.',
-      confirmText: 'Hide',
-      onConfirm: () async {
-        if (loan.id != null) {
-          await provider.hideLoan(loan.id!);
-          if (context.mounted) {
-            AppToast.info(
-              context,
-              message: 'Loan hidden',
-              subtitle: 'You can unhide it anytime from settings',
-            );
-          }
-        }
-      },
-    );
-  }
-
   void _confirmDelete(BuildContext context, FinanceProvider provider) {
     AppConfirmDialog.show(
       context: context,
@@ -723,415 +704,854 @@ class _LoanCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Loan Detail Screen
 // ─────────────────────────────────────────────────────────────────────────────
-class LoanDetailScreen extends StatelessWidget {
+class LoanDetailScreen extends StatefulWidget {
   final LoanRecord loan;
   const LoanDetailScreen({super.key, required this.loan});
 
   @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<FinanceProvider>();
-    // Get current version from provider
-    final current = provider.loanRecords
-        .firstWhere((l) => l.id == loan.id, orElse: () => loan);
-    final payments = provider.paymentsForLoan(current.id!);
-    final fmt = NumberFormat('#,##0.00');
-    final isLent = current.loanType == 'lent';
-    final accentColor =
-        isLent ? AppColors.positive : AppColors.warning;
-    final bool isAutoDetectedLoan = current.contractNumber != null ||
-        current.trackedSenderName?.toLowerCase() == 'telebirr' ||
-        current.personName.toLowerCase().contains('telecom') ||
-        current.personName.toLowerCase().contains('telebirr');
+  State<LoanDetailScreen> createState() => _LoanDetailScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: context.themeBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        iconTheme: IconThemeData(color: context.themeTextPrimary),
-        title: Text(
-          current.personName,
-          style: TextStyle(
-              color: context.themeTextPrimary, fontSize: 18, fontWeight: FontWeight.w600),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+class _LoanDetailScreenState extends State<LoanDetailScreen> {
+  bool _isMenuOpen = false;
+
+  Widget _buildBackground() {
+    return Positioned.fill(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [
+              AppColors.background,
+              AppColors.bgMid,
+            ],
+          ),
         ),
-        actions: [
-          if (!current.isPaid && !isAutoDetectedLoan) ...[
-            AppButton.pill(
-              text: 'Extend',
-              icon: Icons.event_repeat_rounded,
-              isSelected: false,
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: current.dueDate.isBefore(DateTime.now())
-                      ? DateTime.now()
-                      : current.dueDate,
-                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                  lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                  builder: (ctx, child) => Theme(
-                    data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.dark(
-                        primary: AppColors.positive,
-                        surface: AppColors.surface,
-                      ),
-                    ),
-                    child: child!,
-                  ),
-                );
-                if (picked != null) {
-                  await provider.updateLoanDueDate(current.id!, picked);
-                }
-              },
-            ),
-            const SizedBox(width: 8),
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: GestureDetector(
-                onTap: () {
-                  AppBottomSheet.show(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (_) =>
-                        RecordPaymentSheet(loan: current, provider: provider),
-                  );
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, color: accentColor, size: 14),
-                      const SizedBox(width: 4),
-                      Text('Payment',
-                          style: TextStyle(
-                              color: accentColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ] else ...[
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: AppButton.pill(
-                text: 'Hide',
-                icon: Icons.visibility_off_outlined,
-                isSelected: false,
-                onPressed: () {
-                  AppConfirmDialog.show(
-                    context: context,
-                    title: 'Hide Loan?',
-                    icon: Icons.visibility_off_outlined,
-                    message:
-                        'Are you sure you want to hide this loan for ${current.personName}? It will be removed from your loan list.',
-                    confirmText: 'Hide',
-                    onConfirm: () async {
-                      if (current.id != null) {
-                        await provider.hideLoan(current.id!);
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          AppToast.info(
-                            context,
-                            message: 'Loan hidden',
-                            subtitle: 'You can restore it anytime in settings',
-                          );
-                        }
-                      }
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
-        physics: const BouncingScrollPhysics(),
+    );
+  }
+
+  Widget _buildProgressStat(String label, String value, Color valueColor) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSoft,
+            fontSize: 10.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    Widget? customWidget,
+    String? tooltipText,
+  }) {
+    final effectiveTooltip = tooltipText ?? (value.isNotEmpty ? value : null);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // ── Progress hero ──────────────────────────────────────────────
+          // Left side: Icon + Label
           Container(
-            padding: const EdgeInsets.all(20),
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(22),
+              color: Colors.white.withValues(alpha: 0.05),
+              shape: BoxShape.circle,
             ),
-            child: Column(
-              children: [
-                // Circular progress
-                SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 120,
-                        height: 120,
-                        child: CircularProgressIndicator(
-                          value: current.progressPercent,
-                          strokeWidth: 8,
-                          backgroundColor: Colors.white.withValues(alpha: 0.07),
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(accentColor),
-                        ),
-                      ),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${(current.progressPercent * 100).toStringAsFixed(0)}%',
-                            style: TextStyle(
-                                color: accentColor,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w700),
-                          ),
-                          const Text('repaid',
-                              style: TextStyle(
-                                  color: AppColors.textSoft, fontSize: 10)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _DetailStat('Principal',
-                        fmt.format(current.principalAmount), Colors.white),
-                    _DetailStat('Paid', fmt.format(current.paidAmount),
-                        AppColors.positive),
-                    _DetailStat('Remaining',
-                        fmt.format(current.remainingAmount), accentColor),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Divider(color: Colors.white.withValues(alpha: 0.07)),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isLent ? '↑ Lent on' : '↓ Borrowed on',
-                      style: const TextStyle(
-                          color: AppColors.textSoft, fontSize: 12),
-                    ),
-                    Text(DateFormat('MMM d, y').format(current.loanDate),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 11)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      current.isOverdue
-                          ? '⚠ Overdue by ${current.daysOverdue}d'
-                          : '📅 Due on',
-                      style: TextStyle(
-                          color: current.isOverdue
-                              ? AppColors.negative
-                              : AppColors.textSoft,
-                          fontSize: 11),
-                    ),
-                    Text(DateFormat('MMM d, y').format(current.dueDate),
-                        style: TextStyle(
-                            color: current.isOverdue
-                                ? AppColors.negative
-                                : Colors.white,
-                            fontSize: 11,
-                            fontWeight: current.isOverdue
-                                ? FontWeight.w700
-                                : FontWeight.normal)),
-                  ],
-                ),
-                if (current.trackedSenderName != null) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('🔍 Tracking sender',
-                          style: TextStyle(
-                              color: AppColors.gold, fontSize: 11)),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          current.trackedSenderName!,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 11),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (current.note != null && current.note!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('📝 Note',
-                          style: TextStyle(
-                              color: AppColors.textSoft, fontSize: 11)),
-                      Flexible(
-                        child: Text(current.note!,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 11)),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+            child: Center(
+              child: Icon(icon, color: AppColors.textSecondary, size: 15),
             ),
           ),
-
-          const SizedBox(height: 24),
-
-          // ── Payment history ────────────────────────────────────────────
-          if (payments.isNotEmpty) ...[
-            const Text('Payment History',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            ...payments.map((p) => _PaymentTile(
-                  payment: p,
-                  loanId: current.id!,
-                  accentColor: accentColor,
-                )),
-          ] else ...[
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Column(
-                  children: [
-                    Icon(Icons.receipt_long_outlined,
-                        color: AppColors.textSecondary.withValues(alpha: 0.3),
-                        size: 40),
-                    const SizedBox(height: 10),
-                    const Text('No payments recorded yet',
-                        style:
-                            TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                  ],
-                ),
-              ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
             ),
-          ],
-
-          // ── Linked Messages ────────────────────────────────────────────
-          // Collect the originating transaction + any repayment transactions
-          // that were auto-linked via SMS, then display their raw messages.
-          Builder(builder: (context) {
-            // 1. Originating transaction (the one that created this loan)
-            final originTx = current.linkedTransactionId != null
-                ? provider.transactions
-                    .where((t) => t.id == current.linkedTransactionId)
-                    .cast<dynamic>()
-                    .firstOrNull
-                : null;
-
-            // 2. Repayment transactions linked to each payment
-            final repaymentTxs = payments
-                .where((p) => p.linkedTransactionId != null)
-                .map((p) => (
-                      payment: p,
-                      tx: provider.transactions
-                          .where((t) => t.id == p.linkedTransactionId)
-                          .cast<dynamic>()
-                          .firstOrNull,
-                    ))
-                .where((pair) => pair.tx != null)
-                .toList();
-
-            if (originTx == null && repaymentTxs.isEmpty) {
-              return const SizedBox.shrink();
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 28),
-                const Text(
-                  'LINKED MESSAGES',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Originating loan SMS
-                if (originTx != null) ...[
-                  _LinkedMessageCard(
-                    label: current.isPaid
-                        ? '📄 Originating Transaction (Settled)'
-                        : '📄 Originating Transaction',
-                    sublabel:
-                        'Created this loan on ${DateFormat('MMM d, y').format(current.loanDate)}',
-                    rawMessage: originTx.rawMessage as String,
-                    accentColor: accentColor,
-                    isPrimary: true,
-                  ),
-                  if (repaymentTxs.isNotEmpty) const SizedBox(height: 10),
-                ],
-
-                // Repayment SMS messages
-                ...repaymentTxs.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final pair = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _LinkedMessageCard(
-                      label: '💸 Repayment #${idx + 1}',
-                      sublabel:
-                          '${fmt.format(pair.payment.amount)} ETB on ${DateFormat('MMM d, y').format(pair.payment.paymentDate)}',
-                      rawMessage: pair.tx.rawMessage as String,
-                      accentColor: AppColors.positive,
-                      isPrimary: false,
-                    ),
-                  );
-                }),
-              ],
-            );
-          }),
+          ),
+          // Clear separation gap between left label and right value
+          const SizedBox(width: 16),
+          // Right side: Info value stretching to the right, truncated if long
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: customWidget ??
+                  (effectiveTooltip != null
+                      ? Tooltip(
+                          message: effectiveTooltip,
+                          triggerMode: TooltipTriggerMode.longPress,
+                          preferBelow: false,
+                          showDuration: const Duration(seconds: 3),
+                          waitDuration: const Duration(milliseconds: 300),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          textStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          child: Text(
+                            value,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.end,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      : Text(
+                          value,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )),
+            ),
+          ),
         ],
       ),
     );
   }
-}
 
-class _DetailStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-  const _DetailStat(this.label, this.value, this.valueColor);
+  Widget _buildCompactHeroCard(
+    BuildContext context,
+    LoanRecord current,
+    Color accentColor,
+    NumberFormat fmt,
+    FinanceProvider provider,
+    bool isLent,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        children: [
+          // Top Row: Status Badge + Due/Created Date
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (current.isPaid)
+                const AppBadge.success(
+                  text: 'SETTLED • PAID',
+                  size: AppBadgeSize.small,
+                )
+              else if (current.isOverdue)
+                AppBadge.destructive(
+                  text: 'OVERDUE BY ${current.daysOverdue}D',
+                  size: AppBadgeSize.small,
+                )
+              else if (isLent)
+                const AppBadge.success(
+                  text: 'MONEY LENT',
+                  size: AppBadgeSize.small,
+                )
+              else
+                const AppBadge.warning(
+                  text: 'DEBT BORROWED',
+                  size: AppBadgeSize.small,
+                ),
+              Text(
+                'Due ${DateFormat('MMM d, yyyy').format(current.dueDate)}',
+                style: TextStyle(
+                  color: current.isOverdue ? AppColors.negative : AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: current.isOverdue ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Hero Amount
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                isLent ? '+' : '-',
+                style: TextStyle(
+                  color: accentColor,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                NumberFormat('#,##0').format(current.principalAmount),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
+                ),
+              ),
+              Text(
+                '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
+                style: const TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const CurrencySymbolWidget(
+                size: 18,
+                color: AppColors.textSoft,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Progress Bar
+          CustomProgressBar(
+            progress: current.progressPercent,
+            height: 8,
+            progressColor: accentColor,
+          ),
+          const SizedBox(height: 12),
+
+          // Stats summary
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildProgressStat('Principal', '${fmt.format(current.principalAmount)} ETB', Colors.white),
+              _buildProgressStat('Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)', '${fmt.format(current.paidAmount)} ETB', AppColors.positive),
+              _buildProgressStat(
+                'Remaining',
+                '${fmt.format(current.remainingAmount)} ETB',
+                current.remainingAmount > 0 ? accentColor : AppColors.textSoft,
+              ),
+            ],
+          ),
+
+          // Quick Action Buttons directly in the hero if not paid
+          if (!current.isPaid) ...[
+            const SizedBox(height: 16),
+            Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton.primary(
+                    text: 'Record Payment',
+                    icon: Icons.add_rounded,
+                    height: 40,
+                    fontSize: 13,
+                    iconSize: 16,
+                    onPressed: () {
+                      AppBottomSheet.show(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => RecordPaymentSheet(
+                          loan: current,
+                          provider: provider,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppButton.secondary(
+                    text: 'Extend Due Date',
+                    icon: Icons.event_repeat_rounded,
+                    height: 40,
+                    fontSize: 13,
+                    iconSize: 16,
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: current.dueDate.isBefore(DateTime.now())
+                            ? DateTime.now()
+                            : current.dueDate,
+                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                        builder: (ctx, child) => Theme(
+                          data: Theme.of(ctx).copyWith(
+                            colorScheme: const ColorScheme.dark(
+                              primary: AppColors.positive,
+                              surface: AppColors.surface,
+                            ),
+                          ),
+                          child: child!,
+                        ),
+                      );
+                      if (picked != null && current.id != null) {
+                        await provider.updateLoanDueDate(current.id!, picked);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoanInfoCard(BuildContext context, LoanRecord current, bool isLent) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: (isLent ? AppColors.positive : AppColors.warning).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Icon(
+                    isLent ? Icons.handshake_outlined : Icons.account_balance_wallet_outlined,
+                    color: isLent ? AppColors.positive : AppColors.warning,
+                    size: 18,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      current.personName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isLent ? 'Borrower • Money Lent Out' : 'Lender • Debt Borrowed',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+          const SizedBox(height: 12),
+
+          _buildInfoRow(
+            Icons.person_outline_rounded,
+            isLent ? 'Borrower' : 'Lender',
+            current.personName,
+          ),
+          _buildInfoRow(
+            Icons.calendar_today_outlined,
+            'Date Created',
+            DateFormat('MMMM dd, yyyy').format(current.loanDate),
+          ),
+          _buildInfoRow(
+            Icons.event_available_outlined,
+            'Due Date',
+            DateFormat('MMMM dd, yyyy').format(current.dueDate),
+            customWidget: current.isOverdue
+                ? AppBadge.destructive(
+                    text: 'Overdue (${current.daysOverdue}d)',
+                    size: AppBadgeSize.small,
+                  )
+                : null,
+          ),
+          _buildInfoRow(
+            Icons.radar_rounded,
+            'Watched Channels',
+            current.trackedSenderName ?? 'All Bank Channels',
+          ),
+          if (current.note != null && current.note!.isNotEmpty)
+            _buildInfoRow(
+              Icons.notes_rounded,
+              'Note',
+              current.note!,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentHistorySection(
+      BuildContext context,
+      LoanRecord current,
+      List<LoanPayment> payments,
+      Color accentColor,
+      NumberFormat fmt,
+      FinanceProvider provider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'REPAYMENT HISTORY',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              AppBadge.neutral(
+                text: '${payments.length} ${payments.length == 1 ? 'payment' : 'payments'}',
+                size: AppBadgeSize.small,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (payments.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      color: AppColors.textSecondary.withValues(alpha: 0.35),
+                      size: 36,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'No repayments recorded yet',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: payments.length,
+              separatorBuilder: (_, __) => Divider(
+                color: Colors.white.withValues(alpha: 0.06),
+                height: 16,
+              ),
+              itemBuilder: (ctx, idx) {
+                final payment = payments[idx];
+                return Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.positive.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: AppColors.positive,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '+${fmt.format(payment.amount)} ETB',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            DateFormat('MMM d, yyyy • hh:mm a').format(payment.paymentDate),
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                          if (payment.note != null && payment.note!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              payment.note!,
+                              style: const TextStyle(
+                                color: AppColors.textSoft,
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: AppColors.textSoft,
+                        size: 18,
+                      ),
+                      tooltip: 'Remove payment',
+                      onPressed: () {
+                        AppConfirmDialog.show(
+                          context: context,
+                          title: 'Remove Payment?',
+                          icon: Icons.delete_outline_rounded,
+                          iconColor: AppColors.negative,
+                          message:
+                              'Are you sure you want to remove this repayment record of ${fmt.format(payment.amount)} ETB?',
+                          confirmText: 'Remove',
+                          cancelText: 'Cancel',
+                          isDestructive: true,
+                          onConfirm: () async {
+                            await provider.deleteLoanPaymentRecord(payment.id!, current.id!);
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinkedMessagesSection(
+      BuildContext context,
+      LoanRecord current,
+      List<LoanPayment> payments,
+      Color accentColor,
+      NumberFormat fmt,
+      FinanceProvider provider) {
+    // 1. Originating transaction
+    final originTx = current.linkedTransactionId != null
+        ? provider.transactions
+            .where((t) => t.id == current.linkedTransactionId)
+            .cast<dynamic>()
+            .firstOrNull
+        : null;
+
+    // 2. Repayment transactions
+    final repaymentTxs = payments
+        .where((p) => p.linkedTransactionId != null)
+        .map((p) => (
+              payment: p,
+              tx: provider.transactions
+                  .where((t) => t.id == p.linkedTransactionId)
+                  .cast<dynamic>()
+                  .firstOrNull,
+            ))
+        .where((pair) => pair.tx != null)
+        .toList();
+
+    if (originTx == null && repaymentTxs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'LINKED SMS MESSAGES',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Originating loan SMS
+        if (originTx != null) ...[
+          _LinkedMessageCard(
+            label: current.isPaid
+                ? '📄 Originating Transaction (Settled)'
+                : '📄 Originating Transaction',
+            sublabel:
+                'Created this loan on ${DateFormat('MMM d, y').format(current.loanDate)}',
+            rawMessage: originTx.rawMessage as String,
+            accentColor: accentColor,
+            isPrimary: true,
+          ),
+          if (repaymentTxs.isNotEmpty) const SizedBox(height: 10),
+        ],
+
+        // Repayment SMS messages
+        ...repaymentTxs.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final pair = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _LinkedMessageCard(
+              label: '💸 Repayment #${idx + 1}',
+              sublabel:
+                  '${fmt.format(pair.payment.amount)} ETB on ${DateFormat('MMM d, y').format(pair.payment.paymentDate)}',
+              rawMessage: pair.tx.rawMessage as String,
+              accentColor: AppColors.positive,
+              isPrimary: false,
+            ),
+          );
+        }),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value,
+    final provider = context.watch<FinanceProvider>();
+    final current = provider.loanRecords
+        .firstWhere((l) => l.id == widget.loan.id, orElse: () => widget.loan);
+    final payments = provider.paymentsForLoan(current.id!);
+    final fmt = NumberFormat('#,##0.00');
+    final isLent = current.loanType == 'lent';
+    final accentColor = isLent ? AppColors.positive : AppColors.warning;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          centerTitle: false,
+          titleSpacing: 0,
+          title: const Text(
+            'Loan Details',
             style: TextStyle(
-                color: valueColor, fontSize: 14, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(color: AppColors.textSoft, fontSize: 10)),
-      ],
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: AppColors.background.withValues(alpha: 0.85),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: const AppBackButton(),
+          actions: [
+            Theme(
+              data: Theme.of(context).copyWith(
+                splashColor: Colors.white.withValues(alpha: 0.15),
+                highlightColor: Colors.white.withValues(alpha: 0.12),
+              ),
+              child: PopupMenuButton<String>(
+                onOpened: () => setState(() => _isMenuOpen = true),
+                onCanceled: () => setState(() => _isMenuOpen = false),
+                offset: const Offset(0, 42),
+                constraints: const BoxConstraints(minWidth: 170, maxWidth: 210),
+                borderRadius: BorderRadius.circular(100),
+                padding: EdgeInsets.zero,
+                icon: Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _isMenuOpen
+                        ? AppColors.buttonSecondary
+                        : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.more_vert_rounded,
+                      color: Colors.white, size: 20),
+                ),
+                color: AppColors.surface,
+                elevation: 10,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onSelected: (value) async {
+                  setState(() => _isMenuOpen = false);
+                  if (value == 'extend') {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: current.dueDate.isBefore(DateTime.now())
+                          ? DateTime.now()
+                          : current.dueDate,
+                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                      builder: (ctx, child) => Theme(
+                        data: Theme.of(ctx).copyWith(
+                          colorScheme: const ColorScheme.dark(
+                            primary: AppColors.positive,
+                            surface: AppColors.surface,
+                          ),
+                        ),
+                        child: child!,
+                      ),
+                    );
+                    if (picked != null && current.id != null) {
+                      await provider.updateLoanDueDate(current.id!, picked);
+                    }
+                  } else if (value == 'delete') {
+                    final shouldDelete = await AppConfirmDialog.show(
+                      context: context,
+                      title: 'Delete Loan?',
+                      icon: Icons.delete_outline_rounded,
+                      iconColor: AppColors.negative,
+                      message:
+                          'Are you sure you want to delete this loan for ${current.personName}? All repayment records will be permanently removed.',
+                      confirmText: 'Delete',
+                      cancelText: 'Cancel',
+                      isDestructive: true,
+                      onConfirm: () {},
+                    );
+                    if (shouldDelete == true && current.id != null && context.mounted) {
+                      await provider.deleteLoan(current.id!);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        AppToast.info(context, message: 'Loan record deleted');
+                      }
+                    }
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  if (!current.isPaid)
+                    PopupMenuItem(
+                      value: 'extend',
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Extend Due Date',
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'Delete Loan',
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.negative,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Stack(
+                children: [
+                  _buildBackground(),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.only(top: 100, bottom: 0),
+                    child: Column(
+                      children: [
+                        // ── 1. Compact Hero Card (Amount, Progress, Stats, & Actions) ──
+                        _buildCompactHeroCard(context, current, accentColor, fmt, provider, isLent),
+                        const SizedBox(height: 14),
+
+                        // ── 2. Core Loan Info Card ─────────────────────────
+                        _buildLoanInfoCard(context, current, isLent),
+                        const SizedBox(height: 14),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── 3. Payment History Section ─────────────────────
+                    _buildPaymentHistorySection(context, current, payments, accentColor, fmt, provider),
+
+                    const SizedBox(height: 16),
+
+                    // ── 4. Linked Messages Section ─────────────────────
+                    _buildLinkedMessagesSection(context, current, payments, accentColor, fmt, provider),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1163,22 +1583,24 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: widget.accentColor.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
           // ── Header row (always visible) ─────────────────────────────
           GestureDetector(
             onTap: () => setState(() => _expanded = !_expanded),
+            behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(7),
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: widget.accentColor.withValues(alpha: 0.1),
+                      color: widget.accentColor.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -1186,10 +1608,10 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
                           ? Icons.receipt_long_outlined
                           : Icons.payments_outlined,
                       color: widget.accentColor,
-                      size: 14,
+                      size: 17,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1198,26 +1620,29 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
                           widget.label,
                           style: TextStyle(
                             color: widget.accentColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           widget.sublabel,
                           style: const TextStyle(
                             color: AppColors.textSecondary,
-                            fontSize: 10,
+                            fontSize: 11,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: widget.accentColor,
-                    size: 18,
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white.withValues(alpha: 0.6),
+                      size: 20,
+                    ),
                   ),
                 ],
               ),
@@ -1227,96 +1652,44 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
           if (_expanded)
             Container(
               width: double.infinity,
-              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.black.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: SelectableText(
-                widget.rawMessage,
-                style: const TextStyle(
-                  color: AppColors.textSoft,
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  height: 1.6,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(
+                    widget.rawMessage,
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontFamily: 'monospace',
+                      fontSize: 11.5,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: AppButton.secondary(
+                      text: 'Copy',
+                      icon: Icons.copy_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: widget.rawMessage));
+                        AppToast.success(context, message: 'Message copied to clipboard');
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentTile extends StatelessWidget {
-  final LoanPayment payment;
-  final int loanId;
-  final Color accentColor;
-  const _PaymentTile(
-      {required this.payment, required this.loanId, required this.accentColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.read<FinanceProvider>();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.payments_outlined, color: accentColor, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${NumberFormat('#,##0.00').format(payment.amount)} ETB',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  DateFormat('MMM d, y · hh:mm a').format(payment.paymentDate),
-                  style:
-                      const TextStyle(color: AppColors.textSoft, fontSize: 10),
-                ),
-                if (payment.note != null && payment.note!.isNotEmpty)
-                  Text(payment.note!,
-                      style: const TextStyle(
-                          color: AppColors.textSoft, fontSize: 10)),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              AppConfirmDialog.show(
-                context: context,
-                title: 'Remove payment?',
-                message: 'Are you sure you want to remove this payment record?',
-                confirmText: 'Remove',
-                isDestructive: true,
-                onConfirm: () async {
-                  await provider.deleteLoanPaymentRecord(payment.id!, loanId);
-                },
-              );
-            },
-            child: const Icon(Icons.close_rounded,
-                color: AppColors.negative, size: 16),
-          ),
         ],
       ),
     );
@@ -2247,10 +2620,10 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      margin: EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.warning.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
@@ -2379,16 +2752,21 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                           color: AppColors.textSecondary),
                                       children: [
                                         const TextSpan(
-                                            text: 'Possible match for '),
+                                            text: 'Incoming payment from '),
+                                        TextSpan(
+                                          text: req.senderFound,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                        const TextSpan(
+                                            text: ' matches borrower '),
                                         TextSpan(
                                           text: loanName,
                                           style: const TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.w600),
                                         ),
-                                        TextSpan(
-                                            text:
-                                                ' (tracking: ${req.trackedName})'),
                                       ],
                                     ),
                                   ),
@@ -2425,7 +2803,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                               const SizedBox(width: 8),
                               // Reject
                               Expanded(
-                                child: AppButton.destructive(
+                                child: AppButton.softDestructive(
                                   text: 'Reject',
                                   icon: Icons.close_rounded,
                                   height: 36,

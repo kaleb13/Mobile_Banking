@@ -40,17 +40,11 @@ void main() {
       expect(fakeSms.isNotEmpty, isTrue);
     });
 
-    test('detects Telebirr credit loan disbursement pipeline', () {
+    test('detects Telebirr sender matching pipeline', () {
       const telebirrSender = '127';
-      const creditSms =
-          'Your credit request with DGV0EMRXKY contract number is successful. Credit amount 25,000 ETB, facilitation fee 500 ETB.';
 
       // Step 1: Verify shortcode sender
       expect(BankSenders.match(telebirrSender), equals('Telebirr'));
-
-      // Step 2: Verify loan detection
-      final isDisbursement = TelebirrParser.isCreditDisbursement(creditSms);
-      expect(isDisbursement, isTrue);
     });
   });
 
@@ -199,6 +193,15 @@ void main() {
       expect(loan.remainingAmount, equals(0.0));
       expect(loan.progressPercent, equals(1.0));
       expect(loan.isPaid, isTrue);
+    });
+
+    test('verifies Telebirr credit disbursement SMS does not create a loan or transaction', () {
+      const creditSms =
+          'Your credit request with DGV0EMRXKY contract number has been approved. The credit amount is ETB 500.00, facilitation fee ETB 6.25, due date 10/08/2026. Your current available credit limit ETB400.00.';
+
+      final tx = TelebirrParser.parse(creditSms, DateTime.now());
+      // Must return null so no transaction or loan is automatically inserted
+      expect(tx, isNull);
     });
   });
 }

@@ -549,6 +549,7 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
   AppNotification? _selectedNotificationForMenu;
   AppNotification? _selectedNotificationForManualInsert;
   bool _isConfirmingClearAll = false;
+  bool _isConfirmingIgnoreAll = false;
 
   @override
   void initState() {
@@ -604,7 +605,31 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (provider.notifications.isNotEmpty)
+                    if (provider.notifications.isNotEmpty) ...[
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isConfirmingIgnoreAll = true;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.buttonSecondary,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: const Text(
+                            'Ignore All',
+                            style: TextStyle(
+                              color: AppColors.buttonSecondaryText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () {
                           setState(() {
@@ -628,6 +653,7 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -767,6 +793,95 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                                         for (final id in ids) {
                                           await provider.deleteNotification(id);
                                         }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // ── Internal Ignore All Confirmation Modal ──
+        if (_isConfirmingIgnoreAll)
+          Positioned.fill(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() => _isConfirmingIgnoreAll = false),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface.withValues(alpha: 0.88),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ignore All Notifications?',
+                                textAlign: TextAlign.left,
+                                style: AppTypography.heading2.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Are you sure you want to permanently ignore all unread messages? They will never reappear even if you refresh or rescan.',
+                                textAlign: TextAlign.left,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  height: 1.45,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: AppButton.secondary(
+                                      text: 'Cancel',
+                                      height: 42,
+                                      onPressed: () => setState(
+                                          () => _isConfirmingIgnoreAll = false),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: AppButton.primary(
+                                      text: 'Ignore All',
+                                      height: 42,
+                                      onPressed: () async {
+                                        setState(
+                                            () => _isConfirmingIgnoreAll = false);
+                                        await provider.ignoreAllNotifications();
                                       },
                                     ),
                                   ),

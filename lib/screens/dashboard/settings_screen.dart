@@ -17,9 +17,10 @@ import '../../widgets/app_list_tile.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/custom_progress_bar.dart';
+import '../../widgets/bank_card_widget.dart';
 import 'privacy_policy_screen.dart';
 import '../privacy/privacy_settings_screen.dart';
-import '../settings/background_settings_screen.dart';
 import '../settings/notification_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -239,32 +240,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
 
                     // ── Section: Notifications ─────────────────────────
-                    _sectionLabel('Notifications & Background'),
+                    _sectionLabel('Notifications'),
                     _buildCardBase([
                       _settingsTile(
                         context,
                         icon: Icons.notifications_active_rounded,
                         iconColor: AppColors.positive,
                         label: 'Notification Settings',
-                        subtitle: 'Active listening, push notifications & summary reports',
+                        subtitle: 'Active listening, quick buttons & reports',
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const NotificationSettingsScreen(),
-                          ),
-                        ),
-                        showDivider: true,
-                      ),
-                      _settingsTile(
-                        context,
-                        icon: Icons.battery_saver_rounded,
-                        iconColor: AppColors.positive,
-                        label: 'Background & Battery Settings',
-                        subtitle: 'Fix delayed SMS & OEM battery rules',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const BackgroundSettingsScreen(),
                           ),
                         ),
                         showDivider: false,
@@ -613,50 +600,205 @@ class _SettingsScreenState extends State<SettingsScreen> {
           heightFactor: null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: ScanWindowOption.values.map((option) {
-              final isSelected = option == currentOption;
-              final isRecommended = option == ScanWindowOption.thirtyDays;
+            children: [
+              ...ScanWindowOption.values.map((option) {
+                final isSelected = option == currentOption;
+                final badgeText = option.badgeLabel;
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AppListTile(
-                  title: option.title,
-                  subtitle: option.subtitle,
-                  leadingIcon: _getScanOptionIcon(option),
-                  leadingColor: isSelected ? AppColors.positive : null,
-                  badge: isRecommended
-                      ? const AppBadge.warning(
-                          text: 'Recommended',
-                          size: AppBadgeSize.micro,
-                        )
-                      : null,
-                  trailing: isSelected
-                      ? const Icon(
-                          Icons.check_circle_rounded,
-                          color: AppColors.positive,
-                          size: 20,
-                        )
-                      : null,
-                  onTap: () async {
-                    Navigator.pop(sheetCtx);
-                    HapticFeedback.lightImpact();
-                    AppToast.info(
-                      context,
-                      message: 'Updating Scan Range',
-                      subtitle: 'Syncing transactions for ${option.title.toLowerCase()}…',
-                    );
-                    await provider.setScanWindowOption(option, rescanImmediately: true);
-                    if (context.mounted) {
-                      AppToast.success(
-                        context,
-                        message: 'Scan Range Updated',
-                        subtitle: 'Active window: ${option.title}',
-                      );
-                    }
-                  },
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: AppListTile(
+                    title: option.title,
+                    subtitle: option.subtitle,
+                    leadingIcon: _getScanOptionIcon(option),
+                    leadingColor: isSelected ? AppColors.positive : null,
+                    badge: badgeText != null
+                        ? (option == ScanWindowOption.sevenDays
+                            ? const AppBadge.success(
+                                text: 'Recommended',
+                                size: AppBadgeSize.micro,
+                              )
+                            : option.isHeavyLoad
+                                ? const AppBadge.destructive(
+                                    text: 'Heavy Load',
+                                    size: AppBadgeSize.micro,
+                                  )
+                                : AppBadge.neutral(
+                                    text: badgeText,
+                                    size: AppBadgeSize.micro,
+                                  ))
+                        : null,
+                    trailing: isSelected
+                        ? const Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.positive,
+                            size: 20,
+                          )
+                        : null,
+                    onTap: () async {
+                      Navigator.pop(sheetCtx);
+                      HapticFeedback.lightImpact();
+
+                      _showRescanProgressDialog(context, option.title);
+
+                      await provider.setScanWindowOption(option, rescanImmediately: true);
+
+                      if (context.mounted && Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop(); // Dismiss progress dialog
+                      }
+
+                      if (context.mounted) {
+                        AppToast.success(
+                          context,
+                          message: 'Scan Range Updated',
+                          subtitle: 'Active window: ${option.title}',
+                        );
+                      }
+                    },
+                  ),
+                );
+              }),
+              Container(
+                margin: const EdgeInsets.only(top: 4, bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-              );
-            }).toList(),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.speed_rounded,
+                      color: AppColors.brandGreen,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '7 Days or Today provides the fastest, most reliable performance across all devices.',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showRescanProgressDialog(BuildContext context, String optionTitle) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: Consumer<FinanceProvider>(
+                builder: (context, provider, _) {
+                  final scanProgress = provider.scanProgress;
+                  final pct = scanProgress.progress > 0
+                      ? scanProgress.progress.clamp(0.05, 1.0)
+                      : 0.15;
+                  final stage = scanProgress.stage.isNotEmpty
+                      ? scanProgress.stage
+                      : 'Rescanning verified banking records…';
+                  final banks = scanProgress.scannedBanks;
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Updating Scan Range',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '${(pct * 100).toInt()}%',
+                        style: const TextStyle(
+                          color: AppColors.positive,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      CustomProgressBar(
+                        progress: pct,
+                        height: 7,
+                        progressColor: AppColors.positive,
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        stage,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.60),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      if (banks.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        ...banks.take(4).map((b) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceElevated,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Center(
+                                      child: BankCardWidget.bankLogo(b.bankName, 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      b.bankName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${b.transactionCount} msgs',
+                                    style: const TextStyle(
+                                      color: AppColors.positive,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
         );
       },

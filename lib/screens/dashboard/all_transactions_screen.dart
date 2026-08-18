@@ -350,7 +350,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildTypeDropdown() {
     return AppDropdown.simple(
       value: _selectedType,
-      items: const ['All', 'Bookmarked', 'Income', 'Expense'],
+      items: const ['All', 'Income', 'Expense'],
       onChanged: (type) {
         if (type != null) setState(() => _selectedType = type);
       },

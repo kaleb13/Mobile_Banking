@@ -4,12 +4,16 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_button.dart';
+import '../dashboard/reason_selection_sheet.dart';
 
 /// Compact Notification Settings Detail Screen.
 ///
 /// Houses:
 /// 1. Real-Time SMS Listening toggle (default ON).
-/// 2. Push Notifications Master Switch (OFF by default) & Periodic Summary Reports
+/// 2. Notification Quick Action Buttons Customization (Slots 1 & 2 + Categorize).
+/// 3. Push Notifications Master Switch (OFF by default) & Periodic Summary Reports
 ///    (Daily, Weekly, and Monthly spending & analysis reports).
 class NotificationSettingsScreen extends StatelessWidget {
   const NotificationSettingsScreen({super.key});
@@ -78,7 +82,44 @@ class NotificationSettingsScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // ── SECTION 2: PUSH NOTIFICATIONS & REPORTS ───────────
+                  // ── SECTION 2: NOTIFICATION QUICK BUTTONS ──────────────
+                  _sectionHeader('SMS NOTIFICATION ACTION BUTTONS'),
+                  const SizedBox(height: 6),
+                  _buildCard([
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                      child: Text(
+                        'Customize the 2 one-tap reason buttons that appear on incoming SMS notification banners. The 3rd button is always "Categorize".',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                    _quickButtonSlotTile(
+                      context: context,
+                      slotNumber: 1,
+                      reasonName: provider.notifQuickButton1,
+                      onChanged: (newReason) => provider.setNotifQuickButton1(newReason),
+                      showDivider: true,
+                    ),
+                    _quickButtonSlotTile(
+                      context: context,
+                      slotNumber: 2,
+                      reasonName: provider.notifQuickButton2,
+                      onChanged: (newReason) => provider.setNotifQuickButton2(newReason),
+                      showDivider: false,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                      child: _buildBannerPreview(provider),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 16),
+
+                  // ── SECTION 3: PUSH NOTIFICATIONS & REPORTS ───────────
                   _sectionHeader('PUSH NOTIFICATIONS & REPORTS'),
                   const SizedBox(height: 6),
                   _buildCard([
@@ -173,7 +214,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'All push reports are generated 100% offline on your device.',
+                            'All push reports and notifications are processed 100% offline on your device.',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.7),
                               fontSize: 11,
@@ -213,9 +254,206 @@ class NotificationSettingsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: children,
       ),
     );
+  }
+
+  Widget _quickButtonSlotTile({
+    required BuildContext context,
+    required int slotNumber,
+    required String reasonName,
+    required ValueChanged<String> onChanged,
+    bool showDivider = false,
+  }) {
+    final icon = _getReasonIcon(reasonName);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.positive.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: AppColors.positive, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      reasonName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Button $slotNumber on notification banner',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              AppButton.pill(
+                text: 'Change',
+                height: 28,
+                fontSize: 11.5,
+                isSelected: false,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed: () {
+                  AppBottomSheet.show(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => ReasonSelectionSheet(
+                      onReasonSelected: (selectedReason) {
+                        onChanged(selectedReason.name);
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.06),
+            indent: 62,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBannerPreview(FinanceProvider provider) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.preview_rounded,
+                color: AppColors.textSecondary,
+                size: 13,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'NOTIFICATION BANNER PREVIEW',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionPill(
+                  provider.notifQuickButton1,
+                  isPrimary: false,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildActionPill(
+                  provider.notifQuickButton2,
+                  isPrimary: false,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildActionPill(
+                  'Categorize',
+                  isPrimary: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionPill(String label, {required bool isPrimary}) {
+    return Container(
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isPrimary
+            ? AppColors.buttonPrimary
+            : AppColors.buttonSecondary,
+        borderRadius: BorderRadius.circular(100),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: isPrimary
+              ? AppColors.buttonPrimaryText
+              : AppColors.buttonSecondaryText,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  IconData _getReasonIcon(String name) {
+    final lower = name.toLowerCase().trim();
+    if (lower.contains('food') || lower.contains('restaurant') || lower.contains('dining') || lower.contains('cafe')) {
+      return Icons.restaurant_rounded;
+    }
+    if (lower.contains('good') || lower.contains('shopping') || lower.contains('market') || lower.contains('grocer')) {
+      return Icons.shopping_bag_rounded;
+    }
+    if (lower.contains('fuel') || lower.contains('gas') || lower.contains('transport') || lower.contains('taxi') || lower.contains('ride')) {
+      return Icons.local_gas_station_rounded;
+    }
+    if (lower.contains('rent') || lower.contains('house') || lower.contains('home')) {
+      return Icons.home_rounded;
+    }
+    if (lower.contains('util') || lower.contains('electric') || lower.contains('water') || lower.contains('bill')) {
+      return Icons.receipt_long_rounded;
+    }
+    if (lower.contains('health') || lower.contains('med') || lower.contains('doctor') || lower.contains('pharmacy')) {
+      return Icons.medical_services_rounded;
+    }
+    if (lower.contains('entertain') || lower.contains('fun') || lower.contains('movie')) {
+      return Icons.movie_rounded;
+    }
+    if (lower.contains('airtime') || lower.contains('phone') || lower.contains('internet')) {
+      return Icons.phone_android_rounded;
+    }
+    return Icons.category_rounded;
   }
 
   Widget _toggleTile({

@@ -1,4 +1,5 @@
 import 'transaction_attachment.dart';
+import '../utils/link_extractor.dart';
 
 class AppTransaction {
   final String? id;
@@ -52,15 +53,17 @@ class AppTransaction {
   /// fallback to customReasonText.
   String? get resolvedReason => reason ?? customReasonText;
 
-  /// True when this transaction was auto-created from a Telebirr credit,
-  /// repayment, or Savings Account SMS. The reason cannot be changed by the user.
+  /// Extracts all URLs found in the raw message body.
+  List<String> get extractedLinks => LinkExtractor.extractUrls(rawMessage);
+
+  /// True if this transaction's raw message body contains any web links.
+  bool get hasLinks => extractedLinks.isNotEmpty;
+
+  /// True when this transaction was auto-created from a special SMS like Savings Account.
   bool get isReasonLocked {
     if (!isAutoDetected) return false;
     final lower = rawMessage.toLowerCase();
-    return lower.contains('credit request') ||
-        lower.contains('outstanding credit amount') ||
-        lower.contains('contract number') ||
-        lower.contains('saving account') ||
+    return lower.contains('saving account') ||
         lower.contains('saving balance');
   }
 

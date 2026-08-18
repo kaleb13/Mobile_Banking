@@ -289,7 +289,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
             const SizedBox(width: 8),
             _buildWhiteFilterDropdown(
               value: _typeFilter,
-              items: const ['All', 'Bookmarked', 'Incoming', 'Outgoing'],
+              items: const ['All', 'Incoming', 'Outgoing'],
               onChanged: (val) {
                 if (val != null) setState(() => _typeFilter = val);
               },

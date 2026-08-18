@@ -1,8 +1,25 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'bank_senders.dart';
+
+class RawSmsData {
+  final String sender;
+  final String body;
+  final DateTime date;
+
+  const RawSmsData({
+    required this.sender,
+    required this.body,
+    required this.date,
+  });
+}
+
 class SmsService {
   final SmsQuery query = SmsQuery();
+  static const MethodChannel _smsScannerChannel =
+      MethodChannel('com.shibre/sms_scanner');
 
   Future<bool> requestPermission() async {
     var smsPermission = await Permission.sms.status;
@@ -20,13 +37,66 @@ class SmsService {
     return await Permission.sms.isGranted;
   }
 
+  /// High-speed native Android query that filters by bank senders and anchor date
+  /// on a background thread in native code before crossing to Dart.
+  Future<List<RawSmsData>> getBankMessagesFast({
+    DateTime? since,
+    List<String> customSenders = const [],
+  }) async {
+    bool hasPermission = await requestPermission();
+    if (!hasPermission) return [];
+
+    try {
+      final sinceMs = since?.millisecondsSinceEpoch;
+      final List<String> allBankSenders = {
+        ...BankSenders.standardBankKeywords,
+        ...customSenders.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty),
+      }.toList();
+
+      final List<dynamic>? res =
+          await _smsScannerChannel.invokeMethod('getBankSmsFast', {
+        'since': sinceMs,
+        'senders': allBankSenders,
+        'customSenders': customSenders,
+      });
+
+      if (res != null) {
+        return res.map((m) {
+          final map = m as Map<dynamic, dynamic>;
+          final dateVal = map['date'];
+          final DateTime dt = dateVal is int
+              ? DateTime.fromMillisecondsSinceEpoch(dateVal)
+              : (dateVal is double
+                  ? DateTime.fromMillisecondsSinceEpoch(dateVal.toInt())
+                  : DateTime.now());
+          return RawSmsData(
+            sender: map['sender'] as String? ?? '',
+            body: map['body'] as String? ?? '',
+            date: dt,
+          );
+        }).toList();
+      }
+    } catch (_) {
+      // Fallback to flutter_sms_inbox if method channel is unavailable
+    }
+
+    final fallbackMessages = await getAllMessages(since: since);
+    return fallbackMessages
+        .where((m) => m.sender != null && m.body != null && m.date != null)
+        .map((m) => RawSmsData(
+              sender: m.sender!,
+              body: m.body!,
+              date: m.date!,
+            ))
+        .toList();
+  }
+
   Future<List<SmsMessage>> getAllMessages({DateTime? since}) async {
     bool hasPermission = await requestPermission();
     if (!hasPermission) return [];
 
     List<SmsMessage> messages = await query.querySms(
       kinds: [SmsQueryKind.inbox],
-      count: 300,
     );
 
     // Sort newest messages first so index 0 is always the latest SMS

@@ -12,6 +12,7 @@ enum AppDateFilterPreset {
   yesterday,
   thisWeek,
   thisMonth,
+  last30Days,
   thisYear,
   customDate,
   customRange,
@@ -54,6 +55,11 @@ class AppDateFilterValue {
         customDate = null,
         customRange = null;
 
+  const AppDateFilterValue.last30Days()
+      : preset = AppDateFilterPreset.last30Days,
+        customDate = null,
+        customRange = null;
+
   const AppDateFilterValue.thisYear()
       : preset = AppDateFilterPreset.thisYear,
         customDate = null,
@@ -69,13 +75,13 @@ class AppDateFilterValue {
         customDate = null,
         customRange = range;
 
-  bool get isDefault => preset == AppDateFilterPreset.anyTime;
+  bool get isDefault => preset == AppDateFilterPreset.anyTime || preset == AppDateFilterPreset.last30Days;
 
   /// Human-friendly display label on the pill trigger.
   String get label {
     switch (preset) {
       case AppDateFilterPreset.anyTime:
-        return 'Date';
+        return 'All Time';
       case AppDateFilterPreset.today:
         return 'Today';
       case AppDateFilterPreset.yesterday:
@@ -84,6 +90,8 @@ class AppDateFilterValue {
         return 'This Week';
       case AppDateFilterPreset.thisMonth:
         return 'This Month';
+      case AppDateFilterPreset.last30Days:
+        return '30 Days';
       case AppDateFilterPreset.thisYear:
         return 'This Year';
       case AppDateFilterPreset.customDate:
@@ -124,6 +132,9 @@ class AppDateFilterValue {
         return !date.isBefore(startOfWeek);
       case AppDateFilterPreset.thisMonth:
         return date.year == now.year && date.month == now.month;
+      case AppDateFilterPreset.last30Days:
+        final thirtyDaysAgo = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 30));
+        return !date.isBefore(thirtyDaysAgo);
       case AppDateFilterPreset.thisYear:
         return date.year == now.year;
       case AppDateFilterPreset.customDate:
@@ -251,7 +262,9 @@ class AppDateFilter extends StatelessWidget {
           currentValue: value,
           onSelected: (newValue) {
             onChanged(newValue);
-            Navigator.pop(sheetContext);
+            if (sheetContext.mounted && Navigator.of(sheetContext).canPop()) {
+              Navigator.of(sheetContext).pop();
+            }
           },
         );
       },
@@ -367,7 +380,7 @@ class _AppDateFilterSheet extends StatelessWidget {
       },
     );
 
-    if (picked != null) {
+    if (context.mounted && picked != null) {
       onSelected(AppDateFilterValue.singleDate(picked));
     }
   }
@@ -406,7 +419,7 @@ class _AppDateFilterSheet extends StatelessWidget {
       },
     );
 
-    if (picked != null) {
+    if (context.mounted && picked != null) {
       onSelected(AppDateFilterValue.dateRange(picked));
     }
   }
@@ -414,6 +427,7 @@ class _AppDateFilterSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presets = [
+      {'label': 'Last 30 Days', 'value': const AppDateFilterValue.last30Days()},
       {'label': 'Any Time (All Transactions)', 'value': const AppDateFilterValue.anyTime()},
       {'label': 'Today', 'value': const AppDateFilterValue.today()},
       {'label': 'Yesterday', 'value': const AppDateFilterValue.yesterday()},

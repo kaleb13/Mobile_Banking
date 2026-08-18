@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_banking_app/models/transaction.dart';
 import 'package:mobile_banking_app/domain/usecases/transactions/filter_transactions_usecase.dart';
+import 'package:mobile_banking_app/widgets/app_date_filter.dart';
 
 void main() {
   group('FilterTransactionsUseCase Sorting Tests', () {
@@ -86,6 +87,41 @@ void main() {
         params: const FilterTransactionsParams(sortBy: 'Name: A-Z'),
       );
       expect(result.map((t) => t.sender).toList(), ['Alice', 'Bob', 'Charlie']);
+    });
+
+    test('filters by Last 30 Days correctly', () {
+      final now = DateTime.now();
+      final recentTx = AppTransaction(
+        id: 'RECENT',
+        name: 'Telebirr',
+        amount: 200.0,
+        type: 'expense',
+        date: now.subtract(const Duration(days: 5)),
+        sender: 'Store',
+        category: 'Auto',
+        rawMessage: 'msg',
+        isAutoDetected: true,
+      );
+      final oldTx = AppTransaction(
+        id: 'OLD',
+        name: 'CBE',
+        amount: 300.0,
+        type: 'income',
+        date: now.subtract(const Duration(days: 45)),
+        sender: 'Old Job',
+        category: 'Auto',
+        rawMessage: 'msg',
+        isAutoDetected: true,
+      );
+
+      final result = useCase.execute(
+        transactions: [recentTx, oldTx],
+        params: const FilterTransactionsParams(
+          dateFilter: AppDateFilterValue.last30Days(),
+        ),
+      );
+      expect(result.length, 1);
+      expect(result.first.id, 'RECENT');
     });
   });
 }

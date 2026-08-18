@@ -18,6 +18,7 @@ import '../models/goal_feasibility.dart';
 import '../models/transaction_attachment.dart';
 import '../services/database_service.dart';
 import '../services/sms_service.dart';
+import '../services/sms_batch_parser.dart';
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart' as sms_inbox;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/telebirr_parser.dart';
@@ -45,6 +46,38 @@ import '../domain/usecases/savings/allocate_saving_goals_usecase.dart';
 import '../models/scan_window_option.dart';
 import '../domain/usecases/settings/get_scan_window_usecase.dart';
 import '../domain/usecases/settings/set_scan_window_usecase.dart';
+
+class ScannedBankProgress {
+  final String bankName;
+  final int transactionCount;
+  final double? latestBalance;
+
+  const ScannedBankProgress({
+    required this.bankName,
+    required this.transactionCount,
+    this.latestBalance,
+  });
+}
+
+class ScanProgressStatus {
+  final double progress;
+  final String stage;
+  final List<ScannedBankProgress> scannedBanks;
+  final bool isComplete;
+
+  const ScanProgressStatus({
+    required this.progress,
+    required this.stage,
+    this.scannedBanks = const [],
+    this.isComplete = false,
+  });
+
+  const ScanProgressStatus.idle()
+      : progress = 0.0,
+        stage = '',
+        scannedBanks = const [],
+        isComplete = false;
+}
 
 class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   final GetWalletBalancesUseCase _getWalletBalancesUseCase =
@@ -147,15 +180,44 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isDailyReportEnabled = true;
   bool _isWeeklyReportEnabled = true;
   bool _isMonthlyReportEnabled = true;
+  String _notifQuickButton1 = 'Food';
+  String _notifQuickButton2 = 'Goods';
   int _currentScreenIndex = 0;
   double _pageOffset = 0.0;
   double? _homeSheetTopY;
   double _homeTopScrollOffset = 0.0;
   String? _userName;
   StreamSubscription? _bgServiceSubscription;
-  bool _isBatchProcessing = false;
 
+  ScanProgressStatus _scanProgress = const ScanProgressStatus.idle();
+  ScanProgressStatus get scanProgress => _scanProgress;
 
+  List<String> _uniqueSenders = const [];
+  List<String> get uniqueSenders => _uniqueSenders;
+
+  List<String> _uniqueBanks = const [];
+  List<String> get uniqueBanks => _uniqueBanks;
+
+  void _updateUniqueFiltersCache() {
+    final sSet = <String>{};
+    final bSet = <String>{};
+    for (final tx in _transactions) {
+      if (tx.sender.isNotEmpty) sSet.add(tx.sender);
+      if (tx.name.isNotEmpty) bSet.add(tx.name);
+    }
+    _uniqueSenders = sSet.toList()..sort();
+    _uniqueBanks = bSet.toList()..sort();
+  }
+
+  void _updateScanProgress(double progress, String stage, [List<ScannedBankProgress>? banks]) {
+    _scanProgress = ScanProgressStatus(
+      progress: progress.clamp(0.0, 1.0),
+      stage: stage,
+      scannedBanks: banks ?? _scanProgress.scannedBanks,
+      isComplete: progress >= 1.0,
+    );
+    notifyListeners();
+  }
 
   /// The last level the user was shown a level-up modal for.
   /// Persisted to SharedPreferences so re-launches don't re-show old modals.
@@ -330,6 +392,22 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool get isDailyReportEnabled => _isDailyReportEnabled;
   bool get isWeeklyReportEnabled => _isWeeklyReportEnabled;
   bool get isMonthlyReportEnabled => _isMonthlyReportEnabled;
+  String get notifQuickButton1 => _notifQuickButton1;
+  String get notifQuickButton2 => _notifQuickButton2;
+
+  Future<void> setNotifQuickButton1(String value) async {
+    _notifQuickButton1 = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('notif_quick_button_1', value);
+    notifyListeners();
+  }
+
+  Future<void> setNotifQuickButton2(String value) async {
+    _notifQuickButton2 = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('notif_quick_button_2', value);
+    notifyListeners();
+  }
 
   Future<void> setPushNotificationsEnabled(bool value) async {
     _isPushNotificationsEnabled = value;
@@ -364,8 +442,42 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     _scanWindowOption = info.option;
     _installAnchorDate = info.anchorDate;
     notifyListeners();
+
     if (rescanImmediately) {
-      await refreshData();
+      _isLoading = true;
+      notifyListeners();
+      try {
+        if (option == ScanWindowOption.allTime) {
+          // All time: wipe to perform clean re-index of all time
+          await DatabaseService.instance.deleteAllTransactions();
+        } else {
+          // Prune transactions older than the newly selected anchor date boundary
+          await DatabaseService.instance.deleteTransactionsOlderThan(info.anchorDate);
+        }
+
+        // Rescan using new anchor date
+        await ingestMessagesBatch(since: info.anchorDate, isInitial: true);
+
+        final results = await Future.wait([
+          DatabaseService.instance.getTransactions(),
+          DatabaseService.instance.getExpenseDefinitions(),
+          DatabaseService.instance.getCashTransactions(),
+          _loadNotifications(),
+          _applyRecurringCashExpenses(),
+          _loadLoans(),
+        ]);
+
+        _expenseDefinitions = results[1] as List<ExpenseDefinition>;
+        _cashTransactions = results[2] as List<CashTransaction>;
+        _transactions = await DatabaseService.instance.getTransactions();
+
+        _calculateStats();
+      } catch (e) {
+        debugPrint('Error during scan window rescan: $e');
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
   int get currentScreenIndex => _currentScreenIndex;
@@ -505,124 +617,177 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     return (currentInSpan / span).clamp(0.0, 1.0);
   }
 
+  /// High-performance batch ingestion of SMS messages.
+  /// 1. Queries native SMS provider using pre-filtering on a background thread.
+  /// 2. Executes background Isolate regex parsing and categorization (zero UI thread lag).
+  /// 3. Ingests all transactions into SQLite via a single atomic transaction (< 40ms).
+  /// 4. Updates loans, recalculates statistics, and notifies listeners.
+  Future<int> ingestMessagesBatch({DateTime? since, bool isInitial = false}) async {
+    _updateScanProgress(0.15, 'Scanning inbox for verified bank messages…');
+
+    final scanInfo = await _getScanWindowUseCase();
+    _scanWindowOption = scanInfo.option;
+    _installAnchorDate = scanInfo.anchorDate;
+    final DateTime anchorDate = since ?? scanInfo.anchorDate;
+
+    // Buffer cutoff slightly (1 minute) to capture edge boundary messages
+    final cutoff = anchorDate.subtract(const Duration(minutes: 1));
+
+    // 1. Fetch raw messages fast via native channel or fallback
+    final customSenderNames = _senders.map((s) => s.senderName).toList();
+    final rawMessages = await SmsService().getBankMessagesFast(
+      since: cutoff,
+      customSenders: customSenderNames,
+    );
+
+    if (rawMessages.isEmpty) {
+      _updateScanProgress(1.0, 'No banking messages found in window', []);
+      return 0;
+    }
+
+    _updateScanProgress(0.35, 'Reading & analyzing bank records…');
+
+    // 2. Pre-fetch auto-reason rules and current bank balances for fast in-memory resolution
+    final autoRules = await DatabaseService.instance.getAutoReasonRules();
+    final initialBalances = <String, double>{};
+    for (final s in _senders) {
+      initialBalances[s.senderName] = balanceForSender(s.senderName);
+    }
+
+    _updateScanProgress(0.55, 'Parsing transactions in background worker…');
+
+    // 3. Parse in background Isolate (zero UI thread blocking)
+    final parseResult = await SmsBatchParser.parseInIsolate(BatchParseParams(
+      rawMessages: rawMessages,
+      pausedBanks: _pausedBanks.toList(),
+      customSenders: _senders,
+      autoReasonRules: autoRules,
+      initialBankBalances: initialBalances,
+    ));
+
+    // Compile dynamic scanned banks summary
+    final Map<String, int> bankCounts = {};
+    final Map<String, double> bankLatestBalances = {};
+    for (final tx in parseResult.transactions) {
+      bankCounts[tx.name] = (bankCounts[tx.name] ?? 0) + 1;
+      if (tx.totalBalance > 0) {
+        bankLatestBalances[tx.name] = tx.totalBalance;
+      }
+    }
+    final List<ScannedBankProgress> scannedBankList = bankCounts.entries.map((e) {
+      return ScannedBankProgress(
+        bankName: e.key,
+        transactionCount: e.value,
+        latestBalance: bankLatestBalances[e.key],
+      );
+    }).toList();
+
+    _updateScanProgress(0.80, 'Storing verified transactions in database…', scannedBankList);
+
+    // 4. Save extracted user owner name if found
+    if (parseResult.extractedUserName != null && _userName == null) {
+      _userName = parseResult.extractedUserName;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_name_v1', _userName!);
+    }
+
+    // 5. Atomic batch insert into SQLite database (< 40ms)
+    final insertedCount = await DatabaseService.instance
+        .insertTransactionsBatch(parseResult.transactions);
+
+    // 6. Batch insert unrecognized notifications
+    if (parseResult.unrecognizedNotifications.isNotEmpty) {
+      await DatabaseService.instance
+          .insertNotificationsBatch(parseResult.unrecognizedNotifications);
+    }
+
+    // 7. Check loan repayments for newly inserted income transactions
+    for (final tx in parseResult.transactions) {
+      if (tx.type == 'income') {
+        await _checkAndApplyLoanRepayment(tx);
+      }
+    }
+
+    _updateScanProgress(1.0, 'Calculated financial balance & tier', scannedBankList);
+    return insertedCount;
+  }
+
   /// Start loading financial data in the background during onboarding
   /// without marking onboarding as complete. Call this early so data
   /// is ready by the time the user reaches the level reveal page.
   Future<void> startBackgroundInit() async {
-    final prefs = await SharedPreferences.getInstance();
-    _userName = prefs.getString('user_name_v1');
-    _hasPermission = await Permission.sms.status.isGranted;
-    if (!_hasPermission) return;
+    _isLoading = true;
+    _updateScanProgress(0.05, 'Connecting to secure SMS inbox…');
 
-
-    final dbSenders = await DatabaseService.instance.getSenders();
-    if (dbSenders.isNotEmpty) {
-      _senders = dbSenders;
-      if (!_senders.any((s) => s.senderName.toUpperCase().contains('AHADU'))) {
-        final ahadu = AppSender(id: '4', senderName: 'Ahadu Bank');
-        await DatabaseService.instance.insertSender(ahadu);
-        _senders.add(ahadu);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _userName = prefs.getString('user_name_v1');
+      _hasPermission = await Permission.sms.status.isGranted;
+      if (!_hasPermission) {
+        _updateScanProgress(1.0, 'SMS Permission not granted');
+        return;
       }
-      if (!_senders.any((s) => s.senderName.toUpperCase() == 'BOA' || s.senderName.toUpperCase().contains('ABYSSINIA'))) {
-        final boa = AppSender(id: '5', senderName: 'BOA');
-        await DatabaseService.instance.insertSender(boa);
-        _senders.add(boa);
-      }
-      if (!_senders.any((s) => s.senderName.toUpperCase().contains('DASHEN'))) {
-        final dashen = AppSender(id: '6', senderName: 'Dashen Bank');
-        await DatabaseService.instance.insertSender(dashen);
-        _senders.add(dashen);
-      }
-    } else {
-      _senders = [
-        AppSender(id: '1', senderName: 'Telebirr'),
-        AppSender(id: '2', senderName: 'CBE'),
-        AppSender(id: '3', senderName: 'CBE Birr'),
-        AppSender(id: '4', senderName: 'Ahadu Bank'),
-        AppSender(id: '5', senderName: 'BOA'),
-        AppSender(id: '6', senderName: 'Dashen Bank'),
-      ];
-      for (var s in _senders) {
-        await DatabaseService.instance.insertSender(s);
-      }
-    }
 
-    _pausedBanks = await DatabaseService.instance.getPausedBanks();
-    _transactions = await DatabaseService.instance.getTransactions();
-    _expenseDefinitions = await DatabaseService.instance.getExpenseDefinitions();
-    _cashTransactions = await DatabaseService.instance.getCashTransactions();
-    _savingGoals = await DatabaseService.instance.getSavingGoals();
-
-    // Ensure install_anchor_date and scan_window_option are set
-    final scanInfo = await _getScanWindowUseCase();
-    _scanWindowOption = scanInfo.option;
-    _installAnchorDate = scanInfo.anchorDate;
-
-    bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
-    if (isFirstBoot && _transactions.isEmpty) {
-      final installAnchor = scanInfo.anchorDate;
-      List<sms_inbox.SmsMessage> allMessages =
-          await SmsService().getAllMessages(since: installAnchor);
-      allMessages.sort((a, b) {
-        if (a.date == null || b.date == null) return 0;
-        return b.date!.compareTo(a.date!);
-      });
-      _isBatchProcessing = true;
-      for (var msg in allMessages) {
-        if (msg.sender != null && msg.body != null && msg.date != null) {
-          final msgDate = msg.date!;
-          if (!_isEnglishBankingMessage(msg.body!)) continue;
-          final bank = BankSenders.match(msg.sender);
-          if (bank == 'Telebirr') {
-            AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); }
-          } else if (bank == 'CBE Birr') {
-            AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); }
-          } else if (bank == 'CBE') {
-            if (_userName == null) {
-              final name = CbeParser.extractOwnerName(msg.body!);
-              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
-            }
-            AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); }
-          } else if (bank == 'Ahadu Bank') {
-            if (_userName == null) {
-              final name = AhaduParser.extractOwnerName(msg.body!);
-              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
-            }
-            AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); }
-          } else if (bank == 'BOA') {
-            if (_userName == null) {
-              final name = BoaParser.extractOwnerName(msg.body!);
-              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
-            }
-            AppTransaction? tx = BoaParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); }
-          } else if (bank == 'Dashen Bank') {
-            if (_userName == null) {
-              final name = DashenParser.extractOwnerName(msg.body!);
-              if (name != null) { _userName = name; await prefs.setString('user_name_v1', name); }
-            }
-            AppTransaction? tx = DashenParser.parse(msg.body!, msgDate);
-            if (tx != null) { await addTransaction(tx); }
-          }
+      final dbSenders = await DatabaseService.instance.getSenders();
+      if (dbSenders.isNotEmpty) {
+        _senders = dbSenders;
+        if (!_senders.any((s) => s.senderName.toUpperCase().contains('AHADU'))) {
+          final ahadu = AppSender(id: '4', senderName: 'Ahadu Bank');
+          await DatabaseService.instance.insertSender(ahadu);
+          _senders.add(ahadu);
+        }
+        if (!_senders.any((s) => s.senderName.toUpperCase() == 'BOA' || s.senderName.toUpperCase().contains('ABYSSINIA'))) {
+          final boa = AppSender(id: '5', senderName: 'BOA');
+          await DatabaseService.instance.insertSender(boa);
+          _senders.add(boa);
+        }
+        if (!_senders.any((s) => s.senderName.toUpperCase().contains('DASHEN'))) {
+          final dashen = AppSender(id: '6', senderName: 'Dashen Bank');
+          await DatabaseService.instance.insertSender(dashen);
+          _senders.add(dashen);
+        }
+      } else {
+        _senders = [
+          AppSender(id: '1', senderName: 'Telebirr'),
+          AppSender(id: '2', senderName: 'CBE'),
+          AppSender(id: '3', senderName: 'CBE Birr'),
+          AppSender(id: '4', senderName: 'Ahadu Bank'),
+          AppSender(id: '5', senderName: 'BOA'),
+          AppSender(id: '6', senderName: 'Dashen Bank'),
+        ];
+        for (var s in _senders) {
+          await DatabaseService.instance.insertSender(s);
         }
       }
-      _isBatchProcessing = false;
-      await prefs.setBool('is_first_boot_v5', false);
+
+      _pausedBanks = await DatabaseService.instance.getPausedBanks();
       _transactions = await DatabaseService.instance.getTransactions();
+      _expenseDefinitions = await DatabaseService.instance.getExpenseDefinitions();
+      _cashTransactions = await DatabaseService.instance.getCashTransactions();
+      _savingGoals = await DatabaseService.instance.getSavingGoals();
+
+      // Ensure install_anchor_date and scan_window_option are set
+      final scanInfo = await _getScanWindowUseCase();
+      _scanWindowOption = scanInfo.option;
+      _installAnchorDate = scanInfo.anchorDate;
+
+      bool isFirstBoot = prefs.getBool('is_first_boot_v5') ?? true;
+      if (isFirstBoot && _transactions.isEmpty) {
+        await ingestMessagesBatch(since: scanInfo.anchorDate, isInitial: true);
+        await prefs.setBool('is_first_boot_v5', false);
+        _transactions = await DatabaseService.instance.getTransactions();
+      }
+
+      _calculateStats();
+      _lastSeenLevel = userLevel;
+      await prefs.setInt('last_seen_level', _lastSeenLevel);
+      _levelDetectionReady = true;
+    } catch (e) {
+      debugPrint('Error in startBackgroundInit: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _calculateStats();
-    _isLoading = false;
-
-    _lastSeenLevel = userLevel;
-    await prefs.setInt('last_seen_level', _lastSeenLevel);
-    _levelDetectionReady = true;
-
-    notifyListeners();
   }
 
   double get incomeThisMonth => _incomeThisMonth;
@@ -871,12 +1036,12 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   bool isLoanHidden(int id) => _hiddenLoanIds.contains(id);
 
   List<LoanRecord> get activeLoans =>
-      _loanRecords.where((l) => l.status == 'active' && (l.id == null || !_hiddenLoanIds.contains(l.id!))).toList();
+      _loanRecords.where((l) => l.status == 'active').toList();
   List<LoanRecord> get overdueLoans =>
-      _loanRecords.where((l) => l.isOverdue && (l.id == null || !_hiddenLoanIds.contains(l.id!))).toList()
+      _loanRecords.where((l) => l.isOverdue).toList()
         ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
   List<LoanRecord> get paidLoans =>
-      _loanRecords.where((l) => l.isPaid && (l.id == null || !_hiddenLoanIds.contains(l.id!))).toList();
+      _loanRecords.where((l) => l.isPaid).toList();
   int get activeLoanCount => activeLoans.length;
   int get overdueLoanCount => overdueLoans.length;
 
@@ -1207,6 +1372,9 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _currentCurrency = AppCurrency.fromCode(savedCurrencyCode);
     }
 
+    _notifQuickButton1 = prefs.getString('notif_quick_button_1') ?? 'Food';
+    _notifQuickButton2 = prefs.getString('notif_quick_button_2') ?? 'Goods';
+
     final scanInfo = await _getScanWindowUseCase();
     _scanWindowOption = scanInfo.option;
     _installAnchorDate = scanInfo.anchorDate;
@@ -1218,88 +1386,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       // Clear old rows to ensure pristine alignment across all parsers
       await DatabaseService.instance.deleteAllTransactions();
 
-      // First boot: fetch messages within the configured anchor window.
-      final installAnchor = scanInfo.anchorDate;
-      List<sms_inbox.SmsMessage> allMessages =
-          await SmsService().getAllMessages(since: installAnchor);
-
-      // Sort newest first
-      allMessages.sort((a, b) {
-        if (a.date == null || b.date == null) return 0;
-        return b.date!.compareTo(a.date!);
-      });
-
-      _isBatchProcessing = true;
-      for (var msg in allMessages) {
-        if (msg.sender != null && msg.body != null && msg.date != null) {
-          final msgDate = msg.date!;
-
-          if (!_isEnglishBankingMessage(msg.body!)) continue;
-
-          final bank = BankSenders.match(msg.sender);
-
-          if (bank == 'Telebirr') {
-            AppTransaction? tx = TelebirrParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-            }
-          } else if (bank == 'CBE Birr') {
-            AppTransaction? tx = CbeBirrParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-            }
-          } else if (bank == 'CBE') {
-            if (_userName == null) {
-              final name = CbeParser.extractOwnerName(msg.body!);
-              if (name != null) {
-                _userName = name;
-                await prefs.setString('user_name_v1', name);
-              }
-            }
-            AppTransaction? tx = CbeParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-            }
-          } else if (bank == 'Ahadu Bank') {
-            if (_userName == null) {
-              final name = AhaduParser.extractOwnerName(msg.body!);
-              if (name != null) {
-                _userName = name;
-                await prefs.setString('user_name_v1', name);
-              }
-            }
-            AppTransaction? tx = AhaduParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-            }
-          } else if (bank == 'BOA') {
-            if (_userName == null) {
-              final name = BoaParser.extractOwnerName(msg.body!);
-              if (name != null) {
-                _userName = name;
-                await prefs.setString('user_name_v1', name);
-              }
-            }
-            AppTransaction? tx = BoaParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-            }
-          } else if (bank == 'Dashen Bank') {
-            if (_userName == null) {
-              final name = DashenParser.extractOwnerName(msg.body!);
-              if (name != null) {
-                _userName = name;
-                await prefs.setString('user_name_v1', name);
-              }
-            }
-            AppTransaction? tx = DashenParser.parse(msg.body!, msgDate);
-            if (tx != null) {
-              await addTransaction(tx);
-            }
-          }
-        }
-      }
-      _isBatchProcessing = false;
+      // First boot: fetch messages within the configured anchor window fast.
+      await ingestMessagesBatch(since: scanInfo.anchorDate, isInitial: true);
       await prefs.setBool('is_first_boot_v7', false);
     }
     // On subsequent opens we do NOT rescan SMS — the background service
@@ -1557,7 +1645,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// Checks whether the user has crossed into a new level since the last time
   /// we showed the celebration modal. If so, shows it via the global navigator.
   Future<void> _maybeFireLevelUpModal() async {
-    if (!_isOnboardingComplete || !_levelDetectionReady || _isBatchProcessing) return;
+    if (!_isOnboardingComplete || !_levelDetectionReady) return;
     final currentLevel = userLevel;
     if (currentLevel <= _lastSeenLevel) return; // no level advance
 
@@ -1602,28 +1690,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       if (windowStart.isAfter(anchorDate)) cutoff = windowStart;
     }
 
-    // Fetch every SMS from known senders since the cutoff
-    // (subtract 1 min buffer to be safe at boundaries)
-    cutoff = cutoff.subtract(const Duration(minutes: 1));
-    List<sms_inbox.SmsMessage> messages =
-        await SmsService().getAllMessages(since: cutoff);
-
-    // Sort oldest-first so transactions are inserted chronologically
-    messages.sort((a, b) {
-      if (a.date == null || b.date == null) return 0;
-      return a.date!.compareTo(b.date!);
-    });
-
-    // Enable batch mode to prevent addTransaction from calling
-    // _calculateStats() + notifyListeners() for each individual message.
-    // We'll do it once at the end.
-    _isBatchProcessing = true;
-    for (var msg in messages) {
-      if (msg.sender != null && msg.body != null && msg.date != null) {
-        await processNewSms(msg.sender!, msg.body!, msg.date!);
-      }
-    }
-    _isBatchProcessing = false;
+    await ingestMessagesBatch(since: cutoff);
 
     final results = await Future.wait([
       DatabaseService.instance.getTransactions(),
@@ -1725,8 +1792,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
         // 5. If message is auto-parsable, process it into transactions and prune from notifications
         final isParsable = TelebirrParser.parse(n.body, n.date) != null ||
-            TelebirrParser.isCreditDisbursement(n.body) ||
-            TelebirrParser.isCreditRepayment(n.body) ||
             CbeParser.parse(n.body, n.date) != null ||
             CbeBirrParser.parse(n.body, n.date) != null ||
             AhaduParser.parse(n.body, n.date) != null ||
@@ -1809,6 +1874,40 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       }
     }
     await prefs.setStringList('ignored_notification_ids', ignored);
+  }
+
+  /// Permanently ignores all current notifications in batch.
+  Future<void> ignoreAllNotifications() async {
+    if (_notifications.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final ignored = prefs.getStringList('ignored_notification_ids') ?? [];
+
+    final notifsToIgnore = List<AppNotification>.from(_notifications);
+    for (final n in notifsToIgnore) {
+      if (!ignored.contains(n.id)) {
+        ignored.add(n.id);
+      }
+      final notifBody = _notifIdToBodyMap[n.id] ?? n.body;
+      if (notifBody.trim().isNotEmpty) {
+        final bodyNormalised = notifBody.replaceAll(RegExp(r'\s+'), ' ').trim();
+        final bodyHash =
+            sha256.convert(utf8.encode(bodyNormalised)).toString();
+        if (!ignored.contains(bodyHash)) {
+          ignored.add(bodyHash);
+        }
+      }
+      await DatabaseService.instance.deleteNotification(n.id);
+      try {
+        const MethodChannel('com.shibre/quick_edit')
+            .invokeMethod('cancelPhoneNotification', {'id': n.id});
+      } catch (_) {}
+    }
+
+    await prefs.setStringList('ignored_notification_ids', ignored);
+    _notifications.clear();
+    _unreadNotificationCount = 0;
+    notifyListeners();
   }
 
   /// Returns true if [msg] looks like a banking message (contains an English
@@ -1931,8 +2030,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // Do NOT add if message is auto-parsable into a transaction
     if (!isSystemAlert) {
       if (TelebirrParser.parse(body, date) != null ||
-          TelebirrParser.isCreditDisbursement(body) ||
-          TelebirrParser.isCreditRepayment(body) ||
           CbeParser.parse(body, date) != null ||
           CbeBirrParser.parse(body, date) != null ||
           AhaduParser.parse(body, date) != null ||
@@ -2131,9 +2228,11 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       _percentageChangeOverall = _percentageChangeOverall.clamp(-100.0, 100.0);
     }
 
-    if (!_isBatchProcessing && _levelDetectionReady) {
+    if (_levelDetectionReady) {
       _maybeFireLevelUpModal();
     }
+
+    _updateUniqueFiltersCache();
   }
 
   /// Resolves the top-level category name (or 'Loan') for expense statistics cards
@@ -2245,12 +2344,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       await _checkAndApplyLoanRepayment(txToInsert);
     }
 
-    // Skip stats recalculation during batch processing (e.g. refreshData)
-    // to avoid N expensive recalculations — the caller will do it once at the end.
-    if (!_isBatchProcessing) {
-      _calculateStats();
-      notifyListeners();
-    }
+    _calculateStats();
+    notifyListeners();
   }
 
 
@@ -2819,10 +2914,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       );
     }
 
-    // If the loan has a tracked sender and the loan was created in the past,
-    // we should scan memory for transactions that arrived AFTER the loan date
-    // and BEFORE now to see if the user already paid it back.
-    if (trackedSenderName != null) {
+    // If the loan is 'lent' and the loan was created in the past,
+    // scan memory for transactions that arrived AFTER the loan date
+    // and BEFORE now to see if the borrower already sent repayments.
+    if (loanType == 'lent') {
       final potentialRepayments = _transactions
           .where((tx) =>
               tx.type == 'income' &&
@@ -2832,24 +2927,40 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         ..sort((a, b) => a.date.compareTo(b.date)); // Oldest first
 
       for (var tx in potentialRepayments) {
-        // Run it through the exact matching logic
-        final score = _nameMatchScore(
-          incoming: tx.sender,
-          tracked: trackedSenderName,
-        );
-        // Also try tx.name (bank-extracted name) if sender score is 0
-        final nameScore = score == 0
-            ? _nameMatchScore(incoming: tx.name, tracked: trackedSenderName)
-            : 0;
-        final bestScore = score > nameScore ? score : nameScore;
+        // Channel filter: If watched banks specified, check if tx came from that bank
+        if (trackedSenderName != null && trackedSenderName.trim().isNotEmpty) {
+          final watchedChannels = trackedSenderName
+              .split(',')
+              .map((c) => c.trim().toLowerCase())
+              .where((c) => c.isNotEmpty)
+              .toList();
+          final txSenderLower = tx.sender.trim().toLowerCase();
+          final txNameLower = tx.name.trim().toLowerCase();
+          final channelMatches = watchedChannels.any((channel) =>
+              txSenderLower.contains(channel) ||
+              channel.contains(txSenderLower) ||
+              txNameLower.contains(channel) ||
+              channel.contains(txNameLower));
+          if (!channelMatches) continue;
+        }
 
-        if (bestScore > 0) {
+        // Match against borrower personName
+        final candidateName = tx.name.trim().isNotEmpty ? tx.name.trim() : tx.sender.trim();
+        final isBank = _senders.any((s) => s.senderName.toLowerCase() == candidateName.toLowerCase());
+        if (isBank && tx.name.trim().isEmpty) continue;
+
+        final score = _nameMatchScore(
+          incoming: tx.name.trim().isNotEmpty ? tx.name.trim() : candidateName,
+          tracked: personName,
+        );
+
+        if (score > 0) {
           final currentLoanState = _loanRecords.firstWhere((l) => l.id == id);
           if (currentLoanState.status == 'active') {
             await _queueRepaymentRequest(
               loan: currentLoanState,
               tx: tx,
-              matchType: bestScore == 2 ? 'exact' : 'partial',
+              matchType: score == 2 ? 'exact' : 'partial',
             );
           }
         }
@@ -3067,28 +3178,43 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
   /// are NEVER shown to the user regardless of any other overlap.
   Future<void> _checkAndApplyLoanRepayment(AppTransaction tx) async {
     // Only 'lent' loans are repaid via incoming money.
-    // 'borrowed' loans are repaid by the user sending money OUT — those
-    // cannot be auto-detected from an income SMS, so they are excluded entirely.
+    if (tx.type != 'income') return;
+
     final allActive = _loanRecords
         .where((l) =>
             l.status == 'active' &&
-            l.trackedSenderName != null &&
             l.loanType == 'lent')
         .toList();
 
     if (allActive.isEmpty) return;
 
     for (final loan in allActive) {
-      // Score against tx.sender (bank sender code) and tx.name (parsed name)
-      final senderScore = _nameMatchScore(
-        incoming: tx.sender,
-        tracked: loan.trackedSenderName!,
+      // 1. Channel filter: if watched bank channels specified, check if tx is from that bank
+      if (loan.trackedSenderName != null && loan.trackedSenderName!.trim().isNotEmpty) {
+        final watchedChannels = loan.trackedSenderName!
+            .split(',')
+            .map((c) => c.trim().toLowerCase())
+            .where((c) => c.isNotEmpty)
+            .toList();
+        final txSenderLower = tx.sender.trim().toLowerCase();
+        final txNameLower = tx.name.trim().toLowerCase();
+        final channelMatches = watchedChannels.any((channel) =>
+            txSenderLower.contains(channel) ||
+            channel.contains(txSenderLower) ||
+            txNameLower.contains(channel) ||
+            channel.contains(txNameLower));
+        if (!channelMatches) continue;
+      }
+
+      // 2. Person matching: Compare the actual person's name in tx against loan.personName
+      final candidateName = tx.name.trim().isNotEmpty ? tx.name.trim() : tx.sender.trim();
+      final isBank = _senders.any((s) => s.senderName.toLowerCase() == candidateName.toLowerCase());
+      if (isBank && tx.name.trim().isEmpty) continue;
+
+      final best = _nameMatchScore(
+        incoming: tx.name.trim().isNotEmpty ? tx.name.trim() : candidateName,
+        tracked: loan.personName,
       );
-      final nameScore = _nameMatchScore(
-        incoming: tx.name,
-        tracked: loan.trackedSenderName!,
-      );
-      final best = senderScore > nameScore ? senderScore : nameScore;
 
       if (best == 0) continue; // first name doesn't match at all — skip
 
@@ -3110,11 +3236,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final applicable = tx.amount.clamp(0.0, loan.remainingAmount);
     if (applicable <= 0) return;
 
+    final candidateName = tx.name.trim().isNotEmpty ? tx.name.trim() : tx.sender.trim();
+
     final req = LoanRepaymentRequest(
       loanId: loan.id!,
       transactionId: tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
-      senderFound: tx.sender,
-      trackedName: loan.trackedSenderName!,
+      senderFound: candidateName,
+      trackedName: loan.personName,
       amount: applicable,
       createdAt: DateTime.now(),
     );
@@ -3125,8 +3253,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     final matchLabel = matchType == 'exact' ? 'exact match' : 'possible match';
     await addUnrecognizedNotification(
       sender: '⚠️ Loan Match — Approval Needed',
-      body: '"${tx.sender}" sent ${tx.amount.toStringAsFixed(2)} ETB '
-          '($matchLabel for "${loan.trackedSenderName}" — ${loan.personName}). '
+      body: '"$candidateName" sent ${tx.amount.toStringAsFixed(2)} ETB '
+          '($matchLabel for borrower "${loan.personName}"). '
           'Go to Loans → Pending to approve or reject.',
       date: DateTime.now(),
     );
@@ -3235,15 +3363,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     }
 
     if (bank == 'Telebirr') {
-      if (TelebirrParser.isCreditDisbursement(message) ||
-          TelebirrParser.isCreditRepayment(message)) {
-        await processSmsRaw(
-          senderAddress: sender,
-          body: message,
-          date: date,
-        );
-        return;
-      }
       AppTransaction? telebirrTx = TelebirrParser.parse(message, date);
       if (telebirrTx != null) {
         await addTransaction(telebirrTx);
@@ -3576,6 +3695,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     await DatabaseService.instance.deleteAllTransactions();
     await DatabaseService.instance.deleteAllUserReasons();
     await DatabaseService.instance.deleteAllNotifications();
+    await DatabaseService.instance.deleteAllLoanRecords();
 
     // 2. Reset SharedPreferences flags so the app treats this as first boot
     final prefs = await SharedPreferences.getInstance();
@@ -3585,6 +3705,8 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     // 3. Reload from cleared DB
     _transactions = [];
     _notifications = [];
+    _loanRecords = [];
+    _loanPayments = {};
     _reasons = await DatabaseService.instance.getReasons();
     _reasonLinks = await DatabaseService.instance.getReasonLinks();
 
@@ -3644,15 +3766,6 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       final bank = BankSenders.match(sender);
       AppTransaction? parsed;
       if (bank == 'Telebirr') {
-        if (TelebirrParser.isCreditDisbursement(body) ||
-            TelebirrParser.isCreditRepayment(body)) {
-          await processSmsRaw(
-            senderAddress: sender,
-            body: body,
-            date: msgDate,
-          );
-          continue;
-        }
         parsed = TelebirrParser.parse(body, msgDate);
       } else if (bank == 'CBE Birr') {
         parsed = CbeBirrParser.parse(body, msgDate);

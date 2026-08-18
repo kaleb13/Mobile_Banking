@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
-import '../models/loan_record.dart';
 import '../models/sender.dart';
 import '../models/app_notification.dart';
 import 'database_service.dart';
@@ -123,23 +122,12 @@ Future<void> processSmsRaw({
   // 1. Try to parse transaction if matched
   AppTransaction? tx;
   if (bank == 'Telebirr') {
-    // ── Credit disbursement (loan taken from Telebirr) ─────────────────────
-    if (TelebirrParser.isCreditDisbursement(body)) {
-      tx = await _handleTelebirrCreditDisbursement(body, date);
-    }
-    // ── Credit repayment (loan paid back) ─────────────────────────────────
-    else if (TelebirrParser.isCreditRepayment(body)) {
-      tx = await _handleTelebirrCreditRepayment(body, date);
-    }
-    // ── Normal Telebirr transaction / Savings ─────────────────────────────
-    else {
-      tx = TelebirrParser.parse(body, date);
-      if (TelebirrParser.isSavingsMessage(body)) {
-        final savingBal = TelebirrParser.extractSavingBalance(body);
-        if (savingBal != null) {
-          await DatabaseService.instance
-              .setAppSetting('telebirr_saving_balance', savingBal.toString());
-        }
+    tx = TelebirrParser.parse(body, date);
+    if (TelebirrParser.isSavingsMessage(body)) {
+      final savingBal = TelebirrParser.extractSavingBalance(body);
+      if (savingBal != null) {
+        await DatabaseService.instance
+            .setAppSetting('telebirr_saving_balance', savingBal.toString());
       }
     }
   } else if (bank == 'CBE Birr') {
@@ -266,148 +254,4 @@ Future<void> processSmsRaw({
     date: date,
   );
   await DatabaseService.instance.insertNotification(notification);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Telebirr Credit Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Handles a Telebirr credit DISBURSEMENT SMS:
-/// - Parses contract number, amount, fee, due date
-/// - Creates an AppTransaction (income, reason=Loan, locked)
-/// - Auto-creates a LoanRecord in the 'borrowed' tab
-Future<AppTransaction?> _handleTelebirrCreditDisbursement(
-    String body, DateTime date) async {
-  final info = TelebirrParser.parseCreditDisbursement(body, date);
-  if (info == null) return null;
-
-  // Resolve the 'Loan' reason ID from the DB
-  final db = DatabaseService.instance;
-  final reasons = await db.getReasons();
-  final loanReason = reasons.cast<dynamic>().firstWhere(
-      (r) => (r.name as String).toLowerCase() == 'loan',
-      orElse: () => null);
-
-  // Build a unique transaction ID from the contract number
-  final txId = 'TBI_CREDIT_${info.contractNumber}';
-
-  // Build note string
-  final noteLines = <String>[
-    'Telebirr Credit — Contract: ${info.contractNumber}',
-    'Facilitation fee: ETB ${info.facilitationFee.toStringAsFixed(2)}',
-    if (info.availableCreditLimit != null)
-      'Available credit limit: ETB ${info.availableCreditLimit!.toStringAsFixed(2)}',
-  ];
-
-  // Create the transaction (income — money received into wallet)
-  final tx = AppTransaction(
-    id: txId,
-    name: TelebirrParser.senderName,
-    amount: info.creditAmount,
-    type: 'income',
-    date: date,
-    sender: 'Ethio Telecom / CBE',
-    category: 'Auto',
-    rawMessage: body,
-    isAutoDetected: true,
-    reasonId: loanReason?.id as int?,
-    reason: loanReason?.name as String? ?? 'Loan',
-    totalBalance: 0.0,
-  );
-
-  // Insert transaction (ignore if duplicate contract)
-  await db.insertTransaction(tx);
-
-  // Auto-create the LoanRecord
-  final loanNote = noteLines.join('\n');
-  final loan = LoanRecord(
-    loanType: 'borrowed',
-    personName: 'Ethio Telecom / CBE',
-    trackedSenderName: 'Telebirr',
-    principalAmount: info.creditAmount,
-    loanDate: date,
-    dueDate: info.dueDate,
-    linkedTransactionId: txId,
-    status: 'active',
-    note: loanNote,
-    contractNumber: info.contractNumber,
-  );
-
-  // Only insert if no existing active loan with this contract number
-  final existingLoans = await db.getLoanRecords();
-  final alreadyExists = existingLoans.any(
-      (l) => l.contractNumber == info.contractNumber && l.status == 'active');
-  if (!alreadyExists) {
-    await db.insertLoanRecord(loan);
-  }
-
-  return tx;
-}
-
-/// Handles a Telebirr credit REPAYMENT SMS:
-/// - Parses paid amount and outstanding balance
-/// - Creates an AppTransaction (expense, reason=Loan, locked)
-/// - Applies payment to the oldest active Telebirr credit loan
-/// - Moves loan to Settled if totalOutstanding == 0
-Future<AppTransaction?> _handleTelebirrCreditRepayment(
-    String body, DateTime date) async {
-  final info = TelebirrParser.parseCreditRepayment(body, date);
-  if (info == null || info.paidAmount <= 0) return null;
-
-  // Resolve the 'Loan' reason ID from the DB
-  final db = DatabaseService.instance;
-  final reasons = await db.getReasons();
-  final loanReason = reasons.cast<dynamic>().firstWhere(
-      (r) => (r.name as String).toLowerCase() == 'loan',
-      orElse: () => null);
-
-  // Build unique transaction ID
-  final txId = 'TBI_REPAY_${date.millisecondsSinceEpoch}';
-
-  // Create expense transaction (money left wallet)
-  final tx = AppTransaction(
-    id: txId,
-    name: TelebirrParser.senderName,
-    amount: info.paidAmount,
-    type: 'expense',
-    date: date,
-    sender: 'Ethio Telecom / CBE',
-    category: 'Auto',
-    rawMessage: body,
-    isAutoDetected: true,
-    reasonId: loanReason?.id as int?,
-    reason: loanReason?.name as String? ?? 'Loan',
-    totalBalance: 0.0,
-  );
-
-  await db.insertTransaction(tx);
-
-  // Find the oldest active Telebirr credit loan and apply the repayment
-  final activeLoan = await db.findActiveTelebirrCreditLoan();
-  if (activeLoan != null && activeLoan.id != null) {
-    await db.applyTelebirrRepayment(
-      loanId: activeLoan.id!,
-      paidAmount: info.paidAmount,
-      totalOutstanding: info.totalOutstanding,
-      linkedTransactionId: txId,
-    );
-  } else {
-    // If no active loan was found (e.g. loan taken before install anchor date),
-    // record this settled loan so it appears in the Settled / Paid tab of Loan Manager
-    final settledLoan = LoanRecord(
-      loanType: 'borrowed',
-      personName: 'Ethio Telecom / CBE',
-      trackedSenderName: 'Telebirr',
-      principalAmount: info.paidAmount,
-      paidAmount: info.paidAmount,
-      loanDate: date,
-      dueDate: date,
-      linkedTransactionId: txId,
-      status: 'paid',
-      note: 'Telebirr Credit Repayment (Auto-settled)',
-    );
-    await db.insertLoanRecord(settledLoan);
-  }
-
-  return tx;
 }

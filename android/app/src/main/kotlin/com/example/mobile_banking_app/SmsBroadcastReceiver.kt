@@ -502,40 +502,53 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             builder.addAction(0, "OK", okPendingIntent)
             builder.addAction(0, "Change Reason", openPendingIntent)
         } else {
-            // Uncategorized Case: 3 Action Buttons [ Food ], [ Goods ], and [ Categorize ]
-            val foodIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            // Uncategorized Case: 3 Action Buttons [ Button 1 ], [ Button 2 ], and [ Categorize ]
+            val (button1Name, button2Name) = getQuickButtonNames(context)
+
+            val button1Intent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_SET_REASON
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
                 putExtra(NotificationActionReceiver.EXTRA_TX_ID, txId)
                 putExtra(NotificationActionReceiver.EXTRA_SMS_BODY, body)
-                putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, "Food")
+                putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, button1Name)
             }
-            val foodPendingIntent = PendingIntent.getBroadcast(
+            val button1PendingIntent = PendingIntent.getBroadcast(
                 context,
                 notifId * 10 + 2,
-                foodIntent,
+                button1Intent,
                 pendingFlags
             )
 
-            val goodsIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            val button2Intent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_SET_REASON
                 putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
                 putExtra(NotificationActionReceiver.EXTRA_TX_ID, txId)
                 putExtra(NotificationActionReceiver.EXTRA_SMS_BODY, body)
-                putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, "Goods")
+                putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, button2Name)
             }
-            val goodsPendingIntent = PendingIntent.getBroadcast(
+            val button2PendingIntent = PendingIntent.getBroadcast(
                 context,
                 notifId * 10 + 3,
-                goodsIntent,
+                button2Intent,
                 pendingFlags
             )
 
-            builder.addAction(0, "Food", foodPendingIntent)
-            builder.addAction(0, "Goods", goodsPendingIntent)
+            builder.addAction(0, button1Name, button1PendingIntent)
+            builder.addAction(0, button2Name, button2PendingIntent)
             builder.addAction(0, "Categorize", openPendingIntent)
         }
 
         notificationManager.notify(notifId, builder.build())
+    }
+
+    private fun getQuickButtonNames(context: Context): Pair<String, String> {
+        return try {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val btn1 = prefs.getString("flutter.notif_quick_button_1", "Food")?.takeIf { it.isNotBlank() } ?: "Food"
+            val btn2 = prefs.getString("flutter.notif_quick_button_2", "Goods")?.takeIf { it.isNotBlank() } ?: "Goods"
+            Pair(btn1, btn2)
+        } catch (_: Exception) {
+            Pair("Food", "Goods")
+        }
     }
 }

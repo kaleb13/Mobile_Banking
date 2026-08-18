@@ -6,6 +6,8 @@ enum AppButtonVariant {
   primary,
   secondary,
   destructive,
+  softDestructive,
+  ghost,
   pill,
 }
 
@@ -16,7 +18,9 @@ enum AppButtonVariant {
 /// - Zero borders / outlines.
 /// - Primary: Crisp white background with dark contrast text (#0F172A).
 /// - Secondary: Glass-like translucent dark background with clean white text (Used for all secondary & cancel actions).
-/// - Destructive: Single unified soft-red danger button (#E11D48 @ 14% tint + crimson text).
+/// - Primary Danger (`AppButton.destructive`): Solid vibrant red background (#E11D48) with high-contrast white text.
+/// - Secondary Danger (`AppButton.softDestructive`): Soft-red translucent background (14% red tint) with vibrant crimson text.
+/// - Ghost (`AppButton.ghost`): Transparent background with clean text.
 /// - Pill: Selectable filter & category chips.
 class AppButton extends StatelessWidget {
   final String? text;
@@ -86,7 +90,7 @@ class AppButton extends StatelessWidget {
         customBackgroundColor = null,
         customTextColor = null;
 
-  /// Single unified danger / destructive button (soft red translucent tint + crimson text)
+  /// Primary Danger / Destructive Button: Solid vibrant red background + white text
   const AppButton.destructive({
     super.key,
     required String this.text,
@@ -106,6 +110,54 @@ class AppButton extends StatelessWidget {
     this.iconSize,
     this.tooltip,
   })  : variant = AppButtonVariant.destructive,
+        isSelected = false,
+        customBackgroundColor = null,
+        customTextColor = null;
+
+  /// Secondary Danger / Soft Destructive Button: Soft red translucent tint + crimson text
+  const AppButton.softDestructive({
+    super.key,
+    required String this.text,
+    required this.onPressed,
+    this.icon,
+    this.trailingIcon,
+    this.isLoading = false,
+    this.fullWidth = true,
+    this.width,
+    this.minWidth,
+    this.maxWidth,
+    this.height = 48.0,
+    this.borderRadius = 100.0,
+    this.elevation = 0.0,
+    this.padding,
+    this.fontSize,
+    this.iconSize,
+    this.tooltip,
+  })  : variant = AppButtonVariant.softDestructive,
+        isSelected = false,
+        customBackgroundColor = null,
+        customTextColor = null;
+
+  /// Ghost / Transparent Button: Transparent background + white/muted text
+  const AppButton.ghost({
+    super.key,
+    required String this.text,
+    required this.onPressed,
+    this.icon,
+    this.trailingIcon,
+    this.isLoading = false,
+    this.fullWidth = false,
+    this.width,
+    this.minWidth,
+    this.maxWidth,
+    this.height = 44.0,
+    this.borderRadius = 100.0,
+    this.elevation = 0.0,
+    this.padding,
+    this.fontSize,
+    this.iconSize,
+    this.tooltip,
+  })  : variant = AppButtonVariant.ghost,
         isSelected = false,
         customBackgroundColor = null,
         customTextColor = null;
@@ -161,9 +213,22 @@ class AppButton extends StatelessWidget {
       case AppButtonVariant.destructive:
         bg = customBackgroundColor ??
             (isInteractive
+                ? AppColors.buttonDestructive
+                : AppColors.buttonDestructive.withValues(alpha: 0.45));
+        textColor = customTextColor ?? Colors.white;
+        break;
+
+      case AppButtonVariant.softDestructive:
+        bg = customBackgroundColor ??
+            (isInteractive
                 ? AppColors.buttonSoftDestructiveBg
                 : AppColors.buttonSoftDestructiveBg.withValues(alpha: 0.5));
         textColor = customTextColor ?? AppColors.buttonDestructive;
+        break;
+
+      case AppButtonVariant.ghost:
+        bg = customBackgroundColor ?? Colors.transparent;
+        textColor = customTextColor ?? Colors.white;
         break;
 
       case AppButtonVariant.pill:
@@ -288,11 +353,15 @@ class AppButton extends StatelessWidget {
                 },
                 splashColor: (variant == AppButtonVariant.primary
                         ? AppColors.buttonPrimaryText
-                        : Colors.white)
+                        : (variant == AppButtonVariant.softDestructive
+                            ? AppColors.buttonDestructive
+                            : Colors.white))
                     .withValues(alpha: 0.12),
                 highlightColor: (variant == AppButtonVariant.primary
                         ? AppColors.buttonPrimaryText
-                        : Colors.white)
+                        : (variant == AppButtonVariant.softDestructive
+                            ? AppColors.buttonDestructive
+                            : Colors.white))
                     .withValues(alpha: 0.06),
                 child: Padding(
                   padding: effectivePadding,

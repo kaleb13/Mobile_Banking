@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/transaction.dart';
 import '../../models/reason.dart';
 import '../../models/loan_record.dart';
@@ -10,6 +11,7 @@ import '../../models/cash_transaction.dart';
 import '../../models/transaction_attachment.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/link_extractor.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_button.dart';
@@ -40,6 +42,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   AppReason? _selectedReason;
   bool _isPersonalNoteExpanded = false;
   bool _isRawMessageExpanded = false;
+  bool _isReceiptLinkExpanded = false;
   bool _isMenuOpen = false;
 
   @override
@@ -387,7 +390,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     child: Text(
                       'Delete',
                       style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textPrimary,
+                        color: AppColors.negative,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w500,
                       ),
@@ -481,6 +484,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ] else if (currentTx.linkedTransactionId != null) ...[
                           _buildInternalTransferCard(context, provider, currentTx),
                           const SizedBox(height: 14),
+                        ] else if (!isAutoLocked && (activeReasonName == 'loan' || activeReasonName.contains('loan'))) ...[
+                          _buildCreateLoanPromptCard(context, provider, currentTx),
+                          const SizedBox(height: 14),
+                        ] else if (!isAutoLocked && (activeReasonName == 'internal transfer' || activeReasonName.contains('internal transfer') || activeReasonName == 'transfer')) ...[
+                          _buildLinkInternalTransferPromptCard(context, provider, currentTx),
+                          const SizedBox(height: 14),
                         ] else if ((currentLabel?.toLowerCase() == 'cash' || currentTx.reason?.toLowerCase() == 'cash') && currentTx.type == 'expense') ...[
                           _buildCashSpendingBreakdownCard(context, provider),
                           const SizedBox(height: 14),
@@ -521,6 +530,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
                     // ── Collapsible Raw Message Source Section ─────────────
                     _buildCollapsibleRawMessageCard(context),
+
+                    if (widget.transaction.hasLinks) ...[
+                      const SizedBox(height: 14),
+                      // ── Collapsible Receipt Link Section ───────────────────
+                      _buildCollapsibleReceiptLinkCard(context),
+                    ],
 
                     const SizedBox(height: 14),
 
@@ -1074,10 +1089,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCollapsibleInfoRow(IconData icon, String label, String value,
-      {Widget? customValue}) {
+      {Widget? customValue, String? tooltipText}) {
+    final effectiveTooltip = tooltipText ?? (value.isNotEmpty ? value : null);
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 11),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, color: AppColors.textSecondary, size: 15),
           const SizedBox(width: 10),
@@ -1089,18 +1107,60 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          const Spacer(),
-          if (customValue != null)
-            customValue
-          else
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: customValue ??
+                  (effectiveTooltip != null
+                      ? Tooltip(
+                          message: effectiveTooltip,
+                          triggerMode: TooltipTriggerMode.longPress,
+                          preferBelow: false,
+                          showDuration: const Duration(seconds: 3),
+                          waitDuration: const Duration(milliseconds: 300),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          textStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          child: Text(
+                            value,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.end,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )
+                      : Text(
+                          value,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )),
             ),
+          ),
         ],
       ),
     );
@@ -1310,7 +1370,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 ),
                 if (activeReasonId != null && !isSpecialReason) ...[
                   if (activeLink != null)
-                    AppButton.destructive(
+                    AppButton.softDestructive(
                       text: 'Unlink',
                       icon: Icons.link_off_rounded,
                       fullWidth: false,
@@ -1487,6 +1547,173 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     ],
                   ),
                   crossFadeState: _isRawMessageExpanded
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 280),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollapsibleReceiptLinkCard(BuildContext context) {
+    final links = widget.transaction.extractedLinks;
+    if (links.isEmpty) return const SizedBox.shrink();
+
+    final primaryLink = links.first;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+          onTap: () {
+            setState(() {
+              _isReceiptLinkExpanded = !_isReceiptLinkExpanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.link_rounded, color: AppColors.positive, size: 18),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'RECEIPT LINK',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    AppButton.secondary(
+                      text: 'Copy',
+                      icon: Icons.copy_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: primaryLink));
+                        AppToast.success(context, message: 'Receipt link copied to clipboard');
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    AppButton.primary(
+                      text: 'Open',
+                      icon: Icons.open_in_browser_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      onPressed: () async {
+                        final uri = Uri.parse(LinkExtractor.normalizeUrl(primaryLink));
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          if (context.mounted) {
+                            AppToast.error(context, message: 'Unable to open link');
+                          }
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: AnimatedRotation(
+                        turns: _isReceiptLinkExpanded ? 0.5 : 0.0,
+                        duration: const Duration(milliseconds: 250),
+                        child: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox(width: double.infinity, height: 0),
+                  secondChild: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 12),
+                      Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+                      const SizedBox(height: 12),
+                      ...links.map((link) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: GestureDetector(
+                              onTap: () async {
+                                final uri = Uri.parse(LinkExtractor.normalizeUrl(link));
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                } else {
+                                  if (context.mounted) {
+                                    AppToast.error(context, message: 'Unable to open link');
+                                  }
+                                }
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.open_in_new_rounded,
+                                      color: AppColors.positive,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        link,
+                                        style: const TextStyle(
+                                          color: AppColors.textSoft,
+                                          height: 1.4,
+                                          fontSize: 12,
+                                          fontFamily: 'monospace',
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: AppColors.positive,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          )),
+                    ],
+                  ),
+                  crossFadeState: _isReceiptLinkExpanded
                       ? CrossFadeState.showSecond
                       : CrossFadeState.showFirst,
                   duration: const Duration(milliseconds: 280),
@@ -1743,6 +1970,147 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
+  Widget _buildCreateLoanPromptCard(
+      BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.positive.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.handshake_outlined,
+                color: AppColors.positive, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Create Loan Record',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Track repayment & schedule for this transaction',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.50),
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          AppButton.primary(
+            text: 'Create',
+            icon: Icons.add_rounded,
+            fullWidth: false,
+            height: 32,
+            fontSize: 11.5,
+            iconSize: 14,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            onPressed: () async {
+              await AppDrawer.show(
+                context: context,
+                builder: (_) => AddLoanSheet(
+                  provider: provider,
+                  linkedTransactionId: currentTx.id,
+                  prefilledAmount: currentTx.amount,
+                  prefilledName: currentTx.sender,
+                  prefilledTrackedSender: currentTx.sender,
+                  prefilledType:
+                      currentTx.type == 'expense' ? 'lent' : 'borrowed',
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinkInternalTransferPromptCard(
+      BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.info.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.sync_alt,
+                color: AppColors.info, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Link Internal Transfer',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Match with corresponding debit/credit',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.50),
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          AppButton.primary(
+            text: 'Link',
+            icon: Icons.add_link_rounded,
+            fullWidth: false,
+            height: 32,
+            fontSize: 11.5,
+            iconSize: 14,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            onPressed: () async {
+              await AppDrawer.show(
+                context: context,
+                builder: (_) => InternalTransferPickerSheet(
+                  sourceTransaction: currentTx,
+                  provider: provider,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInternalTransferCard(
       BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
     AppTransaction? linkedTx;
@@ -1798,7 +2166,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ],
                 ),
               ),
-              AppButton.destructive(
+              AppButton.softDestructive(
                 text: 'Unlink',
                 icon: Icons.link_off_rounded,
                 fullWidth: false,

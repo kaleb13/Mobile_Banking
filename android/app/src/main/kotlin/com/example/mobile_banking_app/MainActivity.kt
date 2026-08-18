@@ -16,6 +16,7 @@ import android.view.accessibility.AccessibilityManager
 import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
+import android.provider.Telephony
 import android.text.TextUtils
 import io.flutter.plugin.common.EventChannel
 import android.net.Uri
@@ -92,6 +93,112 @@ class MainActivity : FlutterFragmentActivity() {
                         notificationManager?.cancel(notifIdStr.hashCode())
                     }
                     result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.shibre/sms_scanner").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getBankSmsFast" -> {
+                    val sinceTimestamp = call.argument<Long>("since")
+                    val rawSenders = call.argument<List<String>>("senders") 
+                        ?: call.argument<List<String>>("customSenders") 
+                        ?: listOf()
+                    val targetSenders = rawSenders.filter { it.isNotBlank() }.map { it.trim().lowercase() }.toSet()
+
+                    Thread {
+                        try {
+                            val projection = arrayOf(
+                                Telephony.Sms._ID,
+                                Telephony.Sms.ADDRESS,
+                                Telephony.Sms.BODY,
+                                Telephony.Sms.DATE
+                            )
+
+                            // ── 1. High-Performance SQL Push-Down Selection ──
+                            // Dynamically queries only the sender addresses registered in Dart
+                            val selectionParts = ArrayList<String>()
+                            val selectionArgsList = ArrayList<String>()
+
+                            if (sinceTimestamp != null && sinceTimestamp > 0) {
+                                selectionParts.add("${Telephony.Sms.DATE} >= ?")
+                                selectionArgsList.add(sinceTimestamp.toString())
+                            }
+
+                            if (targetSenders.isNotEmpty()) {
+                                val bankConditions = ArrayList<String>()
+                                for (sender in targetSenders) {
+                                    bankConditions.add("${Telephony.Sms.ADDRESS} LIKE ?")
+                                    selectionArgsList.add("%$sender%")
+                                }
+                                selectionParts.add("(" + bankConditions.joinToString(" OR ") + ")")
+                            }
+
+                            val selection = if (selectionParts.isNotEmpty()) selectionParts.joinToString(" AND ") else null
+                            val selectionArgs = if (selectionArgsList.isNotEmpty()) selectionArgsList.toTypedArray() else null
+
+                            var cursor = try {
+                                contentResolver.query(
+                                    Telephony.Sms.Inbox.CONTENT_URI,
+                                    projection,
+                                    selection,
+                                    selectionArgs,
+                                    "${Telephony.Sms.DATE} ASC"
+                                )
+                            } catch (_: Exception) {
+                                null
+                            }
+
+                            // ── 2. Graceful Fallback (in case custom OEM blocks complex LIKE clauses) ──
+                            if (cursor == null) {
+                                val fallbackSelection = if (sinceTimestamp != null && sinceTimestamp > 0) "${Telephony.Sms.DATE} >= ?" else null
+                                val fallbackArgs = if (sinceTimestamp != null && sinceTimestamp > 0) arrayOf(sinceTimestamp.toString()) else null
+                                cursor = contentResolver.query(
+                                    Telephony.Sms.Inbox.CONTENT_URI,
+                                    projection,
+                                    fallbackSelection,
+                                    fallbackArgs,
+                                    "${Telephony.Sms.DATE} ASC"
+                                )
+                            }
+
+                            val messages = ArrayList<Map<String, Any>>(cursor?.count ?: 0)
+                            cursor?.use {
+                                val addrIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
+                                val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
+                                val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
+
+                                while (it.moveToNext()) {
+                                    val addr = if (addrIdx >= 0) it.getString(addrIdx) else null
+                                    val body = if (bodyIdx >= 0) it.getString(bodyIdx) else null
+                                    val date = if (dateIdx >= 0) it.getLong(dateIdx) else null
+
+                                    if (!addr.isNullOrEmpty() && !body.isNullOrEmpty() && date != null) {
+                                        val lowerAddr = addr.trim().lowercase()
+                                        val isBank = targetSenders.isEmpty() ||
+                                                targetSenders.contains(lowerAddr) ||
+                                                targetSenders.any { k -> lowerAddr.contains(k) }
+                                        if (isBank) {
+                                            val item = HashMap<String, Any>(3)
+                                            item["sender"] = addr
+                                            item["body"] = body
+                                            item["date"] = date
+                                            messages.add(item)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(messages)
+                            }
+                        } catch (e: Exception) {
+                            Handler(Looper.getMainLooper()).post {
+                                result.error("QUERY_ERROR", e.message, null)
+                            }
+                        }
+                    }.start()
                 }
                 else -> result.notImplemented()
             }

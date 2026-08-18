@@ -120,8 +120,6 @@ class LoanRecord {
         contractNumber: clearContractNumber ? null : (contractNumber ?? this.contractNumber),
       );
 
-  /// True if this loan was auto-created from a Telebirr credit SMS.
-  bool get isTelebirrCredit => contractNumber != null;
 }
 
 /// Represents a single repayment event against a loan.

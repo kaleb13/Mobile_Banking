@@ -39,10 +39,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _searchQuery = '';
   String _typeFilter = 'All';
   bool _isBookmarkedOnly = false;
-  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.last30Days();
   String _senderFilter = 'All Senders';
   String _bankFilter = 'All Banks';
   String _sortBy = 'Date: Newest';
+  int _displayedLimit = 30;
   bool _isSearchActive = false;
   bool _isFilterExpanded = false;
   final DraggableScrollableController _sheetController =
@@ -1085,25 +1086,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDraggableTransactionsSheet(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
 
-    final allTransactions = provider.transactions;
-    final allSenders = ['All Senders'];
-    allSenders
-        .addAll(allTransactions.map((t) => t.sender).toSet().toList()..sort());
-
+    final allSenders = ['All Senders', ...provider.uniqueSenders];
     if (!allSenders.contains(_senderFilter)) {
       _senderFilter = 'All Senders';
     }
 
-    final allBanks = ['All Banks'];
-    allBanks
-        .addAll(allTransactions.map((t) => t.name).toSet().toList()..sort());
-
+    final allBanks = ['All Banks', ...provider.uniqueBanks];
     if (!allBanks.contains(_bankFilter)) {
       _bankFilter = 'All Banks';
     }
 
     final transactionsList = const FilterTransactionsUseCase().execute(
-      transactions: allTransactions,
+      transactions: provider.transactions,
       params: FilterTransactionsParams(
         bankFilter: _bankFilter,
         senderFilter: _senderFilter,
@@ -1114,6 +1108,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onlyBookmarked: _isBookmarkedOnly,
       ),
     );
+
+    final int visibleCount = _displayedLimit.clamp(0, transactionsList.length);
+    final bool hasMore = transactionsList.length > visibleCount;
 
     final mediaQuery = MediaQuery.of(context);
     final screenHeight = mediaQuery.size.height;
@@ -1240,17 +1237,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onChanged: (val) {
                     setState(() {
                       _searchQuery = val;
+                      _displayedLimit = 30;
                     });
                   },
                   onClear: () {
                     setState(() {
                       _searchQuery = '';
+                      _displayedLimit = 30;
                     });
                   },
                   onClose: () {
                     setState(() {
                       _isSearchActive = false;
                       _searchQuery = '';
+                      _displayedLimit = 30;
                     });
                   },
                   backgroundColor: AppColors.lightGreyBackground,
@@ -1276,6 +1276,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           onTap: () {
                             setState(() {
                               _isBookmarkedOnly = !_isBookmarkedOnly;
+                              _displayedLimit = 30;
                             });
                           },
                           behavior: HitTestBehavior.opaque,
@@ -1338,22 +1339,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                           maxWidth: 130,
                           onChanged: (val) {
-                            if (val != null) setState(() => _sortBy = val);
+                            if (val != null) {
+                              setState(() {
+                                _sortBy = val;
+                                _displayedLimit = 30;
+                              });
+                            }
                           },
                         ),
                         const SizedBox(width: 8),
                         _buildWhiteFilterDropdown(
                           value: _typeFilter,
-                          items: const ['All', 'Bookmarked', 'Incoming', 'Outgoing'],
+                          items: const ['All', 'Incoming', 'Outgoing'],
                           onChanged: (val) {
-                            if (val != null) setState(() => _typeFilter = val);
+                            if (val != null) {
+                              setState(() {
+                                _typeFilter = val;
+                                _displayedLimit = 30;
+                              });
+                            }
                           },
                         ),
                         const SizedBox(width: 8),
                         AppDateFilter.light(
                           value: _dateFilterValue,
                           onChanged: (val) {
-                            setState(() => _dateFilterValue = val);
+                            setState(() {
+                              _dateFilterValue = val;
+                              _displayedLimit = 30;
+                            });
                           },
                         ),
                         const SizedBox(width: 8),
@@ -1362,7 +1376,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           items: allBanks,
                           maxWidth: 90,
                           onChanged: (val) {
-                            if (val != null) setState(() => _bankFilter = val);
+                            if (val != null) {
+                              setState(() {
+                                _bankFilter = val;
+                                _displayedLimit = 30;
+                              });
+                            }
                           },
                         ),
                         const SizedBox(width: 8),
@@ -1371,7 +1390,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           items: allSenders,
                           maxWidth: 100,
                           onChanged: (val) {
-                            if (val != null) setState(() => _senderFilter = val);
+                            if (val != null) {
+                              setState(() {
+                                _senderFilter = val;
+                                _displayedLimit = 30;
+                              });
+                            }
                           },
                         ),
                       ],
@@ -1394,7 +1418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : ListView.separated(
                         controller: scrollController,
                         padding: const EdgeInsets.only(top: 4, bottom: 90),
-                        itemCount: transactionsList.length,
+                        itemCount: visibleCount + (hasMore ? 1 : 0),
                         separatorBuilder: (context, index) => const Divider(
                           height: 1,
                           thickness: 0.5,
@@ -1403,6 +1427,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: AppColors.lightGreySurface,
                         ),
                         itemBuilder: (context, index) {
+                          if (index == visibleCount) {
+                            // Lazy load next page
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted && _displayedLimit < transactionsList.length) {
+                                setState(() {
+                                  _displayedLimit += 30;
+                                });
+                              }
+                            });
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      AppColors.brandGreen.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
                           final tx = transactionsList[index];
                           final bool isLatest = index == 0;
                           return _buildWhiteTransactionItem(context, tx, isLatest);
