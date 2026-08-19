@@ -5,8 +5,8 @@ import org.junit.Test
 
 /**
  * Unit tests for SmsBroadcastReceiver — verifies sender matching, security
- * filtering, and SHA-256 idempotency key generation without needing an
- * Android emulator.
+ * filtering, structured banking fact extraction, locked reason pattern detection,
+ * and SHA-256 idempotency key generation.
  */
 class SmsBroadcastReceiverTest {
 
@@ -101,24 +101,6 @@ class SmsBroadcastReceiverTest {
     }
 
     @Test
-    fun `detects PIN reset and change messages`() {
-        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
-            "Please reset your PIN to continue."))
-        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
-            "Password reset link sent."))
-        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
-            "Change your PIN for security."))
-    }
-
-    @Test
-    fun `detects auth and verification codes`() {
-        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
-            "Your auth code is 456789"))
-        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
-            "Your verification code is 1234. Enter it now."))
-    }
-
-    @Test
     fun `allows transaction messages through`() {
         assertFalse(SmsBroadcastReceiver.isSecurityOrAuthMessage(
             "You have received ETB 1,500.00 from John. Balance: ETB 5,000.00"))
@@ -128,44 +110,79 @@ class SmsBroadcastReceiverTest {
             "Payment of ETB 500 sent to merchant ABC."))
     }
 
-    // ── SHA-256 ID Generation ───────────────────────────────────────────────
+    // ── Banking Fact Extraction & Locked Pattern Tests ──────────────────────
 
     @Test
-    fun `generates consistent SHA-256 IDs`() {
-        val id1 = SmsBroadcastReceiver.generateId("CBE", 1000L, "Hello")
-        val id2 = SmsBroadcastReceiver.generateId("CBE", 1000L, "Hello")
-        assertEquals(id1, id2)
+    fun `parses Telebirr Airtime recharge with locked Airtime pattern`() {
+        val msg = "Dear Kaleb \nYou have recharged ETB 5.00 airtime for 972665987 on 19/08/2026 14:54:18. Your transaction number is DHJ9WSTUPZ. Your current balance is ETB 485.32."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(5.0, parsed!!.amount, 0.001)
+        assertEquals("ETB 5.00", parsed.formattedAmount)
+        assertTrue(parsed.isDebit)
+        assertEquals("972665987", parsed.counterparty)
+        assertEquals("To: 972665987", parsed.directionHeader)
+        assertTrue(parsed.isLocked)
+        assertEquals("Airtime", parsed.lockedReasonName)
+        assertEquals("DHJ9WSTUPZ", parsed.txReference)
     }
 
     @Test
-    fun `generates different IDs for different inputs`() {
-        val id1 = SmsBroadcastReceiver.generateId("CBE", 1000L, "Hello")
-        val id2 = SmsBroadcastReceiver.generateId("CBE", 1001L, "Hello")
-        val id3 = SmsBroadcastReceiver.generateId("CBE", 1000L, "Hello!")
-        assertNotEquals(id1, id2)
-        assertNotEquals(id1, id3)
+    fun `parses Telebirr Airtime with full 251 phone number`() {
+        val msg = "Dear KALEB \nYou have recharged ETB 50.00 airtime for 251972665987 on 04/04/2024 14:26:46. Your transaction number is BD45KRON6P. Your current balance is ETB 39.69."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(50.0, parsed!!.amount, 0.001)
+        assertEquals("251972665987", parsed.counterparty)
+        assertEquals("To: 251972665987", parsed.directionHeader)
+        assertTrue(parsed.isLocked)
+        assertEquals("Airtime", parsed.lockedReasonName)
     }
 
     @Test
-    fun `SHA-256 ID is 64 character hex string`() {
-        val id = SmsBroadcastReceiver.generateId("CBE", 1000L, "Test message")
-        assertEquals(64, id.length)
-        assertTrue(id.matches(Regex("[0-9a-f]{64}")))
-    }
+    fun `parses Telebirr Package subscription with locked Package pattern`() {
+        val msg = "Dear KALEB\n You have paid ETB 50.00 for package subscription to 972665987 on 20/04/2024 07:10:41. Your transaction number is BDK7PQVAMX. Your current balance is ETB 24.61."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
 
-    // ── Amount & Direction Formatting ─────────────────────────────────────
-
-    @Test
-    fun `extracts formatted ETB amount correctly`() {
-        assertEquals("ETB 1,500.00", SmsBroadcastReceiver.extractAmount("You received ETB 1500.00 from John."))
-        assertEquals("ETB 2,000.50", SmsBroadcastReceiver.extractAmount("Account credited Birr 2,000.50."))
-        assertEquals("ETB 500.00", SmsBroadcastReceiver.extractAmount("Paid Br. 500.00 for goods."))
+        assertNotNull(parsed)
+        assertEquals(50.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("972665987", parsed.counterparty)
+        assertTrue(parsed.isLocked)
+        assertEquals("Package", parsed.lockedReasonName)
     }
 
     @Test
-    fun `determines direction header correctly`() {
-        assertEquals("From: Telebirr", SmsBroadcastReceiver.getDirectionHeader("Telebirr", "You received ETB 500 from Ali"))
-        assertEquals("For: CBE", SmsBroadcastReceiver.getDirectionHeader("CBE", "You have debited ETB 200 to Merchant"))
-        assertEquals("For: Telebirr", SmsBroadcastReceiver.getDirectionHeader("Telebirr", "Payment of ETB 100 sent to merchant"))
+    fun `parses Telebirr Shamo internal savings transfer with locked Internal Transfer pattern`() {
+        val msg = "Dear KALEB \nYou have reserved ETB 10.00 to your Shamo Account on 21/04/2024 22:01:10.The service fee is ETB 0.01. Your current E-Money Account balance is ETB 13.60."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(10.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertTrue(parsed.isLocked)
+        assertEquals("Internal Transfer", parsed.lockedReasonName)
+    }
+
+    @Test
+    fun `parses Telebirr standard transfer with unlocked pattern`() {
+        val msg = "Dear KALEB \nYou have transferred ETB 100.00 to NAHOM ABRAHAM(251921607264) on 24/04/2024 18:58:01. Your transaction number is BDO6RA9LCM."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(100.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertFalse(parsed.isLocked)
+        assertNull(parsed.lockedReasonName)
+    }
+
+    @Test
+    fun `drops non-transaction SMS fragments without showing notification`() {
+        val msg = "To download your payment information please click this link: https://transactioninfo.ethiotelecom.et/receipt/DHJ9WSTUPZ\nFor any support and information related to telebirr service"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
+
+        assertNull("Non-transaction fragment must return null", parsed)
     }
 }

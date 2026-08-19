@@ -1,4 +1,4 @@
-import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
 
 class AhaduParser {
@@ -17,13 +17,12 @@ class AhaduParser {
     return null;
   }
 
-  static AppTransaction? parse(String message, DateTime fallbackDate) {
+  static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
     if (message.isEmpty) return null;
 
     final lowerMsg = message.toLowerCase();
 
     String type = '';
-    String category = 'Auto';
     double amount = 0.0;
     double totalBalance = 0.0;
     String recipientOrSender = '';
@@ -52,12 +51,9 @@ class AhaduParser {
         lowerMsg.contains('cashout') ||
         lowerMsg.contains('purchase')) {
       type = 'expense';
-      category = (lowerMsg.contains('withdrawn') || lowerMsg.contains('cashout'))
-          ? 'Withdrawal'
-          : 'Transferred';
 
       amount = extractAmount(RegExp(
-          r'(?:transfer\s+of|debited\s+with|debit|paid|withdrawn|sent)\s+ETB\s*([0-9,.]+)',
+          r'(?:transfer\s+of|debited\s+with|debit\s+of|debit|paid|withdrawn|sent)\s+ETB\s*([0-9,.]+)',
           caseSensitive: false));
       if (amount <= 0) {
         amount = extractAmount(
@@ -82,7 +78,6 @@ class AhaduParser {
         lowerMsg.contains('deposit') ||
         lowerMsg.contains('cashin')) {
       type = 'income';
-      category = 'Deposit';
 
       amount = extractAmount(RegExp(
           r'(?:deposit\s+of|received|credited\s+with|credit|deposited)\s+ETB\s*([0-9,.]+)',
@@ -141,7 +136,7 @@ class AhaduParser {
     // Fallback: digital receipt URL parameter "digitalreceipt?es=1008700007948/05-AUG-26/5509"
     String? refId;
     final refMatch = RegExp(
-            r'(?:reference\s+number|ref(?:erence)?\s*no\.?|ref\.?)\s*([A-Za-z0-9]+)',
+            r'(?:reference\s+number|ref(?:erence)?\s*(?:no\.?)?|ref\.?)\s*:?\s*([A-Za-z0-9]+)',
             caseSensitive: false)
         .firstMatch(message);
     if (refMatch != null) {
@@ -166,17 +161,16 @@ class AhaduParser {
       recipientOrSender = type == 'income' ? 'Ahadu Deposit' : 'Ahadu Transfer';
     }
 
-    return AppTransaction(
+    return ParsedSmsResult(
       id: txId,
-      name: senderName,
+      bankName: senderName,
       amount: amount,
       type: type,
       date: txDate,
-      sender: recipientOrSender,
-      category: category,
-      rawMessage: message,
-      isAutoDetected: true,
+      counterparty: recipientOrSender,
       totalBalance: totalBalance,
+      rawMessage: message,
+      patternType: SmsPatternType.standardTransfer,
     );
   }
 

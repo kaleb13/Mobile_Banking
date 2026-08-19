@@ -18,14 +18,15 @@ void main() {
       expect(bankName, equals('CBE'));
 
       // Step 2: Parser extraction
-      final AppTransaction? tx = CbeParser.parse(rawSms, DateTime.now());
-      expect(tx, isNotNull);
-      expect(tx!.amount, equals(207.50));
-      expect(tx.type, equals('income'));
-      expect(tx.totalBalance, equals(556.87));
-      expect(tx.isAutoDetected, isTrue);
+      final parsed = CbeParser.parse(rawSms, DateTime.now());
+      expect(parsed, isNotNull);
+      expect(parsed!.amount, equals(207.50));
+      expect(parsed.type, equals('income'));
+      expect(parsed.totalBalance, equals(556.87));
 
-      // Step 3: Verify integrated transaction attributes
+      // Step 3: Domain entity conversion
+      final tx = AppTransaction.fromParsedResult(parsed);
+      expect(tx.isAutoDetected, isTrue);
       expect(tx.name, equals('CBE'));
       expect(tx.sender, equals('Kaleab Afesha'));
     });

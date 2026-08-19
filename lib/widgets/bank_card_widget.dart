@@ -204,11 +204,11 @@ class BankCardWidget extends StatelessWidget {
     final buttonProgress = ((t - 0.60) / 0.40).clamp(0.0, 1.0);
     final buttonOpacity = Curves.easeInOut.transform(buttonProgress);
 
-    final double logoSize = lerpDouble(22, 38, t)!;
-    final double cardPadding = lerpDouble(10, 16, t)!;
-    final double nameFontSize = lerpDouble(15, 17, t)!;
-    final double balanceFontSize = lerpDouble(22, 28, t)!;
-    final double decimalFontSize = lerpDouble(14, 18, t)!;
+    final double logoSize = lerpDouble(24, 40, t)!;
+    final double cardPadding = lerpDouble(12, 18, t)!;
+    final double nameFontSize = lerpDouble(15, 17.5, t)!;
+    final double balanceFontSize = lerpDouble(22, 29, t)!;
+    final double decimalFontSize = lerpDouble(14, 18.5, t)!;
 
     // Drop shadow is strictly ONLY present when stacked on the Home deck (t <= 0.01).
     // In the wallet manager (t = 1.0) or during flight (on the way), cards have zero shadow.
@@ -239,7 +239,7 @@ class BankCardWidget extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 14),
             padding: EdgeInsets.all(cardPadding),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(28),
               gradient: LinearGradient(
                 begin: Alignment.bottomLeft,
                 end: Alignment.topRight,

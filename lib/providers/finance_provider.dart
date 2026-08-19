@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../models/app_currency.dart';
 import '../models/sender.dart';
 import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import '../models/app_notification.dart';
 import '../models/reason.dart';
 import '../models/loan_record.dart';
@@ -3366,69 +3367,45 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       return;
     }
 
+    ParsedSmsResult? parsedResult;
     if (bank == 'Telebirr') {
-      AppTransaction? telebirrTx = TelebirrParser.parse(message, date);
-      if (telebirrTx != null) {
-        await addTransaction(telebirrTx);
-      } else {
-        // Parser couldn't read it — save to notifications so user sees it
-        await addUnrecognizedNotification(
-            sender: sender, body: message, date: date);
-      }
-      return;
+      parsedResult = TelebirrParser.parse(message, date);
     } else if (bank == 'CBE') {
-      AppTransaction? cbeTx = CbeParser.parse(message, date);
-      if (cbeTx != null) {
-        await addTransaction(cbeTx);
-      } else {
-        // Some CBE Birr messages (e.g. ATM withdrawals) arrive with sender
-        // ID "CBE" instead of "CBEBirr". If the CBE parser can't read it
-        // and the body uses the "Br." CBE Birr currency marker, try the
-        // CBE Birr parser as a fallback before dropping the message.
-        final looksLikeCbeBirr = message.toLowerCase().contains('br.');
-        if (looksLikeCbeBirr) {
-          AppTransaction? cbeBirrFallbackTx =
-              CbeBirrParser.parse(message, date);
-          if (cbeBirrFallbackTx != null) {
-            await addTransaction(cbeBirrFallbackTx);
-            return;
+      parsedResult = CbeParser.parse(message, date);
+      if (parsedResult == null && message.toLowerCase().contains('br.')) {
+        parsedResult = CbeBirrParser.parse(message, date);
+      }
+    } else if (bank == 'CBE Birr') {
+      parsedResult = CbeBirrParser.parse(message, date);
+    } else if (bank == 'Ahadu Bank') {
+      parsedResult = AhaduParser.parse(message, date);
+    } else if (bank == 'BOA') {
+      parsedResult = BoaParser.parse(message, date);
+    } else if (bank == 'Dashen Bank') {
+      parsedResult = DashenParser.parse(message, date);
+    }
+
+    if (bank != null) {
+      if (parsedResult != null) {
+        int? reasonId;
+        String? reasonName;
+        if (parsedResult.isSystemLocked) {
+          final lockedName = parsedResult.lockedReasonName;
+          if (lockedName != null) {
+            final matched = _reasons.cast<AppReason?>().firstWhere(
+              (r) => r?.name.toLowerCase().trim() == lockedName.toLowerCase().trim(),
+              orElse: () => null,
+            );
+            reasonId = matched?.id;
+            reasonName = matched?.name ?? lockedName;
           }
         }
-        await addUnrecognizedNotification(
-            sender: sender, body: message, date: date);
-      }
-      return;
-    } else if (bank == 'CBE Birr') {
-      AppTransaction? cbeBirrTx = CbeBirrParser.parse(message, date);
-      if (cbeBirrTx != null) {
-        await addTransaction(cbeBirrTx);
-      } else {
-        await addUnrecognizedNotification(
-            sender: sender, body: message, date: date);
-      }
-      return;
-    } else if (bank == 'Ahadu Bank') {
-      AppTransaction? ahaduTx = AhaduParser.parse(message, date);
-      if (ahaduTx != null) {
-        await addTransaction(ahaduTx);
-      } else {
-        await addUnrecognizedNotification(
-            sender: sender, body: message, date: date);
-      }
-      return;
-    } else if (bank == 'BOA') {
-      AppTransaction? boaTx = BoaParser.parse(message, date);
-      if (boaTx != null) {
-        await addTransaction(boaTx);
-      } else {
-        await addUnrecognizedNotification(
-            sender: sender, body: message, date: date);
-      }
-      return;
-    } else if (bank == 'Dashen Bank') {
-      AppTransaction? dashenTx = DashenParser.parse(message, date);
-      if (dashenTx != null) {
-        await addTransaction(dashenTx);
+        final tx = AppTransaction.fromParsedResult(
+          parsedResult,
+          reasonId: reasonId,
+          reason: reasonName,
+        );
+        await addTransaction(tx);
       } else {
         await addUnrecognizedNotification(
             sender: sender, body: message, date: date);
@@ -3768,7 +3745,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
       // Parse the SMS with the appropriate parser (trusted senders only)
       final bank = BankSenders.match(sender);
-      AppTransaction? parsed;
+      ParsedSmsResult? parsed;
       if (bank == 'Telebirr') {
         parsed = TelebirrParser.parse(body, msgDate);
       } else if (bank == 'CBE Birr') {
@@ -3783,7 +3760,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         parsed = DashenParser.parse(body, msgDate);
       }
 
-      if (parsed == null || parsed.id == null) continue;
+      if (parsed == null) continue;
 
       final oldTx = oldTxMap[parsed.id];
 
@@ -3802,9 +3779,19 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       String? finalReason;
       String? finalCustomReasonText;
 
-      if (oldTx != null) {
+      if (parsed.isSystemLocked) {
+        final lockedName = parsed.lockedReasonName;
+        if (lockedName != null) {
+          final matched = _reasons.cast<AppReason?>().firstWhere(
+            (r) => r?.name.toLowerCase().trim() == lockedName.toLowerCase().trim(),
+            orElse: () => null,
+          );
+          finalReasonId = matched?.id;
+          finalReason = matched?.name ?? lockedName;
+        }
+      } else if (oldTx != null) {
         if (oldTx.sender.toLowerCase().trim() ==
-            parsed.sender.toLowerCase().trim()) {
+            parsed.counterparty.toLowerCase().trim()) {
           finalReasonId = oldTx.reasonId;
           finalReason = oldTx.reason;
           finalCustomReasonText = oldTx.customReasonText;
@@ -3819,7 +3806,7 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         final autoLink = _reasonLinks.cast<AppReasonLink?>().firstWhere(
             (l) =>
                 l!.linkedName.toLowerCase().trim() ==
-                    parsed!.sender.toLowerCase().trim() &&
+                    parsed!.counterparty.toLowerCase().trim() &&
                 l.linkType == expectedLinkType,
             orElse: () => null);
 
@@ -3834,21 +3821,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         }
       }
 
-      final txToInsert = AppTransaction(
-        id: parsed.id,
-        name: parsed.name,
-        amount: parsed.amount,
-        type: parsed.type,
-        date: finalDate,
-        sender: parsed.sender,
-        category: parsed.category,
-        rawMessage: parsed.rawMessage,
-        isAutoDetected: parsed.isAutoDetected,
-        totalBalance: parsed.totalBalance,
+      final txToInsert = AppTransaction.fromParsedResult(
+        parsed,
         reasonId: finalReasonId,
         reason: finalReason,
         customReasonText: finalCustomReasonText,
-      );
+        note: oldTx?.note,
+      ).copyWith(date: finalDate);
 
       await DatabaseService.instance.insertTransaction(txToInsert);
 

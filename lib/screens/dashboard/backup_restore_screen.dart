@@ -263,7 +263,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   // ═══════════════════════════════════════════════════════════════════════════
   Widget _buildBackupTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -281,8 +281,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
           const SizedBox(height: 24),
 
-          const SizedBox(height: 24),
-
           // Result
           if (_exportedPath != null) _exportSuccessCard(),
           if (_exportError != null) _exportErrorCard(),
@@ -291,13 +289,16 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
           // Existing backups
           if (_backupFiles.isNotEmpty) ...[
-            const Text(
-              'EXISTING BACKUPS',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.2,
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'EXISTING BACKUPS',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -316,8 +317,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.positive.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-              ),
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -366,8 +367,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.negative.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-              ),
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Row(
         children: [
           const Icon(Icons.error_outline, color: AppColors.negative, size: 22),
@@ -391,10 +392,10 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
         children: [
@@ -450,7 +451,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   Widget _buildRestoreFileList() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -477,13 +478,16 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
           else if (_backupFiles.isEmpty)
             _noBackupsPlaceholder()
           else ...[
-            const Text(
-              'RECENT BACKUPS',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.2,
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'RECENT BACKUPS',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -564,10 +568,10 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       onTap: _isImporting ? null : () => _confirmRestore(file),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Row(
           children: [
@@ -828,11 +832,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
     required String body,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(16),
-              ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

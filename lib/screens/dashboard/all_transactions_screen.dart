@@ -413,7 +413,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
       physics: const BouncingScrollPhysics(),
       itemCount: transactions.length,
       separatorBuilder: (context, index) => Divider(

@@ -292,11 +292,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         body: SafeArea(
           bottom: false,
           child: ListView(
-            padding: const EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 100),
+            padding: const EdgeInsets.only(left: 0, right: 0, top: 16, bottom: 100),
             children: [
               // ── Header ───────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                 child: Row(
                   children: [
                     const AppBackButton(),
@@ -341,20 +341,23 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   }
 
   Widget _sectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.positive, size: 14),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.textSoft,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.positive, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.textSoft,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -364,11 +367,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(16),
-              ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -403,16 +406,16 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(16),
-              ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         child: Column(
           children: [
             ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
               title: Row(
                 children: [
                   Expanded(

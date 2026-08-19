@@ -44,7 +44,7 @@ void main() {
         (
           sender: 'Ahadu Bank',
           bodyGen: (int i, double amt) =>
-              'Dear Customer, your account 1001*** has been Credited with ETB ${amt.toStringAsFixed(2)} on 20/04/2026. Current Balance ETB 5,000.00 with reference number AH$i.',
+              'Dear Customer, your account 1001*** has been Credited with ETB ${amt.toStringAsFixed(2)} on 20/04/2026. Current Balance ETB 5,000.00. Ref: AH$i.',
         ),
       ];
 

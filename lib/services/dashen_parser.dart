@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:intl/intl.dart';
-import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 
 class DashenParser {
   static const String senderName = "Dashen Bank";
@@ -18,19 +18,20 @@ class DashenParser {
       final name = matchComma.group(1)?.trim();
       if (name != null &&
           name.isNotEmpty &&
-          name.toLowerCase() != 'customer') {
+          !name.toLowerCase().startsWith('customer')) {
         return name;
       }
     }
 
-    // Pattern 2: "Dear Nahom,"
-    final match = RegExp(r'Dear\s+([A-Za-z\s]+?),', caseSensitive: false)
+    // Pattern 2: "Dear Nahom," or "Dear Nahom Your Account"
+    final matchSpace = RegExp(r'Dear\s+([A-Za-z\s]+?)(?:\s+Your\s+Account|,)',
+            caseSensitive: false)
         .firstMatch(message);
-    if (match != null) {
-      final name = match.group(1)?.trim();
+    if (matchSpace != null) {
+      final name = matchSpace.group(1)?.trim();
       if (name != null &&
           name.isNotEmpty &&
-          name.toLowerCase() != 'customer') {
+          !name.toLowerCase().startsWith('customer')) {
         return name;
       }
     }
@@ -38,7 +39,7 @@ class DashenParser {
     return null;
   }
 
-  static AppTransaction? parse(String message, DateTime fallbackDate) {
+  static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
     if (message.isEmpty) return null;
 
     final lowerMsg = message.toLowerCase();
@@ -55,7 +56,6 @@ class DashenParser {
     }
 
     String type = '';
-    String category = 'Auto';
     double amount = 0.0;
     double totalBalance = 0.0;
     String recipientOrSender = '';
@@ -93,9 +93,6 @@ class DashenParser {
         lowerMsg.contains('transfer to') ||
         lowerMsg.contains('transferred to')) {
       type = 'expense';
-      category = (lowerMsg.contains('withdrawn') || lowerMsg.contains('withdrawal'))
-          ? 'Withdrawal'
-          : 'Transferred';
 
       // Amount extraction for debits / withdrawals
       amount = extractAmount(RegExp(
@@ -133,7 +130,6 @@ class DashenParser {
         lowerMsg.contains('deposit') ||
         lowerMsg.contains('received')) {
       type = 'income';
-      category = 'Deposit';
 
       // Amount extraction for credits / deposits
       amount = extractAmount(RegExp(
@@ -277,18 +273,16 @@ class DashenParser {
             .toString()
             .substring(0, 16);
 
-    return AppTransaction(
+    return ParsedSmsResult(
       id: txId,
-      name: senderName,
-      sender: recipientOrSender.isNotEmpty ? recipientOrSender : senderName,
+      bankName: senderName,
       amount: amount,
       type: type,
-      category: category,
       date: txDate,
-      rawMessage: message,
-      isAutoDetected: true,
+      counterparty: recipientOrSender.isNotEmpty ? recipientOrSender : senderName,
       totalBalance: totalBalance,
-      bankReference: referenceNumber,
+      rawMessage: message,
+      patternType: SmsPatternType.standardTransfer,
     );
   }
 }

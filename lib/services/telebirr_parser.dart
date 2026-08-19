@@ -1,5 +1,5 @@
 import 'bank_senders.dart';
-import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,23 +35,22 @@ class TelebirrParser {
 
   // ── Standard Transaction Parser ────────────────────────────────────────────
 
-  static AppTransaction? parse(String message, DateTime fallbackDate) {
+  static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
     if (message.isEmpty) return null;
     if (BankSenders.isSecurityOrAuthMessage(message)) return null;
 
     final lowerMsg = message.toLowerCase();
 
-    // 1. Airtime Check: Ignore airtime messages completely
+    // 1. Airtime Check: Ignore airtime received messages completely
     if (RegExp(r'received etb [0-9.]+\s*airtime').hasMatch(lowerMsg)) {
       return null;
     }
 
-    // 2. Identify Category & Amount
+    // 2. Identify Type, Pattern & Amount
     String type = '';
-    String category = 'Auto';
     double amount = 0.0;
     String senderOrRecipient = '';
-    String? reason;
+    SmsPatternType patternType = SmsPatternType.standardTransfer;
 
     // A helper to extract amount safely
     double extractAmount(RegExp regex) {
@@ -64,19 +63,63 @@ class TelebirrParser {
       return 0.0;
     }
 
-    if (lowerMsg.contains('saving account') || lowerMsg.contains('saving balance')) {
-      // Telebirr Savings (Sanduq) Deposit or Withdrawal
-      category = 'Auto';
-      reason = 'Internal Transfer';
-      senderOrRecipient = 'Telebirr Saving Account';
+    if (lowerMsg.contains('airtime') ||
+        ((lowerMsg.contains('recharged') || lowerMsg.contains('bought')) &&
+            lowerMsg.contains('airtime'))) {
+      patternType = SmsPatternType.telebirrAirtime;
+      if (lowerMsg.contains('received')) {
+        type = 'income';
+        amount = extractAmount(
+            RegExp(r'(?:received|recharged)\s+ETB\s+([0-9,.]+)'));
+        if (amount <= 0) amount = extractAmount(RegExp(r'ETB\s+([0-9,.]+)'));
+        final fromMatch =
+            RegExp(r'from\s+((?:251|0)?[97]\d{8}|\S+)').firstMatch(message);
+        senderOrRecipient = fromMatch?.group(1)?.trim() ?? 'Airtime';
+      } else {
+        type = 'expense';
+        amount = extractAmount(
+            RegExp(r'(?:recharged|bought)\s+ETB\s+([0-9,.]+)'));
+        if (amount <= 0) amount = extractAmount(RegExp(r'ETB\s+([0-9,.]+)'));
+        final phoneMatch = RegExp(
+          r'airtime\s+for\s+((?:251|0)?[97]\d{8})',
+          caseSensitive: false,
+        ).firstMatch(message);
+        senderOrRecipient = phoneMatch?.group(1)?.trim() ?? 'Airtime';
+      }
+    } else if (lowerMsg.contains('package') &&
+        (lowerMsg.contains('paid') ||
+            lowerMsg.contains('bought') ||
+            lowerMsg.contains('package subscription') ||
+            lowerMsg.contains('monthly voice'))) {
+      type = 'expense';
+      patternType = SmsPatternType.telebirrPackage;
+      amount = extractAmount(RegExp(r'(?:paid|bought)\s+ETB\s+([0-9,.]+)'));
+      if (amount <= 0) amount = extractAmount(RegExp(r'ETB\s+([0-9,.]+)'));
+
+      final phoneMatch = RegExp(
+        r'(?:made\s+for|to|for)\s+((?:251|0)?[97]\d{8})',
+        caseSensitive: false,
+      ).firstMatch(message);
+      senderOrRecipient = phoneMatch?.group(1)?.trim() ?? 'Package';
+    } else if (lowerMsg.contains('saving account') ||
+        lowerMsg.contains('saving balance') ||
+        lowerMsg.contains('sanduq') ||
+        lowerMsg.contains('shamo') ||
+        (lowerMsg.contains('reserved') && lowerMsg.contains('account'))) {
+      // Telebirr Savings (Sanduq / Shamo) Deposit or Withdrawal
+      patternType = SmsPatternType.telebirrSanduq;
+      senderOrRecipient =
+          lowerMsg.contains('shamo') ? 'Shamo Account' : 'Sanduq Savings';
 
       if (lowerMsg.contains('deposit') ||
           lowerMsg.contains('to your saving account') ||
-          lowerMsg.contains('to your saving')) {
+          lowerMsg.contains('to your saving') ||
+          lowerMsg.contains('reserved')) {
         type = 'expense';
         amount = extractAmount(RegExp(
-            r'(?:deposited|deposit|transferred)\s+ETB\s+([0-9,.]+(?:\.[0-9]+)?)',
+            r'(?:deposited|deposit|transferred|reserved)\s+ETB\s+([0-9,.]+(?:\.[0-9]+)?)',
             caseSensitive: false));
+        if (amount <= 0) amount = extractAmount(RegExp(r'ETB\s+([0-9,.]+)'));
       } else if (lowerMsg.contains('withdraw') ||
           lowerMsg.contains('from your saving account') ||
           lowerMsg.contains('from your saving')) {
@@ -84,18 +127,19 @@ class TelebirrParser {
         amount = extractAmount(RegExp(
             r'(?:withdrawn|withdraw|transferred)\s+ETB\s+([0-9,.]+(?:\.[0-9]+)?)',
             caseSensitive: false));
+        if (amount <= 0) amount = extractAmount(RegExp(r'ETB\s+([0-9,.]+)'));
       } else {
         type = 'expense';
         amount = extractAmount(RegExp(
             r'(?:ETB\s+)?([0-9,.]+(?:\.[0-9]+)?)\s+(?:to|from)\s+your\s+saving',
             caseSensitive: false));
+        if (amount <= 0) amount = extractAmount(RegExp(r'ETB\s+([0-9,.]+)'));
       }
     } else if (lowerMsg.contains('received')) {
       type = 'income';
       amount = extractAmount(RegExp(r'received\s+ETB\s+([0-9,.]+)'));
 
       // NEW template: "from Commercial Bank of Ethiopia to your telebirr Account"
-      // Note: We search the whole message since the order might vary
       final bankDepositMatch = RegExp(
               r'from\s+(.*?)\s+to your telebirr Account',
               caseSensitive: false)
@@ -104,7 +148,6 @@ class TelebirrParser {
       if (bankDepositMatch != null) {
         senderOrRecipient = bankDepositMatch.group(1)?.trim() ?? '';
       } else {
-        // Check for "from" appearing elsewhere if the specific "to your telebirr Account" isn't strictly after it
         final fromMatch =
             RegExp(r'from\s+(.*?)(?=\s*\(|on\s+\d{2}/\d{2}|to\s+your|$)')
                 .firstMatch(message);
@@ -116,9 +159,6 @@ class TelebirrParser {
       type = 'expense';
       amount = extractAmount(RegExp(r'transferred ETB ([0-9,.]+)'));
 
-      // Extract to: "to Commercial Bank of Ethiopia account number 1000342078177 on "
-      //         or: "to Ahadu Bank SC account number 0087364810101 on "
-      //         or: "to Abebe Kebede (251911223344) on "
       final toMatch =
           RegExp(r'to\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
       if (toMatch != null) {
@@ -138,41 +178,21 @@ class TelebirrParser {
       type = 'expense';
       amount = extractAmount(RegExp(r'debited\s+with\s+ETB\s+([0-9,.]+)'));
 
-      // Extract at: "at telebirr Agent 248168. Your transaction number"
       final atMatch = RegExp(r'at\s+(.*?)\.\s+Your\s+transaction\s+number',
               caseSensitive: false)
           .firstMatch(message);
       if (atMatch != null) {
         senderOrRecipient = atMatch.group(1)?.trim() ?? '';
       }
-    } else if (lowerMsg.contains('recharged') && lowerMsg.contains('airtime')) {
-      type = 'expense';
-      amount = extractAmount(RegExp(r'recharged ETB ([0-9,.]+)'));
-
-      // Extract phone: "for 251972665987 on 04/04/2024" or "for 0935389104 on "
-      final phoneMatch = RegExp(
-        r'airtime\s+for\s+((?:251|0)?[97]\d{8})',
-        caseSensitive: false,
-      ).firstMatch(message);
-      if (phoneMatch != null) {
-        senderOrRecipient = phoneMatch.group(1)?.trim() ?? '';
-      }
-
-      reason = 'Airtime';
     } else if (lowerMsg.contains('paid')) {
       type = 'expense';
       amount = extractAmount(RegExp(r'paid ETB ([0-9,.]+)'));
 
-      // Extract for: "for package Monthly Voice plus Data Package: 1.2 GB and 168Min purchase made for 972665987 on "
-      //         or: "for package subscription to 972665987 on "
-      //         or: "for package Hourly unlimited Internet purchase made for 972665987 on "
       final forMatch =
           RegExp(r'for\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
       if (forMatch != null) {
         final rawDesc = forMatch.group(1)?.trim() ?? '';
 
-        // If it's a package purchase made for a phone number (e.g. "... made for 972665987" or "... to 972665987"):
-        // Extract the phone number as the recipient.
         final phoneMatch = RegExp(
           r'(?:made\s+for|to|for)\s+((?:251|0)?[97]\d{8})',
           caseSensitive: false,
@@ -183,13 +203,9 @@ class TelebirrParser {
         } else {
           senderOrRecipient = rawDesc;
         }
-
-        if (lowerMsg.contains('package')) {
-          reason = 'Package';
-        }
       }
     } else {
-      // Must contain received, transferred, paid, or saving
+      // Must contain airtime, package, received, transferred, debited, paid, or saving
       return null;
     }
 
@@ -202,46 +218,32 @@ class TelebirrParser {
     // Supports both:
     //   OLD: "transaction number is XXXXX"
     //   NEW: "transaction number XXXXX"  (no "is")
-    String? id;
-    final idRegex = RegExp(r'transaction number(?:\s+is)?\s+([A-Z0-9]+)',
+    //   DEPOSIT: "transaction number XXXXX on"
+    final idRegex = RegExp(
+        r'transaction\s+number\s+(?:is\s+)?([A-Za-z0-9]+)',
         caseSensitive: false);
     final idMatch = idRegex.firstMatch(singleLineMsg);
-    if (idMatch != null) {
-      id = idMatch.group(1);
-    } else {
-      return null; // A valid Telebirr message must have a transaction ID
-    }
+    final id = idMatch?.group(1)?.trim() ??
+        'TB_${type}_${fallbackDate.millisecondsSinceEpoch}_$amount';
 
-    // 4. Extract Current Balance (Main Telebirr / e-money Account)
+    // 4. Extract Post Balance
+    // Supports:
+    //   OLD: "Your current balance is ETB 123.45"
+    //   OLD (double space): "Your current  balance is  ETB 123.45"
+    //   NEW: "Your current balance is ETB 123.45."
+    //   E-Money: "Your current E-Money Account balance is ETB 123.45."
+    //   Saving: "your current saving balance is ETB 123.45"
     double totalBalance = 0.0;
-
-    // Check for explicit "telebirr / e-money Account balance is ETB ..." first (for dual-balance messages)
-    final mainAccMatch = RegExp(
-            r'(?:telebirr|e-money|e\s+money)\s+(?:account\s+)?balance\s+is\s+ETB\s+([0-9.,]+)',
-            caseSensitive: false)
-        .firstMatch(singleLineMsg);
-
-    if (mainAccMatch != null) {
-      String strippedBalance =
-          mainAccMatch.group(1)?.replaceAll(',', '') ?? '0';
-      if (strippedBalance.endsWith('.')) {
-        strippedBalance =
-            strippedBalance.substring(0, strippedBalance.length - 1);
+    final balanceRegex = RegExp(
+        r'(?:current\s+(?:E-Money\s+Account\s+|saving\s+)?balance\s+is\s+ETB\s+|balance\s+is\s+ETB\s+)([0-9,]+(?:\.[0-9]+)?)',
+        caseSensitive: false);
+    final balanceMatch = balanceRegex.firstMatch(singleLineMsg);
+    if (balanceMatch != null) {
+      String rawBalance = balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
+      if (rawBalance.endsWith('.')) {
+        rawBalance = rawBalance.substring(0, rawBalance.length - 1);
       }
-      totalBalance = double.tryParse(strippedBalance) ?? 0.0;
-    } else {
-      final balanceMatch =
-          RegExp(r'balance is\s+ETB\s+([0-9.,]+)', caseSensitive: false)
-              .firstMatch(singleLineMsg);
-      if (balanceMatch != null) {
-        String strippedBalance =
-            balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
-        if (strippedBalance.endsWith('.')) {
-          strippedBalance =
-              strippedBalance.substring(0, strippedBalance.length - 1);
-        }
-        totalBalance = double.tryParse(strippedBalance) ?? 0.0;
-      }
+      totalBalance = double.tryParse(rawBalance) ?? 0.0;
     }
 
     // 5. Extract Date
@@ -276,18 +278,16 @@ class TelebirrParser {
       }
     }
 
-    return AppTransaction(
+    return ParsedSmsResult(
       id: id,
-      name: senderName,
+      bankName: senderName,
       amount: amount,
       type: type,
       date: txDate,
-      sender: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderNumber,
-      category: category,
-      reason: reason,
-      rawMessage: message,
-      isAutoDetected: true,
+      counterparty: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderNumber,
       totalBalance: totalBalance,
+      rawMessage: message,
+      patternType: patternType,
     );
   }
 }

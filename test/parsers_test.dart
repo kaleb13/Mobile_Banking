@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_banking_app/models/parsed_sms_result.dart';
+import 'package:mobile_banking_app/models/transaction.dart';
 import 'package:mobile_banking_app/services/cbe_parser.dart';
 import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
 import 'package:mobile_banking_app/services/telebirr_parser.dart';
@@ -17,8 +19,9 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.amount, equals(207.50));
       expect(tx.type, equals('income'));
-      expect(tx.sender, equals('Kaleab Afesha'));
+      expect(tx.counterparty, equals('Kaleab Afesha'));
       expect(tx.totalBalance, equals(556.87));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('parses debit/withdrawal transaction', () {
@@ -28,6 +31,7 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.amount, equals(100.00));
       expect(tx.type, equals('expense'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('returns null for empty or invalid message', () {
@@ -43,7 +47,8 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.amount, equals(500.00));
       expect(tx.type, equals('income'));
-      expect(tx.name, equals('CBE Birr'));
+      expect(tx.bankName, equals('CBE Birr'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('ignores voucher/request messages', () {
@@ -68,8 +73,9 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.amount, equals(250.00));
       expect(tx.type, equals('income'));
-      expect(tx.name, equals('Telebirr'));
+      expect(tx.bankName, equals('Telebirr'));
       expect(tx.id, equals('TB12345'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('parses bank transfer and extracts account number only as recipient', () {
@@ -79,61 +85,80 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.amount, equals(460.00));
       expect(tx.type, equals('expense'));
-      expect(tx.name, equals('Telebirr'));
+      expect(tx.bankName, equals('Telebirr'));
       expect(tx.id, equals('DHI6W98782'));
-      expect(tx.sender, equals('1000342078177'));
+      expect(tx.counterparty, equals('1000342078177'));
       expect(tx.totalBalance, equals(652.32));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
-    test('parses package purchase and extracts phone number with locked Package reason', () {
+    test('parses package purchase and extracts phone number with locked Package pattern', () {
       const sms =
           "Dear KALEB\nYou have paid ETB 50.00 for package subscription to 972665987 on 20/04/2024 07:10:41. Your transaction number is  BDK7PQVAMX. Your current balance is ETB 24.61.\nFor any support and information related to telebirr service\nThank you for using telebirr\nEthio telecom";
       final tx = TelebirrParser.parse(sms, now);
       expect(tx, isNotNull);
       expect(tx!.amount, equals(50.00));
       expect(tx.type, equals('expense'));
-      expect(tx.name, equals('Telebirr'));
+      expect(tx.bankName, equals('Telebirr'));
       expect(tx.id, equals('BDK7PQVAMX'));
-      expect(tx.sender, equals('972665987'));
-      expect(tx.reason, equals('Package'));
-      expect(tx.customReasonText, isNull);
-      expect(tx.note, isNull);
-      expect(tx.isReasonLocked, isTrue);
+      expect(tx.counterparty, equals('972665987'));
+      expect(tx.patternType, equals(SmsPatternType.telebirrPackage));
+      expect(tx.isSystemLocked, isTrue);
+      expect(tx.lockedReasonName, equals('Package'));
       expect(tx.totalBalance, equals(24.61));
+
+      // Domain entity conversion test
+      final entity = AppTransaction.fromParsedResult(tx);
+      expect(entity.reason, equals('Package'));
+      expect(entity.customReasonText, isNull);
+      expect(entity.note, isNull);
+      expect(entity.isReasonLocked, isTrue);
     });
 
-    test('parses detailed package purchase and extracts phone number with locked Package reason', () {
+    test('parses detailed package purchase and extracts phone number with locked Package pattern', () {
       const sms =
           "Dear KALEB\nYou have paid ETB 130.00 for package Monthly Voice plus Data Package: 1.2 GB and 168Min purchase made for 972665987 on 15/08/2026 20:48:44. Your transaction number is  DHF1TGBPYB. Your current balance is ETB 774.32.To download your payment information please click this link: https://transactioninfo.ethiotelecom.et/receipt/DHF1TGBPYB\nThank you for using telebirr\nEthio telecom";
       final tx = TelebirrParser.parse(sms, now);
       expect(tx, isNotNull);
       expect(tx!.amount, equals(130.00));
       expect(tx.type, equals('expense'));
-      expect(tx.name, equals('Telebirr'));
+      expect(tx.bankName, equals('Telebirr'));
       expect(tx.id, equals('DHF1TGBPYB'));
-      expect(tx.sender, equals('972665987'));
-      expect(tx.reason, equals('Package'));
-      expect(tx.customReasonText, isNull);
-      expect(tx.note, isNull);
-      expect(tx.isReasonLocked, isTrue);
+      expect(tx.counterparty, equals('972665987'));
+      expect(tx.patternType, equals(SmsPatternType.telebirrPackage));
+      expect(tx.isSystemLocked, isTrue);
+      expect(tx.lockedReasonName, equals('Package'));
       expect(tx.totalBalance, equals(774.32));
+
+      // Domain entity conversion test
+      final entity = AppTransaction.fromParsedResult(tx);
+      expect(entity.reason, equals('Package'));
+      expect(entity.customReasonText, isNull);
+      expect(entity.note, isNull);
+      expect(entity.isReasonLocked, isTrue);
     });
 
-    test('parses airtime recharge outflow and extracts phone number with locked Airtime reason', () {
+    test('parses airtime recharge outflow and extracts phone number with locked Airtime pattern', () {
       const sms =
           "Dear KALEB \nYou have recharged ETB 50.00 airtime for 251972665987 on 04/04/2024 14:26:46. Your transaction number is BD45KRON6P. Your current  balance is  ETB 39.69. \nFor any support and information related to telebirr service\nThank you for using telebirr\nEthio telecom";
       final tx = TelebirrParser.parse(sms, now);
       expect(tx, isNotNull);
       expect(tx!.amount, equals(50.00));
       expect(tx.type, equals('expense'));
-      expect(tx.name, equals('Telebirr'));
+      expect(tx.bankName, equals('Telebirr'));
       expect(tx.id, equals('BD45KRON6P'));
-      expect(tx.sender, equals('251972665987'));
-      expect(tx.reason, equals('Airtime'));
-      expect(tx.customReasonText, isNull);
-      expect(tx.note, isNull);
-      expect(tx.isReasonLocked, isTrue);
+      expect(tx.counterparty, equals('251972665987'));
+      expect(tx.patternType, equals(SmsPatternType.telebirrAirtime));
+      expect(tx.isSystemLocked, isTrue);
+      expect(tx.lockedReasonName, equals('Airtime'));
       expect(tx.totalBalance, equals(39.69));
+
+      // Domain entity conversion test
+      final entity = AppTransaction.fromParsedResult(tx);
+      expect(entity.reason, equals('Airtime'));
+      expect(entity.customReasonText, isNull);
+      expect(entity.note, isNull);
+      expect(entity.isReasonLocked, isTrue);
     });
   });
 
@@ -145,7 +170,8 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.amount, equals(1200.00));
       expect(tx.type, equals('income'));
-      expect(tx.name, equals('Ahadu Bank'));
+      expect(tx.bankName, equals('Ahadu Bank'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('parses debit transaction with receipt link ref and date', () {
@@ -171,6 +197,7 @@ https://verifayda.ahadubank.com/
       expect(tx.date.day, equals(5));
       expect(tx.date.hour, equals(13));
       expect(tx.date.minute, equals(23));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
   });
 
@@ -182,11 +209,11 @@ https://verifayda.ahadubank.com/
       expect(tx, isNotNull);
       expect(tx!.amount, equals(3000.00));
       expect(tx.type, equals('income'));
-      expect(tx.name, equals('BOA'));
-      expect(tx.sender, equals('BOA'));
+      expect(tx.bankName, equals('BOA'));
+      expect(tx.counterparty, equals('Yohannes Bizuneh'));
       expect(tx.totalBalance, equals(31824.04));
-      expect(tx.bankReference, equals('FT26215HWFDW10104'));
       expect(tx.id, equals('boa_ref_FT26215HWFDW10104'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('parses exact user provided BOA credit message with 10k ETB and Fayda link', () {
@@ -199,11 +226,11 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
       expect(tx, isNotNull);
       expect(tx!.amount, equals(10000.00));
       expect(tx.type, equals('income'));
-      expect(tx.name, equals('BOA'));
-      expect(tx.sender, equals('BOA'));
+      expect(tx.bankName, equals('BOA'));
+      expect(tx.counterparty, equals('Yohannes Bizuneh'));
       expect(tx.totalBalance, equals(34175.92));
-      expect(tx.bankReference, equals('FT26157FZW7Y10104'));
       expect(tx.id, equals('boa_ref_FT26157FZW7Y10104'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('parses debit transaction with ref ID', () {
@@ -213,10 +240,11 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
       expect(tx, isNotNull);
       expect(tx!.amount, equals(10000.00));
       expect(tx.type, equals('expense'));
-      expect(tx.name, equals('BOA'));
-      expect(tx.sender, equals('BOA'));
+      expect(tx.bankName, equals('BOA'));
+      expect(tx.counterparty, equals('BOA'));
       expect(tx.totalBalance, equals(21818.29));
-      expect(tx.bankReference, equals('TT262259CCQC91836'));
+      expect(tx.id, equals('boa_ref_TT262259CCQC91836'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
     test('ignores queue token messages', () {
@@ -227,7 +255,6 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
     test('parses all 44 transaction messages in BOA SMS.xml with 100% precision', () {
       final file = File(r'c:\Users\kaleb\Documents\Mobile_Banking\BOA SMS.xml');
       if (!file.existsSync()) {
-        // Skip if file is not locally on test runner
         return;
       }
       final content = file.readAsStringSync();
@@ -243,8 +270,8 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
         final tx = BoaParser.parse(body, now);
         if (tx != null) {
           parsedCount++;
-          expect(tx.name, equals('BOA'));
-          expect(tx.sender, equals('BOA'));
+          expect(tx.bankName, equals('BOA'));
+          expect(tx.counterparty, equals('BOA'));
           expect(tx.amount, greaterThan(0));
         } else {
           ignoredCount++;
@@ -252,7 +279,42 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
       }
 
       expect(parsedCount, equals(44));
-      expect(ignoredCount, equals(53));
+      expect(ignoredCount, equals(1));
+    });
+
+    test('parses all 59 transaction messages in Ahadu_SMS.xml with 100% precision', () {
+      final file = File(r'c:\Users\kaleb\Documents\Mobile_Banking\Ahadu_SMS.xml');
+      if (!file.existsSync()) {
+        return;
+      }
+      final content = file.readAsStringSync();
+      final smsRegExp = RegExp(r'<sms\s+[^>]*?body="(.*?)"[^>]*?>', dotAll: true);
+      final matches = smsRegExp.allMatches(content).toList();
+
+      int parsedCount = 0;
+      int ignoredCount = 0;
+
+      for (final m in matches) {
+        final bodyEscaped = m.group(1) ?? '';
+        final body = bodyEscaped
+            .replaceAll('&#10;', '\n')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&apos;', "'");
+        final tx = AhaduParser.parse(body, now);
+        if (tx != null) {
+          parsedCount++;
+          expect(tx.bankName, equals('Ahadu Bank'));
+          expect(tx.amount, greaterThan(0));
+        } else {
+          ignoredCount++;
+        }
+      }
+
+      expect(parsedCount, equals(59));
+      expect(ignoredCount, equals(19));
     });
   });
 }

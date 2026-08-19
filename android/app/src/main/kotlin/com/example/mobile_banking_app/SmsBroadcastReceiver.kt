@@ -13,27 +13,61 @@ import androidx.core.app.NotificationCompat
 import java.io.File
 import java.security.MessageDigest
 import java.text.NumberFormat
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.Locale
 
 /**
- * Native BroadcastReceiver that listens for SMS_RECEIVED broadcasts.
+ * Clean Architecture Native BroadcastReceiver that listens for SMS_RECEIVED broadcasts.
  *
- * When an SMS arrives from a known bank sender, this receiver:
- *   1. Checks the sender against a hardcoded allowlist (CBE, Telebirr, etc.)
- *   2. Filters out OTP/PIN/security messages
- *   3. Generates a SHA-256 idempotency key from sender|timestamp|body
- *   4. Inserts a row into the app's SQLite database (INSERT OR IGNORE)
- *   5. Shows a rich 3-line Android notification banner with dynamic action buttons:
- *        - Attached Reason: [ OK ] and [ Change Reason ]
- *        - Uncategorized: [ Food ], [ Utilities ], and [ Open ]
- *   6. Pushes an event to Flutter via static EventSink (if Flutter engine is alive)
+ * When an SMS arrives from a known bank sender:
+ *   1. Verifies sender against the bank allowlist.
+ *   2. Filters out OTP/PIN/security messages.
+ *   3. Parses the message using strict bank fact extractors (mirroring Dart domain parsers).
+ *   4. Drops non-transaction messages or invalid multi-part SMS segments (preventing ghost notifications).
+ *   5. Debounces against recent transaction signatures to prevent duplicate multi-part notifications.
+ *   6. Dispatches notifications based on the 3-mode button rule:
+ *        - Locked Reason (Airtime, Package, Sanduq/Shamo, Loan): 0 action buttons.
+ *        - Attached Unlocked Reason (via reason_links / SQLite): 2 action buttons [ OK ] and [ Change Reason ].
+ *        - Uncategorized: 3 action buttons [ Quick 1 ], [ Quick 2 ], and [ Categorize ].
+ *   7. Inserts a row into the notifications table in SQLite and notifies Flutter via EventChannel.
  */
 class SmsBroadcastReceiver : BroadcastReceiver() {
 
+    data class NativeParsedSms(
+        val bankName: String,
+        val amount: Double,
+        val formattedAmount: String,
+        val isDebit: Boolean,
+        val counterparty: String,
+        val directionHeader: String,
+        val title: String,
+        val isLocked: Boolean,
+        val lockedReasonName: String?,
+        val txReference: String?
+    )
+
     companion object {
-        private const val CHANNEL_ID = "sms_auto_detect"
-        private const val CHANNEL_NAME = "SMS Auto-Detect"
-        private const val DB_NAME = "finance_v3.db"
+        const val CHANNEL_ID = "sms_auto_detect"
+        const val CHANNEL_NAME = "SMS Auto-Detect"
+        const val DB_NAME = "finance_v3.db"
+        const val DEDUPE_WINDOW_MS = 15000L // 15 seconds debounce window
+
+        const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
+        const val EXTRA_TX_ID = "extra_tx_id"
+        const val EXTRA_SMS_BODY = "extra_sms_body"
+        const val EXTRA_BANK_NAME = "extra_bank_name"
+        const val EXTRA_AMOUNT = "extra_amount"
+        const val EXTRA_DIRECTION = "extra_direction"
+
+        // Sliding window cache for recently seen transaction signatures
+        private val recentSignatures = Collections.synchronizedMap(
+            object : LinkedHashMap<String, Long>(20, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+                    return size > 50
+                }
+            }
+        )
 
         // Hardcoded bank sender allowlist
         private val BANK_SENDERS = mapOf(
@@ -49,9 +83,6 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             "AMOLE" to "Dashen Bank",
         )
 
-        /**
-         * Matches a sender address against the hardcoded bank allowlist.
-         */
         fun matchBankSender(sender: String?): String? {
             if (sender.isNullOrBlank()) return null
             val s = sender.trim()
@@ -66,33 +97,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             return null
         }
 
-        /**
-         * Returns true if the text contains Amharic Ethiopic characters.
-         */
         fun isAmharicMessage(body: String): Boolean {
             return body.any { it in '\u1200'..'\u137F' }
         }
 
-        /**
-         * Returns true if the text contains at least one English banking keyword.
-         */
-        fun isEnglishBankingMessage(body: String): Boolean {
-            val lower = body.lowercase()
-            val keywords = listOf(
-                "received", "sent", "send", "transferred", "transfer", "paid", "pay",
-                "payment", "credited", "credit", "debited", "debit", "deposited",
-                "deposit", "withdrawn", "withdrawal", "withdraw", "balance", "account",
-                "available", "remaining", "amount", "total", "birr", "etb", "usd",
-                "loan", "repay", "due", "transaction", "txn", "ref no", "reference",
-                "purchase", "charged", "fee", "bank", "wallet", "mobile money",
-                "telebirr", "cbe", "ahadu", "boa", "dashen"
-            )
-            return keywords.any { lower.contains(it) }
-        }
-
-        /**
-         * Returns true if the message is a security/auth/OTP message.
-         */
         fun isSecurityOrAuthMessage(body: String): Boolean {
             val lower = body.lowercase()
 
@@ -145,7 +153,6 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 return true
             }
 
-            // ── Amharic PIN / Password / Security / OTP patterns ─────────────
             if (lower.contains("የይለፍ ቃል") ||
                 lower.contains("የይለፍ ቃልዎ") ||
                 lower.contains("ሚስጥር ቁጥር") ||
@@ -160,9 +167,6 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             return false
         }
 
-        /**
-         * Generates a SHA-256 fingerprint from sender, timestamp, and body.
-         */
         fun generateId(sender: String, timestampMs: Long, body: String): String {
             val input = "$sender|$timestampMs|$body"
             val digest = MessageDigest.getInstance("SHA-256")
@@ -170,76 +174,381 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             return hashBytes.joinToString("") { "%02x".format(it) }
         }
 
-        /**
-         * Extracts transaction amount from SMS text.
-         */
-        fun extractAmount(body: String): String {
-            val regex = Regex("(?i)(?:ETB|Birr|Br\\.?|USD)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)")
-            val match = regex.find(body)
-            if (match != null) {
-                val rawAmountStr = match.groupValues[1].replace(",", "")
-                val doubleVal = rawAmountStr.toDoubleOrNull()
-                if (doubleVal != null) {
-                    val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
-                        minimumFractionDigits = 2
-                        maximumFractionDigits = 2
-                    }
-                    return "ETB ${formatter.format(doubleVal)}"
-                }
+        private fun formatEtb(amount: Double): String {
+            val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+                minimumFractionDigits = 2
+                maximumFractionDigits = 2
             }
+            return "ETB ${formatter.format(amount)}"
+        }
 
-            // Fallback: simple numeric extraction
-            val numRegex = Regex("([0-9]{1,6}(?:\\.[0-9]{1,2})?)")
-            val numMatch = numRegex.find(body)
-            if (numMatch != null) {
-                val rawAmountStr = numMatch.groupValues[1].replace(",", "")
-                val doubleVal = rawAmountStr.toDoubleOrNull()
-                if (doubleVal != null) {
-                    val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
-                        minimumFractionDigits = 2
-                        maximumFractionDigits = 2
-                    }
-                    return "ETB ${formatter.format(doubleVal)}"
-                }
-            }
-            return "ETB 0.00"
+        private fun parseAmount(regex: Regex, text: String): Double {
+            val match = regex.find(text) ?: return 0.0
+            val raw = match.groupValues[1].replace(",", "").trim()
+            val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+            return clean.toDoubleOrNull() ?: 0.0
         }
 
         /**
-         * Extracts person name or counterparty from SMS text.
+         * Pure Fact Extraction Engine (Mirrors Dart Bank Parsers)
          */
-        fun extractPersonName(body: String): String? {
-            // "to Kaleb Kebede" or "from Kaleb Kebede"
-            val toFromRegex = Regex("(?i)(?:to|from)\\s+([A-Za-z]+(?:\\s+[A-Za-z]+)?)")
-            val match = toFromRegex.find(body)
-            if (match != null) {
-                val name = match.groupValues[1].trim()
-                // Ignore known bank names
-                val upper = name.uppercase()
-                if (!upper.contains("BANK") && !upper.contains("TELEBIRR") && !upper.contains("CBE")) {
-                    return name
+        fun parseBankingSms(bankName: String, body: String): NativeParsedSms? {
+            val singleLine = body.replace("\n", " ").replace("\r", " ")
+            val lower = singleLine.lowercase()
+
+            when (bankName) {
+                "Telebirr" -> {
+                    // 1. Airtime pattern: outgoing recharge OR incoming airtime topup
+                    if (lower.contains("airtime") || ((lower.contains("recharged") || lower.contains("bought") || lower.contains("recharge")) && (lower.contains("airtime") || lower.contains("ethio telecom")))) {
+                        var amount = parseAmount(Regex("(?i)(?:recharged|bought|received)\\s+(?:(?:ETB|Br\\.?|Birr)\\s*)?([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val isIncoming = lower.contains("received")
+                        val phoneMatch = if (isIncoming) {
+                            Regex("(?i)from\\s+(\\+?(?:251|0)?[97]\\d{8})").find(singleLine)
+                        } else {
+                            Regex("(?i)(?:airtime\\s+for|for)\\s+(\\+?(?:251|0)?[97]\\d{8})").find(singleLine)
+                        }
+                        val phone = phoneMatch?.groupValues?.get(1)?.trim() ?: "Airtime"
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = !isIncoming,
+                            counterparty = phone,
+                            directionHeader = if (isIncoming) "From: $phone" else (if (phone != "Airtime") "To: $phone" else "Debit (Telebirr)"),
+                            title = "Banking SMS from Telebirr",
+                            isLocked = true,
+                            lockedReasonName = "Airtime",
+                            txReference = ref
+                        )
+                    }
+
+                    // 2. Package pattern: "paid ETB 50.00 for package subscription to 972665987 on..."
+                    if (lower.contains("package") && (lower.contains("paid") || lower.contains("bought") || lower.contains("package subscription") || lower.contains("monthly voice"))) {
+                        var amount = parseAmount(Regex("(?i)(?:paid|bought)\\s+(?:(?:ETB|Br\\.?|Birr)\\s*)?([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val phoneMatch = Regex("(?i)(?:made\\s+for|to|for)\\s+(\\+?(?:251|0)?[97]\\d{8})").find(singleLine)
+                        val phone = phoneMatch?.groupValues?.get(1)?.trim() ?: "Package"
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = true,
+                            counterparty = phone,
+                            directionHeader = if (phone != "Package") "To: $phone" else "Debit (Telebirr)",
+                            title = "Banking SMS from Telebirr",
+                            isLocked = true,
+                            lockedReasonName = "Package",
+                            txReference = ref
+                        )
+                    }
+
+                    // 3. Sanduq / Shamo / Internal savings
+                    if (lower.contains("sanduq") || lower.contains("shamo") || (lower.contains("saving") && lower.contains("balance")) || (lower.contains("reserved") && lower.contains("account"))) {
+                        var amount = parseAmount(Regex("(?i)(?:reserved|transferred)?\\s*ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = if (amount > 0) amount else 0.0,
+                            formattedAmount = if (amount > 0) formatEtb(amount) else "Internal Transfer",
+                            isDebit = true,
+                            counterparty = if (lower.contains("shamo")) "Shamo Account" else "Sanduq Savings",
+                            directionHeader = "Debit (Telebirr)",
+                            title = "Banking SMS from Telebirr",
+                            isLocked = true,
+                            lockedReasonName = "Internal Transfer",
+                            txReference = ref
+                        )
+                    }
+
+                    // 4. Loan / Credit Request
+                    if (lower.contains("credit request") || lower.contains("contract number") || lower.contains("credit loan") || lower.contains("loan disbursement")) {
+                        val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = false,
+                            counterparty = "Telebirr Loan",
+                            directionHeader = "Credit (Telebirr)",
+                            title = "Banking SMS from Telebirr",
+                            isLocked = true,
+                            lockedReasonName = "Loan",
+                            txReference = ref
+                        )
+                    }
+
+                    // 5. Outgoing Transfer: "transferred ETB 100.00 to Abebe on..."
+                    if (lower.contains("transferred")) {
+                        val amount = parseAmount(Regex("(?i)transferred\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val toMatch = Regex("(?i)to\\s+(.*?)\\s+on\\s+\\d{2}/\\d{2}").find(singleLine)
+                        val rawRecipient = toMatch?.groupValues?.get(1)?.trim() ?: ""
+                        val accMatch = Regex("(?i)account\\s+(?:number\\s+)?([0-9A-Za-z]+)").find(rawRecipient)
+                        val recipient = accMatch?.groupValues?.get(1)?.trim() ?: rawRecipient.ifEmpty { "Transfer" }
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = true,
+                            counterparty = recipient,
+                            directionHeader = "To: $recipient",
+                            title = if (recipient != "Transfer") "Transaction with $recipient" else "Banking SMS from Telebirr",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+
+                    // 6. Incoming Transfer: "received ETB 100.00 from Abebe on..."
+                    if (lower.contains("received")) {
+                        val amount = parseAmount(Regex("(?i)received\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val fromMatch = Regex("(?i)from\\s+(.*?)\\s+on\\s+\\d{2}/\\d{2}").find(singleLine)
+                        val senderName = fromMatch?.groupValues?.get(1)?.trim() ?: "Sender"
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = false,
+                            counterparty = senderName,
+                            directionHeader = "From: $senderName",
+                            title = if (senderName != "Sender") "Transaction with $senderName" else "Banking SMS from Telebirr",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+
+                    // 7. General Debit
+                    if (lower.contains("debited")) {
+                        val amount = parseAmount(Regex("(?i)debited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Telebirr",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = true,
+                            counterparty = "Telebirr Debit",
+                            directionHeader = "Debit (Telebirr)",
+                            title = "Banking SMS from Telebirr",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+                }
+
+                "CBE" -> {
+                    if (lower.contains("credited")) {
+                        val amount = parseAmount(Regex("(?i)credited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        val fromMatch = Regex("(?i)from\\s+(.*?)(?:,\\s*on|\\s+on\\s+\\d{2}/\\d{2})").find(singleLine)
+                        val senderName = fromMatch?.groupValues?.get(1)?.trim() ?: "CBE Deposit"
+                        val refMatch = Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "CBE",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = false,
+                            counterparty = senderName,
+                            directionHeader = "From: $senderName",
+                            title = if (senderName != "CBE Deposit") "Transaction with $senderName" else "Banking SMS from CBE",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+
+                    if (lower.contains("debited") || lower.contains("transfer") || lower.contains("withdrawn")) {
+                        val amount = parseAmount(Regex("(?i)(?:debited\\s+with|transfer\\s+of)\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        val toMatch = Regex("(?i)to\\s+(.*?)(?:,\\s*on|\\s+on\\s+\\d{2}/\\d{2})").find(singleLine)
+                        val recipient = toMatch?.groupValues?.get(1)?.trim() ?: "CBE Withdrawal"
+                        val refMatch = Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "CBE",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = true,
+                            counterparty = recipient,
+                            directionHeader = "To: $recipient",
+                            title = if (recipient != "CBE Withdrawal") "Transaction with $recipient" else "Banking SMS from CBE",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+                }
+
+                "BOA" -> {
+                    if (lower.contains("credited")) {
+                        val amount = parseAmount(Regex("(?i)credited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        val byMatch = Regex("(?i)by\\s+(.*?)(?:\\s*\\.|\\s*available)").find(singleLine)
+                        val senderName = byMatch?.groupValues?.get(1)?.trim() ?: "BOA Deposit"
+                        val refMatch = Regex("(?i)trx=([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "BOA",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = false,
+                            counterparty = senderName,
+                            directionHeader = "From: $senderName",
+                            title = if (senderName != "BOA Deposit") "Transaction with $senderName" else "Banking SMS from BOA",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+
+                    if (lower.contains("debited") || lower.contains("paid")) {
+                        val amount = parseAmount(Regex("(?i)debited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        val refMatch = Regex("(?i)trx=([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "BOA",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = true,
+                            counterparty = "BOA Transfer",
+                            directionHeader = "Debit (BOA)",
+                            title = "Banking SMS from BOA",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+                }
+
+                "Ahadu Bank" -> {
+                    if (lower.contains("credited") || lower.contains("received") || lower.contains("deposit")) {
+                        val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        val refMatch = Regex("(?i)(?:reference\\s+number|ref(?:erence)?\\s*(?:no\\.?)?|ref\\.?)?\\s*:?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Ahadu Bank",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = false,
+                            counterparty = "Ahadu Deposit",
+                            directionHeader = "From: Ahadu Deposit",
+                            title = "Banking SMS from Ahadu Bank",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+
+                    if (lower.contains("debited") || lower.contains("debit") || lower.contains("transfer") || lower.contains("withdrawn") || lower.contains("paid")) {
+                        val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+                        var refMatch = Regex("(?i)(?:reference\\s+number|ref(?:erence)?\\s*(?:no\\.?)?|ref\\.?)?\\s*:?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        if (refMatch == null) {
+                            refMatch = Regex("(?i)digitalreceipt\\?es=([A-Za-z0-9]+)").find(singleLine)
+                        }
+                        val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                        return NativeParsedSms(
+                            bankName = "Ahadu Bank",
+                            amount = amount,
+                            formattedAmount = formatEtb(amount),
+                            isDebit = true,
+                            counterparty = "Ahadu Transfer",
+                            directionHeader = "Debit (Ahadu Bank)",
+                            title = "Banking SMS from Ahadu Bank",
+                            isLocked = false,
+                            lockedReasonName = null,
+                            txReference = ref
+                        )
+                    }
+                }
+
+                "Dashen Bank" -> {
+                    val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                    if (amount <= 0) return null
+                    val isDebit = lower.contains("debited") || lower.contains("transfer") || lower.contains("paid")
+
+                    return NativeParsedSms(
+                        bankName = "Dashen Bank",
+                        amount = amount,
+                        formattedAmount = formatEtb(amount),
+                        isDebit = isDebit,
+                        counterparty = if (isDebit) "Dashen Transfer" else "Dashen Deposit",
+                        directionHeader = if (isDebit) "Debit (Dashen Bank)" else "Credit (Dashen Bank)",
+                        title = "Banking SMS from Dashen Bank",
+                        isLocked = false,
+                        lockedReasonName = null,
+                        txReference = null
+                    )
+                }
+
+                "CBE Birr" -> {
+                    val amount = parseAmount(Regex("(?i)([0-9,]+(?:\\.[0-9]+)?)\\s*Br\\.?"), singleLine)
+                    if (amount <= 0) return null
+                    val isDebit = lower.contains("paid") || lower.contains("transferred") || lower.contains("debited")
+                    val refMatch = Regex("(?i)txn\\s+id\\s+([A-Za-z0-9]+)").find(singleLine)
+                    val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                    return NativeParsedSms(
+                        bankName = "CBE Birr",
+                        amount = amount,
+                        formattedAmount = formatEtb(amount),
+                        isDebit = isDebit,
+                        counterparty = if (isDebit) "CBE Birr Payment" else "CBE Birr Deposit",
+                        directionHeader = if (isDebit) "Debit (CBE Birr)" else "Credit (CBE Birr)",
+                        title = "Banking SMS from CBE Birr",
+                        isLocked = false,
+                        lockedReasonName = null,
+                        txReference = ref
+                    )
                 }
             }
+
             return null
-        }
-
-        /**
-         * Returns a direction header string like "To: John" or "From: John".
-         */
-        fun getDirectionHeader(bankName: String, body: String): String {
-            val person = extractPersonName(body)
-            if (!person.isNullOrBlank()) {
-                val lower = body.lowercase()
-                val isDebit = lower.contains("debit") || lower.contains("transferred") ||
-                        lower.contains("paid") || lower.contains("spent") ||
-                        lower.contains("transfer to") || lower.contains("payment to")
-                return if (isDebit) "To: $person" else "From: $person"
-            }
-            val lower = body.lowercase()
-            val isDebit = lower.contains("debit") || lower.contains("transferred") ||
-                    lower.contains("paid") || lower.contains("spent") ||
-                    lower.contains("transfer to") || lower.contains("payment to")
-            return if (isDebit) "Debit ($bankName)" else "Credit ($bankName)"
         }
     }
 
@@ -258,13 +567,35 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         val bankName = matchBankSender(sender) ?: return
         if (isAmharicMessage(body)) return
         if (isSecurityOrAuthMessage(body)) return
-        if (!isEnglishBankingMessage(body)) return
+
+        // 1. Parse into structured banking facts. Drop non-transaction messages or broken SMS parts!
+        val parsed = parseBankingSms(bankName, body) ?: return
+
+        // 2. Sliding window debounce (15 seconds) to prevent duplicate notifications from multi-part PDUs
+        val dedupeKey = "${parsed.bankName}|${parsed.isDebit}|${parsed.formattedAmount}|${parsed.txReference ?: parsed.counterparty}"
+        val now = System.currentTimeMillis()
+        synchronized(recentSignatures) {
+            val lastSeen = recentSignatures[dedupeKey]
+            if (lastSeen != null && (now - lastSeen) < DEDUPE_WINDOW_MS) {
+                return // Drop duplicate notification
+            }
+            recentSignatures[dedupeKey] = now
+        }
 
         val txId = generateId(sender, timestampMs, body)
-        val attachedReason = checkAttachedReasonInDb(context, sender, body)
 
-        // Show Android system status bar notification with interactive action buttons
-        showNotification(context, txId, bankName, body, attachedReason)
+        // 3. Resolve attached reason: locked patterns first, otherwise check reason_links in SQLite
+        val attachedReason = if (parsed.isLocked) {
+            parsed.lockedReasonName
+        } else {
+            checkAttachedReasonInDb(context, parsed.counterparty, body)
+        }
+
+        // 4. Save notification to SQLite for Dart hydration
+        insertIntoDb(context, txId, bankName, body, timestampMs, attachedReason)
+
+        // 5. Show Android status bar notification
+        showNotification(context, txId, parsed, attachedReason)
 
         try {
             MainActivity.smsEventSink?.success("newTransaction")
@@ -277,7 +608,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         bankName: String,
         body: String,
         timestampMs: Long,
-        sender: String
+        reason: String?
     ): Boolean {
         return try {
             val dbPath = File(context.getDatabasePath(DB_NAME).path)
@@ -293,11 +624,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 .format(java.util.Date(timestampMs))
 
             val sql = """
-                INSERT OR IGNORE INTO notifications (id, sender, body, date, isRead)
-                VALUES (?, ?, ?, ?, 0)
+                INSERT OR IGNORE INTO notifications (id, sender, body, date, isRead, reason)
+                VALUES (?, ?, ?, ?, 0, ?)
             """.trimIndent()
 
-            db.execSQL(sql, arrayOf(id, bankName, body, dateIso))
+            db.execSQL(sql, arrayOf(id, bankName, body, dateIso, reason))
             db.close()
             true
         } catch (e: Exception) {
@@ -305,12 +636,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         }
     }
 
-    /**
-     * Checks SQLite database to see if the message or counterparty has a linked reason.
-     * Only returns a valid reason name from the `reasons` / `reason_links` tables.
-     * System bank names (e.g. "CBE", "Telebirr") are NEVER returned as attached reasons.
-     */
-    private fun checkAttachedReasonInDb(context: Context, sender: String, body: String): String? {
+    private fun checkAttachedReasonInDb(context: Context, counterparty: String, body: String): String? {
         return try {
             val dbPath = File(context.getDatabasePath(DB_NAME).path)
             if (!dbPath.exists()) return null
@@ -321,94 +647,38 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 SQLiteDatabase.OPEN_READONLY
             )
 
-            var reason: String? = null
+            var matchedReason: String? = null
+            val lowerCounterparty = counterparty.lowercase().trim()
+            val lowerBody = body.lowercase().trim()
 
-            // 1. Check Telebirr credit/loan auto-reasons
-            val lower = body.lowercase()
-            if (lower.contains("credit loan") || lower.contains("loan disbursement") || lower.contains("credit request") || lower.contains("contract number") || lower.contains("outstanding credit amount")) {
-                reason = "Loan"
-            }
+            val cursor = db.rawQuery("""
+                SELECT r.name, rl.linkedName
+                FROM reason_links rl
+                JOIN reasons r ON rl.reasonId = r.id
+            """.trimIndent(), null)
 
-            // 2. Check internal transfers (Sanduq / self transfer)
-            if (reason == null && (lower.contains("sanduq") || lower.contains("internal transfer"))) {
-                reason = "Internal Transfer"
-            }
-
-            // 3. Check reason_links table joined with reasons table
-            if (reason == null) {
-                try {
-                    val cursor = db.rawQuery("""
-                        SELECT r.name, rl.linkedName
-                        FROM reason_links rl
-                        JOIN reasons r ON rl.reasonId = r.id
-                    """.trimIndent(), null)
-
-                    while (cursor.moveToNext()) {
-                        val rName = cursor.getString(0)
-                        val linkedName = cursor.getString(1) ?: ""
-                        if (linkedName.isNotBlank() && lower.contains(linkedName.lowercase())) {
-                            reason = rName
-                            break
-                        }
+            while (cursor.moveToNext()) {
+                val rName = cursor.getString(0)
+                val linkedName = cursor.getString(1)?.lowercase()?.trim() ?: ""
+                if (linkedName.isNotBlank()) {
+                    if (lowerCounterparty.contains(linkedName) || lowerBody.contains(linkedName)) {
+                        matchedReason = rName
+                        break
                     }
-                    cursor.close()
-                } catch (_: Exception) {
-                    // Table reason_links or reasons might not exist yet on fresh install
                 }
             }
-
+            cursor.close()
             db.close()
-            reason
-        } catch (e: Exception) {
+            matchedReason
+        } catch (_: Exception) {
             null
-        }
-    }
-
-    private fun isLockedReason(reason: String?, body: String): Boolean {
-        val rLower = reason?.lowercase()?.trim() ?: ""
-        val bLower = body.lowercase().trim()
-        return rLower == "loan" ||
-               rLower == "internal transfer" ||
-               rLower == "bounce" ||
-               rLower == "saving" ||
-               rLower == "savings" ||
-               bLower.contains("credit loan") ||
-               bLower.contains("loan disbursement") ||
-               bLower.contains("credit request") ||
-               bLower.contains("contract number") ||
-               bLower.contains("outstanding credit amount") ||
-               bLower.contains("sanduq") ||
-               bLower.contains("saving account") ||
-               bLower.contains("saving balance")
-    }
-
-    private fun extractPersonName(body: String): String? {
-        val pattern = java.util.regex.Pattern.compile("(?:from|to|by)\\s+([A-Za-z]+(?:\\s+[A-Za-z]+){0,4})", java.util.regex.Pattern.CASE_INSENSITIVE)
-        val matcher = pattern.matcher(body)
-        if (matcher.find()) {
-            val rawName = matcher.group(1)?.trim() ?: return null
-            val nonPersonKeywords = setOf("cbe", "telebirr", "ahadu", "bank", "account", "mobile", "service", "ethiopia", "atm")
-            if (!nonPersonKeywords.contains(rawName.lowercase(java.util.Locale.US))) {
-                return limitPersonNameWords(rawName)
-            }
-        }
-        return null
-    }
-
-    private fun limitPersonNameWords(name: String): String {
-        val words = name.trim().split("\\s+".toRegex()).filter { it.isNotEmpty() }
-        return when {
-            words.isEmpty() -> name
-            words.size == 1 -> words[0]
-            else -> "${words[0]} ${words[1]}" // Max 2 words! (1 shows 1, 3 shows 2)
         }
     }
 
     private fun showNotification(
         context: Context,
         txId: String,
-        bankName: String,
-        body: String,
+        parsed: NativeParsedSms,
         attachedReason: String?
     ) {
         val notificationManager =
@@ -427,28 +697,15 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         val notifId = txId.hashCode()
 
-        val isLocked = isLockedReason(attachedReason, body)
-        val resolvedReason = if (isLocked && attachedReason.isNullOrBlank()) {
-            if (body.lowercase().contains("sanduq") || body.lowercase().contains("internal transfer")) "Internal Transfer" else "Loan"
-        } else {
-            attachedReason
+        val reasonLine = when {
+            parsed.isLocked -> "${parsed.lockedReasonName} (Locked)"
+            !attachedReason.isNullOrBlank() -> attachedReason
+            else -> "Uncategorized"
         }
 
-        val directionLine = getDirectionHeader(bankName, body)
-        val amountLine = extractAmount(body)
-        val reasonLine = if (!resolvedReason.isNullOrBlank()) {
-            if (isLocked) "$resolvedReason (Locked)" else resolvedReason
-        } else {
-            "Uncategorized"
-        }
-
-        val personName = extractPersonName(body)
-        val title = if (!personName.isNullOrBlank()) {
-            "Transaction with $personName"
-        } else {
-            "Banking SMS from $bankName"
-        }
-
+        val directionLine = parsed.directionHeader
+        val amountLine = parsed.formattedAmount
+        val title = parsed.title
         val bigText = "$directionLine\nAmount: $amountLine\nReason: $reasonLine"
 
         val pendingFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -457,20 +714,23 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
 
-        val openIntent = if (isLocked) {
-            // Locked reason: Launch main app directly (no quick-edit categorization dialog)
+        val openIntent = if (parsed.isLocked) {
+            // Locked reason: Launch main app directly (no quick categorization dialog)
             Intent(context, MainActivity::class.java).apply {
                 this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_TX_ID, txId)
+                putExtra(EXTRA_NOTIFICATION_ID, notifId)
             }
         } else {
-            // Unlocked: Launch the transparent quick-edit dialog
+            // Unlocked: Launch transparent quick-edit dialog
             Intent(context, TransactionQuickEditActivity::class.java).apply {
                 this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(TransactionQuickEditActivity.EXTRA_TX_ID, txId)
-                putExtra(TransactionQuickEditActivity.EXTRA_SMS_BODY, body)
-                putExtra(TransactionQuickEditActivity.EXTRA_BANK_NAME, bankName)
-                putExtra(TransactionQuickEditActivity.EXTRA_AMOUNT, amountLine)
-                putExtra(TransactionQuickEditActivity.EXTRA_DIRECTION, directionLine)
+                putExtra(EXTRA_TX_ID, txId)
+                putExtra(EXTRA_NOTIFICATION_ID, notifId)
+                putExtra(EXTRA_SMS_BODY, "")
+                putExtra(EXTRA_BANK_NAME, parsed.bankName)
+                putExtra(EXTRA_AMOUNT, amountLine)
+                putExtra(EXTRA_DIRECTION, directionLine)
             }
         }
         val openPendingIntent = PendingIntent.getActivity(context, notifId, openIntent, pendingFlags)
@@ -484,13 +744,13 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             .setContentIntent(openPendingIntent)
             .setAutoCancel(true)
 
-        if (isLocked) {
-            // Locked Reason Case: NO action buttons. Plain informative notification. Tapping opens the main app.
+        if (parsed.isLocked) {
+            // Mode 1: Locked Reason -> 0 ACTION BUTTONS (Plain informative notification banner)
         } else if (!attachedReason.isNullOrBlank()) {
-            // Attached Unlocked Reason Case: 2 Action Buttons [ OK ] and [ Change Reason ]
+            // Mode 2: Attached Unlocked Reason -> 2 Action Buttons [ OK ] and [ Change Reason ]
             val okIntent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_DISMISS
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
+                putExtra(EXTRA_NOTIFICATION_ID, notifId)
             }
             val okPendingIntent = PendingIntent.getBroadcast(
                 context,
@@ -502,14 +762,13 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             builder.addAction(0, "OK", okPendingIntent)
             builder.addAction(0, "Change Reason", openPendingIntent)
         } else {
-            // Uncategorized Case: 3 Action Buttons [ Button 1 ], [ Button 2 ], and [ Categorize ]
+            // Mode 3: Uncategorized -> 3 Action Buttons [ Button 1 ], [ Button 2 ], and [ Categorize ]
             val (button1Name, button2Name) = getQuickButtonNames(context)
 
             val button1Intent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_SET_REASON
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
-                putExtra(NotificationActionReceiver.EXTRA_TX_ID, txId)
-                putExtra(NotificationActionReceiver.EXTRA_SMS_BODY, body)
+                putExtra(EXTRA_NOTIFICATION_ID, notifId)
+                putExtra(EXTRA_TX_ID, txId)
                 putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, button1Name)
             }
             val button1PendingIntent = PendingIntent.getBroadcast(
@@ -521,9 +780,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             val button2Intent = Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_SET_REASON
-                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
-                putExtra(NotificationActionReceiver.EXTRA_TX_ID, txId)
-                putExtra(NotificationActionReceiver.EXTRA_SMS_BODY, body)
+                putExtra(EXTRA_NOTIFICATION_ID, notifId)
+                putExtra(EXTRA_TX_ID, txId)
                 putExtra(NotificationActionReceiver.EXTRA_REASON_NAME, button2Name)
             }
             val button2PendingIntent = PendingIntent.getBroadcast(

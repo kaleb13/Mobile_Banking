@@ -333,11 +333,11 @@ class __InteractiveFrozenCardPreviewState
               child: Stack(
                 children: [
                   Container(
-                    height: 165,
+                    height: 172,
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
+                      borderRadius: BorderRadius.circular(28),
                       gradient: RadialGradient(
                         center: Alignment(centerX, 0.0),
                         radius: 1.8,

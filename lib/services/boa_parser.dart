@@ -1,4 +1,4 @@
-import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 
 class BoaParser {
   static const String senderName = "BOA";
@@ -60,13 +60,12 @@ class BoaParser {
     return false;
   }
 
-  static AppTransaction? parse(String message, DateTime fallbackDate) {
+  static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
     if (shouldIgnore(message)) return null;
 
     final lowerMsg = message.toLowerCase();
 
     String type = '';
-    String category = 'Auto';
     double amount = 0.0;
     double totalBalance = 0.0;
     String recipientOrSender = '';
@@ -90,11 +89,16 @@ class BoaParser {
     final refMatch = RegExp(r'trx=([A-Za-z0-9]+)', caseSensitive: false).firstMatch(message);
     if (refMatch != null) {
       refId = refMatch.group(1)?.trim();
+    } else {
+      final textRef = RegExp(r'(?:Ref(?:\s*No)?|Txn(?:\s*ID)?)\s*:?\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(message);
+      if (textRef != null) {
+        refId = textRef.group(1)?.trim();
+      }
     }
 
     // Extract Total Available Balance
     final balMatch = RegExp(
-      r'Available\s+Balance:\s*(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
+      r'(?:Available\s+Balance|Current\s+Balance|Balance)\s*(?:is|:)?\s*(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
       caseSensitive: false,
     ).firstMatch(message);
     if (balMatch != null) {
@@ -105,17 +109,45 @@ class BoaParser {
       totalBalance = double.tryParse(balStr) ?? 0.0;
     }
 
+    // Extract date if present: "on 12-Nov-2023 14:20" or "on 12/11/2023"
+    final dateMatch = RegExp(
+            r'on\s+(\d{1,2}-[A-Za-z]{3}-\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}/\d{1,2}/\d{2,4})')
+        .firstMatch(message);
+    if (dateMatch != null) {
+      final dStr = dateMatch.group(1)!;
+      try {
+        final parts = dStr.split(' ');
+        final dPart = parts[0];
+        final tPart = parts.length > 1 ? parts[1] : '00:00';
+        final dParts = dPart.contains('-') ? dPart.split('-') : dPart.split('/');
+        final day = int.parse(dParts[0]);
+        final monthStr = dParts[1];
+        final year = int.parse(dParts[2].length == 2 ? '20${dParts[2]}' : dParts[2]);
+        int month = 1;
+        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        final mIdx = months.indexOf(monthStr.toLowerCase());
+        if (mIdx != -1) {
+          month = mIdx + 1;
+        } else {
+          month = int.tryParse(monthStr) ?? 1;
+        }
+        final tParts = tPart.split(':');
+        final hour = int.parse(tParts[0]);
+        final min = int.parse(tParts[1]);
+        txDate = DateTime(year, month, day, hour, min);
+      } catch (_) {
+        txDate = fallbackDate;
+      }
+    }
+
     // 1. Expense / Debit parsing
     if (lowerMsg.contains('debited')) {
       type = 'expense';
-      category = 'Transferred';
-
       amount = extractAmount(RegExp(
         r'debited\s+(?:with\s+)?(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
         caseSensitive: false,
       ));
 
-      // Extract recipient name if present (e.g. "to ...")
       final toMatch = RegExp(
         r'to\s+(.*?)\s+(?:on\s+|\.|\n|Available|Receipt|Link|Feedback)',
         caseSensitive: false,
@@ -124,20 +156,17 @@ class BoaParser {
         recipientOrSender = toMatch.group(1)?.trim() ?? '';
       }
       if (recipientOrSender.isEmpty) {
-        recipientOrSender = 'BOA Transfer';
+        recipientOrSender = senderName;
       }
     }
     // 2. Income / Credit parsing
     else if (lowerMsg.contains('credited')) {
       type = 'income';
-      category = 'Deposit';
-
       amount = extractAmount(RegExp(
         r'credited\s+(?:with\s+)?(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
         caseSensitive: false,
       ));
 
-      // Extract sender/payer name after "by" (e.g., "by Yohannes Bizuneh . Available")
       final byMatch = RegExp(
         r'by\s+(.*?)(?:\s*\.|\n|Available|Receipt|Link|Feedback)',
         caseSensitive: false,
@@ -158,18 +187,16 @@ class BoaParser {
         ? 'boa_ref_$refId'
         : 'boa_${type}_${txDate.year}${txDate.month.toString().padLeft(2, '0')}${txDate.day.toString().padLeft(2, '0')}_${amount.toStringAsFixed(2)}';
 
-    return AppTransaction(
+    return ParsedSmsResult(
       id: id,
-      name: senderName,
+      bankName: senderName,
       amount: amount,
       type: type,
       date: txDate,
-      sender: senderName,
-      category: category,
-      rawMessage: message,
-      isAutoDetected: true,
+      counterparty: recipientOrSender.isNotEmpty ? recipientOrSender : senderName,
       totalBalance: totalBalance,
-      bankReference: refId,
+      rawMessage: message,
+      patternType: SmsPatternType.standardTransfer,
     );
   }
 }

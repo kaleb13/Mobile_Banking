@@ -34,7 +34,7 @@ class AboutAppScreen extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -57,18 +57,18 @@ class AboutAppScreen extends StatelessWidget {
 
   Widget _buildDeveloperCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(22),
-              ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(2.5),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-                          ),
+            ),
             child: const CircleAvatar(
               radius: 30,
               backgroundImage: AssetImage('assets/images/developer.webp'),
@@ -105,7 +105,7 @@ class AboutAppScreen extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.info.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -135,7 +135,7 @@ class AboutAppScreen extends StatelessWidget {
 
   Widget _buildSectionLabel(String label) {
     return Padding(
-      padding: const EdgeInsets.only(left: 8, bottom: 12),
+      padding: const EdgeInsets.only(left: 16, bottom: 12),
       child: Text(
         label,
         style: const TextStyle(
@@ -151,11 +151,11 @@ class AboutAppScreen extends StatelessWidget {
   Widget _buildContributorCard(String name) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(18),
-              ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
       child: Row(
         children: [
           Container(
@@ -184,11 +184,11 @@ class AboutAppScreen extends StatelessWidget {
   Widget _buildAboutContent() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(24),
-              ),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
       child: Text(
         'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from CBE, Telebirr, and CBE Birr, providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',
         style: TextStyle(

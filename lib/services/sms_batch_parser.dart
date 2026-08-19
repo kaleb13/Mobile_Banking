@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'package:crypto/crypto.dart';
 import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import '../models/app_notification.dart';
 import '../models/sender.dart';
 import 'sms_service.dart';
@@ -111,32 +112,35 @@ class SmsBatchParser {
     return keywords.any((kw) => lower.contains(kw));
   }
 
-  /// Parses a batch of SMS messages inside a dedicated background [Isolate].
+  /// Spawns a background isolate to parse a large list of SMS messages.
   static Future<BatchParseResult> parseInIsolate(BatchParseParams params) async {
-    return await Isolate.run(() => _executeParse(params));
+    return await Isolate.run(() => _parseInternal(params));
   }
 
-  static BatchParseResult _executeParse(BatchParseParams params) {
+  /// Synchronous internal batch parsing logic run entirely inside the isolate.
+  static BatchParseResult _parseInternal(BatchParseParams params) {
     final List<AppTransaction> parsedTransactions = [];
-    final Set<String> seenTxIds = {};
     final List<AppNotification> unrecognizedNotifications = [];
+    final Set<String> seenTxIds = {};
     String? extractedUserName;
 
-    // Track running balances per bank during parsing
-    final Map<String, double> runningBalances = Map.from(params.initialBankBalances);
-
-    // Build quick lookup for auto reason rules: key = "${sender.toLowerCase()}_${type.toLowerCase()}"
+    // Fast O(1) lookup map for auto-reason rules
     final Map<String, AutoReasonRule> ruleLookup = {};
     for (final rule in params.autoReasonRules) {
-      final s = rule.sender.toLowerCase().trim();
-      final t = rule.type?.toLowerCase().trim();
-      if (t != null && t.isNotEmpty) {
-        ruleLookup['${s}_$t'] = rule;
+      final sKey = rule.sender.toLowerCase().trim();
+      final tKey = rule.type?.toLowerCase().trim();
+      if (tKey != null && tKey.isNotEmpty) {
+        ruleLookup['${sKey}_$tKey'] = rule;
+      } else {
+        ruleLookup[sKey] = rule;
       }
-      ruleLookup[s] = rule; // generic fallback
     }
 
-    final pausedSet = params.pausedBanks.map((b) => b.toUpperCase()).toSet();
+    final Set<String> pausedSet = params.pausedBanks
+        .map((b) => b.toUpperCase())
+        .toSet();
+
+    final Map<String, double> runningBalances = Map.from(params.initialBankBalances);
 
     // Sort chronologically (oldest first) so running balances update correctly
     final messages = List<RawSmsData>.from(params.rawMessages)
@@ -163,23 +167,23 @@ class SmsBatchParser {
         continue; // Paused bank
       }
 
-      AppTransaction? tx;
+      ParsedSmsResult? parsed;
 
       if (bank == 'Telebirr') {
-        tx = TelebirrParser.parse(body, date);
+        parsed = TelebirrParser.parse(body, date);
       } else if (bank == 'CBE') {
-        tx = CbeParser.parse(body, date);
-        if (tx == null && body.toLowerCase().contains('br.')) {
-          tx = CbeBirrParser.parse(body, date);
+        parsed = CbeParser.parse(body, date);
+        if (parsed == null && body.toLowerCase().contains('br.')) {
+          parsed = CbeBirrParser.parse(body, date);
         }
       } else if (bank == 'CBE Birr') {
-        tx = CbeBirrParser.parse(body, date);
+        parsed = CbeBirrParser.parse(body, date);
       } else if (bank == 'Ahadu Bank') {
-        tx = AhaduParser.parse(body, date);
+        parsed = AhaduParser.parse(body, date);
       } else if (bank == 'BOA') {
-        tx = BoaParser.parse(body, date);
+        parsed = BoaParser.parse(body, date);
       } else if (bank == 'Dashen Bank') {
-        tx = DashenParser.parse(body, date);
+        parsed = DashenParser.parse(body, date);
       } else {
         // Custom sender check
         final customSender = params.customSenders.firstWhere(
@@ -187,53 +191,59 @@ class SmsBatchParser {
           orElse: () => AppSender(senderName: ''),
         );
         if (customSender.senderName.isNotEmpty) {
-          tx = _parseCustomSender(customSender, body, date);
+          parsed = _parseCustomSender(customSender, body, date);
         }
       }
 
-      if (tx != null) {
+      if (parsed != null) {
         // Compute running balance if totalBalance is 0
-        final bankKey = tx.name;
+        final bankKey = parsed.bankName;
         final currentBal = runningBalances[bankKey] ?? 0.0;
-        if (tx.totalBalance == 0) {
-          final newBal = tx.type == 'income'
-              ? (currentBal + tx.amount)
-              : (currentBal - tx.amount);
-          final finalBal = newBal > 0 ? newBal : 0.0;
-          tx = tx.copyWith(totalBalance: finalBal);
-          runningBalances[bankKey] = finalBal;
+        double effectiveBal = parsed.totalBalance;
+        if (effectiveBal == 0) {
+          final newBal = parsed.type == 'income'
+              ? (currentBal + parsed.amount)
+              : (currentBal - parsed.amount);
+          effectiveBal = newBal > 0 ? newBal : 0.0;
+          runningBalances[bankKey] = effectiveBal;
         } else {
-          runningBalances[bankKey] = tx.totalBalance;
+          runningBalances[bankKey] = effectiveBal;
         }
 
-        AppTransaction currentTx = tx;
-        // Apply auto-reason categorization rules
-        if (currentTx.reason != null && currentTx.reasonId == null) {
-          final rName = currentTx.reason!.toLowerCase().trim();
-          try {
-            final matched = params.autoReasonRules.firstWhere(
-              (r) => r.name.toLowerCase().trim() == rName,
-            );
-            currentTx = currentTx.copyWith(
-              reasonId: matched.id,
-              reason: matched.name,
-            );
-          } catch (_) {}
-        } else if (currentTx.reasonId == null && currentTx.customReasonText == null) {
-          final sKey = currentTx.sender.toLowerCase().trim();
-          final tKey = currentTx.type.toLowerCase().trim();
+        int? resolvedReasonId;
+        String? resolvedReasonName;
+
+        // Apply reason linking based on pattern or counterparty
+        if (parsed.isSystemLocked) {
+          final lockedName = parsed.lockedReasonName;
+          if (lockedName != null) {
+            resolvedReasonName = lockedName;
+            try {
+              final matched = params.autoReasonRules.firstWhere(
+                (r) => r.name.toLowerCase().trim() == lockedName.toLowerCase().trim(),
+              );
+              resolvedReasonId = matched.id;
+            } catch (_) {}
+          }
+        } else {
+          final sKey = parsed.counterparty.toLowerCase().trim();
+          final tKey = parsed.type.toLowerCase().trim();
           final matchedRule = ruleLookup['${sKey}_$tKey'] ?? ruleLookup[sKey];
           if (matchedRule != null) {
-            currentTx = currentTx.copyWith(
-              reasonId: matchedRule.id,
-              reason: matchedRule.name,
-            );
+            resolvedReasonId = matchedRule.id;
+            resolvedReasonName = matchedRule.name;
           }
         }
 
-        final txId = currentTx.id ?? '${currentTx.name}_${currentTx.date.millisecondsSinceEpoch}_${currentTx.amount}';
+        final tx = AppTransaction.fromParsedResult(
+          parsed,
+          reasonId: resolvedReasonId,
+          reason: resolvedReasonName,
+        ).copyWith(totalBalance: effectiveBal);
+
+        final txId = tx.id ?? '${tx.name}_${tx.date.millisecondsSinceEpoch}_${tx.amount}';
         if (seenTxIds.add(txId)) {
-          parsedTransactions.add(currentTx);
+          parsedTransactions.add(tx);
         }
       } else if (bank != null) {
         // Unrecognized banking SMS -> save to notifications
@@ -258,7 +268,7 @@ class SmsBatchParser {
     );
   }
 
-  static AppTransaction? _parseCustomSender(
+  static ParsedSmsResult? _parseCustomSender(
     AppSender sender,
     String body,
     DateTime date,
@@ -294,17 +304,18 @@ class SmsBatchParser {
     final amount = SmsService.extractAmount(body);
     if (amount <= 0) return null;
 
-    return AppTransaction(
-      id: sha256.convert(utf8.encode('${sender.senderName}_${date.millisecondsSinceEpoch}_$amount')).toString(),
-      name: sender.senderName,
+    final id = sha256.convert(utf8.encode('${sender.senderName}|${date.millisecondsSinceEpoch}|$body')).toString();
+
+    return ParsedSmsResult(
+      id: id,
+      bankName: sender.senderName,
       amount: amount,
       type: type,
       date: date,
-      sender: sender.senderName,
-      category: 'General',
-      rawMessage: body,
-      isAutoDetected: true,
+      counterparty: sender.senderName,
       totalBalance: 0.0,
+      rawMessage: body,
+      patternType: SmsPatternType.standardTransfer,
     );
   }
 }

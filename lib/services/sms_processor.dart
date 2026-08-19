@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import '../models/sender.dart';
 import '../models/app_notification.dart';
 import 'database_service.dart';
@@ -120,9 +121,9 @@ Future<void> processSmsRaw({
 
 
   // 1. Try to parse transaction if matched
-  AppTransaction? tx;
+  ParsedSmsResult? parsedResult;
   if (bank == 'Telebirr') {
-    tx = TelebirrParser.parse(body, date);
+    parsedResult = TelebirrParser.parse(body, date);
     if (TelebirrParser.isSavingsMessage(body)) {
       final savingBal = TelebirrParser.extractSavingBalance(body);
       if (savingBal != null) {
@@ -131,19 +132,19 @@ Future<void> processSmsRaw({
       }
     }
   } else if (bank == 'CBE Birr') {
-    tx = CbeBirrParser.parse(body, date);
+    parsedResult = CbeBirrParser.parse(body, date);
   } else if (bank == 'CBE') {
-    tx = CbeParser.parse(body, date);
+    parsedResult = CbeParser.parse(body, date);
     // Fallback: some CBE Birr ATM messages arrive with sender ID "CBE"
-    if (tx == null && body.toLowerCase().contains('br.')) {
-      tx = CbeBirrParser.parse(body, date);
+    if (parsedResult == null && body.toLowerCase().contains('br.')) {
+      parsedResult = CbeBirrParser.parse(body, date);
     }
   } else if (bank == 'Ahadu Bank') {
-    tx = AhaduParser.parse(body, date);
+    parsedResult = AhaduParser.parse(body, date);
   } else if (bank == 'BOA') {
-    tx = BoaParser.parse(body, date);
+    parsedResult = BoaParser.parse(body, date);
   } else if (bank == 'Dashen Bank') {
-    tx = DashenParser.parse(body, date);
+    parsedResult = DashenParser.parse(body, date);
   } else {
     // Custom Senders matching
     final senders = await DatabaseService.instance.getSenders();
@@ -167,28 +168,26 @@ Future<void> processSmsRaw({
       }
 
       if (hasDeposit && !hasExpense) {
-        tx = AppTransaction(
+        parsedResult = ParsedSmsResult(
           id: sha256.convert(utf8.encode('$senderAddress|${date.millisecondsSinceEpoch}|$body')).toString(),
-          name: matchedSender.senderName,
+          bankName: matchedSender.senderName,
           amount: amount,
           type: 'income',
           date: date,
-          sender: senderAddress,
-          category: 'Auto',
+          counterparty: senderAddress,
+          totalBalance: 0.0,
           rawMessage: body,
-          isAutoDetected: true,
         );
       } else if (hasExpense && !hasDeposit) {
-        tx = AppTransaction(
+        parsedResult = ParsedSmsResult(
           id: sha256.convert(utf8.encode('$senderAddress|${date.millisecondsSinceEpoch}|$body')).toString(),
-          name: matchedSender.senderName,
+          bankName: matchedSender.senderName,
           amount: amount,
           type: 'expense',
           date: date,
-          sender: senderAddress,
-          category: 'Auto',
+          counterparty: senderAddress,
+          totalBalance: 0.0,
           rawMessage: body,
-          isAutoDetected: true,
         );
       }
     }
@@ -196,46 +195,44 @@ Future<void> processSmsRaw({
 
   // 2. If the message was parsed into an auto-detected transaction, insert it into
   // transactions and do NOT pollute the unregistered notifications list.
-  if (tx != null) {
+  if (parsedResult != null) {
     String? resolvedReasonName;
     int? resolvedReasonId;
 
-    final currentTx = tx;
+    final reasons = await DatabaseService.instance.getReasons();
+
     if (initialReason != null && initialReason.isNotEmpty) {
-      final reasons = await DatabaseService.instance.getReasons();
       final matchedReason = reasons.cast<dynamic>().firstWhere(
         (r) => (r.name as String).toLowerCase() == initialReason.toLowerCase(),
         orElse: () => null,
       );
       resolvedReasonName = matchedReason?.name as String? ?? initialReason;
       resolvedReasonId = matchedReason?.id as int?;
-      tx = currentTx.copyWith(
-        reason: resolvedReasonName,
-        reasonId: resolvedReasonId,
-      );
-    } else if (currentTx.reason != null && currentTx.reason!.isNotEmpty) {
-      final reasons = await DatabaseService.instance.getReasons();
-      final matchedReason = reasons.cast<dynamic>().firstWhere(
-        (r) => (r.name as String).toLowerCase() == currentTx.reason!.toLowerCase(),
-        orElse: () => null,
-      );
-      resolvedReasonName = matchedReason?.name as String? ?? currentTx.reason!;
-      resolvedReasonId = matchedReason?.id as int?;
-      tx = currentTx.copyWith(
-        reason: resolvedReasonName,
-        reasonId: resolvedReasonId,
-      );
-    } else if (currentTx.reasonId == null && currentTx.reason == null) {
-      final autoReason = await DatabaseService.instance.findAutoReason(currentTx.sender, currentTx.type);
+    } else if (parsedResult.isSystemLocked) {
+      final lockedName = parsedResult.lockedReasonName;
+      if (lockedName != null) {
+        final matchedReason = reasons.cast<dynamic>().firstWhere(
+          (r) => (r.name as String).toLowerCase() == lockedName.toLowerCase(),
+          orElse: () => null,
+        );
+        resolvedReasonName = matchedReason?.name as String? ?? lockedName;
+        resolvedReasonId = matchedReason?.id as int?;
+      }
+    } else {
+      final autoReason = await DatabaseService.instance.findAutoReason(parsedResult.counterparty, parsedResult.type);
       if (autoReason != null) {
         resolvedReasonName = autoReason.name;
         resolvedReasonId = autoReason.id;
-        tx = currentTx.copyWith(
-          reason: resolvedReasonName,
-          reasonId: resolvedReasonId,
-        );
       }
     }
+
+    final tx = AppTransaction.fromParsedResult(
+      parsedResult,
+      reason: resolvedReasonName,
+      reasonId: resolvedReasonId,
+      customReasonText: null,
+      note: null,
+    );
 
     final insertResult = await DatabaseService.instance.insertTransaction(tx);
 

@@ -89,7 +89,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       ),
                     )
                   : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
+                      padding: const EdgeInsets.fromLTRB(0, 8, 0, 140),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
@@ -198,7 +198,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
       },
       behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.only(top: 14, bottom: 12),
+        margin: const EdgeInsets.fromLTRB(16, 14, 16, 12),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -288,10 +288,10 @@ class _WalletCard extends StatelessWidget {
     if (pageOffset < 0.98) {
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
-        height: 160,
+        height: 172,
         decoration: BoxDecoration(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(28),
         ),
       );
     }

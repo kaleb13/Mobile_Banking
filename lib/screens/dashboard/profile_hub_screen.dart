@@ -51,24 +51,27 @@ class ProfileHubScreen extends StatelessWidget {
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const SizedBox(height: 12),
                     
                     // ── Header: AppHeader with Levels Action ──────────────────
-                    AppHeader(
-                      title: 'Profile Hub',
-                      showBackButton: false,
-                      padding: EdgeInsets.zero,
-                      trailing: AppButton.secondary(
-                        text: 'Levels',
-                        trailingIcon: Icons.arrow_forward_ios_rounded,
-                        fullWidth: false,
-                        height: 32,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        onPressed: () => _showLevelsInfoDialog(context),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: AppHeader(
+                        title: 'Profile Hub',
+                        showBackButton: false,
+                        padding: EdgeInsets.zero,
+                        trailing: AppButton.secondary(
+                          text: 'Levels',
+                          trailingIcon: Icons.arrow_forward_ios_rounded,
+                          fullWidth: false,
+                          height: 32,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          onPressed: () => _showLevelsInfoDialog(context),
+                        ),
                       ),
                     ),
 
@@ -134,10 +137,10 @@ class ProfileHubScreen extends StatelessWidget {
                             // 2. Premium Level Progress Card with CustomProgressBar
                             Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.all(18),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                               decoration: BoxDecoration(
                                 color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(22),
+                                borderRadius: BorderRadius.circular(28),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,47 +261,49 @@ class ProfileHubScreen extends StatelessWidget {
 
                     const SizedBox(height: 28),
 
-                    // ── Menu List Cards (#111821 bg, no border) ──────────────
-                    _buildMenuItemCard(
-                      context,
-                      title: 'Saving Goals',
-                      iconWidget: Image.asset(
-                        'assets/images/Saving_Goal_Icon.png',
-                        width: 26,
-                        height: 26,
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SavingGoalsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-
-                    _buildMenuItemCard(
-                      context,
-                      title: 'Settings',
-                      iconWidget: SvgPicture.asset(
-                        'assets/images/Settings_icon.svg',
-                        width: 24,
-                        height: 24,
-                        colorFilter: const ColorFilter.mode(
-                          Colors.white,
-                          BlendMode.srcIn,
+                    // ── Grouped Navigation Card (Saving Goals & Settings in one unified card) ──
+                    _buildGroupedCardBase([
+                      _buildMenuItemTile(
+                        context,
+                        title: 'Saving Goals',
+                        iconWidget: Image.asset(
+                          'assets/images/Saving_Goal_Icon.png',
+                          width: 26,
+                          height: 26,
                         ),
+                        showDivider: true,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SavingGoalsScreen(),
+                            ),
+                          );
+                        },
                       ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SettingsScreen(),
+                      _buildMenuItemTile(
+                        context,
+                        title: 'Settings',
+                        iconWidget: SvgPicture.asset(
+                          'assets/images/Settings_icon.svg',
+                          width: 24,
+                          height: 24,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                        showDivider: false,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ]),
 
                     const SizedBox(height: 100),
                   ],
@@ -311,54 +316,74 @@ class ProfileHubScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItemCard(
+  Widget _buildGroupedCardBase(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildMenuItemTile(
     BuildContext context, {
     required String title,
     required Widget iconWidget,
     required VoidCallback onTap,
+    bool showDivider = false,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: Colors.white.withValues(alpha: 0.05),
-        highlightColor: Colors.white.withValues(alpha: 0.03),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                child: iconWidget,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
+    return Column(
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            splashColor: Colors.white.withValues(alpha: 0.05),
+            highlightColor: Colors.white.withValues(alpha: 0.03),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    child: iconWidget,
                   ),
-                ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white.withValues(alpha: 0.35),
+                    size: 15,
+                  ),
+                ],
               ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: Colors.white.withValues(alpha: 0.35),
-                size: 15,
-              ),
-            ],
+            ),
           ),
         ),
-      ),
+        if (showDivider)
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            color: Colors.white.withValues(alpha: 0.05),
+          ),
+      ],
     );
   }
 

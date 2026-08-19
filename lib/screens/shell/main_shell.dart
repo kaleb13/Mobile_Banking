@@ -212,11 +212,11 @@ class _MainShellState extends State<MainShell> {
       final bool isVisibleOnHome = !isPaused && !isCashWallet && i < 3;
 
       // ── Wallet list position (t=1.0) ──────────────────────────────
-      const double walletLeft = 16.0;
+      const double walletLeft = 0.0;
       final double headerOffset = (hasPaused && i > activeCount) ? 36.0 : 0.0;
-      final double walletTop = topPadding + 62.0 + i * 174.0 + headerOffset;
-      final double walletW = screenWidth - 32.0;
-      const double walletH = 160.0;
+      final double walletTop = topPadding + 62.0 + i * 186.0 + headerOffset;
+      final double walletW = screenWidth;
+      const double walletH = 172.0;
 
       // ── Home deck position (t=0.0) ────────────────────────────────
       // Visible-on-Home cards get their own stacked offset; all others
@@ -225,8 +225,8 @@ class _MainShellState extends State<MainShell> {
           isVisibleOnHome ? i : 2.clamp(0, activeCount > 0 ? activeCount - 1 : 0);
       final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
       final double homeLeft = screenWidth - 105.0 + deckLeftOffset + 42.0;
-      const double homeW = 100.0;
-      const double homeH = 185.0;
+      const double homeW = 104.0;
+      const double homeH = 188.0;
 
       // Interpolate position
       final double left = lerpDouble(homeLeft, walletLeft, t)!;

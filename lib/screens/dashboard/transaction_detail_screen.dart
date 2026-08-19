@@ -520,7 +520,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 ],
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -538,10 +538,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       _buildCollapsibleReceiptLinkCard(context),
                     ],
 
-                    const SizedBox(height: 14),
-
-                    // ── Link Reason Feature Info Section ───────────────────
-                    _buildLinkReasonInfoSection(context),
+                    if (!isReasonBlocked) ...[
+                      const SizedBox(height: 14),
+                      // ── Link Reason Feature Info Section ───────────────────
+                      _buildLinkReasonInfoSection(context),
+                    ],
 
                     const SizedBox(height: 40),
                   ],
@@ -652,11 +653,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         : 'External Party';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -760,11 +761,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final fmtShort = NumberFormat('#,##0.00');
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1297,60 +1298,61 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     bool isIncome,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
           focusColor: Colors.transparent,
-          onTap: () async {
-            if (linkedLoan != null) {
-              AppToast.warning(
-                context,
-                message: 'To change reason, delete loan record first',
-              );
-              return;
-            }
-            if (isAutoLocked) {
-              AppToast.warning(
-                context,
-                message: 'Reason is locked — auto-created from SMS',
-              );
-              return;
-            }
-            if (isCashLocked) {
-              final spendings = provider.spendingsForTransaction(widget.transaction.id ?? '');
-              AppConfirmDialog.show(
-                context: context,
-                title: 'Reason Locked',
-                message:
-                    'This transaction has ${spendings.length} active cash ${spendings.length == 1 ? 'deduction' : 'deductions'} linked to it. To change the reason away from Cash, all linked deductions must be removed first.\n\nWould you like to delete all linked deductions and change the reason now?',
-                confirmText: 'Clear & Edit',
-                cancelText: 'Keep Locked',
-                isDestructive: true,
-                onConfirm: () async {
-                  for (final s in spendings) {
-                    if (s.id != null) {
-                      await provider.deleteCashTransaction(s.id!);
-                    }
+          onTap: isReasonBlocked
+              ? () {
+                  if (isAutoLocked) {
+                    AppToast.warning(
+                      context,
+                      message: 'Reason is locked for this transaction',
+                    );
+                    return;
                   }
-                  if (context.mounted) {
-                    _showReasonPicker(context, provider);
+                  if (linkedLoan != null) {
+                    AppToast.warning(
+                      context,
+                      message: 'To change reason, delete loan record first',
+                    );
+                    return;
                   }
-                },
-              );
-              return;
-            }
-            _showReasonPicker(context, provider);
-          },
+                  if (isCashLocked) {
+                    final spendings = provider.spendingsForTransaction(widget.transaction.id ?? '');
+                    AppConfirmDialog.show(
+                      context: context,
+                      title: 'Reason Locked',
+                      message:
+                          'This transaction has ${spendings.length} active cash ${spendings.length == 1 ? 'deduction' : 'deductions'} linked to it. To change the reason away from Cash, all linked deductions must be removed first.\n\nWould you like to delete all linked deductions and change the reason now?',
+                      confirmText: 'Clear & Edit',
+                      cancelText: 'Keep Locked',
+                      isDestructive: true,
+                      onConfirm: () async {
+                        for (final s in spendings) {
+                          if (s.id != null) {
+                            await provider.deleteCashTransaction(s.id!);
+                          }
+                        }
+                        if (context.mounted) {
+                          _showReasonPicker(context, provider);
+                        }
+                      },
+                    );
+                    return;
+                  }
+                }
+              : () => _showReasonPicker(context, provider),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
@@ -1396,7 +1398,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       Text(
                         isReasonBlocked
                             ? (isAutoLocked
-                                ? 'Locked • Telebirr credit transaction'
+                                ? 'Locked • System auto-categorized'
                                 : (isCashLocked
                                     ? 'Locked • Linked deductions active'
                                     : 'Locked • Linked loan record'))
@@ -1414,7 +1416,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     ],
                   ),
                 ),
-                if (activeReasonId != null && !isSpecialReason) ...[
+                if (!isReasonBlocked && activeReasonId != null && !isSpecialReason) ...[
                   if (activeLink != null)
                     AppButton.softDestructive(
                       text: 'Unlink',
@@ -1456,11 +1458,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     ),
                   const SizedBox(width: 8),
                 ],
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Colors.white24,
-                  size: 20,
-                ),
+                if (!isReasonBlocked)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.white24,
+                    size: 20,
+                  ),
               ],
             ),
           ),
@@ -1498,13 +1501,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -1515,7 +1518,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             });
           },
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1614,13 +1617,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -1631,7 +1634,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             });
           },
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1774,7 +1777,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Widget _buildLinkReasonInfoSection(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1837,11 +1840,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return GestureDetector(
       onLongPress: () => _showLoanOptionsSheet(context, loan, provider),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.symmetric(horizontal: 0),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(24),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
               color: accentColor.withValues(alpha: 0.1),
@@ -2019,11 +2022,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Widget _buildCreateLoanPromptCard(
       BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
         children: [
@@ -2092,11 +2095,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Widget _buildLinkInternalTransferPromptCard(
       BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Row(
         children: [
@@ -2166,11 +2169,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     } catch (_) {}
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

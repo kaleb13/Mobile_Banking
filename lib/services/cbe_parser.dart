@@ -1,18 +1,17 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
 
 class CbeParser {
   static const String senderName = "CBE";
 
-  static AppTransaction? parse(String message, DateTime fallbackDate) {
+  static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
     if (message.isEmpty) return null;
 
     final lowerMsg = message.toLowerCase();
 
     String type = '';
-    String category = 'Auto';
     double amount = 0.0;
     String senderOrRecipient = '';
 
@@ -32,7 +31,6 @@ class CbeParser {
 
     if (lowerMsg.contains('transfer')) {
       type = 'expense';
-      category = 'Transferred';
       amount = extractAmount(
           RegExp(r'transferr?ed\s+ETB\s*([0-9,.]+)', caseSensitive: false));
 
@@ -54,7 +52,6 @@ class CbeParser {
       }
     } else if (lowerMsg.contains('debited')) {
       type = 'expense';
-      category = 'Withdrawed';
       senderOrRecipient =
           'ATM or Other'; // Default recipient for debited/withdrawal
 
@@ -94,7 +91,6 @@ class CbeParser {
       }
     } else if (lowerMsg.contains('credited')) {
       type = 'income';
-      category = 'Deposit';
 
       // Old format: "credited with ETB 30025.00"
       // New format: "credited by QELEM MEDA TECHNOLOGIES PLC with ETB 30025.00"
@@ -125,7 +121,6 @@ class CbeParser {
     } else if (lowerMsg.contains('received')) {
       // "You have received ETB 5,000.00 from account 1****4239 (Name) to your account ..."
       type = 'income';
-      category = 'Deposit';
       amount = extractAmount(
           RegExp(r'received\s+ETB\s*([0-9,.]+)', caseSensitive: false));
 
@@ -139,7 +134,6 @@ class CbeParser {
     } else if (lowerMsg.contains('debit transaction')) {
       // "A debit transaction of ETB 5000.0. has occurred on your account ..."
       type = 'expense';
-      category = 'Withdrawed';
       senderOrRecipient = 'ATM or Other';
       amount = extractAmount(
           RegExp(r'debit transaction of ETB\s*([0-9,.]+)', caseSensitive: false));
@@ -222,17 +216,16 @@ class CbeParser {
       }
     }
 
-    return AppTransaction(
+    return ParsedSmsResult(
       id: id,
-      name: senderName,
+      bankName: senderName,
       amount: amount,
       type: type,
       date: txDate,
-      sender: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderName,
-      category: category,
-      rawMessage: message,
-      isAutoDetected: true,
+      counterparty: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderName,
       totalBalance: totalBalance,
+      rawMessage: message,
+      patternType: SmsPatternType.standardTransfer,
     );
   }
 

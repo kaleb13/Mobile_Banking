@@ -34,7 +34,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 48),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -43,9 +43,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.035),
-                        borderRadius: BorderRadius.circular(20),
-                                              ),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(28),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -176,8 +176,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.gold.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-                              ),
+                borderRadius: BorderRadius.circular(24),
+              ),
               child: Text(
                 'For questions or concerns about this Privacy Policy, contact the developer directly via Telegram: @Shibre_Plus',
                 style: TextStyle(
@@ -210,9 +210,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.035),
-          borderRadius: BorderRadius.circular(18),
-                  ),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

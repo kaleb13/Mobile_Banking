@@ -142,7 +142,7 @@ class _AppNoteCardState extends State<AppNoteCard> {
   @override
   Widget build(BuildContext context) {
     final accent = widget.accentColor ?? AppColors.positive;
-    final cardBg = widget.backgroundColor ?? Colors.white.withValues(alpha: 0.05);
+    final cardBg = widget.backgroundColor ?? AppColors.surface;
 
     final bool hasContent = widget.controller.text.trim().isNotEmpty || widget.attachments.isNotEmpty;
 
@@ -150,13 +150,13 @@ class _AppNoteCardState extends State<AppNoteCard> {
       margin: widget.margin,
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -169,7 +169,7 @@ class _AppNoteCardState extends State<AppNoteCard> {
                 }
               : null,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,

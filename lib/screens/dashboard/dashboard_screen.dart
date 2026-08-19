@@ -630,15 +630,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return GestureDetector(
         onTap: () => provider.animateToTab(1),
         behavior: HitTestBehavior.opaque,
-        child: const SizedBox(width: 105, height: 185),
+        child: const SizedBox(width: 108, height: 188),
       );
     }
 
     // Render native stacked cards in-tree on Home Page for 100% synchronous scroll/pull
     const double baseLeftOffset = -42.0;
     const double leftStep = 22.0;
-    const double homeW = 100.0;
-    const double homeH = 185.0;
+    const double homeW = 104.0;
+    const double homeH = 188.0;
 
     final activeSenders = provider.activeSenders;
     final List<Widget> cardWidgets = [];
@@ -678,8 +678,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onTap: () => provider.animateToTab(1),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 105,
-        height: 185,
+        width: 108,
+        height: 188,
         child: Stack(
           clipBehavior: Clip.none,
           children: cardWidgets,

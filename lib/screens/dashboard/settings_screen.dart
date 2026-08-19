@@ -42,10 +42,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildCardBase(List<Widget> children) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF111821),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -379,7 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _sectionLabel(String label) {
     return Padding(
-      padding: const EdgeInsets.only(left: 32, bottom: 8, top: 24),
+      padding: const EdgeInsets.only(left: 16, bottom: 8, top: 20),
       child: Text(
         label,
         style: TextStyle(

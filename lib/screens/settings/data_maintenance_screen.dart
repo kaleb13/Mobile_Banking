@@ -187,7 +187,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildRefreshTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         children: [
           _infoCard(
@@ -214,7 +214,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildResetTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         children: [
           _infoCard(
@@ -247,8 +247,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(22),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,14 +258,18 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
               Icon(icon, color: color, size: 28),
               const SizedBox(width: 12),
               Text(title,
-                  style: TextStyle(
-                      color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 16),
           Text(body,
-              style: const TextStyle(
-                  color: AppColors.textSoft, fontSize: 14, height: 1.6)),
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 13,
+                  height: 1.5)),
         ],
       ),
     );
@@ -273,7 +277,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _statusItem(IconData icon, String title, String subtitle) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
       child: Row(
         children: [
           Container(

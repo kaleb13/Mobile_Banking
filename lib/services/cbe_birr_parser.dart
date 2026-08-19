@@ -1,11 +1,11 @@
-import '../models/transaction.dart';
+import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
 
 class CbeBirrParser {
   static const String senderName = "CBEBirr";
   static const String senderNameFormatted = "CBE Birr";
 
-  static AppTransaction? parse(String message, DateTime fallbackDate) {
+  static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
     if (message.isEmpty) return null;
 
     final lowerMsg = message.toLowerCase();
@@ -27,7 +27,6 @@ class CbeBirrParser {
     }
 
     String type = '';
-    String category = 'Auto';
     double amount = 0.0;
     String senderOrRecipient = 'From your CBE or unknown';
     String dateStr = '';
@@ -40,7 +39,6 @@ class CbeBirrParser {
 
     // A. Cash Out / ATM Withdrawal
     if (lowerMsg.contains("withdrawn") && lowerMsg.contains("atm")) {
-      category = "Cash";
       type = "expense";
       final amountMatch =
           RegExp(r'withdrawn\s+([0-9.,]+)\s*br\.?', caseSensitive: false)
@@ -56,7 +54,6 @@ class CbeBirrParser {
     // B. Bought Airtime / Package
     else if (lowerMsg.contains("bought") ||
         (lowerMsg.contains("airtime") && lowerMsg.contains("for"))) {
-      category = "Transferred";
       type = "expense";
       final amountMatch =
           RegExp(r'bought\s+([0-9.,]+)\s*br\.?', caseSensitive: false)
@@ -79,7 +76,6 @@ class CbeBirrParser {
     }
     // C. Credited / Inward Deposit
     else if (lowerMsg.contains("credited")) {
-      category = "Deposit";
       type = "income";
       final amountMatch =
           RegExp(r'credited with\s+([0-9.,]+)\s*br\.?', caseSensitive: false)
@@ -101,7 +97,6 @@ class CbeBirrParser {
     }
     // D. Received (Money or Airtime)
     else if (lowerMsg.contains("received")) {
-      category = "Deposit";
       type = "income";
       final amountMatch =
           RegExp(r'received\s+([0-9.,]+)\s*br\.?', caseSensitive: false)
@@ -135,7 +130,6 @@ class CbeBirrParser {
         lowerMsg.contains("paid") ||
         lowerMsg.contains("transferred") ||
         lowerMsg.contains("made")) {
-      category = "Transferred";
       type = "expense";
 
       var amountMatch = RegExp(
@@ -218,17 +212,16 @@ class CbeBirrParser {
       }
     }
 
-    return AppTransaction(
-      id: id,
-      name: senderNameFormatted,
+    return ParsedSmsResult(
+      id: id!,
+      bankName: senderNameFormatted,
       amount: amount,
       type: type,
       date: txDate,
-      sender: senderOrRecipient,
-      category: category,
-      rawMessage: message,
-      isAutoDetected: true,
+      counterparty: senderOrRecipient,
       totalBalance: totalBalance,
+      rawMessage: message,
+      patternType: SmsPatternType.standardTransfer,
     );
   }
 }

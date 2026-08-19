@@ -1,4 +1,5 @@
 import 'transaction_attachment.dart';
+import 'parsed_sms_result.dart';
 import '../utils/link_extractor.dart';
 
 class AppTransaction {
@@ -49,6 +50,38 @@ class AppTransaction {
     this.isBookmarked = false,
   });
 
+  /// Factory that enriches a pure parser DTO (ParsedSmsResult) into an AppTransaction entity.
+  factory AppTransaction.fromParsedResult(
+    ParsedSmsResult result, {
+    int? reasonId,
+    String? reason,
+    String? customReasonText,
+    String? note,
+    String? linkedTransactionId,
+    String? bankReference,
+    bool isBookmarked = false,
+  }) {
+    return AppTransaction(
+      id: result.id,
+      name: result.bankName,
+      amount: result.amount,
+      type: result.type,
+      date: result.date,
+      sender: result.counterparty,
+      category: 'Auto',
+      totalBalance: result.totalBalance,
+      rawMessage: result.rawMessage,
+      isAutoDetected: true,
+      reasonId: reasonId,
+      reason: reason ?? result.lockedReasonName,
+      customReasonText: customReasonText,
+      note: note,
+      linkedTransactionId: linkedTransactionId,
+      bankReference: bankReference,
+      isBookmarked: isBookmarked,
+    );
+  }
+
   /// Resolved display label: prefer reason name from `reason` field (pre-resolved),
   /// fallback to customReasonText.
   String? get resolvedReason => reason ?? customReasonText;
@@ -59,15 +92,20 @@ class AppTransaction {
   /// True if this transaction's raw message body contains any web links.
   bool get hasLinks => extractedLinks.isNotEmpty;
 
-  /// True when this transaction was auto-created with a locked system reason (Savings/Sanduq, Airtime, Package).
+  /// True when this transaction was auto-created with a locked system reason (Savings/Sanduq, Airtime, Package, Internal Transfer, Loan).
   bool get isReasonLocked {
     if (!isAutoDetected) return false;
     final lower = rawMessage.toLowerCase();
     final rLower = (reason ?? customReasonText)?.toLowerCase().trim();
     return lower.contains('saving account') ||
         lower.contains('saving balance') ||
+        lower.contains('sanduq') ||
+        lower.contains('shamo') ||
+        lower.contains('reserved') ||
         rLower == 'airtime' ||
-        rLower == 'package';
+        rLower == 'package' ||
+        rLower == 'internal transfer' ||
+        rLower == 'loan';
   }
 
   Map<String, dynamic> toMap() {
@@ -124,6 +162,7 @@ class AppTransaction {
   }
 
   AppTransaction copyWith({
+    DateTime? date,
     int? reasonId,
     bool clearReasonId = false,
     int? categoryId,
@@ -149,7 +188,7 @@ class AppTransaction {
       name: name,
       amount: amount,
       type: type,
-      date: date,
+      date: date ?? this.date,
       sender: sender,
       category: category,
       rawMessage: rawMessage,

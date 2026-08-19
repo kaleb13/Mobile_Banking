@@ -334,7 +334,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 205,
+          height: 215,
           child: PageView(
             controller: _cardPageController,
             onPageChanged: (idx) {
@@ -346,11 +346,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             children: [
               // ── 1. Main Telebirr Wallet Card ──────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(28),
                     gradient: LinearGradient(
                       begin: Alignment.bottomLeft,
                       end: Alignment.topRight,
@@ -453,17 +453,17 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
               // ── 2. Telebirr Savings Account (Sanduq) Card ──────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(28),
                     gradient: const LinearGradient(
                       begin: Alignment.bottomLeft,
                       end: Alignment.topRight,
                       colors: [
-                        Color(0xFF007A3D),
-                        Color(0xFF00B050),
+                        AppColors.success,
+                        AppColors.cardLime,
                       ],
                     ),
                   ),
@@ -611,12 +611,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
         // ── Combined Total Assets Summary ──────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(28),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -838,11 +838,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         : Colors.white.withValues(alpha: 0.8);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(28),
           gradient: LinearGradient(
             begin: Alignment.bottomLeft,
             end: Alignment.topRight,
@@ -1589,7 +1589,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 0),
       itemCount: sortedDayKeys.length,
       itemBuilder: (context, groupIdx) {
         final dayKey = sortedDayKeys[groupIdx];
@@ -1604,7 +1604,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(28),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
