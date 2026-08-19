@@ -200,6 +200,7 @@ Future<void> processSmsRaw({
     String? resolvedReasonName;
     int? resolvedReasonId;
 
+    final currentTx = tx;
     if (initialReason != null && initialReason.isNotEmpty) {
       final reasons = await DatabaseService.instance.getReasons();
       final matchedReason = reasons.cast<dynamic>().firstWhere(
@@ -208,16 +209,28 @@ Future<void> processSmsRaw({
       );
       resolvedReasonName = matchedReason?.name as String? ?? initialReason;
       resolvedReasonId = matchedReason?.id as int?;
-      tx = tx.copyWith(
+      tx = currentTx.copyWith(
         reason: resolvedReasonName,
         reasonId: resolvedReasonId,
       );
-    } else if (tx.reasonId == null && tx.reason == null) {
-      final autoReason = await DatabaseService.instance.findAutoReason(tx.sender, tx.type);
+    } else if (currentTx.reason != null && currentTx.reason!.isNotEmpty) {
+      final reasons = await DatabaseService.instance.getReasons();
+      final matchedReason = reasons.cast<dynamic>().firstWhere(
+        (r) => (r.name as String).toLowerCase() == currentTx.reason!.toLowerCase(),
+        orElse: () => null,
+      );
+      resolvedReasonName = matchedReason?.name as String? ?? currentTx.reason!;
+      resolvedReasonId = matchedReason?.id as int?;
+      tx = currentTx.copyWith(
+        reason: resolvedReasonName,
+        reasonId: resolvedReasonId,
+      );
+    } else if (currentTx.reasonId == null && currentTx.reason == null) {
+      final autoReason = await DatabaseService.instance.findAutoReason(currentTx.sender, currentTx.type);
       if (autoReason != null) {
         resolvedReasonName = autoReason.name;
         resolvedReasonId = autoReason.id;
-        tx = tx.copyWith(
+        tx = currentTx.copyWith(
           reason: resolvedReasonName,
           reasonId: resolvedReasonId,
         );

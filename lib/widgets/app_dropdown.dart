@@ -32,7 +32,7 @@ class AppDropdownItem<T> {
 
 /// Standardized design system Dropdown component.
 ///
-/// Features 100% rounded pill triggers, custom menu popups with rounded corners,
+/// Features 100% rounded pill triggers, 16px rounded menu popups,
 /// zero border strokes, and dedicated light and dark variants.
 class AppDropdown<T> extends StatelessWidget {
   /// Currently selected value.
@@ -50,11 +50,14 @@ class AppDropdown<T> extends StatelessWidget {
   /// Maximum width constraint for the selected text and menu items.
   final double? maxWidth;
 
-  /// Trigger button height (defaults to 32).
+  /// Trigger button height (defaults to 34).
   final double height;
 
-  /// Border radius for the trigger and dropdown menu popup (defaults to 16).
+  /// Border radius for the trigger button (defaults to 100 for 100% pill).
   final double borderRadius;
+
+  /// Border radius for the popup menu overlay (defaults to 16).
+  final double menuBorderRadius;
 
   /// Custom padding for the trigger button.
   final EdgeInsetsGeometry? padding;
@@ -90,8 +93,9 @@ class AppDropdown<T> extends StatelessWidget {
     required this.onChanged,
     this.variant = AppDropdownVariant.dark,
     this.maxWidth,
-    this.height = 32,
-    this.borderRadius = 16,
+    this.height = 34,
+    this.borderRadius = 100,
+    this.menuBorderRadius = 16,
     this.padding,
     this.prefix,
     this.icon,
@@ -110,8 +114,9 @@ class AppDropdown<T> extends StatelessWidget {
     required List<AppDropdownItem<T>> items,
     required ValueChanged<T?> onChanged,
     double? maxWidth,
-    double height = 32,
-    double borderRadius = 16,
+    double height = 34,
+    double borderRadius = 100,
+    double menuBorderRadius = 16,
     EdgeInsetsGeometry? padding,
     Widget? prefix,
     IconData? icon,
@@ -131,6 +136,7 @@ class AppDropdown<T> extends StatelessWidget {
       maxWidth: maxWidth,
       height: height,
       borderRadius: borderRadius,
+      menuBorderRadius: menuBorderRadius,
       padding: padding,
       prefix: prefix,
       icon: icon,
@@ -150,8 +156,9 @@ class AppDropdown<T> extends StatelessWidget {
     required List<AppDropdownItem<T>> items,
     required ValueChanged<T?> onChanged,
     double? maxWidth,
-    double height = 32,
-    double borderRadius = 16,
+    double height = 34,
+    double borderRadius = 100,
+    double menuBorderRadius = 16,
     EdgeInsetsGeometry? padding,
     Widget? prefix,
     IconData? icon,
@@ -171,6 +178,7 @@ class AppDropdown<T> extends StatelessWidget {
       maxWidth: maxWidth,
       height: height,
       borderRadius: borderRadius,
+      menuBorderRadius: menuBorderRadius,
       padding: padding,
       prefix: prefix,
       icon: icon,
@@ -191,8 +199,9 @@ class AppDropdown<T> extends StatelessWidget {
     required ValueChanged<String?> onChanged,
     AppDropdownVariant variant = AppDropdownVariant.dark,
     double? maxWidth,
-    double height = 32,
-    double borderRadius = 16,
+    double height = 34,
+    double borderRadius = 100,
+    double menuBorderRadius = 16,
     EdgeInsetsGeometry? padding,
     Widget? prefix,
     IconData? icon,
@@ -215,6 +224,7 @@ class AppDropdown<T> extends StatelessWidget {
       maxWidth: maxWidth,
       height: height,
       borderRadius: borderRadius,
+      menuBorderRadius: menuBorderRadius,
       padding: padding,
       prefix: prefix,
       icon: icon,
@@ -234,6 +244,7 @@ class AppDropdown<T> extends StatelessWidget {
         str == 'Any Time' ||
         str == 'All Senders' ||
         str == 'All Banks' ||
+        str == 'All Wallets' ||
         (items.isNotEmpty && items.first.value == value);
   }
 
@@ -248,30 +259,27 @@ class AppDropdown<T> extends StatelessWidget {
     // Trigger styling
     final Color triggerBg = backgroundColor ??
         (isLight
-            ? (isDef
-                ? AppColors.lightGreyBackground
-                : AppColors.bgDeepLight)
-            : (isDef
-                ? AppColors.surface
-                : AppColors.surface));
+            ? AppColors.lightGreyBackground
+            : AppColors.surface);
 
     final Color effectiveTextColor = textColor ??
         (isLight
             ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
-            : (isDef ? AppColors.textSecondary : Colors.white));
+            : (isDef ? AppColors.textSoft : Colors.white));
 
     final Color effectiveIconColor = iconColor ??
         (isLight
             ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
-            : (isDef ? AppColors.textSecondary : Colors.white));
+            : (isDef ? AppColors.textSoft : Colors.white));
 
     // Popup styling
     final Color menuBg = dropdownColor ?? (isLight ? Colors.white : AppColors.surfaceElevated);
-    final Color itemTextColor = isLight ? AppColors.darkCharcoal : Colors.white;
+    final Color itemDefaultTextColor = isLight ? AppColors.darkCharcoal : AppColors.textSoft;
+    final Color itemActiveTextColor = isLight ? AppColors.darkCharcoal : Colors.white;
 
     return Container(
       height: height,
-      padding: padding ?? const EdgeInsets.symmetric(horizontal: 12),
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: triggerBg,
         borderRadius: BorderRadius.circular(borderRadius),
@@ -296,16 +304,17 @@ class AppDropdown<T> extends StatelessWidget {
                 ),
               ),
               dropdownColor: menuBg,
-              borderRadius: BorderRadius.circular(borderRadius),
+              borderRadius: BorderRadius.circular(menuBorderRadius),
               menuMaxHeight: 300,
               elevation: 8,
               style: TextStyle(
                 color: effectiveTextColor,
-                fontSize: 12,
-                fontWeight: isDef ? FontWeight.w500 : FontWeight.w700,
+                fontSize: 11.5,
+                fontWeight: isDef ? FontWeight.w500 : FontWeight.bold,
               ),
               onChanged: onChanged,
               items: items.map((AppDropdownItem<T> item) {
+                final bool isItemActive = item.value == value;
                 return DropdownMenuItem<T>(
                   value: item.value,
                   child: ConstrainedBox(
@@ -317,7 +326,11 @@ class AppDropdown<T> extends StatelessWidget {
                           item.leading!,
                           const SizedBox(width: 8),
                         ] else if (item.icon != null) ...[
-                          Icon(item.icon, size: 16, color: itemTextColor),
+                          Icon(
+                            item.icon,
+                            size: 16,
+                            color: isItemActive ? itemActiveTextColor : itemDefaultTextColor,
+                          ),
                           const SizedBox(width: 8),
                         ],
                         Flexible(
@@ -326,10 +339,9 @@ class AppDropdown<T> extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: itemTextColor,
-                              fontSize: 13,
-                              fontWeight:
-                                  item.value == value ? FontWeight.w600 : FontWeight.normal,
+                              color: isItemActive ? itemActiveTextColor : itemDefaultTextColor,
+                              fontSize: 12.5,
+                              fontWeight: isItemActive ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
                         ),

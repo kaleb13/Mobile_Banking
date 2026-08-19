@@ -8,7 +8,6 @@ import '../../models/sender.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_button.dart';
@@ -19,8 +18,10 @@ import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/animated_balance_text.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_reset_filter_button.dart';
 import 'transaction_detail_screen.dart';
-import 'manage_bank_screen.dart';
+import 'analysis_screen.dart';
 
 class SenderDetailScreen extends StatefulWidget {
   final AppSender sender;
@@ -35,6 +36,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _chartFilter = '30D'; // 1D, 7D, 30D, 180D, 360D
   String _searchQuery = '';
   String _typeFilter = 'All'; // All, Income, Expense
+  String _senderFilter = 'All Senders';
+  bool _isBookmarkedOnly = false;
+  String _sortBy = 'Date: Newest';
+  String _dateRangeFilter = 'All Time'; // All Time, 7D, 30D, 90D, 1Y
   final TextEditingController _searchController = TextEditingController();
   final PageController _cardPageController = PageController();
   int _cardPageIndex = 0;
@@ -104,34 +109,61 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       return tNameUp == sNameUp || tSenderUp == sNameUp;
     }).toList();
 
-    // Chart date filter
-    DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
-    if (_chartFilter == '1D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 1));
-    } else if (_chartFilter == '7D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 7));
-    } else if (_chartFilter == '30D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 30));
-    } else if (_chartFilter == '180D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 180));
-    } else if (_chartFilter == '360D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 360));
+    final uniqueSenders = allTxForSender
+        .map((tx) => tx.sender.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final senderOptions = ['All Senders', ...uniqueSenders];
+    if (!senderOptions.contains(_senderFilter)) {
+      _senderFilter = 'All Senders';
     }
 
-    // Filter transactions for listing & chart
+    // Filter transactions for listing & search
     final filteredTransactions = allTxForSender.where((tx) {
-      final matchesDate = tx.date.isAfter(cutoff);
-      final matchesSearch =
-          tx.sender.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              (tx.resolvedReason
-                      ?.toLowerCase()
-                      .contains(_searchQuery.toLowerCase()) ??
-                  false);
+      final q = _searchQuery.trim().toLowerCase();
+      final matchesSearch = q.isEmpty ||
+          tx.sender.toLowerCase().contains(q) ||
+          (tx.resolvedReason?.toLowerCase().contains(q) ?? false) ||
+          tx.amount.toString().contains(q) ||
+          (tx.bankReference?.toLowerCase().contains(q) ?? false);
+
       final matchesType = _typeFilter == 'All' ||
           (_typeFilter == 'Income' && tx.type == 'income') ||
           (_typeFilter == 'Expense' && tx.type != 'income');
-      return matchesDate && matchesSearch && matchesType;
+
+      final matchesSender = _senderFilter == 'All Senders' ||
+          tx.sender.trim().toLowerCase() == _senderFilter.trim().toLowerCase();
+
+      final matchesBookmark = !_isBookmarkedOnly || tx.isBookmarked;
+
+      bool matchesDateRange = true;
+      final now = DateTime.now();
+      if (_dateRangeFilter == '7D') {
+        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 7)));
+      } else if (_dateRangeFilter == '30D') {
+        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 30)));
+      } else if (_dateRangeFilter == '90D') {
+        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 90)));
+      } else if (_dateRangeFilter == '1Y') {
+        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 365)));
+      }
+
+      return matchesSearch && matchesType && matchesSender && matchesBookmark && matchesDateRange;
     }).toList();
+
+    // Sort transactions
+    if (_sortBy == 'Date: Oldest') {
+      filteredTransactions.sort((a, b) => a.date.compareTo(b.date));
+    } else if (_sortBy == 'Amount: High-Low') {
+      filteredTransactions.sort((a, b) => b.amount.compareTo(a.amount));
+    } else if (_sortBy == 'Amount: Low-High') {
+      filteredTransactions.sort((a, b) => a.amount.compareTo(b.amount));
+    } else {
+      // Default: Date: Newest
+      filteredTransactions.sort((a, b) => b.date.compareTo(a.date));
+    }
 
     // Calculate Balance & Trends
     double currentBalance =
@@ -229,7 +261,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                             _buildChartFilters(),
                           ],
                           const SizedBox(height: 32),
-                          _buildActivityFilterSection(),
+                          _buildActivityFilterSection(
+                              filteredTransactions.length, senderOptions),
                           _buildTransactionList(filteredTransactions),
                           const SizedBox(height: 80),
                         ],
@@ -672,7 +705,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             alignment: Alignment.centerLeft,
             child: AnimatedBalanceText(
               value: balance,
-              isMasked: !provider.isBalanceVisible,
+              isMasked: !provider.isBalanceVisible ||
+                  provider.isTrackingPaused(widget.sender.senderName),
               integerStyle: TextStyle(
                 color: textColorPrimary,
                 fontSize: 32,
@@ -742,15 +776,34 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           children: [
             GestureDetector(
               onTap: () => _showPNLInfo(context),
-              child: Text(
-                '30D PNL ',
-                style: TextStyle(
-                  color: textColorPrimary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+              behavior: HitTestBehavior.opaque,
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '30D PNL',
+                      style: TextStyle(
+                        color: textColorPrimary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.2,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 1),
+                    CustomPaint(
+                      size: const Size(double.infinity, 1),
+                      painter: DashedUnderlinePainter(
+                        color: textColorPrimary.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+            const SizedBox(width: 6),
             Text(
               '${change >= 0 ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())} (${percent.abs().toStringAsFixed(1)}%)',
               style: TextStyle(
@@ -890,31 +943,40 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               Expanded(
                 child: _buildActionButton(
                   context,
-                  label: "View Bank",
-                  icon: Icons.account_balance_rounded,
+                  label: "Credentials",
+                  icon: Icons.vpn_key_rounded,
                   color: AppColors.surfaceElevated,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => ManageBankScreen(sender: sender)),
+                  badge: const AppBadge.neutral(
+                    text: 'Soon',
+                    size: AppBadgeSize.small,
                   ),
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    AppToast.info(
+                      context,
+                      message: 'Coming Soon',
+                      subtitle:
+                          'Bank credentials and account setup are coming soon!',
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildActionButton(
                   context,
-                  label: "Transfer",
-                  icon: Icons.swap_horiz_rounded,
-                  color: AppColors.gold,
-                  textColor: Colors.black,
-                  onTap: () {
-                    AppToast.info(
-                      context,
-                      message: 'Quick Transfer',
-                      subtitle: 'Direct transfer feature is coming soon!',
-                    );
-                  },
+                  label: "Spending Analytics",
+                  icon: Icons.insights_rounded,
+                  color: AppColors.surfaceElevated,
+                  textColor: Colors.white,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AnalysisScreen(
+                        initialBankFilter: sender.senderName,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -930,6 +992,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     required IconData icon,
     required Color color,
     Color textColor = Colors.white,
+    Widget? badge,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -947,19 +1010,30 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            Icon(icon, color: textColor.withValues(alpha: 0.8), size: 24),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: textColor.withValues(alpha: 0.8), size: 24),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
+            if (badge != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: badge,
+              ),
           ],
         ),
       ),
@@ -1271,42 +1345,185 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
-  Widget _buildActivityFilterSection() {
-    const tabs = ['All', 'Income', 'Expense'];
-    final selectedIdx = tabs.indexOf(_typeFilter).clamp(0, 2);
+  Widget _buildActivityFilterSection(
+      int totalCount, List<String> senderOptions) {
+    final bool hasActiveFilters = _isBookmarkedOnly ||
+        _typeFilter != 'All' ||
+        _senderFilter != 'All Senders' ||
+        _dateRangeFilter != 'All Time' ||
+        _sortBy != 'Date: Newest';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // AppCapsuleTabBar component
-          AppCapsuleTabBar(
-            tabs: tabs,
-            selectedIndex: selectedIdx,
-            onTabChanged: (idx) {
-              setState(() {
-                _typeFilter = tabs[idx];
-              });
-            },
-            height: 44,
-            fontSize: 13,
-            borderRadius: 24,
-            indicatorRadius: 20,
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'ACTIVITY',
-            style: TextStyle(
-              color: AppColors.textSoft,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+          // Filter Pills Row (Horizontal Scroll)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _buildBookmarkFilterPill(),
+                const SizedBox(width: 8),
+                _buildFilterDropdown(
+                  value: _typeFilter,
+                  items: const ['All', 'Income', 'Expense'],
+                  icon: Icons.swap_horiz_rounded,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _typeFilter = val);
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterDropdown(
+                  value: _senderFilter,
+                  items: senderOptions,
+                  icon: Icons.person_outline_rounded,
+                  maxWidth: 140,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _senderFilter = val);
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterDropdown(
+                  value: _sortBy,
+                  items: const [
+                    'Date: Newest',
+                    'Date: Oldest',
+                    'Amount: High-Low',
+                    'Amount: Low-High',
+                  ],
+                  icon: Icons.sort_rounded,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _sortBy = val);
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildFilterDropdown(
+                  value: _dateRangeFilter,
+                  items: const ['All Time', '7D', '30D', '90D', '1Y'],
+                  icon: Icons.calendar_today_rounded,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _dateRangeFilter = val);
+                  },
+                ),
+                if (hasActiveFilters) ...[
+                  const SizedBox(width: 8),
+                  AppResetFilterButton(
+                    onTap: () {
+                      setState(() {
+                        _isBookmarkedOnly = false;
+                        _typeFilter = 'All';
+                        _senderFilter = 'All Senders';
+                        _dateRangeFilter = 'All Time';
+                        _sortBy = 'Date: Newest';
+                      });
+                    },
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
+
+          // Header Label with Count
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ACTIVITY ($totalCount)',
+                style: const TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              if (hasActiveFilters)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.positive.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: const Text(
+                    'Filtered',
+                    style: TextStyle(
+                      color: AppColors.positive,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
         ],
       ),
+    );
+  }
+
+  Widget _buildBookmarkFilterPill() {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _isBookmarkedOnly = !_isBookmarkedOnly;
+        });
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: _isBookmarkedOnly
+              ? AppColors.gold.withValues(alpha: 0.18)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _isBookmarkedOnly
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              size: 14,
+              color: _isBookmarkedOnly ? AppColors.gold : AppColors.textSoft,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Bookmarked',
+              style: TextStyle(
+                color:
+                    _isBookmarkedOnly ? AppColors.gold : AppColors.textSoft,
+                fontSize: 11.5,
+                fontWeight:
+                    _isBookmarkedOnly ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterDropdown({
+    required String value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String?> onChanged,
+    double? maxWidth,
+  }) {
+    return AppDropdown.simple(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      variant: AppDropdownVariant.dark,
+      maxWidth: maxWidth,
+      icon: icon,
     );
   }
 
@@ -1383,7 +1600,27 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDateGroupHeader(headerLabel, isFirst: groupIdx == 0),
-            ...dayTxs.map((tx) => _buildTransactionItem(tx)),
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (int i = 0; i < dayTxs.length; i++) ...[
+                    _buildTransactionItem(dayTxs[i]),
+                    if (i < dayTxs.length - 1)
+                      Container(
+                        height: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        color: Colors.white.withValues(alpha: 0.05),
+                      ),
+                  ],
+                ],
+              ),
+            ),
           ],
         );
       },
@@ -1397,115 +1634,115 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         ? (isIncome ? 'From $partyName' : 'For $partyName')
         : (isIncome ? 'Deposit' : 'Transfer');
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => TransactionDetailScreen(transaction: tx)),
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => TransactionDetailScreen(transaction: tx)),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isIncome
-                    ? AppColors.positive.withValues(alpha: 0.12)
-                    : AppColors.negative.withValues(alpha: 0.12),
+        splashColor: Colors.white.withValues(alpha: 0.04),
+        highlightColor: Colors.white.withValues(alpha: 0.02),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isIncome
+                      ? AppColors.positive.withValues(alpha: 0.12)
+                      : AppColors.negative.withValues(alpha: 0.12),
+                ),
+                child: Icon(
+                  isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
+                  size: 20,
+                  color: isIncome ? AppColors.positive : AppColors.negative,
+                ),
               ),
-              child: Icon(
-                isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
-                size: 20,
-                color: isIncome ? AppColors.positive : AppColors.negative,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          tx.resolvedReason ?? (isIncome ? 'Deposit' : 'Expense'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.2,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            tx.resolvedReason ?? (isIncome ? 'Deposit' : 'Expense'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
                           ),
                         ),
-                      ),
-                      if (tx.isBookmarked) ...[
-                        const SizedBox(width: 5),
-                        const BookmarkBadge(),
+                        if (tx.isBookmarked) ...[
+                          const SizedBox(width: 5),
+                          const BookmarkBadge(),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    partyLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
-                      fontSize: 12,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Consumer<FinanceProvider>(
-              builder: (context, provider, child) {
-                final isVisible = provider.isBalanceVisible;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    isVisible
-                        ? CurrencyTextWidget(
-                            amount: tx.amount,
-                            showSign: true,
-                            style: TextStyle(
-                              color: isIncome ? AppColors.positive : Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            customFormattedStr:
-                                NumberFormat('#,##0.00').format(tx.amount),
-                          )
-                        : Text(
-                            '****',
-                            style: TextStyle(
-                              color: isIncome ? AppColors.positive : Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                     const SizedBox(height: 4),
                     Text(
-                      DateFormat('hh:mm a').format(tx.date),
+                      partyLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.textSoft,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
                       ),
                     ),
                   ],
-                );
-              },
-            ),
-          ],
+                ),
+              ),
+              Consumer<FinanceProvider>(
+                builder: (context, provider, child) {
+                  final isVisible = provider.isBalanceVisible;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      isVisible
+                          ? CurrencyTextWidget(
+                              amount: tx.amount,
+                              showSign: true,
+                              style: TextStyle(
+                                color: isIncome ? AppColors.positive : Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              customFormattedStr:
+                                  NumberFormat('#,##0.00').format(tx.amount),
+                            )
+                          : Text(
+                              '****',
+                              style: TextStyle(
+                                color: isIncome ? AppColors.positive : Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('hh:mm a').format(tx.date),
+                        style: const TextStyle(
+                          color: AppColors.textSoft,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -15,6 +15,8 @@ class WalletsScreen extends StatefulWidget {
 }
 
 class _WalletsScreenState extends State<WalletsScreen> {
+  bool _isPausedSectionExpanded = false;
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
@@ -110,7 +112,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                 isBalanceVisible: provider.isBalanceVisible,
                                 isPaused: false,
                                 onTap: () => Navigator.push(
-                                  context,
+                                   context,
                                   MaterialPageRoute(
                                     builder: (_) =>
                                         SenderDetailScreen(sender: sender),
@@ -124,38 +126,43 @@ class _WalletsScreenState extends State<WalletsScreen> {
                               return _buildCashWalletRow(context, provider);
                             }
 
-                            // 3. Paused Section Header
+                            // 3. Paused Section Collapsible Header Card
                             if (index == activeCount + 1 &&
                                 pausedSenders.isNotEmpty) {
                               return _buildPausedSectionHeader(
-                                  context, pausedSenders.length);
+                                context,
+                                pausedSenders.length,
+                                isExpanded: _isPausedSectionExpanded,
+                                onToggle: () {
+                                  setState(() {
+                                    _isPausedSectionExpanded =
+                                        !_isPausedSectionExpanded;
+                                  });
+                                },
+                              );
                             }
 
-                            // 4. Paused Bank Cards (Below Cash Wallet)
-                            final int pausedIndex =
-                                index - (activeCount + 2);
-                            if (pausedIndex >= 0 &&
-                                pausedIndex < pausedSenders.length) {
-                              final sender = pausedSenders[pausedIndex];
-                              final double balance =
-                                  provider.balanceForSender(sender.senderName);
-                              final int txCount =
-                                  provider.txCountForSender(sender.senderName);
+                            // 4. Paused Bank Cards (Shown only when expanded)
+                            if (_isPausedSectionExpanded) {
+                              final int pausedIndex =
+                                  index - (activeCount + 2);
+                              if (pausedIndex >= 0 &&
+                                  pausedIndex < pausedSenders.length) {
+                                final sender = pausedSenders[pausedIndex];
+                                final double balance =
+                                    provider.balanceForSender(sender.senderName);
+                                final int txCount =
+                                    provider.txCountForSender(sender.senderName);
 
-                              return _WalletCard(
-                                senderName: sender.senderName,
-                                balance: balance,
-                                txCount: txCount,
-                                isBalanceVisible: provider.isBalanceVisible,
-                                isPaused: true,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        SenderDetailScreen(sender: sender),
-                                  ),
-                                ),
-                              );
+                                return _WalletCard(
+                                  senderName: sender.senderName,
+                                  balance: balance,
+                                  txCount: txCount,
+                                  isBalanceVisible: false,
+                                  isPaused: true,
+                                  onTap: () {},
+                                );
+                              }
                             }
 
                             return const SizedBox.shrink();
@@ -163,7 +170,10 @@ class _WalletsScreenState extends State<WalletsScreen> {
                           childCount: provider.activeSenders.length +
                               1 +
                               (provider.pausedSenders.isNotEmpty
-                                  ? 1 + provider.pausedSenders.length
+                                  ? (1 +
+                                      (_isPausedSectionExpanded
+                                          ? provider.pausedSenders.length
+                                          : 0))
                                   : 0),
                         ),
                       ),
@@ -175,46 +185,53 @@ class _WalletsScreenState extends State<WalletsScreen> {
     );
   }
 
-  Widget _buildPausedSectionHeader(BuildContext context, int count) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 14),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.pausedBadge.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(100),
+  Widget _buildPausedSectionHeader(
+    BuildContext context,
+    int count, {
+    required bool isExpanded,
+    required VoidCallback onToggle,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onToggle();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(top: 14, bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            AppBadge.warning(
+              text: 'PAUSED TRACKING ($count)',
+              icon: Icons.pause_circle_rounded,
+              size: AppBadgeSize.small,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.pause_circle_rounded,
-                  color: AppColors.pausedBadge,
-                  size: 13,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'PAUSED TRACKING ($count)',
-                  style: const TextStyle(
-                    color: AppColors.pausedBadge,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
+            const Spacer(),
+            Text(
+              isExpanded ? 'Hide' : 'Show',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.55),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: Colors.white.withValues(alpha: 0.08),
+            const SizedBox(width: 4),
+            AnimatedRotation(
+              turns: isExpanded ? 0.5 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: Colors.white.withValues(alpha: 0.65),
+                size: 18,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

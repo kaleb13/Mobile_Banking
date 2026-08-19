@@ -295,8 +295,9 @@ class __InteractiveFrozenCardPreviewState
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0.00');
-    final balStr =
-        widget.isBalanceVisible ? fmt.format(widget.balance) : '****,***.**';
+    final balStr = (widget.isBalanceVisible && !widget.isPaused)
+        ? fmt.format(widget.balance)
+        : '****,***.**';
     final parts = balStr.split('.');
 
     final bool isDarkTextTheme = BankCardWidget.isDarkTextTheme(

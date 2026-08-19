@@ -159,7 +159,21 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     );
   }
 
+  bool _isProtectedTopCategory(AppReason reason) {
+    return reason.isTopLevelCategory &&
+        reason.name.trim().toLowerCase() == 'mobile & internet';
+  }
+
+  bool _isProtectedSubcategory(AppReason reason) {
+    if (!reason.isSubcategory) return false;
+    final nameLower = reason.name.trim().toLowerCase();
+    return nameLower == 'airtime' || nameLower == 'package';
+  }
+
   void _showCategoryOptionsModal(BuildContext context, FinanceProvider provider, AppReason reason) {
+    final isTopProtected = _isProtectedTopCategory(reason);
+    final isSubProtected = _isProtectedSubcategory(reason);
+
     AppDrawer.show(
       context: context,
       builder: (sheetCtx) {
@@ -168,21 +182,34 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             icon: Icons.category_outlined,
             iconColor: AppColors.positive,
             title: reason.name,
-            subtitle: reason.isSubcategory ? 'Subcategory Options' : 'Category Options',
+            subtitle: isSubProtected
+                ? 'System Locked Reason'
+                : isTopProtected
+                    ? 'System Category'
+                    : reason.isSubcategory
+                        ? 'Subcategory Options'
+                        : 'Category Options',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Colors.white70),
-                title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  _showAddCategoryDialog(context, provider, existing: reason);
-                },
-              ),
-              if (reason.isTopLevelCategory)
+              if (isSubProtected)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text(
+                    'This is a locked system reason used for automatic SMS transaction detection. It cannot be renamed or deleted.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                )
+              else if (isTopProtected) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'This is a core system category and cannot be renamed or deleted. You can still add, edit, or remove custom subcategories inside it.',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ),
                 ListTile(
                   leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
                   title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
@@ -191,14 +218,33 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     _showAddCategoryDialog(context, provider, parentCategory: reason);
                   },
                 ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
-                title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  _confirmDeleteCategory(context, provider, reason);
-                },
-              ),
+              ] else ...[
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined, color: Colors.white70),
+                  title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _showAddCategoryDialog(context, provider, existing: reason);
+                  },
+                ),
+                if (reason.isTopLevelCategory)
+                  ListTile(
+                    leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
+                    title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _showAddCategoryDialog(context, provider, parentCategory: reason);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
+                  title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _confirmDeleteCategory(context, provider, reason);
+                  },
+                ),
+              ],
             ],
           ),
         );
@@ -367,9 +413,23 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             ListTile(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-              title: Text(
-                category.name,
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      category.name,
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (_isProtectedTopCategory(category))
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: AppBadge.info(
+                        text: 'System',
+                        size: AppBadgeSize.small,
+                      ),
+                    ),
+                ],
               ),
               subtitle: Text(
                 '${subcategories.length} subcategories',
@@ -397,6 +457,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     const Divider(color: Colors.white10, height: 1),
                     const SizedBox(height: 6),
                     ...subcategories.map((sub) {
+                      final isSubLocked = _isProtectedSubcategory(sub);
                       return Container(
                         margin: const EdgeInsets.only(bottom: 4),
                         decoration: BoxDecoration(
@@ -419,6 +480,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                                       style: const TextStyle(color: Colors.white70, fontSize: 13),
                                     ),
                                   ),
+                                  if (isSubLocked)
+                                    const AppBadge.info(
+                                      text: 'Locked',
+                                      size: AppBadgeSize.small,
+                                    ),
                                 ],
                               ),
                             ),

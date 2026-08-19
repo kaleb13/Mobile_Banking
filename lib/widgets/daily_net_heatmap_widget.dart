@@ -152,10 +152,10 @@ class DailyNetHeatmapWidget extends StatelessWidget {
               child: Text(
                 headerLabel,
                 style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.3,
+                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -268,38 +268,16 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    '$dayNum',
-                                    style: TextStyle(
-                                      color: textColor.withValues(alpha: 0.85),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '$dayNum',
+                                style: TextStyle(
+                                  color: textColor.withValues(alpha: 0.85),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                if (isSelectedDay || isDayModeActive)
-                                  Container(
-                                    width: 4.5,
-                                    height: 4.5,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.white.withValues(alpha: 0.65),
-                                          blurRadius: 3.0,
-                                          spreadRadius: 0.5,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
                             if (formattedNet.isNotEmpty)
                               FittedBox(
@@ -358,10 +336,10 @@ class DailyNetHeatmapWidget extends StatelessWidget {
               child: Text(
                 'Quarterly Net · $quarterName',
                 style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.3,
+                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
                 ),
               ),
             ),
@@ -519,10 +497,10 @@ class DailyNetHeatmapWidget extends StatelessWidget {
               child: Text(
                 'Annual Net Matrix · $selectedYear',
                 style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -0.3,
+                  color: AppColors.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
                 ),
               ),
             ),

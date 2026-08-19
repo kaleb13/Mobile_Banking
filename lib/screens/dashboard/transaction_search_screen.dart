@@ -10,6 +10,7 @@ import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_reset_filter_button.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
@@ -259,14 +260,6 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                             : FontWeight.w500,
                       ),
                     ),
-                    if (_isBookmarkedOnly) ...[
-                      const SizedBox(width: 4),
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        size: 13,
-                        color: AppColors.gold,
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -319,6 +312,26 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                 if (val != null) setState(() => _senderFilter = val);
               },
             ),
+            if (_isBookmarkedOnly ||
+                _typeFilter != 'All' ||
+                !_dateFilterValue.isDefault ||
+                _bankFilter != 'All Banks' ||
+                _senderFilter != 'All Senders' ||
+                _sortBy != 'Date: Newest') ...[
+              const SizedBox(width: 8),
+              AppResetFilterButton(
+                onTap: () {
+                  setState(() {
+                    _isBookmarkedOnly = false;
+                    _typeFilter = 'All';
+                    _dateFilterValue = const AppDateFilterValue.anyTime();
+                    _bankFilter = 'All Banks';
+                    _senderFilter = 'All Senders';
+                    _sortBy = 'Date: Newest';
+                  });
+                },
+              ),
+            ],
           ],
         ),
       ),
@@ -553,7 +566,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
       img = SvgPicture.asset('assets/images/Dashen_Bank_Logo.svg',
-          width: 22, height: 22, fit: BoxFit.contain,
+          width: 25, height: 25, fit: BoxFit.contain,
           colorFilter: const ColorFilter.mode(AppColors.cardDashenDark, BlendMode.srcIn));
       bgColor = AppColors.cardDashenLight.withValues(alpha: 0.15);
     } else if (nameUp.contains('CASH')) {

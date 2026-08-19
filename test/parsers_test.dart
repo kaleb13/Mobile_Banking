@@ -71,6 +71,70 @@ void main() {
       expect(tx.name, equals('Telebirr'));
       expect(tx.id, equals('TB12345'));
     });
+
+    test('parses bank transfer and extracts account number only as recipient', () {
+      const sms =
+          "Dear Kaleb\nYou have transferred ETB 460.00 successfully from your telebirr account 251972665987 to Commercial Bank of Ethiopia account number 1000342078177 on 18/08/2026 21:21:41. Your telebirr transaction number is DHI6W98782 and your bank transaction number is FT26231CLLMV. The service fee is  ETB 2.61 and  15% VAT on the service fee is ETB 0.39. Your current balance is ETB 652.32. To download your payment information please click this link: https://transactioninfo.ethiotelecom.et/receipt/DHI6W98782\nThank you for using telebirr\nEthio telecom";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(460.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.name, equals('Telebirr'));
+      expect(tx.id, equals('DHI6W98782'));
+      expect(tx.sender, equals('1000342078177'));
+      expect(tx.totalBalance, equals(652.32));
+    });
+
+    test('parses package purchase and extracts phone number with locked Package reason', () {
+      const sms =
+          "Dear KALEB\nYou have paid ETB 50.00 for package subscription to 972665987 on 20/04/2024 07:10:41. Your transaction number is  BDK7PQVAMX. Your current balance is ETB 24.61.\nFor any support and information related to telebirr service\nThank you for using telebirr\nEthio telecom";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(50.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.name, equals('Telebirr'));
+      expect(tx.id, equals('BDK7PQVAMX'));
+      expect(tx.sender, equals('972665987'));
+      expect(tx.reason, equals('Package'));
+      expect(tx.customReasonText, isNull);
+      expect(tx.note, isNull);
+      expect(tx.isReasonLocked, isTrue);
+      expect(tx.totalBalance, equals(24.61));
+    });
+
+    test('parses detailed package purchase and extracts phone number with locked Package reason', () {
+      const sms =
+          "Dear KALEB\nYou have paid ETB 130.00 for package Monthly Voice plus Data Package: 1.2 GB and 168Min purchase made for 972665987 on 15/08/2026 20:48:44. Your transaction number is  DHF1TGBPYB. Your current balance is ETB 774.32.To download your payment information please click this link: https://transactioninfo.ethiotelecom.et/receipt/DHF1TGBPYB\nThank you for using telebirr\nEthio telecom";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(130.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.name, equals('Telebirr'));
+      expect(tx.id, equals('DHF1TGBPYB'));
+      expect(tx.sender, equals('972665987'));
+      expect(tx.reason, equals('Package'));
+      expect(tx.customReasonText, isNull);
+      expect(tx.note, isNull);
+      expect(tx.isReasonLocked, isTrue);
+      expect(tx.totalBalance, equals(774.32));
+    });
+
+    test('parses airtime recharge outflow and extracts phone number with locked Airtime reason', () {
+      const sms =
+          "Dear KALEB \nYou have recharged ETB 50.00 airtime for 251972665987 on 04/04/2024 14:26:46. Your transaction number is BD45KRON6P. Your current  balance is  ETB 39.69. \nFor any support and information related to telebirr service\nThank you for using telebirr\nEthio telecom";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(50.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.name, equals('Telebirr'));
+      expect(tx.id, equals('BD45KRON6P'));
+      expect(tx.sender, equals('251972665987'));
+      expect(tx.reason, equals('Airtime'));
+      expect(tx.customReasonText, isNull);
+      expect(tx.note, isNull);
+      expect(tx.isReasonLocked, isTrue);
+      expect(tx.totalBalance, equals(39.69));
+    });
   });
 
   group('AhaduParser', () {

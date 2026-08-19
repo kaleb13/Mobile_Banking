@@ -84,8 +84,8 @@ class BankAvatar extends StatelessWidget {
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
       img = SvgPicture.asset(
         'assets/images/Dashen_Bank_Logo.svg',
-        width: iconSize,
-        height: iconSize,
+        width: iconSize * 1.15,
+        height: iconSize * 1.15,
         fit: BoxFit.contain,
         colorFilter: ColorFilter.mode(
           isLight ? AppColors.cardDashenDark : Colors.white,

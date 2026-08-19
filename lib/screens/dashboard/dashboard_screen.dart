@@ -20,6 +20,7 @@ import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
+import '../../widgets/app_reset_filter_button.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../domain/usecases/analytics/get_balance_history_usecase.dart';
@@ -1158,7 +1159,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               // Drag Handle
               Center(
                 child: InteractiveDragHandle(
-                  color: const Color(0xFFCBD5E1),
+                  color: AppColors.darkGreyText,
                   width: 36,
                   padding: const EdgeInsets.only(top: 10, bottom: 6),
                   onTap: () {
@@ -1217,7 +1218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Icons.filter_list,
                         color: _isFilterExpanded
                             ? AppColors.darkCharcoal
-                            : AppColors.overlayDark50,
+                            : AppColors.darkGreyText,
                         size: 22,
                       ),
                     ),
@@ -1315,14 +1316,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         : FontWeight.w500,
                                   ),
                                 ),
-                                if (_isBookmarkedOnly) ...[
-                                  const SizedBox(width: 4),
-                                  const Icon(
-                                    Icons.check_circle_rounded,
-                                    size: 13,
-                                    color: AppColors.gold,
-                                  ),
-                                ],
                               ],
                             ),
                           ),
@@ -1398,6 +1391,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             }
                           },
                         ),
+                        if (_isBookmarkedOnly ||
+                            _typeFilter != 'All' ||
+                            _dateFilterValue.preset != AppDateFilterPreset.last30Days ||
+                            _bankFilter != 'All Banks' ||
+                            _senderFilter != 'All Senders' ||
+                            _sortBy != 'Date: Newest') ...[
+                          const SizedBox(width: 8),
+                          AppResetFilterButton(
+                            onTap: () {
+                              setState(() {
+                                _isBookmarkedOnly = false;
+                                _typeFilter = 'All';
+                                _dateFilterValue = const AppDateFilterValue.last30Days();
+                                _bankFilter = 'All Banks';
+                                _senderFilter = 'All Senders';
+                                _sortBy = 'Date: Newest';
+                                _displayedLimit = 30;
+                              });
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1590,8 +1604,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
       img = SvgPicture.asset(
         'assets/images/Dashen_Bank_Logo.svg',
-        width: 22,
-        height: 22,
+        width: 25,
+        height: 25,
         fit: BoxFit.contain,
         colorFilter: const ColorFilter.mode(AppColors.cardDashenDark, BlendMode.srcIn),
       );

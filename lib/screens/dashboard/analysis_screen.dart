@@ -8,8 +8,9 @@ import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_dropdown.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_reset_filter_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/daily_net_heatmap_widget.dart';
@@ -17,13 +18,18 @@ import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/app_search_bar.dart';
+import '../../widgets/app_drawer.dart';
 import 'category_detail_screen.dart';
+import 'all_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
 enum PeriodFilter { day, week, month, quarter, year }
 
 class AnalysisScreen extends StatefulWidget {
-  const AnalysisScreen({super.key});
+  final String? initialBankFilter;
+
+  const AnalysisScreen({super.key, this.initialBankFilter});
 
   @override
   State<AnalysisScreen> createState() => _AnalysisScreenState();
@@ -31,6 +37,12 @@ class AnalysisScreen extends StatefulWidget {
 
 class _AnalysisScreenState extends State<AnalysisScreen>
     with TickerProviderStateMixin {
+  late String _selectedBank;
+  String? _selectedCounterparty;
+  bool _isFilterExpanded = false;
+  bool _isBankPerformanceExpanded = false;
+  bool _isPersonContactExpanded = false;
+  bool _isCategoryAnalysisExpanded = false;
   PeriodFilter _selectedPeriod = PeriodFilter.month;
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
   int _selectedSubPeriodIndex = 0;
@@ -89,6 +101,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   @override
   void initState() {
     super.initState();
+    _selectedBank = _normalizeBankName(widget.initialBankFilter ?? 'All Wallets');
     _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(_selectedPeriod);
     _subPeriodScrollController = PageController(
       initialPage: _selectedSubPeriodIndex,
@@ -111,12 +124,220 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     _fadeCtrl.forward();
   }
 
+  String _normalizeBankName(String raw) {
+    final up = raw.toUpperCase();
+    if (up.contains('TELEBIRR')) return 'Telebirr';
+    if (up.contains('CBE BIRR') || up.contains('CBEBIRR')) return 'CBE Birr';
+    if (up == 'CBE' || up.contains('COMMERCIAL BANK')) return 'CBE';
+    if (up.contains('AHADU')) return 'Ahadu';
+    if (up.contains('DASHEN')) return 'Dashen';
+    if (up.contains('BOA') || up.contains('ABYSSINIA')) return 'BOA';
+    if (up.contains('CASH')) return 'Cash Wallet';
+    if (up == 'ALL' || up == 'ALL BANKS' || up == 'ALL WALLETS') return 'All Wallets';
+    return raw.trim();
+  }
+
+  bool _matchesBank(AppTransaction tx, String bank) {
+    if (bank == 'All' || bank == 'All Banks' || bank == 'All Wallets') return true;
+    final bUp = bank.toUpperCase();
+    final tNameUp = tx.name.toUpperCase();
+    final tSenderUp = tx.sender.toUpperCase();
+
+    if (bUp.contains('TELEBIRR')) {
+      return tNameUp.contains('TELEBIRR') || tSenderUp.contains('TELEBIRR');
+    } else if (bUp == 'CBE BIRR' || bUp == 'CBEBIRR') {
+      return tNameUp.contains('CBE BIRR') ||
+          tNameUp.contains('CBEBIRR') ||
+          tSenderUp.contains('CBE BIRR') ||
+          tSenderUp.contains('CBEBIRR');
+    } else if (bUp == 'CBE' || bUp.contains('COMMERCIAL BANK')) {
+      return (tNameUp == 'CBE' ||
+              tSenderUp == 'CBE' ||
+              tNameUp.contains('COMMERCIAL BANK')) &&
+          !tNameUp.contains('BIRR') &&
+          !tSenderUp.contains('BIRR');
+    } else if (bUp.contains('AHADU')) {
+      return tNameUp.contains('AHADU') || tSenderUp.contains('AHADU');
+    } else if (bUp.contains('DASHEN')) {
+      return tNameUp.contains('DASHEN') || tSenderUp.contains('DASHEN');
+    } else if (bUp.contains('BOA') || bUp.contains('ABYSSINIA')) {
+      return tNameUp.contains('BOA') ||
+          tSenderUp.contains('BOA') ||
+          tNameUp.contains('ABYSSINIA') ||
+          tSenderUp.contains('ABYSSINIA');
+    }
+    return tNameUp.contains(bUp) || tSenderUp.contains(bUp);
+  }
+
+  List<String> _getAvailableBanks(FinanceProvider provider) {
+    final List<String> result = ['All Wallets'];
+    final Set<String> seen = {'All Wallets'};
+
+    for (final s in provider.senders) {
+      final name = _normalizeBankName(s.senderName);
+      if (name.isNotEmpty && seen.add(name)) {
+        result.add(name);
+      }
+    }
+    for (final tx in provider.transactions) {
+      final name = _normalizeBankName(tx.name.isNotEmpty ? tx.name : tx.sender);
+      if (name.isNotEmpty && seen.add(name)) {
+        result.add(name);
+      }
+    }
+    if (provider.cashTransactions.isNotEmpty && seen.add('Cash Wallet')) {
+      result.add('Cash Wallet');
+    }
+    return result;
+  }
+
   @override
   void dispose() {
     _morphCtrl.dispose();
     _fadeCtrl.dispose();
     _subPeriodScrollController.dispose();
     super.dispose();
+  }
+
+  List<({String label, String shortLabel})> _getSubPeriodItemsFormatted() {
+    final now = DateTime.now();
+    switch (_selectedPeriod) {
+      case PeriodFilter.day:
+        final DateFormat dayFmt = DateFormat('E, MMM d');
+        final DateFormat shortFmt = DateFormat('MMM d');
+        return List.generate(14, (i) {
+          final d = now.subtract(Duration(days: 13 - i));
+          if (d.year == now.year && d.month == now.month && d.day == now.day) {
+            return (label: 'Today', shortLabel: 'Today');
+          }
+          final yesterday = now.subtract(const Duration(days: 1));
+          if (d.year == yesterday.year &&
+              d.month == yesterday.month &&
+              d.day == yesterday.day) {
+            return (label: 'Yesterday', shortLabel: 'Yesterday');
+          }
+          return (label: dayFmt.format(d), shortLabel: shortFmt.format(d));
+        });
+      case PeriodFilter.week:
+        return [
+          (label: '4 Wks Ago', shortLabel: '4 Wks Ago'),
+          (label: '3 Wks Ago', shortLabel: '3 Wks Ago'),
+          (label: '2 Wks Ago', shortLabel: '2 Wks Ago'),
+          (label: 'Last Week', shortLabel: 'Last Week'),
+          (label: 'This Week', shortLabel: 'This Week'),
+        ];
+      case PeriodFilter.month:
+        const allMonths = [
+          'January',
+          'February',
+          'March',
+          'April',
+          'May',
+          'June',
+          'July',
+          'August',
+          'September',
+          'October',
+          'November',
+          'December',
+        ];
+        const shortMonths = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        return List.generate(now.month, (i) {
+          return (label: allMonths[i], shortLabel: shortMonths[i]);
+        });
+      case PeriodFilter.quarter:
+        return [
+          (label: 'Q1 (Jan - Mar)', shortLabel: 'Q1'),
+          (label: 'Q2 (Apr - Jun)', shortLabel: 'Q2'),
+          (label: 'Q3 (Jul - Sep)', shortLabel: 'Q3'),
+          (label: 'Q4 (Oct - Dec)', shortLabel: 'Q4'),
+        ];
+      case PeriodFilter.year:
+        return [
+          (
+            label: (now.year - 2).toString(),
+            shortLabel: (now.year - 2).toString()
+          ),
+          (
+            label: (now.year - 1).toString(),
+            shortLabel: (now.year - 1).toString()
+          ),
+          (label: now.year.toString(), shortLabel: now.year.toString()),
+        ];
+    }
+  }
+
+  Widget _buildSubPeriodSelector() {
+    final items = _getSubPeriodItemsFormatted();
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final safeIndex = _selectedSubPeriodIndex.clamp(0, items.length - 1);
+
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final isSelected = index == safeIndex;
+          final item = items[index];
+
+          return GestureDetector(
+            onTap: () {
+              final defaultIdx = _getDefaultSubPeriodIndex(_selectedPeriod);
+              final targetIdx =
+                  (isSelected && index != defaultIdx) ? defaultIdx : index;
+              _onSubPeriodChanged(index);
+              if (_subPeriodScrollController.hasClients) {
+                _subPeriodScrollController.jumpToPage(targetIdx);
+              }
+            },
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.surfaceElevated
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Center(
+                child: Text(
+                  item.label,
+                  style: TextStyle(
+                    color: isSelected
+                        ? Colors.white
+                        : AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   List<String> _getSubPeriodItems() {
@@ -130,13 +351,21 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             return 'Today';
           }
           final yesterday = now.subtract(const Duration(days: 1));
-          if (d.year == yesterday.year && d.month == yesterday.month && d.day == yesterday.day) {
+          if (d.year == yesterday.year &&
+              d.month == yesterday.month &&
+              d.day == yesterday.day) {
             return 'Yesterday';
           }
           return dayFmt.format(d);
         });
       case PeriodFilter.week:
-        return ['4 Wks Ago', '3 Wks Ago', '2 Wks Ago', 'Last Week', 'This Week'];
+        return [
+          '4 Wks Ago',
+          '3 Wks Ago',
+          '2 Wks Ago',
+          'Last Week',
+          'This Week'
+        ];
       case PeriodFilter.month:
         const allMonths = [
           'January',
@@ -154,7 +383,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ];
         return allMonths.sublist(0, now.month);
       case PeriodFilter.quarter:
-        return ['Q1 (Jan-Mar)', 'Q2 (Apr-Jun)', 'Q3 (Jul-Sep)', 'Q4 (Oct-Dec)'];
+        return [
+          'Q1 (Jan-Mar)',
+          'Q2 (Apr-Jun)',
+          'Q3 (Jul-Sep)',
+          'Q4 (Oct-Dec)'
+        ];
       case PeriodFilter.year:
         return [
           (now.year - 2).toString(),
@@ -207,10 +441,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   void _onSubPeriodChanged(int index) {
-    if (_selectedSubPeriodIndex == index) return;
     HapticFeedback.selectionClick();
+    final defaultIndex = _getDefaultSubPeriodIndex(_selectedPeriod);
     _changeFilter(() {
-      _selectedSubPeriodIndex = index;
+      if (_selectedSubPeriodIndex == index && index != defaultIndex) {
+        // Toggle off: revert back to current / default sub-period
+        _selectedSubPeriodIndex = defaultIndex;
+      } else {
+        _selectedSubPeriodIndex = index;
+      }
       _selectedHeatmapDay = null;
     });
   }
@@ -396,21 +635,35 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     List<AppTransaction> filteredBankTxs = [];
     List<CashTransaction> filteredCashTxs = [];
 
-    for (var tx in provider.transactions) {
-      final reasonStr = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? '').trim().toLowerCase();
-      if (reasonStr == 'bounce' ||
-          reasonStr == 'internal transfer' ||
-          reasonStr == 'cash') {
-        continue;
-      }
-      if (_matchesFilter(tx.date, now, year)) {
-        filteredBankTxs.add(tx);
+    final isCashOnly = _selectedBank == 'Cash Wallet';
+    final isAll = _selectedBank == 'All Wallets' ||
+        _selectedBank == 'All Banks' ||
+        _selectedBank == 'All';
+
+    if (!isCashOnly) {
+      for (var tx in provider.transactions) {
+        final reasonStr = (tx.reason ??
+                tx.customReasonText ??
+                tx.resolvedReason ??
+                '')
+            .trim()
+            .toLowerCase();
+        if (reasonStr == 'bounce' ||
+            reasonStr == 'internal transfer' ||
+            reasonStr == 'cash') {
+          continue;
+        }
+        if (_matchesFilter(tx.date, now, year) && _matchesBank(tx, _selectedBank)) {
+          filteredBankTxs.add(tx);
+        }
       }
     }
 
-    for (var tx in provider.cashTransactions) {
-      if (_matchesFilter(tx.date, now, year)) {
-        filteredCashTxs.add(tx);
+    if (isAll || isCashOnly) {
+      for (var tx in provider.cashTransactions) {
+        if (_matchesFilter(tx.date, now, year)) {
+          filteredCashTxs.add(tx);
+        }
       }
     }
 
@@ -533,21 +786,34 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       'Telebirr': (inVal: 0.0, outVal: 0.0),
       'CBE Birr': (inVal: 0.0, outVal: 0.0),
       'Ahadu': (inVal: 0.0, outVal: 0.0),
+      'Dashen': (inVal: 0.0, outVal: 0.0),
+      'BOA': (inVal: 0.0, outVal: 0.0),
       'Cash Wallet': (inVal: 0.0, outVal: 0.0),
     };
 
     for (var tx in filteredBankTxs) {
       final nameUpper = tx.name.toUpperCase();
+      final senderUpper = tx.sender.toUpperCase();
       String key = 'CBE';
-      if (nameUpper.contains('TELEBIRR')) {
+      if (nameUpper.contains('TELEBIRR') || senderUpper.contains('TELEBIRR')) {
         key = 'Telebirr';
-      } else if (nameUpper.contains('CBE BIRR') || nameUpper.contains('CBEBIRR')) {
+      } else if (nameUpper.contains('CBE BIRR') ||
+          nameUpper.contains('CBEBIRR') ||
+          senderUpper.contains('CBE BIRR') ||
+          senderUpper.contains('CBEBIRR')) {
         key = 'CBE Birr';
-      } else if (nameUpper.contains('AHADU')) {
+      } else if (nameUpper.contains('AHADU') || senderUpper.contains('AHADU')) {
         key = 'Ahadu';
+      } else if (nameUpper.contains('DASHEN') || senderUpper.contains('DASHEN')) {
+        key = 'Dashen';
+      } else if (nameUpper.contains('BOA') ||
+          nameUpper.contains('ABYSSINIA') ||
+          senderUpper.contains('BOA') ||
+          senderUpper.contains('ABYSSINIA')) {
+        key = 'BOA';
       }
 
-      final curr = bankMap[key]!;
+      final curr = bankMap[key] ?? (inVal: 0.0, outVal: 0.0);
       if (tx.type == 'income') {
         bankMap[key] = (inVal: curr.inVal + tx.amount, outVal: curr.outVal);
       } else if (tx.type == 'expense') {
@@ -564,7 +830,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
 
-    final bankBreakdown = bankMap.entries.map((e) {
+    final bankBreakdown = bankMap.entries
+        .where((e) => e.value.inVal > 0 || e.value.outVal > 0)
+        .map((e) {
       final inV = e.value.inVal;
       final outV = e.value.outVal;
       return (
@@ -770,7 +1038,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   dynamic _getCachedFilteredAnalyticsData(FinanceProvider provider) {
-    final key = '${provider.transactions.length}_${provider.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}';
+    final key = '${provider.transactions.length}_${provider.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_$_selectedBank';
     if (_cachedAnalyticsData != null && _lastAnalyticsCacheKey == key) {
       return _cachedAnalyticsData;
     }
@@ -805,112 +1073,174 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               physics: const BouncingScrollPhysics(),
               child: SafeArea(
                 bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 16),
-                      // ── 1. Top Clean Header ("Analysis") ──
-                      _buildHeader(),
-                      const SizedBox(height: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    // ── 1. Standardized Single Top Header with Filter Action ──
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: AppHeader(
+                        title: _selectedBank != 'All Wallets' &&
+                                _selectedBank != 'All Banks' &&
+                                _selectedBank != 'All'
+                            ? '$_selectedBank Analytics'
+                            : 'Spending Charts',
+                        showBackButton: Navigator.canPop(context),
+                        padding: EdgeInsets.zero,
+                        trailing: GestureDetector(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _isFilterExpanded = !_isFilterExpanded;
+                            });
+                          },
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: _isFilterExpanded
+                                  ? AppColors.surfaceElevated
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.filter_list_rounded,
+                                color: _isFilterExpanded
+                                    ? Colors.white
+                                    : AppColors.textSoft,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
 
-                      // ── 2. Full-Width Period Filter Row (All/Expense/Income + Day/Week/Month/Quarter/Year) ──
-                      _buildPeriodFilterRow(),
-                      const SizedBox(height: 22),
+                    // ── Expandable Dropdown Filters Section (Edge-to-Edge) ──
+                    _buildDropdownFiltersSection(provider),
+                    const SizedBox(height: 12),
 
-                      // ── 3. Dynamic Sub-Period Selector Tabs (Days, Weeks, Months, Quarters, Years) ───────
-                      _buildSubPeriodSelectorTabs(),
-                      const SizedBox(height: 24),
+                    // ── Reacting Sub-Period Filter Selector (Edge-to-Edge) ──
+                    _buildSubPeriodSelector(),
+                    const SizedBox(height: 14),
 
-                      // ── 4. Daily Net Calendar Heatmap Grid Section ───────
-                      DailyNetHeatmapWidget(
-                        bankTransactions: provider.transactions,
-                        cashTransactions: provider.cashTransactions,
-                        periodType: HeatmapPeriodType.values[_selectedPeriod.index],
-                        selectedDate: _getSynchronizedTargetDate(),
-                        highlightedWeekRange: _getSynchronizedWeekRange(),
-                        selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
-                        selectedYear: _selectedPeriod == PeriodFilter.year
-                            ? (DateTime.now().year - (2 - _selectedSubPeriodIndex))
-                            : DateTime.now().year,
-                        selectedDay: _selectedHeatmapDay,
-                        onDaySelected: (day) {
-                          _changeFilter(() {
-                            if (day != null && _selectedPeriod == PeriodFilter.day) {
-                              final now = DateTime.now();
-                              final todayMidnight = DateTime(now.year, now.month, now.day);
-                              final dayMidnight = DateTime(day.year, day.month, day.day);
-                              final diff = todayMidnight.difference(dayMidnight).inDays;
-                              if (diff >= 0 && diff < 14) {
-                                _selectedSubPeriodIndex = 13 - diff;
-                                if (_subPeriodScrollController.hasClients) {
-                                  _subPeriodScrollController.jumpToPage(_selectedSubPeriodIndex);
+                    // ── Main Page Content Sections ──
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── 4. Daily Net Calendar Heatmap Grid Section ───────
+                          DailyNetHeatmapWidget(
+                            bankTransactions: data.filteredBankTxs,
+                            cashTransactions: data.filteredCashTxs,
+                            periodType:
+                                HeatmapPeriodType.values[_selectedPeriod.index],
+                            selectedDate: _getSynchronizedTargetDate(),
+                            highlightedWeekRange: _getSynchronizedWeekRange(),
+                            selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
+                            selectedYear: _selectedPeriod == PeriodFilter.year
+                                ? (DateTime.now().year -
+                                    (2 - _selectedSubPeriodIndex))
+                                : DateTime.now().year,
+                            selectedDay: _selectedHeatmapDay,
+                            onDaySelected: (day) {
+                              _changeFilter(() {
+                                if (day != null &&
+                                    _selectedPeriod == PeriodFilter.day) {
+                                  final now = DateTime.now();
+                                  final todayMidnight =
+                                      DateTime(now.year, now.month, now.day);
+                                  final dayMidnight =
+                                      DateTime(day.year, day.month, day.day);
+                                  final diff = todayMidnight
+                                      .difference(dayMidnight)
+                                      .inDays;
+                                  if (diff >= 0 && diff < 14) {
+                                    _selectedSubPeriodIndex = 13 - diff;
+                                    if (_subPeriodScrollController.hasClients) {
+                                      _subPeriodScrollController
+                                          .jumpToPage(_selectedSubPeriodIndex);
+                                    }
+                                  }
+                                } else {
+                                  _selectedHeatmapDay = day;
                                 }
-                              }
-                            } else {
-                              _selectedHeatmapDay = day;
-                            }
-                          });
-                        },
-                        onMonthSelected: (monthIndex) {
-                          _changeFilter(() {
-                            _selectedPeriod = PeriodFilter.month;
-                            _selectedSubPeriodIndex = monthIndex;
-                            _selectedHeatmapDay = null;
-                            if (_subPeriodScrollController.hasClients) {
-                              _subPeriodScrollController.jumpToPage(monthIndex);
-                            }
-                          });
-                        },
-                        isBalanceVisible: provider.isBalanceVisible,
-                        userLevel: provider.userLevel,
-                      ),
-                      if (_selectedHeatmapDay != null)
-                        _buildActiveDayFilterBanner(),
-                      const SizedBox(height: 24),
+                              });
+                            },
+                            onMonthSelected: (monthIndex) {
+                              _changeFilter(() {
+                                _selectedPeriod = PeriodFilter.month;
+                                _selectedSubPeriodIndex = monthIndex;
+                                _selectedHeatmapDay = null;
+                                if (_subPeriodScrollController.hasClients) {
+                                  _subPeriodScrollController
+                                      .jumpToPage(monthIndex);
+                                }
+                              });
+                            },
+                            isBalanceVisible: provider.isBalanceVisible,
+                            userLevel: provider.userLevel,
+                          ),
+                          if (_selectedHeatmapDay != null)
+                            _buildActiveDayFilterBanner(),
+                          const SizedBox(height: 24),
 
-                      // ── 5. Prominent Inflow / Outflow & Net Cash Flow Summary Section ─────────────────────
-                      _buildRedesignedInflowOutflowNetSection(
-                        data.totalIncome,
-                        data.totalExpense,
-                        data.netPnl,
-                        provider.isBalanceVisible,
-                      ),
-                      const SizedBox(height: 28),
+                          // ── 5. Prominent Inflow / Outflow & Net Cash Flow Summary Section ─────────────────────
+                          _buildRedesignedInflowOutflowNetSection(
+                            data.totalIncome,
+                            data.totalExpense,
+                            data.netPnl,
+                            provider.isBalanceVisible,
+                          ),
+                          const SizedBox(height: 14),
 
-                      // ── 5. Standalone Segmented Distribution Bar ──────────────────────────
-                      _buildStandaloneSegmentedBar(
-                        data.categories,
-                        data.chartTotal,
-                      ),
-                      const SizedBox(height: 14),
+                          // ── 5. Standalone Segmented Distribution Bar ──────────────────────────
+                          _buildStandaloneSegmentedBar(
+                            data.categories,
+                            data.chartTotal,
+                          ),
+                          const SizedBox(height: 10),
 
-                      // ── 6. Category Breakdown & Go Deeper Card ────────────────────────────
-                      _buildCategoryBreakdownCard(
-                        data.categories,
-                        data.chartTotal,
-                        data.netPnl,
-                        provider.isBalanceVisible,
-                      ),
-                      const SizedBox(height: 28),
+                          // ── 6. Category Breakdown & Go Deeper Card ────────────────────────────
+                          _buildCategoryBreakdownCard(
+                            data.categories,
+                            data.chartTotal,
+                            data.netPnl,
+                            provider.isBalanceVisible,
+                          ),
+                          const SizedBox(height: 14),
 
-                      // ── 7. Redesigned Reason Analysis Section ──────────────
-                      _buildReasonBreakdownSection(
-                        data.filteredBankTxs,
-                        data.filteredCashTxs,
-                        provider,
-                      ),
-                      const SizedBox(height: 36),
+                          // ── 7. Redesigned Category Analysis Card ────────────────
+                          _buildReasonBreakdownSection(
+                            data.filteredBankTxs,
+                            data.filteredCashTxs,
+                            provider,
+                          ),
+                          const SizedBox(height: 14),
 
-                      // ── 8. Redesigned Bank Performance Breakdown ───────────
-                      _buildRedesignedBankPerformance(
-                        data.bankBreakdown,
-                        provider.isBalanceVisible,
+                          // ── 8. Person & Counterparty Analytics Section ─────────
+                          _buildCounterpartyAnalyticsSection(
+                            data.filteredBankTxs,
+                            provider,
+                          ),
+                          const SizedBox(height: 14),
+
+                          // ── 9. Redesigned Bank Performance Breakdown ───────────
+                          _buildRedesignedBankPerformance(
+                            data.bankBreakdown,
+                            data.filteredBankTxs,
+                            data.filteredCashTxs,
+                            provider.isBalanceVisible,
+                          ),
+                          const SizedBox(height: 80),
+                        ],
                       ),
-                      const SizedBox(height: 120),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -920,22 +1250,122 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 1. Clean Top Header matching Wallets Screen ────────────────────────────
-  Widget _buildHeader() {
-    return const Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          'Spending Charts',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.5,
+  // ── 1. Expandable Standardized Dropdown Filters Section ────────────────────
+  Widget _buildDropdownFiltersSection(FinanceProvider provider) {
+    final availableBanks = _getAvailableBanks(provider);
+    final hasActiveFilters = (_selectedBank != 'All Wallets' &&
+            _selectedBank != 'All Banks' &&
+            _selectedBank != 'All') ||
+        _selectedPeriod != PeriodFilter.month ||
+        _selectedAnalysisType != 'All' ||
+        _selectedSubPeriodIndex != _getDefaultSubPeriodIndex(_selectedPeriod);
+
+    return AnimatedCrossFade(
+      firstChild: const SizedBox.shrink(),
+      secondChild: Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              // 1. Period / Date Filter Dropdown (Day, Week, Month, Quarter, Year)
+              AppDropdown<PeriodFilter>.dark(
+                value: _selectedPeriod,
+                items: const [
+                  AppDropdownItem(value: PeriodFilter.day, label: 'Day'),
+                  AppDropdownItem(value: PeriodFilter.week, label: 'Week'),
+                  AppDropdownItem(value: PeriodFilter.month, label: 'Month'),
+                  AppDropdownItem(value: PeriodFilter.quarter, label: 'Quarter'),
+                  AppDropdownItem(value: PeriodFilter.year, label: 'Year'),
+                ],
+                onChanged: (PeriodFilter? val) {
+                  if (val != null) _onPeriodChanged(val);
+                },
+                isDefault: _selectedPeriod == PeriodFilter.month,
+              ),
+              const SizedBox(width: 8),
+
+              // 3. Net / Transferred / Deposit Flow Filter
+              AppDropdown<String>.dark(
+                value: _selectedAnalysisType,
+                items: const [
+                  AppDropdownItem(value: 'All', label: 'Net'),
+                  AppDropdownItem(value: 'Expenses', label: 'Transferred'),
+                  AppDropdownItem(value: 'Income', label: 'Deposit'),
+                ],
+                onChanged: (String? val) {
+                  if (val != null) {
+                    _changeFilter(() {
+                      _selectedAnalysisType = val;
+                    });
+                  }
+                },
+                isDefault: _selectedAnalysisType == 'All',
+              ),
+              const SizedBox(width: 8),
+
+              // 4. Bank Filter Dropdown
+              AppDropdown<String>.dark(
+                value: _selectedBank,
+                items: availableBanks.map((bank) {
+                  return AppDropdownItem<String>(
+                    value: bank,
+                    label: bank,
+                  );
+                }).toList(),
+                onChanged: (String? val) {
+                  if (val != null && val != _selectedBank) {
+                    HapticFeedback.selectionClick();
+                    _changeFilter(() {
+                      _selectedBank = val;
+                      _drilledCategory = null;
+                      _selectedCounterparty = null;
+                    });
+                  }
+                },
+                maxWidth: 140,
+                isDefault: _selectedBank == 'All Wallets' || _selectedBank == 'All',
+              ),
+
+              // 5. Reset Filter Button
+              if (hasActiveFilters) ...[
+                const SizedBox(width: 8),
+                AppResetFilterButton(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _changeFilter(() {
+                      _selectedBank = 'All Wallets';
+                      _selectedPeriod = PeriodFilter.month;
+                      _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(PeriodFilter.month);
+                      _selectedAnalysisType = 'All';
+                      _selectedHeatmapDay = null;
+                      _drilledCategory = null;
+                      _selectedCounterparty = null;
+                      if (_subPeriodScrollController.hasClients) {
+                        _subPeriodScrollController.jumpToPage(_selectedSubPeriodIndex);
+                      }
+                    });
+                  },
+                ),
+              ],
+            ],
           ),
         ),
-      ],
+      ),
+      crossFadeState: _isFilterExpanded
+          ? CrossFadeState.showSecond
+          : CrossFadeState.showFirst,
+      duration: const Duration(milliseconds: 250),
     );
+  }
+
+  String _getAnalysisTypeLabel(String type) {
+    if (type == 'Expenses') return 'Transferred';
+    if (type == 'Income') return 'Deposit';
+    return 'Net';
   }
 
   Widget _buildActiveDayFilterBanner() {
@@ -976,108 +1406,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  String _getAnalysisTypeLabel(String type) {
-    if (type == 'Expenses') return 'Transferred';
-    if (type == 'Income') return 'Deposit';
-    return 'Net';
-  }
-
-  // ── 2. Full-Width Period Filter Row & Redesigned Dropdown Menu ────────────
-  Widget _buildPeriodFilterRow() {
-    final analysisTypeIndex = switch (_selectedAnalysisType) {
-      'Expenses' => 1,
-      'Income' => 2,
-      _ => 0, // 'All' / Net
-    };
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // 1. Period Dropdown Menu (Left) - Uses AppDropdown
-        AppDropdown<PeriodFilter>.dark(
-          value: _selectedPeriod,
-          items: const [
-            AppDropdownItem(value: PeriodFilter.day, label: 'Day'),
-            AppDropdownItem(value: PeriodFilter.week, label: 'Week'),
-            AppDropdownItem(value: PeriodFilter.month, label: 'Month'),
-            AppDropdownItem(value: PeriodFilter.quarter, label: 'Quarter'),
-            AppDropdownItem(value: PeriodFilter.year, label: 'Year'),
-          ],
-          onChanged: (PeriodFilter? val) {
-            if (val != null) _onPeriodChanged(val);
-          },
-          height: 38,
-          borderRadius: 22,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          backgroundColor: AppColors.surface,
-          dropdownColor: AppColors.surfaceElevated,
-          isDefault: false,
-        ),
-        const SizedBox(width: 10),
-
-        // 2. Analysis Type Capsule Tab Bar (Right) - Net, Transferred, Deposit
-        Expanded(
-          child: AppCapsuleTabBar(
-            tabs: const ['Net', 'Transferred', 'Deposit'],
-            selectedIndex: analysisTypeIndex,
-            onTabChanged: (index) {
-              final newType = switch (index) {
-                1 => 'Expenses',
-                2 => 'Income',
-                _ => 'All',
-              };
-              if (_selectedAnalysisType == newType) return;
-              _changeFilter(() {
-                _selectedAnalysisType = newType;
-              });
-            },
-            height: 38,
-            fontSize: 11,
-            borderRadius: 22,
-            indicatorRadius: 18,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── 3. Dynamic Sub-Period Selector Tabs (Days, Weeks, Months, Quarters, Years) ───
-  Widget _buildSubPeriodSelectorTabs() {
-    final items = _getSubPeriodItems();
-    return SizedBox(
-      height: 38,
-      child: PageView.builder(
-        controller: _subPeriodScrollController,
-        itemCount: items.length,
-        onPageChanged: _onSubPeriodChanged,
-        itemBuilder: (context, index) {
-          final isSelected = index == _selectedSubPeriodIndex;
-          return GestureDetector(
-            onTap: () {
-              _subPeriodScrollController.animateToPage(
-                index,
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeInOutCubic,
-              );
-            },
-            child: Center(
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 250),
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white38,
-                  fontSize: isSelected ? 17 : 13,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                  letterSpacing: -0.3,
-                ),
-                child: Text(items[index]),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -1488,7 +1816,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 amount: displayTotal,
                                 customFormattedStr: fmt.format(displayTotal),
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textSoft,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.5,
@@ -1498,7 +1826,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                             : const Text(
                                 '****',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textSoft,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: -0.5,
@@ -1593,6 +1921,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 )
               else
@@ -1935,27 +2265,51 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     if (categoryMap.isEmpty) {
       return Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: const Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.analytics_outlined, color: Colors.white38, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'No transaction categories recorded for this period',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Category Analysis',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
+              ),
+            ),
+            SizedBox(height: 14),
+            Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.analytics_outlined,
+                        color: AppColors.textDisabled, size: 16),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'No transactions recorded for this period',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -1963,22 +2317,32 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     // Convert accumulator map to sorted list
     final categoryList = categoryMap.values.map((acc) {
       final subList = acc.subcategories.values.map((sAcc) {
+        double sExp = 0.0;
+        double sInc = 0.0;
+
+        for (final t in sAcc.bankTxs) {
+          if (t.type == 'income') {
+            sInc += t.amount;
+          } else {
+            sExp += t.amount;
+          }
+        }
+        for (final ct in sAcc.cashTxs) {
+          if (ct.type == 'addition' || ct.type == 'income') {
+            sInc += ct.amount;
+          } else {
+            sExp += ct.amount;
+          }
+        }
+
         double sTotal = 0.0;
         if (_selectedAnalysisType == 'Income') {
-          for (final t in sAcc.bankTxs.where((t) => t.type == 'income')) {
-            sTotal += t.amount;
-          }
-          for (final ct in sAcc.cashTxs.where(
-              (ct) => ct.type == 'addition' || ct.type == 'income')) {
-            sTotal += ct.amount;
-          }
+          sTotal = sInc;
+        } else if (_selectedAnalysisType == 'Expenses') {
+          sTotal = sExp;
         } else {
-          for (final t in sAcc.bankTxs.where((t) => t.type == 'expense')) {
-            sTotal += t.amount;
-          }
-          for (final ct in sAcc.cashTxs.where((ct) => ct.type == 'expense')) {
-            sTotal += ct.amount;
-          }
+          // 'All' mode: calculate net value (summing transactions and taking net difference)
+          sTotal = (sExp - sInc).abs();
         }
 
         return SubcategoryAnalysisItem(
@@ -1991,22 +2355,32 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }).where((s) => s.totalCount > 0).toList()
         ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
 
+      double catExp = 0.0;
+      double catInc = 0.0;
+
+      for (final t in acc.allBankTxs) {
+        if (t.type == 'income') {
+          catInc += t.amount;
+        } else {
+          catExp += t.amount;
+        }
+      }
+      for (final ct in acc.allCashTxs) {
+        if (ct.type == 'addition' || ct.type == 'income') {
+          catInc += ct.amount;
+        } else {
+          catExp += ct.amount;
+        }
+      }
+
       double catTotal = 0.0;
       if (_selectedAnalysisType == 'Income') {
-        for (final t in acc.allBankTxs.where((t) => t.type == 'income')) {
-          catTotal += t.amount;
-        }
-        for (final ct in acc.allCashTxs
-            .where((ct) => ct.type == 'addition' || ct.type == 'income')) {
-          catTotal += ct.amount;
-        }
+        catTotal = catInc;
+      } else if (_selectedAnalysisType == 'Expenses') {
+        catTotal = catExp;
       } else {
-        for (final t in acc.allBankTxs.where((t) => t.type == 'expense')) {
-          catTotal += t.amount;
-        }
-        for (final ct in acc.allCashTxs.where((ct) => ct.type == 'expense')) {
-          catTotal += ct.amount;
-        }
+        // 'All' mode: calculate net value for category
+        catTotal = (catExp - catInc).abs();
       }
 
       return (
@@ -2021,292 +2395,1132 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         subcategories: subList,
         totalTxCount: acc.allBankTxs.length + acc.allCashTxs.length,
       );
-    }).where((c) => c.totalAmount > 0).toList()
+    }).where((c) => c.totalTxCount > 0).toList()
       ..sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
 
     final totalSum = categoryList.fold<double>(0, (s, e) => s + e.totalAmount);
     final fmt = NumberFormat('#,##0.00');
     final periodSubtitle = _getPeriodSubtitle();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Category Analysis',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.3,
-              ),
-            ),
-            Text(
-              '${categoryList.length} ${categoryList.length == 1 ? 'Category' : 'Categories'}',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        ...categoryList.asMap().entries.map((entry) {
-          final i = entry.key;
-          final cat = entry.value;
-          final pct = totalSum > 0 ? cat.totalAmount / totalSum : 0.0;
-          final color = cat.color;
-          final hasSubcategories = cat.subcategories.isNotEmpty;
-
-          String subtitleText;
-          if (hasSubcategories) {
-            final subCount = cat.subcategories.length;
-            subtitleText =
-                '$subCount ${subCount == 1 ? 'subcategory' : 'subcategories'} • ${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
-          } else {
-            subtitleText =
-                '${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
-          }
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CategoryDetailScreen(
-                        categoryName: cat.categoryName,
-                        categoryReason: cat.categoryReason,
-                        categoryColor: color,
-                        totalAmount: cat.totalAmount,
-                        periodLabel: periodSubtitle,
-                        directBankTransactions: cat.directBankTxs,
-                        directCashTransactions: cat.directCashTxs,
-                        allBankTransactions: cat.allBankTxs,
-                        allCashTransactions: cat.allCashTxs,
-                        subcategories: cat.subcategories,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header Row: Title, Badge, and Toggle Button ──
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _isCategoryAnalysisExpanded = !_isCategoryAnalysisExpanded;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Category Analysis',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
                       ),
                     ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    const SizedBox(width: 8),
+                    AppBadge.neutral(
+                      text: '${categoryList.length}',
+                      size: AppBadgeSize.micro,
+                    ),
+                  ],
+                ),
+                AnimatedRotation(
+                  turns: _isCategoryAnalysisExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.textSecondary,
+                    size: 20,
                   ),
-                  child: Row(
-                    children: [
-                      // Rank badge
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    cat.categoryName,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: [
+                const SizedBox(height: 14),
+                Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                for (int i = 0; i < categoryList.length; i++) ...[
+                  Builder(
+                    builder: (context) {
+                      final cat = categoryList[i];
+                      final pct =
+                          totalSum > 0 ? cat.totalAmount / totalSum : 0.0;
+                      final color = cat.color;
+                      final hasSubcategories = cat.subcategories.isNotEmpty;
+
+                      String subtitleText;
+                      if (hasSubcategories) {
+                        final subCount = cat.subcategories.length;
+                        subtitleText =
+                            '$subCount ${subCount == 1 ? 'subcategory' : 'subcategories'} • ${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
+                      } else {
+                        subtitleText =
+                            '${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CategoryDetailScreen(
+                                    categoryName: cat.categoryName,
+                                    categoryReason: cat.categoryReason,
+                                    categoryColor: color,
+                                    totalAmount: cat.totalAmount,
+                                    periodLabel: periodSubtitle,
+                                    directBankTransactions: cat.directBankTxs,
+                                    directCashTransactions: cat.directCashTxs,
+                                    allBankTransactions: cat.allBankTxs,
+                                    allCashTransactions: cat.allCashTxs,
+                                    subcategories: cat.subcategories,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                provider.isBalanceVisible
-                                    ? CurrencyTextWidget(
-                                        amount: cat.totalAmount,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        customFormattedStr:
-                                            fmt.format(cat.totalAmount),
-                                      )
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                // Rank badge
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: TextStyle(
+                                        color: color,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
-                                          CurrencySymbolWidget(
-                                            color: color,
-                                            size: 14,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            '****',
-                                            style: TextStyle(
-                                              color: color,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
+                                          Expanded(
+                                            child: Text(
+                                              cat.categoryName,
+                                              style: const TextStyle(
+                                                color: AppColors.textSoft,
+                                                fontSize: 13.5,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
                                             ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          provider.isBalanceVisible
+                                              ? CurrencyTextWidget(
+                                                  amount: cat.totalAmount,
+                                                  style: TextStyle(
+                                                    color: color,
+                                                    fontSize: 13.5,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                  ),
+                                                  customFormattedStr:
+                                                      fmt.format(cat.totalAmount),
+                                                )
+                                              : Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    CurrencySymbolWidget(
+                                                      color: color,
+                                                      size: 13.5,
+                                                      fontWeight:
+                                                        FontWeight.bold,
+                                                    ),
+                                                    const SizedBox(width: 2),
+                                                    Text(
+                                                      '****',
+                                                      style: TextStyle(
+                                                        color: color,
+                                                        fontSize: 13.5,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.chevron_right_rounded,
+                                            color: Colors.white38,
+                                            size: 16,
                                           ),
                                         ],
                                       ),
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.chevron_right_rounded,
-                                  color: Colors.white38,
-                                  size: 18,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        subtitleText,
+                                        style: const TextStyle(
+                                          color: AppColors.textDisabled,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      CustomProgressBar(
+                                        progress: pct,
+                                        height: 8,
+                                        progressColor: color,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        _selectedAnalysisType == 'Income'
+                                            ? '${(pct * 100).toStringAsFixed(1)}% of total received'
+                                            : _selectedAnalysisType ==
+                                                    'Expenses'
+                                                ? '${(pct * 100).toStringAsFixed(1)}% of total spent'
+                                                : '${(pct * 100).toStringAsFixed(1)}% of net total',
+                                        style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitleText,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            CustomProgressBar(
-                              progress: pct,
-                              height: 10,
-                              progressColor: color,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${(pct * 100).toStringAsFixed(1)}% of total spent',
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                ),
-              ),
+                  if (i < categoryList.length - 1)
+                    Divider(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      height: 1,
+                    ),
+                ],
+              ],
             ),
-          );
-        }),
-      ],
+            crossFadeState: _isCategoryAnalysisExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+        ],
+      ),
     );
   }
 
   // ── 8. Redesigned Bank Performance Breakdown Section ─────────────────────
   Widget _buildRedesignedBankPerformance(
     List<({String name, double income, double expense, double net})> bankBreakdown,
+    List<AppTransaction> filteredBankTxs,
+    List<CashTransaction> filteredCashTxs,
+    bool isBalanceVisible,
+  ) {
+    final isBankSpecific = _selectedBank != 'All Wallets' &&
+        _selectedBank != 'All Banks' &&
+        _selectedBank != 'All';
+
+    if (isBankSpecific) {
+      return _buildSpecificBankInsights(
+        filteredBankTxs,
+        filteredCashTxs,
+        isBalanceVisible,
+      );
+    }
+
+    if (bankBreakdown.isEmpty) return const SizedBox.shrink();
+
+    final fmt = NumberFormat('#,##0.00');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header Row: Title, Badge, and Toggle Button ──
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _isBankPerformanceExpanded = !_isBankPerformanceExpanded;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Bank Performance',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AppBadge.neutral(
+                      text: '${bankBreakdown.length}',
+                      size: AppBadgeSize.micro,
+                    ),
+                  ],
+                ),
+                AnimatedRotation(
+                  turns: _isBankPerformanceExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: [
+                const SizedBox(height: 14),
+                Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                for (int i = 0; i < bankBreakdown.length; i++) ...[
+                  Builder(
+                    builder: (context) {
+                      final bank = bankBreakdown[i];
+                      final isPositive = bank.net >= 0;
+                      final maxVolume = max(bank.income, bank.expense);
+                      final ratio = maxVolume > 0 ? (bank.expense / maxVolume).clamp(0.1, 1.0) : 0.5;
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                // Official Bank Logo / Icon
+                                BankCardWidget.bankLogo(bank.name, 22, AppColors.textSecondary),
+                                const SizedBox(width: 10),
+                                Text(
+                                  bank.name,
+                                  style: const TextStyle(
+                                    color: AppColors.textSoft,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                isBalanceVisible
+                                    ? CurrencyTextWidget(
+                                        amount: bank.net,
+                                        showSign: true,
+                                        style: TextStyle(
+                                          color: isPositive ? AppColors.positive : AppColors.negative,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        customFormattedStr: fmt.format(bank.net.abs()),
+                                      )
+                                    : const Text(
+                                        '****',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            CustomProgressBar(
+                              progress: ratio,
+                              height: 10,
+                              progressColor:
+                                  isPositive ? AppColors.positive : AppColors.negative,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  if (i < bankBreakdown.length - 1)
+                    Divider(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      height: 1,
+                    ),
+                ],
+              ],
+            ),
+            crossFadeState: _isBankPerformanceExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpecificBankInsights(
+    List<AppTransaction> bankTxs,
+    List<CashTransaction> cashTxs,
     bool isBalanceVisible,
   ) {
     final fmt = NumberFormat('#,##0.00');
+    final totalCount = bankTxs.length + cashTxs.length;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Bank Performance',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.3,
+    final incomeTxs = bankTxs.where((t) => t.type == 'income').toList();
+    final expenseTxs = bankTxs.where((t) => t.type == 'expense').toList();
+
+    final double maxExpense = expenseTxs.isEmpty
+        ? 0.0
+        : expenseTxs.map((t) => t.amount).reduce(max);
+    final double maxIncome = incomeTxs.isEmpty
+        ? 0.0
+        : incomeTxs.map((t) => t.amount).reduce(max);
+
+    final double totalExpense = expenseTxs.fold(0.0, (sum, t) => sum + t.amount);
+    final double avgExpense =
+        expenseTxs.isEmpty ? 0.0 : totalExpense / expenseTxs.length;
+
+    // Find top counterparty for this bank
+    final Map<String, int> partyCounts = {};
+    for (var tx in bankTxs) {
+      final s = tx.sender.trim();
+      if (s.isNotEmpty) {
+        partyCounts[s] = (partyCounts[s] ?? 0) + 1;
+      }
+    }
+    String topParty = 'None';
+    int topPartyCount = 0;
+    partyCounts.forEach((k, v) {
+      if (v > topPartyCount) {
+        topParty = k;
+        topPartyCount = v;
+      }
+    });
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _isBankPerformanceExpanded = !_isBankPerformanceExpanded;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '$_selectedBank Insights',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AppBadge.success(
+                      text: '$totalCount tx',
+                      size: AppBadgeSize.small,
+                    ),
+                  ],
+                ),
+                AnimatedRotation(
+                  turns: _isBankPerformanceExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: [
+                const SizedBox(height: 16),
+                // 2x2 Grid of Insight metrics
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricTile(
+                        icon: Icons.receipt_long_rounded,
+                        iconColor: AppColors.positive,
+                        title: 'Avg. Outflow',
+                        value: isBalanceVisible
+                            ? 'ETB ${fmt.format(avgExpense)}'
+                            : 'ETB ****',
+                        subtitle: '${expenseTxs.length} outgoing txs',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildMetricTile(
+                        icon: Icons.arrow_upward_rounded,
+                        iconColor: AppColors.positive,
+                        title: 'Peak Deposit',
+                        value: isBalanceVisible
+                            ? 'ETB ${fmt.format(maxIncome)}'
+                            : 'ETB ****',
+                        subtitle: '${incomeTxs.length} incoming txs',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricTile(
+                        icon: Icons.arrow_downward_rounded,
+                        iconColor: AppColors.negative,
+                        title: 'Largest Expense',
+                        value: isBalanceVisible
+                            ? 'ETB ${fmt.format(maxExpense)}'
+                            : 'ETB ****',
+                        subtitle: 'Single peak outgoing',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildMetricTile(
+                        icon: Icons.person_outline_rounded,
+                        iconColor: AppColors.infoLight,
+                        title: 'Top Party',
+                        value: topParty,
+                        subtitle: topPartyCount > 0
+                            ? '$topPartyCount transactions'
+                            : 'No party data',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            crossFadeState: _isBankPerformanceExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+        ],
+      ),
+    );
+  }
 
-        // High-contrast, clean monochrome performance cards
-        Column(
-          children: bankBreakdown.map((bank) {
-            final isPositive = bank.net >= 0;
-            final maxVolume = max(bank.income, bank.expense);
-            final ratio = maxVolume > 0 ? (bank.expense / maxVolume).clamp(0.1, 1.0) : 0.5;
+  Widget _buildMetricTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textSoft,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.2,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: AppColors.textDisabled,
+              fontSize: 10.5,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
+  // ── 8. Person & Counterparty Analytics Section (One Big Unified Card) ─────
+  Widget _buildCounterpartyAnalyticsSection(
+    List<AppTransaction> transactions,
+    FinanceProvider provider,
+  ) {
+    final bankNamesUpper = {
+      'CBE',
+      'TELEBIRR',
+      'CBE BIRR',
+      'CBEBIRR',
+      'AHADU',
+      'AHADU BANK',
+      'DASHEN',
+      'DASHEN BANK',
+      'BOA',
+      'ABYSSINIA',
+      'BANK OF ABYSSINIA',
+      'CASH',
+      'MANUAL ENTRY',
+      'UNKNOWN',
+      ...provider.senders.map((s) => s.senderName.trim().toUpperCase()),
+    };
+
+    // Group by counterparty / sender
+    final Map<String, List<AppTransaction>> groups = {};
+    for (final tx in transactions) {
+      final rawSender = tx.sender.trim();
+      if (rawSender.isEmpty || bankNamesUpper.contains(rawSender.toUpperCase())) {
+        continue;
+      }
+      groups.putIfAbsent(rawSender, () => []).add(tx);
+    }
+
+    if (groups.isEmpty) return const SizedBox.shrink();
+
+    final List<CounterpartyInsight> list = groups.entries.map((e) {
+      final name = e.key;
+      final txs = e.value;
+      final sentTxs = txs.where((t) => t.type == 'expense').toList();
+      final rcvdTxs = txs.where((t) => t.type == 'income').toList();
+      final totalSent = sentTxs.fold(0.0, (sum, t) => sum + t.amount);
+      final totalReceived = rcvdTxs.fold(0.0, (sum, t) => sum + t.amount);
+      final Set<String> banks = {};
+      DateTime? latest;
+      for (final t in txs) {
+        if (t.name.isNotEmpty) banks.add(t.name);
+        if (latest == null || t.date.isAfter(latest)) latest = t.date;
+      }
+      return CounterpartyInsight(
+        name: name,
+        totalSent: totalSent,
+        totalReceived: totalReceived,
+        sentCount: sentTxs.length,
+        receivedCount: rcvdTxs.length,
+        lastDate: latest,
+        banks: banks,
+      );
+    }).toList();
+
+    // Sort by activity (transaction count, then volume)
+    list.sort((a, b) {
+      final c = b.totalCount.compareTo(a.totalCount);
+      if (c != 0) return c;
+      return b.totalVolume.compareTo(a.totalVolume);
+    });
+
+    final activeInsight = list.firstWhere(
+      (item) => item.name == _selectedCounterparty,
+      orElse: () => list.first,
+    );
+
+    final isBalanceVisible = provider.isBalanceVisible;
+    final fmt = NumberFormat('#,##0.00');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header Row: Title, Count Badge & Simple Expand Arrow ──
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _isPersonContactExpanded = !_isPersonContactExpanded;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Person & Contact',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AppBadge.neutral(
+                      text: '${list.length}',
+                      size: AppBadgeSize.micro,
+                    ),
+                  ],
+                ),
+                AnimatedRotation(
+                  turns: _isPersonContactExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 14),
+                Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                const SizedBox(height: 14),
+
+                // ── Streamlined Contact Selector (Inside Expanded Window) ──
+                GestureDetector(
+                  onTap: () => _showCounterpartyPickerSheet(list),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      activeInsight.name,
+                                      style: const TextStyle(
+                                        color: AppColors.textSoft,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (list.first.name == activeInsight.name) ...[
+                                    const SizedBox(width: 6),
+                                    const AppBadge.warning(
+                                      text: 'TOP',
+                                      size: AppBadgeSize.micro,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${activeInsight.totalCount} transactions • ${fmt.format(activeInsight.totalVolume)} volume',
+                                style: const TextStyle(
+                                  color: AppColors.textDisabled,
+                                  fontSize: 10.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.textSecondary,
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Minimalist 3-Stat Metric Row (No ETB prefix, smaller font) ──
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCompactStatTile(
+                        label: 'Sent',
+                        value: isBalanceVisible
+                            ? fmt.format(activeInsight.totalSent)
+                            : '****',
+                        color: AppColors.textSoft,
+                        count: '${activeInsight.sentCount} out',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildCompactStatTile(
+                        label: 'Received',
+                        value: isBalanceVisible
+                            ? fmt.format(activeInsight.totalReceived)
+                            : '****',
+                        color: AppColors.textSoft,
+                        count: '${activeInsight.receivedCount} in',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildCompactStatTile(
+                        label: 'Net',
+                        value: isBalanceVisible
+                            ? '${activeInsight.netStanding >= 0 ? '+' : '-'}${fmt.format(activeInsight.netStanding.abs())}'
+                            : '****',
+                        color: activeInsight.netStanding >= 0
+                            ? AppColors.positive
+                            : AppColors.negative,
+                        count: activeInsight.netStanding >= 0
+                            ? 'Surplus'
+                            : 'Deficit',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // ── View All Transactions Button (100% Fully Rounded Pill) ──
+                AppButton.secondary(
+                  text: 'View ${activeInsight.totalCount} Transactions',
+                  icon: Icons.receipt_long_rounded,
+                  fullWidth: true,
+                  height: 42,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AllTransactionsScreen(
+                          initialSenderFilter: activeInsight.name,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            crossFadeState: _isPersonContactExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 250),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactStatTile({
+    required String label,
+    required String value,
+    required Color color,
+    required String count,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                count,
+                style: const TextStyle(
+                  color: AppColors.textDisabled,
+                  fontSize: 9,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.2,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCounterpartyPickerSheet(List<CounterpartyInsight> list) {
+    AppDrawer.show(
+      context: context,
+      builder: (sheetCtx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = list.where((c) {
+              if (query.trim().isEmpty) return true;
+              return c.name.toLowerCase().contains(query.trim().toLowerCase());
+            }).toList();
+
+            final fmt = NumberFormat('#,##0.00');
+
+            return AppDrawer(
+              heightFactor: 0.78,
+              headerCard: AppDrawerHeaderCard(
+                icon: Icons.person_search_rounded,
+                iconColor: AppColors.positive,
+                title: 'Select Contact',
+                subtitle: '${list.length} total contacts recorded',
               ),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      // Official Bank Logo / Icon
-                      BankCardWidget.bankLogo(bank.name, 22, AppColors.textPrimary),
-                      const SizedBox(width: 10),
-                      Text(
-                        bank.name,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      isBalanceVisible
-                          ? CurrencyTextWidget(
-                              amount: bank.net,
-                              showSign: true,
-                              style: TextStyle(
-                                color: isPositive ? AppColors.positive : AppColors.negative,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              customFormattedStr: fmt.format(bank.net.abs()),
-                            )
-                          : const Text(
-                              '****',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                  AppSearchBar(
+                    mode: AppSearchBarMode.pill,
+                    hint: 'Search contact name...',
+                    onChanged: (val) {
+                      setSheetState(() => query = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Text(
+                                'No contacts found matching search.',
+                                style: TextStyle(color: AppColors.textSoft),
                               ),
                             ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  CustomProgressBar(
-                    progress: ratio,
-                    height: 10,
-                    progressColor:
-                        isPositive ? AppColors.positive : AppColors.negative,
+                          )
+                        : ListView.separated(
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 6),
+                            itemBuilder: (_, index) {
+                              final item = filtered[index];
+                              final isSelected = item.name == _selectedCounterparty ||
+                                  (_selectedCounterparty == null && index == 0);
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.surfaceElevated
+                                      : AppColors.surface,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  visualDensity: VisualDensity.compact,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 2,
+                                  ),
+                                  leading: Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? AppColors.buttonPrimary
+                                          : AppColors.surfaceElevated,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        item.name.isNotEmpty
+                                            ? item.name.substring(0, 1).toUpperCase()
+                                            : '?',
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? AppColors.buttonPrimaryText
+                                              : AppColors.textPrimary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    item.name,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 13.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    '${item.totalCount} txs • ETB ${fmt.format(item.totalVolume)} volume',
+                                    style: const TextStyle(
+                                      color: AppColors.textSoft,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  trailing: isSelected
+                                      ? const Icon(
+                                          Icons.check_circle_rounded,
+                                          color: AppColors.positive,
+                                          size: 18,
+                                        )
+                                      : (index == 0 && query.isEmpty)
+                                          ? const AppBadge.warning(
+                                              text: 'TOP',
+                                              size: AppBadgeSize.micro,
+                                            )
+                                          : null,
+                                  onTap: () {
+                                    Navigator.pop(sheetCtx);
+                                    HapticFeedback.selectionClick();
+                                    setState(() {
+                                      _selectedCounterparty = item.name;
+                                    });
+                                  },
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
             );
-          }).toList(),
-        ),
-      ],
+          },
+        );
+      },
     );
   }
+}
+
+class CounterpartyInsight {
+  final String name;
+  final double totalSent;
+  final double totalReceived;
+  final int sentCount;
+  final int receivedCount;
+  final DateTime? lastDate;
+  final Set<String> banks;
+
+  CounterpartyInsight({
+    required this.name,
+    required this.totalSent,
+    required this.totalReceived,
+    required this.sentCount,
+    required this.receivedCount,
+    required this.lastDate,
+    required this.banks,
+  });
+
+  int get totalCount => sentCount + receivedCount;
+  double get totalVolume => totalSent + totalReceived;
+  double get netStanding => totalReceived - totalSent;
 }
 
 // ─── Custom Painter for Circular Segmented Morphing Ring Donut Chart ──────────

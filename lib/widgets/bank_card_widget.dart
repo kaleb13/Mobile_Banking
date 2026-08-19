@@ -176,7 +176,7 @@ class BankCardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = animationFactor.clamp(0.0, 1.0);
     final fmt = NumberFormat('#,##0.00');
-    final balStr = isBalanceVisible ? fmt.format(balance) : '****,***.**';
+    final balStr = (isBalanceVisible && !isPaused) ? fmt.format(balance) : '****,***.**';
     final parts = balStr.split('.');
 
     // When paused: use defined greyscale palette; otherwise use brand gradient
@@ -232,7 +232,7 @@ class BankCardWidget extends StatelessWidget {
         : const [];
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: isPaused ? null : onTap,
       child: Stack(
         children: [
           Container(
@@ -266,18 +266,33 @@ class BankCardWidget extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              senderName.toUpperCase().contains('AHADU')
-                                  ? 'Ahadu Bank'
-                                  : senderName,
-                              style: TextStyle(
-                                color: textColorPrimary,
-                                fontSize: nameFontSize,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    senderName.toUpperCase().contains('AHADU')
+                                        ? 'Ahadu Bank'
+                                        : senderName,
+                                    style: TextStyle(
+                                      color: textColorPrimary,
+                                      fontSize: nameFontSize,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: -0.3,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isPaused) ...[
+                                  const SizedBox(width: 8),
+                                  const AppBadge.warning(
+                                    text: 'PAUSED',
+                                    icon: Icons.pause_rounded,
+                                    size: AppBadgeSize.small,
+                                  ),
+                                ],
+                              ],
                             ),
                             Opacity(
                               opacity: descriptionOpacity,
@@ -285,7 +300,7 @@ class BankCardWidget extends StatelessWidget {
                                 padding: const EdgeInsets.only(top: 1),
                                 child: Text(
                                   isPaused
-                                      ? 'Tracking paused — tap card to view history'
+                                      ? 'Tracking paused'
                                       : subtitle(senderName),
                                   style: TextStyle(
                                     color: textColorSub,
@@ -351,7 +366,9 @@ class BankCardWidget extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      '$txCount total Transactions',
+                      isPaused
+                          ? '$txCount saved Transactions'
+                          : '$txCount total Transactions',
                       style: TextStyle(
                         color: textColorSub,
                         fontSize: 11,
@@ -363,20 +380,6 @@ class BankCardWidget extends StatelessWidget {
               ],
             ),
           ),
-
-          // ── PAUSED badge in top-right area ──────────────────────
-          if (isPaused)
-            Positioned(
-              top: 12,
-              right: (showMoreButton && senderName.toUpperCase() != 'CASH WALLET')
-                  ? 48
-                  : 12,
-              child: const AppBadge.warning(
-                text: 'PAUSED',
-                icon: Icons.pause_rounded,
-                size: AppBadgeSize.small,
-              ),
-            ),
 
           // ── Three-Dot Action Menu in top-right corner ────────────
           if (showMoreButton && senderName.toUpperCase() != 'CASH WALLET')

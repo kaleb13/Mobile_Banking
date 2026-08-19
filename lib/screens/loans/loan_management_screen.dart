@@ -177,7 +177,6 @@ class _LoanTopDrawerCard extends StatelessWidget {
     final parts = formattedStr.split('.');
     final intPart = parts[0];
     final fracPart = parts.length > 1 ? '.${parts[1]}' : '.00';
-    final accentColor = isLent ? AppColors.positive : AppColors.warning;
 
     return Expanded(
       child: GestureDetector(
@@ -224,15 +223,6 @@ class _LoanTopDrawerCard extends StatelessWidget {
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
-                      isLent ? '+' : '-',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
                       intPart,
                       style: const TextStyle(
                         color: Colors.white,
@@ -277,36 +267,27 @@ class _LoanTopDrawerCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Row: Title on Left, Add Loan button on Right
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Loan Tracker',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  AppButton.primary(
-                    text: 'Add Loan',
-                    icon: Icons.add_rounded,
-                    fullWidth: false,
-                    height: 32,
-                    fontSize: 12,
-                    iconSize: 15,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    onPressed: () {
-                      AppBottomSheet.show(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (_) => AddLoanSheet(provider: provider),
-                      );
-                    },
-                  ),
-                ],
+              // Header: AppHeader with Add Loan Action
+              AppHeader(
+                title: 'Loan Tracker',
+                showBackButton: false,
+                padding: EdgeInsets.zero,
+                trailing: AppButton.primary(
+                  text: 'Add Loan',
+                  icon: Icons.add_rounded,
+                  fullWidth: false,
+                  height: 32,
+                  fontSize: 12,
+                  iconSize: 15,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  onPressed: () {
+                    AppBottomSheet.show(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => AddLoanSheet(provider: provider),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 14),
 
@@ -909,15 +890,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                isLent ? '+' : '-',
-                style: TextStyle(
-                  color: accentColor,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-              const SizedBox(width: 4),
               Text(
                 NumberFormat('#,##0').format(current.principalAmount),
                 style: const TextStyle(

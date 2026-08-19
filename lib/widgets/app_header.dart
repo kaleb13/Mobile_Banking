@@ -43,7 +43,7 @@ class AppHeader extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: AppTypography.heading2.copyWith(
+                  style: AppTypography.heading1.copyWith(
                     color: context.themeTextPrimary,
                   ),
                   maxLines: 1,

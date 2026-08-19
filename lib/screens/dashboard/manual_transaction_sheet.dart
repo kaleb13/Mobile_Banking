@@ -9,7 +9,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/currency_symbol_widget.dart';
+import 'reason_selection_sheet.dart';
 
 class ManualTransactionSheet extends StatefulWidget {
   final AppNotification? notification;
@@ -37,7 +39,6 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
   String _type = 'expense'; // 'income' or 'expense'
   late final DateTime _fixedDate;
   bool _isSaving = false;
-  bool _isSelectingReason = false;
 
   @override
   void initState() {
@@ -95,6 +96,22 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
     } else {
       Navigator.pop(context);
     }
+  }
+
+  void _openReasonSelection() {
+    AppBottomSheet.show(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetCtx) => ReasonSelectionSheet(
+        initialReason: _selectedReason,
+        transactionType: _type,
+        onReasonSelected: (reason) {
+          setState(() {
+            _selectedReason = reason;
+          });
+        },
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -159,276 +176,176 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
             ? null
             : _save,
       ),
-      child: Stack(
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 16),
         children: [
-          ListView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 16),
-            children: [
-              // Income / Expense Capsule Tab Bar
-              AppCapsuleTabBar(
-                tabs: const ['Expense', 'Income'],
-                selectedIndex: _type == 'expense' ? 0 : 1,
-                onTabChanged: (index) {
-                  setState(() {
-                    _type = index == 0 ? 'expense' : 'income';
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Amount Field Card
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          isIncome ? '+ ' : '- ',
-                          style: TextStyle(
-                            color: activeColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        CurrencySymbolWidget(
-                          size: 16,
-                          color: activeColor,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _amountController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: '0.00',
-                          hintStyle: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Sender / Receiver Field Card
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline_rounded,
-                        size: 18, color: AppColors.textSecondary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _receiverController,
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5),
-                        decoration: InputDecoration(
-                          hintText: isIncome ? 'Sender / Source Name' : 'Recipient / Merchant Name',
-                          hintStyle: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Category / Reason Select Chip Card
-              GestureDetector(
-                onTap: () => setState(() => _isSelectingReason = true),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _selectedReason != null
-                            ? Icons.category_rounded
-                            : Icons.sell_outlined,
-                        size: 18,
-                        color: _selectedReason != null
-                            ? AppColors.gold
-                            : AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Reason / Category',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _selectedReason?.name ?? 'Select Reason / Category...',
-                              style: TextStyle(
-                                color: _selectedReason != null
-                                    ? AppColors.textPrimary
-                                    : AppColors.textSecondary,
-                                fontSize: 13.5,
-                                fontWeight: _selectedReason != null
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.keyboard_arrow_right_rounded,
-                          color: AppColors.textSecondary, size: 20),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          // Income / Expense Capsule Tab Bar
+          AppCapsuleTabBar(
+            tabs: const ['Expense', 'Income'],
+            selectedIndex: _type == 'expense' ? 0 : 1,
+            onTabChanged: (index) {
+              setState(() {
+                _type = index == 0 ? 'expense' : 'income';
+              });
+            },
           ),
+          const SizedBox(height: 16),
 
-          // Inline Reason Selector Overlay View
-          if (_isSelectingReason)
-            Positioned.fill(
-              child: Container(
-                color: AppColors.bgMid,
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Amount Field Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => setState(() => _isSelectingReason = false),
-                          child: const Icon(Icons.arrow_back_rounded,
-                              color: AppColors.textPrimary, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Select Category / Reason',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (_selectedReason != null)
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _selectedReason = null;
-                              _isSelectingReason = false;
-                            }),
-                            child: const Text(
-                              'Clear',
-                              style: TextStyle(
-                                color: AppColors.negative,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: Builder(
-                        builder: (context) {
-                          final reasons = widget.provider.reasons
-                              .where((r) => !(_type == 'income' &&
-                                  r.name.trim().toLowerCase() == 'cash'))
-                              .toList();
-
-                          if (reasons.isEmpty) {
-                            return const Center(
-                              child: Text(
-                                'No categories defined yet',
-                                style:
-                                    TextStyle(color: AppColors.textSecondary),
-                              ),
-                            );
-                          }
-
-                          return ListView.separated(
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: reasons.length,
-                            separatorBuilder: (context, index) => const Divider(
-                              height: 1,
-                              color: AppColors.border,
-                            ),
-                            itemBuilder: (context, index) {
-                              final reason = reasons[index];
-                              final isSelected =
-                                  _selectedReason?.id == reason.id;
-
-                              return ListTile(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedReason = reason;
-                                    _isSelectingReason = false;
-                                  });
-                                },
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                title: Text(
-                                  reason.name,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? AppColors.gold
-                                        : AppColors.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.w500,
-                                  ),
-                                ),
-                                trailing: isSelected
-                                    ? const Icon(Icons.check_circle_rounded,
-                                        color: AppColors.gold, size: 20)
-                                    : null,
-                              );
-                            },
-                          );
-                        },
+                    Text(
+                      isIncome ? '+ ' : '- ',
+                      style: TextStyle(
+                        color: activeColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    CurrencySymbolWidget(
+                      size: 16,
+                      color: activeColor,
                     ),
                   ],
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: '0.00',
+                      hintStyle: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Sender / Receiver Field Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.person_outline_rounded,
+                    size: 18, color: AppColors.textSecondary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _receiverController,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5),
+                    decoration: InputDecoration(
+                      hintText: isIncome ? 'Sender / Source Name' : 'Recipient / Merchant Name',
+                      hintStyle: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Category / Reason Select Chip Card
+          GestureDetector(
+            onTap: _openReasonSelection,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _selectedReason != null
+                        ? Icons.category_rounded
+                        : Icons.sell_outlined,
+                    size: 18,
+                    color: _selectedReason != null
+                        ? AppColors.gold
+                        : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Reason / Category',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _selectedReason?.name ?? 'Select Reason / Category...',
+                          style: TextStyle(
+                            color: _selectedReason != null
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
+                            fontSize: 13.5,
+                            fontWeight: _selectedReason != null
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_selectedReason != null)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        setState(() {
+                          _selectedReason = null;
+                        });
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(Icons.close_rounded,
+                            color: AppColors.textSecondary, size: 18),
+                      ),
+                    ),
+                  const Icon(Icons.keyboard_arrow_right_rounded,
+                      color: AppColors.textSecondary, size: 20),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );

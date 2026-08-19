@@ -281,19 +281,17 @@ class AppDateFilter extends StatelessWidget {
 
     // Trigger background styling (Zero borders)
     final Color triggerBg = backgroundColor ??
-        (isLight
-            ? (isDef ? AppColors.lightGreyBackground : AppColors.bgDeepLight)
-            : (isDef ? AppColors.surface : AppColors.surfaceElevated));
+        (isLight ? AppColors.lightGreyBackground : AppColors.surface);
 
     final Color effectiveTextColor = textColor ??
         (isLight
             ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
-            : (isDef ? AppColors.textSecondary : Colors.white));
+            : (isDef ? AppColors.textSoft : Colors.white));
 
     final Color effectiveIconColor = iconColor ??
         (isLight
             ? (isDef ? AppColors.mediumGreyText : AppColors.darkCharcoal)
-            : (isDef ? AppColors.textSecondary : Colors.white));
+            : (isDef ? AppColors.textSoft : Colors.white));
 
     return GestureDetector(
       onTap: () => _showDatePickerSheet(context),

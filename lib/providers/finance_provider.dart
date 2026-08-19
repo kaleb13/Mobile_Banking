@@ -247,24 +247,28 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// Pauses tracking for [bankName].
   /// - New SMS messages from this bank will be ignored.
+  /// - Transactions without reasons are removed; transactions with reasons are kept.
   /// - Existing transactions from this bank are excluded from all
   ///   balance and income/expense calculations until tracking resumes.
   Future<void> pauseTracking(String bankName) async {
     _pausedBanks = {..._pausedBanks, bankName};
     await DatabaseService.instance.setPausedBanks(_pausedBanks);
+    await DatabaseService.instance.deleteUncategorizedTransactionsForBank(bankName);
+    await DatabaseService.instance.deleteUncategorizedNotificationsForBank(bankName);
+    _transactions = await DatabaseService.instance.getTransactions();
+    _notifications = await DatabaseService.instance.getNotifications();
     _calculateStats();
     notifyListeners();
   }
 
   /// Resumes tracking for [bankName], re-including its transactions in
-  /// all balance and stats calculations.
+  /// all balance and stats calculations, and re-scans for that bank.
   Future<void> resumeTracking(String bankName) async {
     _pausedBanks = _pausedBanks
         .where((b) => b.toUpperCase() != bankName.toUpperCase())
         .toSet();
     await DatabaseService.instance.setPausedBanks(_pausedBanks);
-    _calculateStats();
-    notifyListeners();
+    await refreshData();
   }
 
   List<AppSender> get senders => _senders;

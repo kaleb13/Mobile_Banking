@@ -22,6 +22,7 @@ import '../../widgets/app_note_card.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/custom_progress_bar.dart';
+import '../../widgets/counterparty_insight_sheet.dart';
 import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
@@ -713,6 +714,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             isIncome ? Icons.call_received_rounded : Icons.call_made_rounded,
             isIncome ? 'From (Sender)' : 'For (Recipient)',
             _limitWords(counterparty, maxWords: 2),
+            onTap: widget.transaction.sender.isNotEmpty &&
+                    widget.transaction.sender != 'Manual Entry' &&
+                    widget.transaction.sender != 'Cash'
+                ? () {
+                    CounterpartyInsightSheet.show(
+                      context,
+                      personName: widget.transaction.sender,
+                    );
+                  }
+                : null,
           ),
           _buildCollapsibleInfoRow(
               Icons.fingerprint, 'Transaction ID', widget.transaction.id ?? 'Pending'),
@@ -1088,11 +1099,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  Widget _buildCollapsibleInfoRow(IconData icon, String label, String value,
-      {Widget? customValue, String? tooltipText}) {
+  Widget _buildCollapsibleInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    Widget? customValue,
+    String? tooltipText,
+    VoidCallback? onTap,
+  }) {
     final effectiveTooltip = tooltipText ?? (value.isNotEmpty ? value : null);
 
-    return Padding(
+    Widget row = Padding(
       padding: const EdgeInsets.only(bottom: 11),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1111,59 +1128,88 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
-              child: customValue ??
-                  (effectiveTooltip != null
-                      ? Tooltip(
-                          message: effectiveTooltip,
-                          triggerMode: TooltipTriggerMode.longPress,
-                          preferBelow: false,
-                          showDuration: const Duration(seconds: 3),
-                          waitDuration: const Duration(milliseconds: 300),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          textStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          child: Text(
-                            value,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.end,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        )
-                      : Text(
-                          value,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.end,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        )),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: customValue ??
+                        (effectiveTooltip != null
+                            ? Tooltip(
+                                message: effectiveTooltip,
+                                triggerMode: TooltipTriggerMode.longPress,
+                                preferBelow: false,
+                                showDuration: const Duration(seconds: 3),
+                                waitDuration: const Duration(milliseconds: 300),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                textStyle: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                child: Text(
+                                  value,
+                                  style: TextStyle(
+                                    color: onTap != null
+                                        ? AppColors.brandGreen
+                                        : Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  textAlign: TextAlign.end,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )
+                            : Text(
+                                value,
+                                style: TextStyle(
+                                  color: onTap != null
+                                      ? AppColors.brandGreen
+                                      : Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.end,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )),
+                  ),
+                  if (onTap != null) ...[
+                    const SizedBox(width: 5),
+                    const Icon(
+                      Icons.insights_rounded,
+                      size: 13,
+                      color: AppColors.brandGreen,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: row,
+      );
+    }
+    return row;
   }
 
   IconData _getReasonCategoryIcon(String? label) {

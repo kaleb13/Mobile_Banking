@@ -13,14 +13,20 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
+import '../../widgets/app_reset_filter_button.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
 class AllTransactionsScreen extends StatefulWidget {
   final String? initialSearchQuery;
+  final String? initialSenderFilter;
 
-  const AllTransactionsScreen({super.key, this.initialSearchQuery});
+  const AllTransactionsScreen({
+    super.key,
+    this.initialSearchQuery,
+    this.initialSenderFilter,
+  });
 
   @override
   State<AllTransactionsScreen> createState() => _AllTransactionsScreenState();
@@ -29,7 +35,7 @@ class AllTransactionsScreen extends StatefulWidget {
 class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   late TextEditingController _searchController;
   String _searchQuery = '';
-  String _selectedSender = 'All';
+  late String _selectedSender;
   AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
   String _selectedType = 'All';
   bool _isBookmarkedOnly = false;
@@ -41,6 +47,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   void initState() {
     super.initState();
     _searchQuery = widget.initialSearchQuery ?? '';
+    _selectedSender = widget.initialSenderFilter ?? 'All';
     _searchController = TextEditingController(text: _searchQuery);
     _startSearchLabelRotation();
   }
@@ -85,14 +92,22 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final provider = Provider.of<FinanceProvider>(context);
     final allTransactions = provider.transactions;
 
-    // Get unique sender names for filter
-    final senderNames = ['All', ...provider.senders.map((s) => s.senderName)];
+    // Get unique sender / bank names for filter
+    final Set<String> senderNamesSet = {'All', ...provider.senders.map((s) => s.senderName)};
+    if (_selectedSender != 'All') {
+      senderNamesSet.add(_selectedSender);
+    }
+    final senderNames = senderNamesSet.toList();
+
+    final isBank = provider.senders.any(
+        (s) => s.senderName.trim().toUpperCase() == _selectedSender.trim().toUpperCase());
 
     // Filter logic
     final filteredTransactions = const FilterTransactionsUseCase().execute(
       transactions: allTransactions,
       params: FilterTransactionsParams(
-        bankFilter: _selectedSender,
+        bankFilter: isBank ? _selectedSender : null,
+        senderFilter: !isBank && _selectedSender != 'All' ? _selectedSender : null,
         typeFilter: _selectedType,
         dateFilter: _dateFilterValue,
         searchQuery: _searchQuery,
@@ -272,14 +287,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             fontWeight: _isBookmarkedOnly ? FontWeight.bold : FontWeight.w500,
                           ),
                         ),
-                        if (_isBookmarkedOnly) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.check_circle_rounded,
-                            size: 13,
-                            color: AppColors.gold,
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -297,6 +304,24 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 _buildSenderDropdown(senderNames),
                 const SizedBox(width: 8),
                 _buildTypeDropdown(),
+                if (_isBookmarkedOnly ||
+                    _selectedType != 'All' ||
+                    !_dateFilterValue.isDefault ||
+                    _selectedSender != 'All' ||
+                    _sortBy != 'Date: Newest') ...[
+                  const SizedBox(width: 8),
+                  AppResetFilterButton(
+                    onTap: () {
+                      setState(() {
+                        _isBookmarkedOnly = false;
+                        _selectedType = 'All';
+                        _dateFilterValue = const AppDateFilterValue.anyTime();
+                        _selectedSender = 'All';
+                        _sortBy = 'Date: Newest';
+                      });
+                    },
+                  ),
+                ],
               ],
             ),
           ),
@@ -525,7 +550,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
       img = SvgPicture.asset('assets/images/Dashen_Bank_Logo.svg',
-          width: 20, height: 20, fit: BoxFit.contain,
+          width: 24, height: 24, fit: BoxFit.contain,
           colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn));
       bgColor = AppColors.cardDashenDark.withValues(alpha: 0.35);
     } else if (nameUp.contains('CASH')) {

@@ -417,6 +417,49 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                           ),
                           const SizedBox(height: 14),
 
+                          // ── Net Total Flow Hero Metric ───────────────────────
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Net Total Flow',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    isBalanceVisible
+                                        ? '${fmt.format((totalOutflow - totalInflow).abs())} ETB'
+                                        : '****',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              totalOutflow >= totalInflow
+                                  ? const AppBadge.destructive(
+                                      text: 'Net Outflow',
+                                      size: AppBadgeSize.small,
+                                    )
+                                  : const AppBadge.success(
+                                      text: 'Net Inflow',
+                                      size: AppBadgeSize.small,
+                                    ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
                           // Inflow / Outflow summary pills
                           Row(
                             children: [
@@ -593,6 +636,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                 child: _buildSubcategoryChip(
                                   label: sub.name,
                                   count: sub.totalCount,
+                                  netAmount: sub.totalAmount,
                                   isSelected: _selectedSubcategory == sub.name,
                                   onTap: () {
                                     setState(() {
@@ -859,9 +903,15 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   Widget _buildSubcategoryChip({
     required String label,
     required int count,
+    double? netAmount,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final fmt = NumberFormat('#,##0');
+    final String countLabel = netAmount != null && netAmount > 0
+        ? '$count • ${fmt.format(netAmount)} ETB'
+        : '$count';
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
@@ -898,7 +948,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 borderRadius: BorderRadius.circular(100),
               ),
               child: Text(
-                '$count',
+                countLabel,
                 style: TextStyle(
                   color: isSelected ? AppColors.brandGreen : AppColors.textSecondary,
                   fontSize: 10,

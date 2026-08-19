@@ -65,7 +65,9 @@ class FilterTransactionsUseCase {
           params.senderFilter != 'All Senders' &&
           params.senderFilter != 'All' &&
           params.senderFilter!.isNotEmpty) {
-        if (tx.sender.toUpperCase() != params.senderFilter!.toUpperCase()) {
+        final sf = params.senderFilter!.trim().toUpperCase();
+        final txs = tx.sender.trim().toUpperCase();
+        if (txs != sf && !txs.contains(sf) && !sf.contains(txs)) {
           return false;
         }
       }

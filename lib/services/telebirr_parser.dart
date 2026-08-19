@@ -116,11 +116,23 @@ class TelebirrParser {
       type = 'expense';
       amount = extractAmount(RegExp(r'transferred ETB ([0-9,.]+)'));
 
-      // Extract to: "to Ahadu Bank SC account number 0087364810101 on "
+      // Extract to: "to Commercial Bank of Ethiopia account number 1000342078177 on "
+      //         or: "to Ahadu Bank SC account number 0087364810101 on "
+      //         or: "to Abebe Kebede (251911223344) on "
       final toMatch =
           RegExp(r'to\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
       if (toMatch != null) {
-        senderOrRecipient = toMatch.group(1)?.trim() ?? '';
+        final rawRecipient = toMatch.group(1)?.trim() ?? '';
+        final accMatch = RegExp(
+          r'account\s+(?:number\s+)?([0-9A-Za-z]+)',
+          caseSensitive: false,
+        ).firstMatch(rawRecipient);
+
+        if (accMatch != null) {
+          senderOrRecipient = accMatch.group(1)?.trim() ?? rawRecipient;
+        } else {
+          senderOrRecipient = rawRecipient;
+        }
       }
     } else if (lowerMsg.contains('debited')) {
       type = 'expense';
@@ -133,15 +145,48 @@ class TelebirrParser {
       if (atMatch != null) {
         senderOrRecipient = atMatch.group(1)?.trim() ?? '';
       }
+    } else if (lowerMsg.contains('recharged') && lowerMsg.contains('airtime')) {
+      type = 'expense';
+      amount = extractAmount(RegExp(r'recharged ETB ([0-9,.]+)'));
+
+      // Extract phone: "for 251972665987 on 04/04/2024" or "for 0935389104 on "
+      final phoneMatch = RegExp(
+        r'airtime\s+for\s+((?:251|0)?[97]\d{8})',
+        caseSensitive: false,
+      ).firstMatch(message);
+      if (phoneMatch != null) {
+        senderOrRecipient = phoneMatch.group(1)?.trim() ?? '';
+      }
+
+      reason = 'Airtime';
     } else if (lowerMsg.contains('paid')) {
       type = 'expense';
       amount = extractAmount(RegExp(r'paid ETB ([0-9,.]+)'));
 
-      // Extract for: "for package Hourly unlimited Internet purchase made for 972665987 on "
+      // Extract for: "for package Monthly Voice plus Data Package: 1.2 GB and 168Min purchase made for 972665987 on "
+      //         or: "for package subscription to 972665987 on "
+      //         or: "for package Hourly unlimited Internet purchase made for 972665987 on "
       final forMatch =
           RegExp(r'for\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
       if (forMatch != null) {
-        senderOrRecipient = forMatch.group(1)?.trim() ?? '';
+        final rawDesc = forMatch.group(1)?.trim() ?? '';
+
+        // If it's a package purchase made for a phone number (e.g. "... made for 972665987" or "... to 972665987"):
+        // Extract the phone number as the recipient.
+        final phoneMatch = RegExp(
+          r'(?:made\s+for|to|for)\s+((?:251|0)?[97]\d{8})',
+          caseSensitive: false,
+        ).firstMatch(rawDesc);
+
+        if (phoneMatch != null) {
+          senderOrRecipient = phoneMatch.group(1)?.trim() ?? rawDesc;
+        } else {
+          senderOrRecipient = rawDesc;
+        }
+
+        if (lowerMsg.contains('package')) {
+          reason = 'Package';
+        }
       }
     } else {
       // Must contain received, transferred, paid, or saving
@@ -240,7 +285,6 @@ class TelebirrParser {
       sender: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderNumber,
       category: category,
       reason: reason,
-      customReasonText: reason,
       rawMessage: message,
       isAutoDetected: true,
       totalBalance: totalBalance,

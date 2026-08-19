@@ -71,9 +71,14 @@ class _HoldToRefreshState extends State<HoldToRefresh>
     curve: const _EasedRefreshCurve(),
   );
 
+  static const double _kSlopThreshold = 10.0;
+
   double _pull = 0;
+  double _startX = 0;
   double _startY = 0;
   bool _trackingTouch = false;
+  bool _isDirectionDetermined = false;
+  bool _isVerticalGesture = false;
   bool _isAtTop = true;
   RefreshPhase _phase = RefreshPhase.idle;
   bool _refreshTriggered = false;
@@ -124,28 +129,28 @@ class _HoldToRefreshState extends State<HoldToRefresh>
           _refreshTriggered = false;
           _pull = 0;
           _trackingTouch = false;
+          _isDirectionDetermined = false;
+          _isVerticalGesture = false;
         }
       }
     }
   }
 
   bool _onScroll(ScrollNotification n) {
-    if (n.metrics.axis != Axis.vertical) return false;
-    _isAtTop = n.metrics.pixels <= 1.0;
-
-    // While dragging or when pull progress is active, lock scroll view at 0,0
-    if (_phase == RefreshPhase.dragging || _pull > 0) {
-      return true;
-    }
-
-    if (_phase == RefreshPhase.refreshing || _phase == RefreshPhase.done) {
+    // If a horizontal scroll occurs (e.g. nested carousel scrolling), immediately invalidate any refresh pull
+    if (n.metrics.axis == Axis.horizontal) {
+      if (_phase == RefreshPhase.dragging || _pull > 0 || _isVerticalGesture) {
+        _isVerticalGesture = false;
+        _isDirectionDetermined = true;
+        _pull = 0;
+        _phase = RefreshPhase.idle;
+        refreshStateNotifier.value = const RefreshState();
+      }
       return false;
     }
 
-    if (!_trackingTouch) {
-      final over = n.metrics.minScrollExtent - n.metrics.pixels;
-      _pull = over > 0 ? over : 0;
-      _updateProgress();
+    if (n.metrics.axis == Axis.vertical) {
+      _isAtTop = n.metrics.pixels <= 1.0;
     }
 
     return false;
@@ -154,8 +159,12 @@ class _HoldToRefreshState extends State<HoldToRefresh>
   void _onPointerDown(PointerDownEvent e) {
     if (_phase == RefreshPhase.refreshing || _phase == RefreshPhase.done) return;
     if (_isAtTop) {
+      _startX = e.position.dx;
       _startY = e.position.dy;
       _trackingTouch = true;
+      _isDirectionDetermined = false;
+      _isVerticalGesture = false;
+      _pull = 0;
     }
   }
 
@@ -165,14 +174,44 @@ class _HoldToRefreshState extends State<HoldToRefresh>
         _phase == RefreshPhase.done) {
       return;
     }
-    final dy = e.position.dy - _startY;
-    if (dy > 0) {
-      _pull = dy;
-      _updateProgress();
-    } else {
-      if (_pull > 0) {
-        _pull = 0;
+
+    final double deltaX = (e.position.dx - _startX).abs();
+    final double deltaY = e.position.dy - _startY;
+
+    // Step 1: Direction disambiguation if not yet determined
+    if (!_isDirectionDetermined) {
+      final double totalDistSquared = (deltaX * deltaX + deltaY * deltaY);
+      if (totalDistSquared >= _kSlopThreshold * _kSlopThreshold) {
+        _isDirectionDetermined = true;
+        // Must be pulling downwards (deltaY > 0), significantly steeper vertically than horizontally, and starting from top
+        if (deltaY > 0 && deltaY >= deltaX * 1.5 && _isAtTop) {
+          _isVerticalGesture = true;
+          // Offset startY so pull progress begins smoothly from 0
+          _startY = e.position.dy;
+        } else {
+          // Horizontal movement, diagonal swipe, or upward scroll -> lock out pull-to-refresh
+          _isVerticalGesture = false;
+          _pull = 0;
+          if (_phase == RefreshPhase.dragging) {
+            _phase = RefreshPhase.idle;
+            refreshStateNotifier.value = const RefreshState();
+          }
+        }
+      }
+      return;
+    }
+
+    // Step 2: If confirmed vertical gesture, track pull distance
+    if (_isVerticalGesture) {
+      final double dy = e.position.dy - _startY;
+      if (dy > 0) {
+        _pull = dy;
         _updateProgress();
+      } else {
+        if (_pull > 0) {
+          _pull = 0;
+          _updateProgress();
+        }
       }
     }
   }
@@ -195,10 +234,20 @@ class _HoldToRefreshState extends State<HoldToRefresh>
 
   void _onRelease() {
     _trackingTouch = false;
-    if (_phase == RefreshPhase.dragging) {
+    final bool wasVertical = _isVerticalGesture;
+    _isDirectionDetermined = false;
+    _isVerticalGesture = false;
+
+    if (wasVertical && _phase == RefreshPhase.dragging) {
       if (_pull >= widget.triggerDistance) {
         _triggerRefresh();
       } else {
+        _phase = RefreshPhase.idle;
+        _pull = 0;
+        refreshStateNotifier.value = const RefreshState();
+      }
+    } else {
+      if (_phase == RefreshPhase.dragging) {
         _phase = RefreshPhase.idle;
         _pull = 0;
         refreshStateNotifier.value = const RefreshState();

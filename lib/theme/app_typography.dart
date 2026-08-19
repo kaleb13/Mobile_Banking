@@ -15,12 +15,12 @@ class AppTypography {
     letterSpacing: -0.5,
   );
 
-  /// Heading 1 — 22px Bold (-0.4 tracking) for modal titles & main screen titles
+  /// Heading 1 — 22px Bold (-0.5 tracking) for main screen titles & page headers
   static const TextStyle heading1 = TextStyle(
     fontFamily: fontFamily,
     fontSize: 22,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   );
 
   /// Heading 2 — 18px Bold (-0.3 tracking) for section headers & card titles

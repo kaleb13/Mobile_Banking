@@ -59,12 +59,15 @@ class AppTransaction {
   /// True if this transaction's raw message body contains any web links.
   bool get hasLinks => extractedLinks.isNotEmpty;
 
-  /// True when this transaction was auto-created from a special SMS like Savings Account.
+  /// True when this transaction was auto-created with a locked system reason (Savings/Sanduq, Airtime, Package).
   bool get isReasonLocked {
     if (!isAutoDetected) return false;
     final lower = rawMessage.toLowerCase();
+    final rLower = (reason ?? customReasonText)?.toLowerCase().trim();
     return lower.contains('saving account') ||
-        lower.contains('saving balance');
+        lower.contains('saving balance') ||
+        rLower == 'airtime' ||
+        rLower == 'package';
   }
 
   Map<String, dynamic> toMap() {

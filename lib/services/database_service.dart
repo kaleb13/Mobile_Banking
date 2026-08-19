@@ -492,7 +492,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       'Transportation': {'icon': 'directions_car', 'color': '#3B82F6', 'subs': ['Fuel & Gas', 'Taxi & Rideshare', 'Public Transit', 'Parking & Tolls', 'Vehicle Maintenance']},
       'Housing': {'icon': 'home', 'color': '#6366F1', 'subs': ['Rent', 'Mortgage', 'Property Tax', 'Home Repairs', 'Furniture']},
       'Utilities': {'icon': 'lightbulb', 'color': '#F59E0B', 'subs': ['Electricity', 'Water', 'Gas', 'Garbage & Sewer']},
-      'Mobile & Internet': {'icon': 'phone_android', 'color': '#8B5CF6', 'subs': ['Airtime', 'Internet', 'Wifi', 'Data Bundles']},
+      'Mobile & Internet': {'icon': 'phone_android', 'color': '#8B5CF6', 'subs': ['Airtime', 'Package', 'Internet', 'Wifi']},
       'Goods': {'icon': 'shopping_bag', 'color': '#EC4899', 'subs': ['Clothing & Apparel', 'Electronics', 'Household Supplies', 'Supermarket Goods', 'Gifts']},
       'Entertainment': {'icon': 'movie', 'color': '#8B5CF6', 'subs': ['Movies', 'Gaming', 'Streaming & Subscriptions', 'Events & Concerts', 'Hobbies']},
       'Health & Personal Care': {'icon': 'medical_services', 'color': '#14B8A6', 'subs': ['Pharmacy & Medicine', 'Doctor & Hospital', 'Salon & Spa', 'Fitness & Gym']},
@@ -500,6 +500,14 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       'Investment & Savings': {'icon': 'trending_up', 'color': '#10B981', 'subs': ['Stocks & Crypto', 'Fixed Deposit', 'Personal Savings']},
       'Salary': {'icon': 'account_balance_wallet', 'color': '#10B981', 'subs': ['Primary Salary', 'Bonus & Commission', 'Freelance']},
     };
+
+    // Migrate legacy 'Data Bundles' / 'Data Bundle' / 'data-bundle' to 'Package' under Mobile & Internet
+    await db.execute('''
+      UPDATE reasons 
+      SET name = 'Package' 
+      WHERE (LOWER(name) = 'data bundles' OR LOWER(name) = 'data bundle' OR LOWER(name) = 'data-bundle')
+      AND parentId IN (SELECT id FROM reasons WHERE LOWER(name) = 'mobile & internet');
+    ''');
 
     // Remove legacy food subcategories
     await db.delete('reasons',
@@ -999,12 +1007,49 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
   Future<int> updateReason(AppReason reason) async {
     final db = await instance.database;
+    if (reason.id != null) {
+      final reasonQuery =
+          await db.query('reasons', where: 'id = ?', whereArgs: [reason.id]);
+      if (reasonQuery.isNotEmpty) {
+        final r = reasonQuery.first;
+        final origNameLower = (r['name'] as String).trim().toLowerCase();
+        final parentId = r['parentId'] as int?;
+
+        // Protect 'Mobile & Internet' top category from renaming
+        if (parentId == null && origNameLower == 'mobile & internet') {
+          return 0;
+        }
+        // Protect 'Airtime' and 'Package' subcategories from renaming
+        if (parentId != null &&
+            (origNameLower == 'airtime' || origNameLower == 'package')) {
+          return 0;
+        }
+      }
+    }
     return await db.update('reasons', reason.toMap(),
         where: 'id = ? AND isSpecial = 0', whereArgs: [reason.id]);
   }
 
   Future<int> deleteReason(int id) async {
     final db = await instance.database;
+    final reasonQuery =
+        await db.query('reasons', where: 'id = ?', whereArgs: [id]);
+    if (reasonQuery.isNotEmpty) {
+      final r = reasonQuery.first;
+      final nameLower = (r['name'] as String).trim().toLowerCase();
+      final parentId = r['parentId'] as int?;
+
+      // Protect 'Mobile & Internet' top category
+      if (parentId == null && nameLower == 'mobile & internet') {
+        return 0;
+      }
+      // Protect 'Airtime' and 'Package' subcategories
+      if (parentId != null &&
+          (nameLower == 'airtime' || nameLower == 'package')) {
+        return 0;
+      }
+    }
+
     // Also delete links and subcategories
     await db.delete('reason_links', where: 'reasonId = ?', whereArgs: [id]);
     await db.delete('reasons', where: 'parentId = ?', whereArgs: [id]);
@@ -1441,6 +1486,30 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       return maps.first['value'] as String?;
     }
     return null;
+  }
+
+  // ──────────────────────────────────────────────
+  // Pause Tracking Data Clean-Up Methods
+  // ──────────────────────────────────────────────
+  /// Deletes transactions for [bankName] that DO NOT have an assigned reason, note, or bookmark.
+  /// Transactions with reasons, category links, notes, or bookmarks are strictly preserved.
+  Future<int> deleteUncategorizedTransactionsForBank(String bankName) async {
+    final db = await instance.database;
+    return await db.delete(
+      'transactions',
+      where: 'UPPER(name) = ? AND (reason IS NULL OR reason = "") AND reasonId IS NULL AND (customReasonText IS NULL OR customReasonText = "") AND (note IS NULL OR note = "") AND isBookmarked = 0',
+      whereArgs: [bankName.toUpperCase()],
+    );
+  }
+
+  /// Deletes notifications for [bankName] that DO NOT have an assigned reason.
+  Future<int> deleteUncategorizedNotificationsForBank(String bankName) async {
+    final db = await instance.database;
+    return await db.delete(
+      'notifications',
+      where: 'UPPER(sender) = ? AND (reason IS NULL OR reason = "")',
+      whereArgs: [bankName.toUpperCase()],
+    );
   }
 }
 

@@ -206,22 +206,34 @@ class SmsBatchParser {
           runningBalances[bankKey] = tx.totalBalance;
         }
 
+        AppTransaction currentTx = tx;
         // Apply auto-reason categorization rules
-        if (tx.reasonId == null && tx.customReasonText == null) {
-          final sKey = tx.sender.toLowerCase().trim();
-          final tKey = tx.type.toLowerCase().trim();
+        if (currentTx.reason != null && currentTx.reasonId == null) {
+          final rName = currentTx.reason!.toLowerCase().trim();
+          try {
+            final matched = params.autoReasonRules.firstWhere(
+              (r) => r.name.toLowerCase().trim() == rName,
+            );
+            currentTx = currentTx.copyWith(
+              reasonId: matched.id,
+              reason: matched.name,
+            );
+          } catch (_) {}
+        } else if (currentTx.reasonId == null && currentTx.customReasonText == null) {
+          final sKey = currentTx.sender.toLowerCase().trim();
+          final tKey = currentTx.type.toLowerCase().trim();
           final matchedRule = ruleLookup['${sKey}_$tKey'] ?? ruleLookup[sKey];
           if (matchedRule != null) {
-            tx = tx.copyWith(
+            currentTx = currentTx.copyWith(
               reasonId: matchedRule.id,
               reason: matchedRule.name,
             );
           }
         }
 
-        final txId = tx.id ?? '${tx.name}_${tx.date.millisecondsSinceEpoch}_${tx.amount}';
+        final txId = currentTx.id ?? '${currentTx.name}_${currentTx.date.millisecondsSinceEpoch}_${currentTx.amount}';
         if (seenTxIds.add(txId)) {
-          parsedTransactions.add(tx);
+          parsedTransactions.add(currentTx);
         }
       } else if (bank != null) {
         // Unrecognized banking SMS -> save to notifications

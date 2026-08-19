@@ -315,16 +315,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildWelcomePageBody() {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 0, 28, 120),
+        padding: const EdgeInsets.fromLTRB(28, 0, 28, 124),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Spacer(flex: 3),
+            const Spacer(),
             const AppBadge.success(
               text: 'SMART FINANCIAL TRACKING',
               size: AppBadgeSize.small,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             const Text(
               'Manage your finances\nwith clarity.',
               style: TextStyle(
@@ -344,7 +344,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 height: 1.5,
               ),
             ),
-            const Spacer(flex: 5),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -364,7 +364,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     ];
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,29 +397,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 16),
 
-            // Compact, clean bank tiles container
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: ListView.separated(
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: supportedBanks.length,
-                  separatorBuilder: (context, index) => Divider(
-                    height: 1,
-                    thickness: 0.5,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = supportedBanks[index];
-                    final String name = item['name']!;
-                    final String type = item['type']!;
-
-                    return Padding(
+            // Compact, clean bank tiles container hugging content
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (int i = 0; i < supportedBanks.length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: Colors.white.withValues(alpha: 0.06),
+                      ),
+                    Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                       child: Row(
                         children: [
@@ -431,7 +427,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Center(
-                              child: BankCardWidget.bankLogo(name, 26, Colors.white),
+                              child: BankCardWidget.bankLogo(supportedBanks[i]['name']!, 26, Colors.white),
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -440,7 +436,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  name,
+                                  supportedBanks[i]['name']!,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -449,7 +445,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  type,
+                                  supportedBanks[i]['type']!,
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.45),
                                     fontSize: 11.5,
@@ -464,9 +460,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 12),

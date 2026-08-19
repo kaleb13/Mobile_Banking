@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/finance_provider.dart';
 import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
-import '../../widgets/app_back_button.dart';
+import '../../widgets/app_header.dart';
 import 'reason_management_screen.dart';
 import 'about_app_screen.dart';
 import '../../models/app_currency.dart';
@@ -80,22 +80,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Header ────────────────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
-                      child: Row(
-                        children: [
-                          const AppBackButton(),
-                          const Text(
-                            'Settings',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ],
-                      ),
+                    const AppHeader(
+                      title: 'Settings',
+                      showBackButton: true,
+                      padding: EdgeInsets.fromLTRB(8, 12, 16, 8),
                     ),
 
                     const SizedBox(height: 4),

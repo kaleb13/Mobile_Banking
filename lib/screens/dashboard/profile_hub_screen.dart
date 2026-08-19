@@ -9,6 +9,7 @@ import '../../widgets/level_up_modal.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_header.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/finance_provider.dart';
 import 'saving_goals_screen.dart';
@@ -56,28 +57,19 @@ class ProfileHubScreen extends StatelessWidget {
                   children: [
                     const SizedBox(height: 12),
                     
-                    // ── Header Row: Title & White Levels Pill ──────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Profile Hub',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        AppButton.secondary(
-                          text: 'Levels',
-                          trailingIcon: Icons.arrow_forward_ios_rounded,
-                          fullWidth: false,
-                          height: 32,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          onPressed: () => _showLevelsInfoDialog(context),
-                        ),
-                      ],
+                    // ── Header: AppHeader with Levels Action ──────────────────
+                    AppHeader(
+                      title: 'Profile Hub',
+                      showBackButton: false,
+                      padding: EdgeInsets.zero,
+                      trailing: AppButton.secondary(
+                        text: 'Levels',
+                        trailingIcon: Icons.arrow_forward_ios_rounded,
+                        fullWidth: false,
+                        height: 32,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        onPressed: () => _showLevelsInfoDialog(context),
+                      ),
                     ),
 
                     const SizedBox(height: 20),

@@ -7,7 +7,6 @@ import '../providers/finance_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_badges.dart';
 import '../widgets/bank_card_widget.dart';
-import '../screens/dashboard/manage_bank_screen.dart';
 import '../screens/dashboard/sender_detail_screen.dart';
 import '../screens/dashboard/analysis_screen.dart';
 import 'app_toast.dart';
@@ -258,105 +257,96 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                           ),
                         ),
 
-                        const SizedBox(height: 10),
+                        if (!currentPaused) ...[
+                          const SizedBox(height: 10),
 
-                        // 2. Bank Credentials & Setup Action Pill (Fires second)
-                        _StaggeredRevealPill(
-                          controller: _animController,
-                          startInterval: 0.26,
-                          endInterval: 0.68,
-                          child: _FocusActionPill(
-                            icon: Icons.account_balance_rounded,
-                            title: 'Bank Details & Credentials',
-                            subtitle: 'Account number & SIM card linkage',
-                            trailing: const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 13,
-                              color: AppColors.textDisabled,
-                            ),
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              final nav = Navigator.of(context);
-                              nav.pop();
-                              if (sender != null) {
-                                nav.push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ManageBankScreen(sender: sender),
-                                  ),
+                          // 2. Bank Details & Credentials Action Pill (Fires second)
+                          _StaggeredRevealPill(
+                            controller: _animController,
+                            startInterval: 0.26,
+                            endInterval: 0.68,
+                            child: _FocusActionPill(
+                              icon: Icons.account_balance_rounded,
+                              title: 'Bank Details & Credentials',
+                              subtitle: 'Account number & SIM card linkage',
+                              trailing: const AppBadge.neutral(
+                                text: 'Soon',
+                                size: AppBadgeSize.small,
+                              ),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                AppToast.info(
+                                  context,
+                                  message: 'Coming Soon',
+                                  subtitle:
+                                      'Bank credentials and SIM card linkage are coming soon!',
                                 );
-                              } else {
-                                if (context.mounted) {
-                                  AppToast.error(
-                                    context,
-                                    message: 'Bank Settings Unavailable',
-                                    subtitle: 'Could not load credentials for this wallet',
+                              },
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // 3. Transaction History Action Pill (Fires third)
+                          _StaggeredRevealPill(
+                            controller: _animController,
+                            startInterval: 0.40,
+                            endInterval: 0.82,
+                            child: _FocusActionPill(
+                              icon: Icons.receipt_long_rounded,
+                              title: 'Transaction History',
+                              subtitle: 'View statement & $liveTxCount transactions',
+                              trailing: AppBadge.neutral(
+                                text: '$liveTxCount tx',
+                                size: AppBadgeSize.small,
+                              ),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                final nav = Navigator.of(context);
+                                nav.pop();
+                                if (sender != null) {
+                                  nav.push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          SenderDetailScreen(sender: sender),
+                                    ),
                                   );
                                 }
-                              }
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // 3. Transaction History Action Pill (Fires third)
-                        _StaggeredRevealPill(
-                          controller: _animController,
-                          startInterval: 0.40,
-                          endInterval: 0.82,
-                          child: _FocusActionPill(
-                            icon: Icons.receipt_long_rounded,
-                            title: 'Transaction History',
-                            subtitle: 'View statement & $liveTxCount transactions',
-                            trailing: AppBadge.neutral(
-                              text: '$liveTxCount tx',
-                              size: AppBadgeSize.small,
+                              },
                             ),
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              final nav = Navigator.of(context);
-                              nav.pop();
-                              if (sender != null) {
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // 4. Spending Analytics & Insights Action Pill (Fires fourth)
+                          _StaggeredRevealPill(
+                            controller: _animController,
+                            startInterval: 0.54,
+                            endInterval: 0.96,
+                            child: _FocusActionPill(
+                              icon: Icons.insights_rounded,
+                              title: 'Spending Analytics & Insights',
+                              subtitle: 'Category breakdown, cashflow & net trends',
+                              trailing: const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 13,
+                                color: AppColors.textDisabled,
+                              ),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                final nav = Navigator.of(context);
+                                nav.pop();
                                 nav.push(
                                   MaterialPageRoute(
-                                    builder: (_) =>
-                                        SenderDetailScreen(sender: sender),
+                                    builder: (_) => AnalysisScreen(
+                                      initialBankFilter: widget.senderName,
+                                    ),
                                   ),
                                 );
-                              }
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // 4. Spending Analytics & Insights Action Pill (Fires fourth)
-                        _StaggeredRevealPill(
-                          controller: _animController,
-                          startInterval: 0.54,
-                          endInterval: 0.96,
-                          child: _FocusActionPill(
-                            icon: Icons.insights_rounded,
-                            title: 'Spending Analytics & Insights',
-                            subtitle: 'Category breakdown, cashflow & net trends',
-                            trailing: const Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              size: 13,
-                              color: AppColors.textDisabled,
+                              },
                             ),
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              final nav = Navigator.of(context);
-                              nav.pop();
-                              nav.push(
-                                MaterialPageRoute(
-                                  builder: (_) => const AnalysisScreen(),
-                                ),
-                              );
-                            },
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ],
