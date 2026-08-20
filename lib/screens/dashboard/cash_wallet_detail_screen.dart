@@ -67,7 +67,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 bottom: false,
                 child: Padding(
                   padding: const EdgeInsets.only(
-                      top: 16, left: 16, right: 16, bottom: 24),
+                      top: 16, left: 12, right: 16, bottom: 24),
                   child: Column(
                     children: [
                       Row(
@@ -98,7 +98,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(width: 48), // Spacer
+                          const SizedBox(width: 36), // Spacer to balance 36px back button
                         ],
                       ),
                       const SizedBox(height: 24),

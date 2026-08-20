@@ -336,7 +336,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           centerTitle: false,
-          titleSpacing: 0,
+          titleSpacing: 10,
+          leadingWidth: 48,
           title: Text(
             widget.categoryName,
             style: const TextStyle(
@@ -348,7 +349,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           backgroundColor: AppColors.background.withValues(alpha: 0.85),
           elevation: 0,
           scrolledUnderElevation: 0,
-          leading: const AppBackButton(),
+          leading: const Padding(
+            padding: EdgeInsets.only(left: 12.0),
+            child: AppBackButton(),
+          ),
         ),
         body: Column(
           children: [

@@ -45,10 +45,11 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
               children: [
                 // ── Header ──────────────────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 16, 8),
                   child: Row(
                     children: [
                       const AppBackButton(),
+                      const SizedBox(width: 10),
                       const Text(
                         'Saving Goals',
                         style: TextStyle(

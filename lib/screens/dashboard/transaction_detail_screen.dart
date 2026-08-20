@@ -13,6 +13,7 @@ import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/link_extractor.dart';
 import '../../widgets/app_back_button.dart';
+import '../../widgets/app_menu_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
@@ -294,7 +295,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           centerTitle: false,
-          titleSpacing: 0,
+          titleSpacing: 10,
+          leadingWidth: 48,
           title: const Text(
             'Transaction Details',
             style: TextStyle(
@@ -306,7 +308,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           backgroundColor: AppColors.background.withValues(alpha: 0.85),
           elevation: 0,
           scrolledUnderElevation: 0,
-          leading: const AppBackButton(),
+          leading: const Padding(
+            padding: EdgeInsets.only(left: 12.0),
+            child: AppBackButton(),
+          ),
           actions: [
             if (currentTx.id != null) ...[
               Container(
@@ -347,58 +352,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ),
               const SizedBox(width: 6),
             ],
-            Theme(
-              data: Theme.of(context).copyWith(
-                splashColor: Colors.white.withValues(alpha: 0.15),
-                highlightColor: Colors.white.withValues(alpha: 0.12),
-              ),
-              child: PopupMenuButton<String>(
-                onOpened: () => setState(() => _isMenuOpen = true),
-                onCanceled: () => setState(() => _isMenuOpen = false),
-                offset: const Offset(0, 42),
-                constraints: const BoxConstraints(minWidth: 140, maxWidth: 180),
-                borderRadius: BorderRadius.circular(100),
-                padding: EdgeInsets.zero,
-                icon: Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _isMenuOpen
-                        ? AppColors.buttonSecondary
-                        : Colors.transparent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.more_vert_rounded,
-                      color: Colors.white, size: 20),
+            AppMenuButton<String>.dark(
+              items: const [
+                AppMenuItem<String>(
+                  value: 'delete',
+                  label: 'Delete',
+                  icon: Icons.delete_outline_rounded,
                 ),
-                color: AppColors.surface,
-                elevation: 10,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                onSelected: (value) {
-                  setState(() => _isMenuOpen = false);
-                  if (value == 'delete') {
-                    _confirmDeleteTransaction(context, provider);
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem<String>(
-                    value: 'delete',
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'Delete',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.negative,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _confirmDeleteTransaction(context, provider);
+                }
+              },
             ),
             const SizedBox(width: 8),
           ],

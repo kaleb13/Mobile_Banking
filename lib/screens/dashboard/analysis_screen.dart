@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,8 @@ import '../../widgets/app_badges.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
+import '../../widgets/interactive_drag_handle.dart';
 import 'category_detail_screen.dart';
 import 'all_transactions_screen.dart';
 
@@ -43,6 +46,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   bool _isBankPerformanceExpanded = false;
   bool _isPersonContactExpanded = false;
   bool _isCategoryAnalysisExpanded = false;
+  bool _isNetBreakdownExpanded = false;
   PeriodFilter _selectedPeriod = PeriodFilter.month;
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
   int _selectedSubPeriodIndex = 0;
@@ -286,57 +290,21 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     final safeIndex = _selectedSubPeriodIndex.clamp(0, items.length - 1);
 
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final isSelected = index == safeIndex;
-          final item = items[index];
-
-          return GestureDetector(
-            onTap: () {
-              final defaultIdx = _getDefaultSubPeriodIndex(_selectedPeriod);
-              final targetIdx =
-                  (isSelected && index != defaultIdx) ? defaultIdx : index;
-              _onSubPeriodChanged(index);
-              if (_subPeriodScrollController.hasClients) {
-                _subPeriodScrollController.jumpToPage(targetIdx);
-              }
-            },
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.surfaceElevated
-                    : AppColors.surface,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Center(
-                child: Text(
-                  item.label,
-                  style: TextStyle(
-                    color: isSelected
-                        ? Colors.white
-                        : AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+    return AppSecondaryTabBar(
+      tabs: items.map((item) => item.label).toList(),
+      selectedIndex: safeIndex,
+      isScrollable: true,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      onTabChanged: (index) {
+        final isSelected = index == safeIndex;
+        final defaultIdx = _getDefaultSubPeriodIndex(_selectedPeriod);
+        final targetIdx =
+            (isSelected && index != defaultIdx) ? defaultIdx : index;
+        _onSubPeriodChanged(index);
+        if (_subPeriodScrollController.hasClients) {
+          _subPeriodScrollController.jumpToPage(targetIdx);
+        }
+      },
     );
   }
 
@@ -1071,177 +1039,208 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             opacity: _fadeAnim,
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              child: SafeArea(
-                bottom: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 12),
-                    // ── 1. Standardized Single Top Header with Filter Action ──
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: AppHeader(
-                        title: _selectedBank != 'All Wallets' &&
-                                _selectedBank != 'All Banks' &&
-                                _selectedBank != 'All'
-                            ? '$_selectedBank Analytics'
-                            : 'Spending Charts',
-                        showBackButton: Navigator.canPop(context),
-                        padding: EdgeInsets.zero,
-                        trailing: GestureDetector(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            setState(() {
-                              _isFilterExpanded = !_isFilterExpanded;
-                            });
-                          },
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: _isFilterExpanded
-                                  ? AppColors.surfaceElevated
-                                  : AppColors.surface,
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.filter_list_rounded,
-                                color: _isFilterExpanded
-                                    ? Colors.white
-                                    : AppColors.textSoft,
-                                size: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── 1. Top Header & Filters Surface Section with Overscroll Stretch ──
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Upward extension filling the pull-down overscroll region seamlessly
+                      Positioned(
+                        top: -1000,
+                        left: 0,
+                        right: 0,
+                        bottom: 28,
+                        child: Container(
+                          color: AppColors.surface,
+                        ),
+                      ),
+                      Container(
+                        width: double.infinity,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(28),
+                          ),
+                        ),
+                        child: SafeArea(
+                          bottom: false,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Header title & filter action button
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                                child: AppHeader(
+                                  title: _selectedBank != 'All Wallets' &&
+                                          _selectedBank != 'All Banks' &&
+                                          _selectedBank != 'All'
+                                      ? '$_selectedBank Analytics'
+                                      : 'Spending Charts',
+                                  showBackButton: Navigator.canPop(context),
+                                  padding: EdgeInsets.zero,
+                                  trailing: GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setState(() {
+                                        _isFilterExpanded = !_isFilterExpanded;
+                                      });
+                                    },
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: _isFilterExpanded
+                                            ? AppColors.buttonPrimary
+                                            : AppColors.heatmapNeutral,
+                                        borderRadius: BorderRadius.circular(100),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.filter_list_rounded,
+                                          color: _isFilterExpanded
+                                              ? AppColors.buttonPrimaryText
+                                              : AppColors.textSoft,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+
+                              // Expandable dropdown filter pills
+                              _buildDropdownFiltersSection(provider),
+                              const SizedBox(height: 12),
+
+                              // Reacting Sub-Period Filter Selector
+                              _buildSubPeriodSelector(),
+                              const SizedBox(height: 16),
+                            ],
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── 2. Daily Net Calendar Heatmap Card Section (Edge-to-Edge) ──
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(28),
                     ),
-
-                    // ── Expandable Dropdown Filters Section (Edge-to-Edge) ──
-                    _buildDropdownFiltersSection(provider),
-                    const SizedBox(height: 12),
-
-                    // ── Reacting Sub-Period Filter Selector (Edge-to-Edge) ──
-                    _buildSubPeriodSelector(),
-                    const SizedBox(height: 14),
-
-                    // ── Main Page Content Sections ──
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ── 4. Daily Net Calendar Heatmap Grid Section ───────
-                          DailyNetHeatmapWidget(
-                            bankTransactions: data.filteredBankTxs,
-                            cashTransactions: data.filteredCashTxs,
-                            periodType:
-                                HeatmapPeriodType.values[_selectedPeriod.index],
-                            selectedDate: _getSynchronizedTargetDate(),
-                            highlightedWeekRange: _getSynchronizedWeekRange(),
-                            selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
-                            selectedYear: _selectedPeriod == PeriodFilter.year
-                                ? (DateTime.now().year -
-                                    (2 - _selectedSubPeriodIndex))
-                                : DateTime.now().year,
-                            selectedDay: _selectedHeatmapDay,
-                            onDaySelected: (day) {
-                              _changeFilter(() {
-                                if (day != null &&
-                                    _selectedPeriod == PeriodFilter.day) {
-                                  final now = DateTime.now();
-                                  final todayMidnight =
-                                      DateTime(now.year, now.month, now.day);
-                                  final dayMidnight =
-                                      DateTime(day.year, day.month, day.day);
-                                  final diff = todayMidnight
-                                      .difference(dayMidnight)
-                                      .inDays;
-                                  if (diff >= 0 && diff < 14) {
-                                    _selectedSubPeriodIndex = 13 - diff;
-                                    if (_subPeriodScrollController.hasClients) {
-                                      _subPeriodScrollController
-                                          .jumpToPage(_selectedSubPeriodIndex);
-                                    }
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DailyNetHeatmapWidget(
+                          bankTransactions: data.filteredBankTxs,
+                          cashTransactions: data.filteredCashTxs,
+                          periodType:
+                              HeatmapPeriodType.values[_selectedPeriod.index],
+                          selectedDate: _getSynchronizedTargetDate(),
+                          highlightedWeekRange: _getSynchronizedWeekRange(),
+                          selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
+                          selectedYear: _selectedPeriod == PeriodFilter.year
+                              ? (DateTime.now().year -
+                                  (2 - _selectedSubPeriodIndex))
+                              : DateTime.now().year,
+                          selectedDay: _selectedHeatmapDay,
+                          onDaySelected: (day) {
+                            _changeFilter(() {
+                              if (day != null &&
+                                  _selectedPeriod == PeriodFilter.day) {
+                                final now = DateTime.now();
+                                final todayMidnight =
+                                    DateTime(now.year, now.month, now.day);
+                                final dayMidnight =
+                                    DateTime(day.year, day.month, day.day);
+                                final diff = todayMidnight
+                                    .difference(dayMidnight)
+                                    .inDays;
+                                if (diff >= 0 && diff < 14) {
+                                  _selectedSubPeriodIndex = 13 - diff;
+                                  if (_subPeriodScrollController.hasClients) {
+                                    _subPeriodScrollController
+                                        .jumpToPage(_selectedSubPeriodIndex);
                                   }
-                                } else {
-                                  _selectedHeatmapDay = day;
                                 }
-                              });
-                            },
-                            onMonthSelected: (monthIndex) {
-                              _changeFilter(() {
-                                _selectedPeriod = PeriodFilter.month;
-                                _selectedSubPeriodIndex = monthIndex;
-                                _selectedHeatmapDay = null;
-                                if (_subPeriodScrollController.hasClients) {
-                                  _subPeriodScrollController
-                                      .jumpToPage(monthIndex);
-                                }
-                              });
-                            },
-                            isBalanceVisible: provider.isBalanceVisible,
-                            userLevel: provider.userLevel,
-                          ),
-                          if (_selectedHeatmapDay != null)
-                            _buildActiveDayFilterBanner(),
-                          const SizedBox(height: 24),
-
-                          // ── 5. Prominent Inflow / Outflow & Net Cash Flow Summary Section ─────────────────────
-                          _buildRedesignedInflowOutflowNetSection(
-                            data.totalIncome,
-                            data.totalExpense,
-                            data.netPnl,
-                            provider.isBalanceVisible,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── 5. Standalone Segmented Distribution Bar ──────────────────────────
-                          _buildStandaloneSegmentedBar(
-                            data.categories,
-                            data.chartTotal,
-                          ),
-                          const SizedBox(height: 10),
-
-                          // ── 6. Category Breakdown & Go Deeper Card ────────────────────────────
-                          _buildCategoryBreakdownCard(
-                            data.categories,
-                            data.chartTotal,
-                            data.netPnl,
-                            provider.isBalanceVisible,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── 7. Redesigned Category Analysis Card ────────────────
-                          _buildReasonBreakdownSection(
-                            data.filteredBankTxs,
-                            data.filteredCashTxs,
-                            provider,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── 8. Person & Counterparty Analytics Section ─────────
-                          _buildCounterpartyAnalyticsSection(
-                            data.filteredBankTxs,
-                            provider,
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── 9. Redesigned Bank Performance Breakdown ───────────
-                          _buildRedesignedBankPerformance(
-                            data.bankBreakdown,
-                            data.filteredBankTxs,
-                            data.filteredCashTxs,
-                            provider.isBalanceVisible,
-                          ),
-                          const SizedBox(height: 80),
+                              } else {
+                                _selectedHeatmapDay = day;
+                              }
+                            });
+                          },
+                          onMonthSelected: (monthIndex) {
+                            _changeFilter(() {
+                              _selectedPeriod = PeriodFilter.month;
+                              _selectedSubPeriodIndex = monthIndex;
+                              _selectedHeatmapDay = null;
+                              if (_subPeriodScrollController.hasClients) {
+                                _subPeriodScrollController
+                                    .jumpToPage(monthIndex);
+                              }
+                            });
+                          },
+                          isBalanceVisible: provider.isBalanceVisible,
+                          userLevel: provider.userLevel,
+                        ),
+                        if (_selectedHeatmapDay != null) ...[
+                          const SizedBox(height: 12),
+                          _buildActiveDayFilterBanner(),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── 3. Prominent Inflow / Outflow & Net Cash Flow Summary Section ──
+                  _buildRedesignedInflowOutflowNetSection(
+                    data.totalIncome,
+                    data.totalExpense,
+                    data.netPnl,
+                    provider.isBalanceVisible,
+                    provider,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── 4. Unified White Net Breakdown & Distribution Card ──────────────
+                  _buildUnifiedCategoryBreakdownCard(
+                    data.categories,
+                    data.chartTotal,
+                    data.netPnl,
+                    provider.isBalanceVisible,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── 6. Redesigned Category Analysis Card ──────────────────
+                  _buildReasonBreakdownSection(
+                    data.filteredBankTxs,
+                    data.filteredCashTxs,
+                    provider,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── 7. Person & Counterparty Analytics Section ────────────
+                  _buildCounterpartyAnalyticsSection(
+                    data.filteredBankTxs,
+                    provider,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── 8. Redesigned Bank Performance Breakdown ──────────────
+                  _buildRedesignedBankPerformance(
+                    data.bankBreakdown,
+                    data.filteredBankTxs,
+                    data.filteredCashTxs,
+                    provider.isBalanceVisible,
+                  ),
+                  const SizedBox(height: 80),
+                ],
               ),
             ),
           ),
@@ -1268,7 +1267,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               // 1. Period / Date Filter Dropdown (Day, Week, Month, Quarter, Year)
@@ -1376,7 +1375,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.heatmapNeutral,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -1410,289 +1409,201 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 4. Prominent Income / Expense & Net Cash Flow Summary Section ─────────
+  // ── 4. Dynamic Glass-Window Stacked Cards Net Cash Flow Hero Section ────────
+  // ── 4. Branded Dark Emerald Ambient Gradient Net Cash Flow Section ────────
   Widget _buildRedesignedInflowOutflowNetSection(
     double totalIncome,
     double totalExpense,
     double netPnl,
     bool isBalanceVisible,
+    FinanceProvider provider,
   ) {
     final fmt = NumberFormat('#,##0.00');
     final isPositiveNet = netPnl >= 0;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        children: [
-          // Top Hero Row: Net Cash Flow Metric & Status Pill
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Net Cash Flow',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  isBalanceVisible
-                      ? CurrencyTextWidget(
-                          amount: netPnl,
-                          showSign: true,
-                          style: TextStyle(
-                            color: isPositiveNet ? AppColors.positive : AppColors.negative,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                          customFormattedStr: fmt.format(netPnl.abs()),
-                        )
-                      : Text(
-                          '****',
-                          style: TextStyle(
-                            color: isPositiveNet ? AppColors.positive : AppColors.negative,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                ],
-              ),
-              // Net Status Badge (AppBadge component)
-              isPositiveNet
-                  ? const AppBadge.success(
-                      text: 'Net Savings',
-                      icon: Icons.trending_up_rounded,
-                      size: AppBadgeSize.medium,
-                    )
-                  : const AppBadge.destructive(
-                      text: 'Net Deficit',
-                      icon: Icons.trending_down_rounded,
-                      size: AppBadgeSize.medium,
-                    ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Divider(color: Colors.white.withValues(alpha: 0.07), height: 1),
-          const SizedBox(height: 14),
+    // Construct sophisticated, executive-grade financial narrative
+    String narrative;
+    if (!isBalanceVisible) {
+      narrative =
+          'Net cash flow metrics across all monitored wallets remain secured in privacy mode. Tap balance toggle to inspect detailed liquidity.';
+    } else if (totalIncome == 0 && totalExpense == 0) {
+      narrative =
+          'No transaction inflows or outflows recorded in this period. Real-time cash movement will dynamically update net liquidity.';
+    } else if (isPositiveNet) {
+      narrative =
+          'Net surplus of +${fmt.format(netPnl)} ETB retained across active wallets, driven by +${fmt.format(totalIncome)} ETB in total deposits against -${fmt.format(totalExpense)} ETB in total outflows.';
+    } else {
+      narrative =
+          'Net outflow deficit of -${fmt.format(netPnl.abs())} ETB recorded across active wallets, reflecting -${fmt.format(totalExpense)} ETB in total transfers against +${fmt.format(totalIncome)} ETB in deposited funds.';
+    }
 
-          // Bottom Side-by-Side: Income & Expense
-          Row(
-            children: [
-              // Income Column
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.positive.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.arrow_downward_rounded,
-                        color: AppColors.positive,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Income',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          isBalanceVisible
-                              ? CurrencyTextWidget(
-                                  amount: totalIncome,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  customFormattedStr: fmt.format(totalIncome),
-                                )
-                              : const Text(
-                                  '****',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 32,
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-              const SizedBox(width: 12),
-              // Expense Column
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.negative.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.arrow_upward_rounded,
-                        color: AppColors.negative,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Expense',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          isBalanceVisible
-                              ? CurrencyTextWidget(
-                                  amount: totalExpense,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  customFormattedStr: fmt.format(totalExpense),
-                                )
-                              : const Text(
-                                  '****',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── 4. Standalone Segmented Morphing Distribution Bar ──────────────────────
-  Widget _buildStandaloneSegmentedBar(
-    List<CategoryArcItem> targetCategories,
-    double targetTotal,
-  ) {
-    return AnimatedBuilder(
-      animation: _morphAnim,
-      builder: (context, child) {
-        final progress = _morphAnim.value;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalW = constraints.maxWidth;
+        const cardHeight = 180.0;
 
         return Container(
-          width: double.infinity,
-          height: 48,
+          height: cardHeight,
+          width: totalW,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(28),
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF0C3025), // Deep emerald glow top-right
+                Color(0xFF071F18), // Rich forest dark mid
+                Color(0xFF0D151D), // Dark slate-charcoal bottom-left
+              ],
+              stops: [0.0, 0.45, 1.0],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final barWidth = constraints.maxWidth;
-
-              return GestureDetector(
-                onTapUp: (details) {
-                  if (targetCategories.isEmpty) return;
-                  final tapX = details.localPosition.dx.clamp(0.0, barWidth);
-
-                  final totalAmt = targetCategories.fold<double>(
-                      0.0, (s, c) => s + c.amount);
-                  if (totalAmt <= 0) return;
-
-                  const double inset = 3.5;
-                  const double gap = 3.5;
-                  final double usableWidth = max(0.0, barWidth - (inset * 2));
-                  final int validCount =
-                      targetCategories.where((s) => s.amount > 0.0001).length;
-                  final double totalGaps =
-                      validCount > 1 ? (validCount - 1) * gap : 0.0;
-                  final double availableWidth =
-                      max(0.0, usableWidth - totalGaps);
-
-                  double cumX = inset;
-                  int clickedIndex = -1;
-                  for (int i = 0; i < targetCategories.length; i++) {
-                    if (targetCategories[i].amount <= 0.0001) continue;
-                    final segW = (targetCategories[i].amount / totalAmt) *
-                        availableWidth;
-                    if (tapX >= cumX && tapX <= cumX + segW + gap) {
-                      clickedIndex = i;
-                      break;
-                    }
-                    cumX += segW + gap;
-                  }
-
-                  setState(() {
-                    _selectedArcIndex = (clickedIndex == _selectedArcIndex)
-                        ? null
-                        : clickedIndex;
-                  });
-                },
-                child: CustomPaint(
-                  size: Size(barWidth, 48),
-                  painter: MorphingSegmentedBarPainter(
-                    oldItems: _previousCategories,
-                    newItems: targetCategories,
-                    oldTotal: _previousTotal,
-                    newTotal: targetTotal,
-                    progress: progress,
-                    selectedIndex: _selectedArcIndex,
+          child: Stack(
+            children: [
+              // ── Ambient Primary Brand Green Radial Glow (Top-Right Corner) ──
+              Positioned(
+                top: -70,
+                right: -50,
+                width: 300,
+                height: 300,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.brandGreen.withValues(alpha: 0.38),
+                        AppColors.brandGreen.withValues(alpha: 0.15),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
+                    ),
                   ),
                 ),
-              );
-            },
+              ),
+
+              // ── Subtle Secondary Glow at bottom left ──
+              Positioned(
+                bottom: -50,
+                left: -40,
+                width: 200,
+                height: 200,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF0E382C).withValues(alpha: 0.35),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Micro-Noise Frosted Grain Texture ──
+              const Positioned.fill(
+                child: CustomPaint(
+                  painter: FrostedGlassNoisePainter(),
+                ),
+              ),
+
+              // ── Centered Brand Content ──
+              Positioned.fill(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: AppColors.brandGreen,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.brandGreen.withValues(alpha: 0.6),
+                                    blurRadius: 6,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'NET CASH FLOW',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.70),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        isBalanceVisible
+                            ? FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  '${isPositiveNet ? '+' : '-'}${fmt.format(netPnl.abs())}',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 27,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.6,
+                                  ),
+                                ),
+                              )
+                            : const Text(
+                                '****',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 27,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.6,
+                                ),
+                              ),
+                        const SizedBox(height: 5),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            narrative,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.80),
+                              fontSize: 10.5,
+                              height: 1.35,
+                              fontWeight: FontWeight.w400,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  // ── 5. Category Breakdown & Go Deeper Card ────────────────────────────────
-  Widget _buildCategoryBreakdownCard(
+  // ── 4. Unified White Net Breakdown & Distribution Card ────────────────────
+  Widget _buildUnifiedCategoryBreakdownCard(
     List<CategoryArcItem> targetCategories,
     double targetTotal,
     double netPnl,
@@ -1710,359 +1621,541 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final selectedItem =
             isCategorySelected ? targetCategories[_selectedArcIndex!] : null;
 
-        final displayTotal =
-            selectedItem != null ? selectedItem.amount : currentTotal;
-        final displayLabel = selectedItem != null
-            ? selectedItem.label
-            : (_drilledCategory != null
-                ? _drilledCategory!.name
-                : '${_getAnalysisTypeLabel(_selectedAnalysisType).toUpperCase()} BREAKDOWN');
-
         final double selectedPct = (targetTotal > 0 && selectedItem != null)
             ? (selectedItem.amount / targetTotal) * 100
             : 100.0;
 
         final fmt = NumberFormat('#,##0.00');
 
+        final bool hasMoreThanSix = targetCategories.length > 6;
+        final List<CategoryArcItem> visibleCategories = _isNetBreakdownExpanded
+            ? targetCategories
+            : targetCategories.take(6).toList();
+
+        // Narrative text for the inner productivity-styled card
+        String narrativeText;
+        if (!isBalanceVisible) {
+          narrativeText =
+              'Category metrics and volume distribution remain masked in privacy mode.';
+        } else if (targetCategories.isEmpty) {
+          narrativeText =
+              'No inflow or outflow transactions recorded for this selected time window.';
+        } else if (selectedItem != null) {
+          narrativeText =
+              '${selectedItem.label} accounts for ${selectedPct.toStringAsFixed(1)}% (${fmt.format(selectedItem.amount)} ETB) of total ${_getAnalysisTypeLabel(_selectedAnalysisType).toLowerCase()} cash flow in this period.';
+        } else {
+          final topCategory = targetCategories.first;
+          final topPct = targetTotal > 0
+              ? (topCategory.amount / targetTotal * 100).toStringAsFixed(1)
+              : '0.0';
+          if (targetCategories.length >= 2) {
+            final secondCategory = targetCategories[1];
+            final combinedPct = targetTotal > 0
+                ? ((topCategory.amount + secondCategory.amount) /
+                        targetTotal *
+                        100)
+                    .toStringAsFixed(0)
+                : '0';
+            narrativeText =
+                '${topCategory.label} and ${secondCategory.label} make up $combinedPct% of your active ${_getAnalysisTypeLabel(_selectedAnalysisType).toLowerCase()} distribution.';
+          } else {
+            narrativeText =
+                '${topCategory.label} accounts for $topPct% of your active ${_getAnalysisTypeLabel(_selectedAnalysisType).toLowerCase()} distribution.';
+          }
+        }
+
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Top Header / Hero Row ──
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Left Side: Back button (if drilled) OR selected item / title
-                  if (_drilledCategory != null) ...[
-                    AppButton.secondary(
-                      text: '← Top Categories',
-                      height: 28,
-                      fontSize: 10.5,
-                      fullWidth: false,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      onPressed: () {
-                        _changeFilter(() {
-                          _drilledCategory = null;
-                          _selectedArcIndex = null;
-                        });
-                      },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 1. Top Interactive Drag / Expand Handle ──
+                Center(
+                  child: InteractiveDragHandle(
+                    color: const Color(0xFFCBD5E1),
+                    width: 36,
+                    height: 4,
+                    padding: const EdgeInsets.only(top: 4, bottom: 12),
+                    onTap: hasMoreThanSix
+                        ? () {
+                            HapticFeedback.selectionClick();
+                            setState(() {
+                              _isNetBreakdownExpanded =
+                                  !_isNetBreakdownExpanded;
+                            });
+                          }
+                        : null,
+                  ),
+                ),
+
+                // ── 2. Top Reasons Grid Section (Inspired by Reference Design) ──
+                if (targetCategories.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'No transactions recorded for this period',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
+                  )
+                else ...[
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            if (selectedItem != null) ...[
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: selectedItem.color,
-                                  shape: BoxShape.circle,
+                        for (int i = 0;
+                            i < visibleCategories.length;
+                            i += 3) ...[
+                          if (i > 0) const SizedBox(height: 10),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _buildWhiteCategoryTile(
+                                  item: visibleCategories[i],
+                                  index: i,
+                                  targetTotal: targetTotal,
+                                  isBalanceVisible: isBalanceVisible,
                                 ),
                               ),
-                              const SizedBox(width: 5),
-                            ],
-                            Flexible(
-                              child: Text(
-                                displayLabel,
-                                style: TextStyle(
-                                  color: selectedItem != null
-                                      ? selectedItem.color
-                                      : AppColors.textSecondary,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.4,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (selectedItem != null) ...[
-                              const SizedBox(width: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 1.5),
-                                decoration: BoxDecoration(
-                                  color: selectedItem.color
-                                      .withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(100),
-                                ),
-                                child: Text(
-                                  '${selectedPct.toStringAsFixed(1)}%',
-                                  style: TextStyle(
-                                    color: selectedItem.color,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.bold,
+                              const SizedBox(width: 8),
+                              if (i + 1 < visibleCategories.length)
+                                Expanded(
+                                  child: _buildWhiteCategoryTile(
+                                    item: visibleCategories[i + 1],
+                                    index: i + 1,
+                                    targetTotal: targetTotal,
+                                    isBalanceVisible: isBalanceVisible,
                                   ),
-                                ),
-                              ),
+                                )
+                              else
+                                const Expanded(child: SizedBox.shrink()),
+                              const SizedBox(width: 8),
+                              if (i + 2 < visibleCategories.length)
+                                Expanded(
+                                  child: _buildWhiteCategoryTile(
+                                    item: visibleCategories[i + 2],
+                                    index: i + 2,
+                                    targetTotal: targetTotal,
+                                    isBalanceVisible: isBalanceVisible,
+                                  ),
+                                )
+                              else
+                                const Expanded(child: SizedBox.shrink()),
                             ],
-                          ],
-                        ),
-                        const SizedBox(height: 1),
-                        isBalanceVisible
-                            ? CurrencyTextWidget(
-                                amount: displayTotal,
-                                customFormattedStr: fmt.format(displayTotal),
-                                style: const TextStyle(
-                                  color: AppColors.textSoft,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5,
-                                ),
-                                iconSize: 14,
-                              )
-                            : const Text(
-                                '****',
-                                style: TextStyle(
-                                  color: AppColors.textSoft,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
 
-                  // Right Side: Go Deeper Button or Clear Selection
-                  if (selectedItem != null) ...[
-                    if (_drilledCategory == null)
-                      Builder(
-                        builder: (ctx) {
-                          final provider =
-                              Provider.of<FinanceProvider>(ctx, listen: false);
-                          final labelLower = selectedItem.label.toLowerCase();
-
-                          final isSpecial = ['loan', 'bounce', 'internal transfer', 'cash', 'uncategorized']
-                                  .contains(labelLower) ||
-                              provider.specialReasons.any(
-                                  (r) => r.name.toLowerCase() == labelLower);
-
-                          if (isSpecial) return const SizedBox.shrink();
-
-                          final foundReason =
-                              provider.topLevelCategories.firstWhere(
-                            (r) => r.name.toLowerCase() == labelLower,
-                            orElse: () => AppReason(name: selectedItem.label),
-                          );
-
-                          final hasSubcategories = foundReason.id != null &&
-                              provider
-                                  .subcategoriesFor(foundReason.id!)
-                                  .isNotEmpty;
-
-                          return AppButton.primary(
-                            text: 'Go Deeper',
-                            trailingIcon: Icons.chevron_right_rounded,
-                            height: 28,
-                            fontSize: 10.5,
-                            iconSize: 13,
-                            fullWidth: false,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                            onPressed: () {
-                              if (!hasSubcategories) {
-                                AppToast.warning(
-                                  ctx,
-                                  message: 'No subcategories found for this category',
-                                );
-                                return;
-                              }
-                              _changeFilter(() {
-                                _drilledCategory = foundReason;
-                                _selectedArcIndex = null;
-                              });
-                            },
-                          );
+                  // Expand / Collapse Action Text / Pill if > 6 categories
+                  if (hasMoreThanSix) ...[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() {
+                            _isNetBreakdownExpanded =
+                                !_isNetBreakdownExpanded;
+                          });
                         },
-                      ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () => setState(() => _selectedArcIndex = null),
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.buttonSecondary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          color: AppColors.textSecondary,
-                          size: 13,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _isNetBreakdownExpanded
+                                    ? 'Show Less'
+                                    : '+${targetCategories.length - 6} more categories',
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _isNetBreakdownExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                color: const Color(0xFF64748B),
+                                size: 16,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ],
-              ),
-              const SizedBox(height: 14),
 
-              // ── 2-Column Breakdown List (Hugs Content Naturally) ──
-              if (targetCategories.isEmpty)
+                const SizedBox(height: 14),
+
+                // ── 3. Inner Slate Container (Segmented Bar & Narrative) ──
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'No transactions recorded for this period',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9), // Soft Slate 100
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                )
-              else
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (int i = 0; i < targetCategories.length; i += 2) ...[
-                      if (i > 0) const SizedBox(height: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top Pill Header Row (✦ PRODUCTIVITY / NET BREAKDOWN Style)
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(
-                            child: _buildBreakdownTile(
-                              item: targetCategories[i],
-                              index: i,
-                              targetTotal: targetTotal,
-                              isBalanceVisible: isBalanceVisible,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(100),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (selectedItem != null) ...[
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: selectedItem.color,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                ] else ...[
+                                  const Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: Color(0xFF0F172A),
+                                    size: 11,
+                                  ),
+                                  const SizedBox(width: 5),
+                                ],
+                                Text(
+                                  selectedItem != null
+                                      ? selectedItem.label.toUpperCase()
+                                      : (_drilledCategory != null
+                                          ? _drilledCategory!.name.toUpperCase()
+                                          : '${_getAnalysisTypeLabel(_selectedAnalysisType).toUpperCase()} DISTRIBUTION'),
+                                  style: const TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          if (i + 1 < targetCategories.length)
-                            Expanded(
-                              child: _buildBreakdownTile(
-                                item: targetCategories[i + 1],
-                                index: i + 1,
-                                targetTotal: targetTotal,
-                                isBalanceVisible: isBalanceVisible,
-                              ),
-                            )
-                          else
-                            const Expanded(child: SizedBox.shrink()),
+
+                          // Action items: Go Deeper button or Clear Selection button
+                          if (selectedItem != null) ...[
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_drilledCategory == null)
+                                  Builder(
+                                    builder: (ctx) {
+                                      final provider =
+                                          Provider.of<FinanceProvider>(ctx,
+                                              listen: false);
+                                      final labelLower =
+                                          selectedItem.label.toLowerCase();
+                                      final isSpecial = [
+                                        'loan',
+                                        'bounce',
+                                        'internal transfer',
+                                        'cash',
+                                        'uncategorized'
+                                      ].contains(labelLower) ||
+                                          provider.specialReasons.any((r) =>
+                                              r.name.toLowerCase() ==
+                                              labelLower);
+                                      if (isSpecial) {
+                                        return const SizedBox.shrink();
+                                      }
+
+                                      final foundReason = provider
+                                          .topLevelCategories
+                                          .firstWhere(
+                                        (r) =>
+                                            r.name.toLowerCase() == labelLower,
+                                        orElse: () => AppReason(
+                                            name: selectedItem.label),
+                                      );
+                                      final hasSubcategories =
+                                          foundReason.id != null &&
+                                              provider
+                                                  .subcategoriesFor(
+                                                      foundReason.id!)
+                                                  .isNotEmpty;
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 6),
+                                        child: AppButton.primary(
+                                          text: 'Go Deeper',
+                                          trailingIcon:
+                                              Icons.chevron_right_rounded,
+                                          height: 26,
+                                          fontSize: 10,
+                                          iconSize: 12,
+                                          fullWidth: false,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 9, vertical: 0),
+                                          onPressed: () {
+                                            if (!hasSubcategories) {
+                                              AppToast.warning(
+                                                ctx,
+                                                message:
+                                                    'No subcategories found for this category',
+                                              );
+                                              return;
+                                            }
+                                            _changeFilter(() {
+                                              _drilledCategory = foundReason;
+                                              _selectedArcIndex = null;
+                                            });
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                GestureDetector(
+                                  onTap: () => setState(
+                                      () => _selectedArcIndex = null),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFE2E8F0),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      color: Color(0xFF475569),
+                                      size: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
+                      const SizedBox(height: 12),
+
+                      // Segmented Bar inside the inner card
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final barWidth = constraints.maxWidth;
+                          return GestureDetector(
+                            onTapUp: (details) {
+                              if (targetCategories.isEmpty) return;
+                              final tapX = details.localPosition.dx
+                                  .clamp(0.0, barWidth);
+                              final totalAmt = targetCategories.fold<double>(
+                                  0.0, (s, c) => s + c.amount);
+                              if (totalAmt <= 0) return;
+
+                              const double inset = 3.5;
+                              const double gap = 3.5;
+                              final double usableWidth =
+                                  max(0.0, barWidth - (inset * 2));
+                              final int validCount = targetCategories
+                                  .where((s) => s.amount > 0.0001)
+                                  .length;
+                              final double totalGaps = validCount > 1
+                                  ? (validCount - 1) * gap
+                                  : 0.0;
+                              final double availableWidth =
+                                  max(0.0, usableWidth - totalGaps);
+
+                              double cumX = inset;
+                              int clickedIndex = -1;
+                              for (int i = 0;
+                                  i < targetCategories.length;
+                                  i++) {
+                                if (targetCategories[i].amount <= 0.0001) {
+                                  continue;
+                                }
+                                final segW = (targetCategories[i].amount /
+                                        totalAmt) *
+                                    availableWidth;
+                                if (tapX >= cumX &&
+                                    tapX <= cumX + segW + gap) {
+                                  clickedIndex = i;
+                                  break;
+                                }
+                                cumX += segW + gap;
+                              }
+
+                              HapticFeedback.selectionClick();
+                              setState(() {
+                                _selectedArcIndex =
+                                    (clickedIndex == _selectedArcIndex)
+                                        ? null
+                                        : clickedIndex;
+                              });
+                            },
+                            child: CustomPaint(
+                              size: Size(barWidth, 38),
+                              painter: MorphingSegmentedBarPainter(
+                                oldItems: _previousCategories,
+                                newItems: targetCategories,
+                                oldTotal: _previousTotal,
+                                newTotal: targetTotal,
+                                progress: progress,
+                                selectedIndex: _selectedArcIndex,
+                                trackColor: const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Smart Financial Insight Text
+                      Text(
+                        narrativeText,
+                        style: const TextStyle(
+                          color: Color(0xFF475569),
+                          fontSize: 11.5,
+                          height: 1.4,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
                     ],
-                  ],
+                  ),
                 ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildBreakdownTile({
+  String _formatCompactAmount(double amt) {
+    if (amt >= 1000000) {
+      return '${(amt / 1000000).toStringAsFixed(1)}M';
+    } else if (amt >= 100000) {
+      return '${(amt / 1000).toStringAsFixed(0)}k';
+    } else if (amt >= 1000) {
+      return NumberFormat('#,##0').format(amt);
+    } else {
+      return NumberFormat('#,##0.00').format(amt);
+    }
+  }
+
+  Widget _buildWhiteCategoryTile({
     required CategoryArcItem item,
     required int index,
     required double targetTotal,
     required bool isBalanceVisible,
   }) {
     final isSelected = _selectedArcIndex == index;
-    final double pct =
-        targetTotal > 0 ? (item.amount / targetTotal) * 100 : 0.0;
-    final String pctStr = pct.toStringAsFixed(1);
-    final String numStr = NumberFormat('#,##0.00').format(item.amount);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
+          HapticFeedback.selectionClick();
           setState(() {
-            _selectedArcIndex =
-                (_selectedArcIndex == index) ? null : index;
+            _selectedArcIndex = (_selectedArcIndex == index) ? null : index;
           });
         },
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           decoration: BoxDecoration(
             color: isSelected
-                ? item.color.withValues(alpha: 0.15)
+                ? item.color.withValues(alpha: 0.12)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Vertical Line Indicator
-              Container(
-                width: 3.0,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: item.color,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 6),
-              // Name and Amount (NO currency symbol)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      item.label,
-                      style: TextStyle(
-                        color:
-                            isSelected ? Colors.white : AppColors.textSoft,
-                        fontSize: 11.5,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              // Top Row: Square Color Indicator + Bold Amount
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: item.color,
+                      borderRadius: BorderRadius.circular(3),
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      isBalanceVisible ? numStr : '****',
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      isBalanceVisible
+                          ? _formatCompactAmount(item.amount)
+                          : '****',
                       style: TextStyle(
                         color: isSelected
-                            ? Colors.white
-                            : AppColors.textSecondary,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w500,
+                            ? item.color
+                            : const Color(0xFF0F172A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 4),
-              // Percentage Pill Badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? item.color.withValues(alpha: 0.25)
-                      : AppColors.buttonSecondary,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Text(
-                  '$pctStr %',
-                  style: TextStyle(
-                    color:
-                        isSelected ? Colors.white : AppColors.textSoft,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
                   ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              // Subtitle: Category Label
+              Text(
+                item.label,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -3543,6 +3636,7 @@ class MorphingSegmentedBarPainter extends CustomPainter {
   final double newTotal;
   final double progress; // 0.0 to 1.0 morphing animation value
   final int? selectedIndex;
+  final Color? trackColor;
 
   MorphingSegmentedBarPainter({
     required this.oldItems,
@@ -3551,6 +3645,7 @@ class MorphingSegmentedBarPainter extends CustomPainter {
     required this.newTotal,
     required this.progress,
     this.selectedIndex,
+    this.trackColor,
   });
 
   @override
@@ -3600,7 +3695,7 @@ class MorphingSegmentedBarPainter extends CustomPainter {
     );
 
     final bgPaint = Paint()
-      ..color = AppColors.surface
+      ..color = trackColor ?? AppColors.surface
       ..style = PaintingStyle.fill;
     canvas.drawRRect(trackRRect, bgPaint);
 
@@ -3694,5 +3789,40 @@ class _SubcategoryDataAccumulator {
     required this.name,
     this.reason,
   });
+}
+
+// ── Frosted Glass Micro-Noise Grain Painter ─────────────────────────────────
+class FrostedGlassNoisePainter extends CustomPainter {
+  const FrostedGlassNoisePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rand = Random(42);
+    final paintLight = Paint()
+      ..color = Colors.white.withValues(alpha: 0.07)
+      ..strokeWidth = 1.0;
+    final paintDark = Paint()
+      ..color = Colors.black.withValues(alpha: 0.07)
+      ..strokeWidth = 1.0;
+
+    final pointsLight = <Offset>[];
+    final pointsDark = <Offset>[];
+
+    for (int i = 0; i < 700; i++) {
+      final dx = rand.nextDouble() * size.width;
+      final dy = rand.nextDouble() * size.height;
+      if (i % 2 == 0) {
+        pointsLight.add(Offset(dx, dy));
+      } else {
+        pointsDark.add(Offset(dx, dy));
+      }
+    }
+
+    canvas.drawPoints(PointMode.points, pointsLight, paintLight);
+    canvas.drawPoints(PointMode.points, pointsDark, paintDark);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

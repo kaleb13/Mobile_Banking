@@ -180,8 +180,8 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 16),
         children: [
-          // Income / Expense Capsule Tab Bar
-          AppCapsuleTabBar(
+          // Income / Expense Primary Tab Bar
+          AppPrimaryTabBar(
             tabs: const ['Expense', 'Income'],
             selectedIndex: _type == 'expense' ? 0 : 1,
             onTabChanged: (index) {

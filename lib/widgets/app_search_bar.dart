@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 
 /// Presentation mode of the [AppSearchBar] when unopened.
@@ -226,30 +227,24 @@ class _AppSearchBarState extends State<AppSearchBar> {
 
   /// Full-width search bar input covering the entirety of the row.
   Widget _buildFullWidthSearchInput(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light ||
+        widget.backgroundColor == AppColors.lightGreyBackground ||
+        widget.textColor == AppColors.darkCharcoal;
+
     final bgColor = widget.backgroundColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.lightGreyBackground
-            : AppColors.surface);
+        (isLight ? AppColors.lightGreyBackground : AppColors.surface);
 
     final txtColor = widget.textColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.darkCharcoal
-            : Colors.white);
+        (isLight ? AppColors.darkCharcoal : Colors.white);
 
     final hColor = widget.hintColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.greyText
-            : AppColors.textSoft);
+        (isLight ? AppColors.greyText : AppColors.textSoft);
 
     final icColor = widget.iconColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.darkGreyText
-            : AppColors.textSecondary);
+        (isLight ? AppColors.darkGreyText : AppColors.textSecondary);
 
     final clColor = widget.closeIconColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.darkCharcoal
-            : Colors.white70);
+        (isLight ? AppColors.darkCharcoal : Colors.white70);
 
     final isCollapsible = widget.mode != AppSearchBarMode.bar;
 
@@ -352,15 +347,18 @@ class _AppSearchBarState extends State<AppSearchBar> {
 
   /// Unopened header row representation according to [AppSearchBarMode].
   Widget _buildUnopenedHeader(BuildContext context) {
+    final bool isLight = Theme.of(context).brightness == Brightness.light ||
+        widget.backgroundColor == AppColors.lightGreyBackground ||
+        widget.textColor == AppColors.darkCharcoal;
+
     final titleColor = widget.textColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.darkCharcoal
-            : Colors.white);
+        (isLight ? AppColors.darkCharcoal : Colors.white);
 
     final iconColor = widget.iconColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? AppColors.overlayDark50
-            : AppColors.textSecondary);
+        (isLight ? AppColors.overlayDark50 : AppColors.textSecondary);
+
+    final buttonBg = widget.backgroundColor ??
+        (isLight ? AppColors.lightGreyBackground : AppColors.surface);
 
     if (widget.mode == AppSearchBarMode.pill) {
       return SizedBox(
@@ -387,7 +385,9 @@ class _AppSearchBarState extends State<AppSearchBar> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: AppColors.buttonSecondary,
+                  color: isLight
+                      ? AppColors.lightGreyBackground
+                      : AppColors.buttonSecondary,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Row(
@@ -395,14 +395,18 @@ class _AppSearchBarState extends State<AppSearchBar> {
                   children: [
                     Icon(
                       Icons.search_rounded,
-                      color: widget.iconColor ?? AppColors.positive,
+                      color: widget.iconColor ??
+                          (isLight
+                              ? AppColors.darkCharcoal
+                              : AppColors.positive),
                       size: 16,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       widget.pillLabel,
                       style: TextStyle(
-                        color: widget.textColor ?? Colors.white,
+                        color: widget.textColor ??
+                            (isLight ? AppColors.darkCharcoal : Colors.white),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -423,15 +427,13 @@ class _AppSearchBarState extends State<AppSearchBar> {
           children: [
             if (widget.leading != null) ...[
               widget.leading!,
-              const SizedBox(width: 4),
+              const SizedBox(width: 10),
             ],
             Expanded(
               child: widget.titleWidget ??
                   Text(
                     widget.title ?? '',
-                    textAlign: widget.leading != null
-                        ? TextAlign.center
-                        : TextAlign.start,
+                    textAlign: TextAlign.start,
                     style: TextStyle(
                       color: titleColor,
                       fontSize: 16,
@@ -441,17 +443,23 @@ class _AppSearchBarState extends State<AppSearchBar> {
                   ),
             ),
             GestureDetector(
-              onTap: _expand,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _expand();
+              },
               behavior: HitTestBehavior.opaque,
               child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: buttonBg,
                   shape: BoxShape.circle,
                 ),
+                alignment: Alignment.center,
                 child: Icon(
                   Icons.search_rounded,
                   color: iconColor,
-                  size: 20,
+                  size: 18,
                 ),
               ),
             ),

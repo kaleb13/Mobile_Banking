@@ -260,7 +260,7 @@ class AppDropdown<T> extends StatelessWidget {
     final Color triggerBg = backgroundColor ??
         (isLight
             ? AppColors.lightGreyBackground
-            : AppColors.surface);
+            : AppColors.heatmapNeutral);
 
     final Color effectiveTextColor = textColor ??
         (isLight
@@ -273,7 +273,8 @@ class AppDropdown<T> extends StatelessWidget {
             : (isDef ? AppColors.textSoft : Colors.white));
 
     // Popup styling
-    final Color menuBg = dropdownColor ?? (isLight ? Colors.white : AppColors.surfaceElevated);
+    final Color menuBg = dropdownColor ??
+        (isLight ? Colors.white : AppColors.heatmapNeutral);
     final Color itemDefaultTextColor = isLight ? AppColors.darkCharcoal : AppColors.textSoft;
     final Color itemActiveTextColor = isLight ? AppColors.darkCharcoal : Colors.white;
 

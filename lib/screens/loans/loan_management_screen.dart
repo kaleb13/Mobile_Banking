@@ -185,8 +185,8 @@ class _LoanTopDrawerCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.surfaceElevated,
-            borderRadius: BorderRadius.circular(16),
+            color: AppColors.heatmapNeutral,
+            borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,98 +251,111 @@ class _LoanTopDrawerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(28),
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header: AppHeader with Add Loan Action
-              AppHeader(
-                title: 'Loan Tracker',
-                showBackButton: false,
-                padding: EdgeInsets.zero,
-                trailing: AppButton.primary(
-                  text: 'Add Loan',
-                  icon: Icons.add_rounded,
-                  fullWidth: false,
-                  height: 32,
-                  fontSize: 12,
-                  iconSize: 15,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  onPressed: () {
-                    AppBottomSheet.show(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => AddLoanSheet(provider: provider),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // Summary metric cards (Lent Out and Borrowed)
-              Row(
-                children: [
-                  _buildMetricCard(
-                    context: context,
-                    title: 'Lent Out',
-                    amount: totalLent,
-                    count: lentCount,
-                    isLent: true,
-                    onTap: () => tabController.animateTo(0),
-                  ),
-                  const SizedBox(width: 10),
-                  _buildMetricCard(
-                    context: context,
-                    title: 'Borrowed',
-                    amount: totalBorrowed,
-                    count: borrowedCount,
-                    isLent: false,
-                    onTap: () => tabController.animateTo(1),
-                  ),
-                ],
-              ),
-
-              // Pending approvals inside header drawer
-              if (provider.pendingRepaymentRequests.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _PendingApprovalsBanner(
-                  requests: provider.pendingRepaymentRequests,
-                  loans: provider.loanRecords,
-                  provider: provider,
-                ),
-              ],
-
-              const SizedBox(height: 14),
-
-              // Capsule Tab Bar inside the bottom of the card
-              AppCapsuleTabBar(
-                tabs: const [
-                  'Lent Out',
-                  'Borrowed',
-                  'Settled',
-                ],
-                controller: tabController,
-                height: 42,
-                fontSize: 13,
-                backgroundColor: AppColors.tabBackground,
-                margin: EdgeInsets.zero,
-              ),
-            ],
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          top: -1000,
+          left: 0,
+          right: 0,
+          bottom: 28,
+          child: Container(
+            color: AppColors.surface,
           ),
         ),
-      ),
+        Container(
+          width: double.infinity,
+          clipBehavior: Clip.antiAlias,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(28),
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header: AppHeader with Add Loan Action
+                  AppHeader(
+                    title: 'Loan Tracker',
+                    showBackButton: false,
+                    padding: EdgeInsets.zero,
+                    trailing: AppButton.primary(
+                      text: 'Add Loan',
+                      icon: Icons.add_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11.5,
+                      iconSize: 13,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      onPressed: () {
+                        AppBottomSheet.show(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => AddLoanSheet(provider: provider),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Summary metric cards (Lent Out and Borrowed)
+                  Row(
+                    children: [
+                      _buildMetricCard(
+                        context: context,
+                        title: 'Lent Out',
+                        amount: totalLent,
+                        count: lentCount,
+                        isLent: true,
+                        onTap: () => tabController.animateTo(0),
+                      ),
+                      const SizedBox(width: 10),
+                      _buildMetricCard(
+                        context: context,
+                        title: 'Borrowed',
+                        amount: totalBorrowed,
+                        count: borrowedCount,
+                        isLent: false,
+                        onTap: () => tabController.animateTo(1),
+                      ),
+                    ],
+                  ),
+
+                  // Pending approvals inside header drawer
+                  if (provider.pendingRepaymentRequests.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _PendingApprovalsBanner(
+                      requests: provider.pendingRepaymentRequests,
+                      loans: provider.loanRecords,
+                      provider: provider,
+                    ),
+                  ],
+
+                  const SizedBox(height: 14),
+
+                  // Primary Tab Bar inside the bottom of the card
+                  AppPrimaryTabBar(
+                    tabs: const [
+                      'Lent Out',
+                      'Borrowed',
+                      'Settled',
+                    ],
+                    controller: tabController,
+                    backgroundColor: AppColors.tabBackground,
+                    margin: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -392,7 +405,7 @@ class _LoanList extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
       physics: const BouncingScrollPhysics(),
       itemCount: loans.length,
       itemBuilder: (ctx, i) => _LoanCard(
@@ -455,11 +468,11 @@ class _LoanCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => _openDetail(context, provider),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
           color: context.themeSurface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -841,11 +854,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     bool isLent,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         children: [
@@ -1006,11 +1019,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
   Widget _buildLoanInfoCard(BuildContext context, LoanRecord current, bool isLent) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1113,9 +1126,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1357,7 +1370,8 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           centerTitle: false,
-          titleSpacing: 0,
+          titleSpacing: 10,
+          leadingWidth: 48,
           title: const Text(
             'Loan Details',
             style: TextStyle(
@@ -1369,113 +1383,73 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
           backgroundColor: AppColors.background.withValues(alpha: 0.85),
           elevation: 0,
           scrolledUnderElevation: 0,
-          leading: const AppBackButton(),
+          leading: const Padding(
+            padding: EdgeInsets.only(left: 12.0),
+            child: AppBackButton(),
+          ),
           actions: [
-            Theme(
-              data: Theme.of(context).copyWith(
-                splashColor: Colors.white.withValues(alpha: 0.15),
-                highlightColor: Colors.white.withValues(alpha: 0.12),
-              ),
-              child: PopupMenuButton<String>(
-                onOpened: () => setState(() => _isMenuOpen = true),
-                onCanceled: () => setState(() => _isMenuOpen = false),
-                offset: const Offset(0, 42),
-                constraints: const BoxConstraints(minWidth: 170, maxWidth: 210),
-                borderRadius: BorderRadius.circular(100),
-                padding: EdgeInsets.zero,
-                icon: Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _isMenuOpen
-                        ? AppColors.buttonSecondary
-                        : Colors.transparent,
-                    shape: BoxShape.circle,
+            AppMenuButton<String>.dark(
+              minWidth: 170,
+              items: [
+                if (!current.isPaid)
+                  const AppMenuItem<String>(
+                    value: 'extend',
+                    label: 'Extend Due Date',
+                    icon: Icons.calendar_today_rounded,
                   ),
-                  child: const Icon(Icons.more_vert_rounded,
-                      color: Colors.white, size: 20),
+                const AppMenuItem<String>(
+                  value: 'delete',
+                  label: 'Delete Loan',
+                  icon: Icons.delete_outline_rounded,
                 ),
-                color: AppColors.surface,
-                elevation: 10,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                onSelected: (value) async {
-                  setState(() => _isMenuOpen = false);
-                  if (value == 'extend') {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: current.dueDate.isBefore(DateTime.now())
-                          ? DateTime.now()
-                          : current.dueDate,
-                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                      builder: (ctx, child) => Theme(
-                        data: Theme.of(ctx).copyWith(
-                          colorScheme: const ColorScheme.dark(
-                            primary: AppColors.positive,
-                            surface: AppColors.surface,
-                          ),
+              ],
+              onSelected: (value) async {
+                if (value == 'extend') {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: current.dueDate.isBefore(DateTime.now())
+                        ? DateTime.now()
+                        : current.dueDate,
+                    firstDate:
+                        DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                    builder: (ctx, child) => Theme(
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: AppColors.positive,
+                          surface: AppColors.surface,
                         ),
-                        child: child!,
                       ),
-                    );
-                    if (picked != null && current.id != null) {
-                      await provider.updateLoanDueDate(current.id!, picked);
-                    }
-                  } else if (value == 'delete') {
-                    final shouldDelete = await AppConfirmDialog.show(
-                      context: context,
-                      title: 'Delete Loan?',
-                      icon: Icons.delete_outline_rounded,
-                      iconColor: AppColors.negative,
-                      message:
-                          'Are you sure you want to delete this loan for ${current.personName}? All repayment records will be permanently removed.',
-                      confirmText: 'Delete',
-                      cancelText: 'Cancel',
-                      isDestructive: true,
-                      onConfirm: () {},
-                    );
-                    if (shouldDelete == true && current.id != null && context.mounted) {
-                      await provider.deleteLoan(current.id!);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        AppToast.info(context, message: 'Loan record deleted');
-                      }
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null && current.id != null) {
+                    await provider.updateLoanDueDate(current.id!, picked);
+                  }
+                } else if (value == 'delete') {
+                  final shouldDelete = await AppConfirmDialog.show(
+                    context: context,
+                    title: 'Delete Loan?',
+                    icon: Icons.delete_outline_rounded,
+                    iconColor: AppColors.negative,
+                    message:
+                        'Are you sure you want to delete this loan for ${current.personName}? All repayment records will be permanently removed.',
+                    confirmText: 'Delete',
+                    cancelText: 'Cancel',
+                    isDestructive: true,
+                    onConfirm: () {},
+                  );
+                  if (shouldDelete == true &&
+                      current.id != null &&
+                      context.mounted) {
+                    await provider.deleteLoan(current.id!);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      AppToast.info(context, message: 'Loan record deleted');
                     }
                   }
-                },
-                itemBuilder: (ctx) => [
-                  if (!current.isPaid)
-                    PopupMenuItem(
-                      value: 'extend',
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Extend Due Date',
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: Colors.white,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'Delete Loan',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.negative,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                }
+              },
             ),
             const SizedBox(width: 8),
           ],
@@ -1506,7 +1480,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               ),
 
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1556,7 +1530,7 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         children: [
@@ -1628,7 +1602,7 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2595,7 +2569,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
       margin: EdgeInsets.zero,
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
@@ -2655,7 +2629,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: AppColors.bgMid,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

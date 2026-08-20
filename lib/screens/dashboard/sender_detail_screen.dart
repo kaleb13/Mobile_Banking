@@ -20,6 +20,7 @@ import '../../widgets/animated_balance_text.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_reset_filter_button.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
 import 'transaction_detail_screen.dart';
 import 'analysis_screen.dart';
 
@@ -284,7 +285,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         : widget.sender.senderName;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
       child: AppSearchBar(
         mode: AppSearchBarMode.icon,
         controller: _searchController,
@@ -1310,38 +1311,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   Widget _buildChartFilters() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
-          final isSelected = _chartFilter == f;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() => _chartFilter = f);
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(24),
-                              ),
-              child: Text(
-                f,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textSoft,
-                  fontSize: 10,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return AppTertiaryTabBar(
+      tabs: const ['1D', '7D', '30D', '180D', '360D'],
+      selectedTab: _chartFilter,
+      onTabChanged: (val) => setState(() => _chartFilter = val),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 
@@ -1353,81 +1327,79 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         _dateRangeFilter != 'All Time' ||
         _sortBy != 'Date: Newest';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Filter Pills Row (Horizontal Scroll)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                _buildBookmarkFilterPill(),
-                const SizedBox(width: 8),
-                _buildFilterDropdown(
-                  value: _typeFilter,
-                  items: const ['All', 'Income', 'Expense'],
-                  icon: Icons.swap_horiz_rounded,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _typeFilter = val);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _buildFilterDropdown(
-                  value: _senderFilter,
-                  items: senderOptions,
-                  icon: Icons.person_outline_rounded,
-                  maxWidth: 140,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _senderFilter = val);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _buildFilterDropdown(
-                  value: _sortBy,
-                  items: const [
-                    'Date: Newest',
-                    'Date: Oldest',
-                    'Amount: High-Low',
-                    'Amount: Low-High',
-                  ],
-                  icon: Icons.sort_rounded,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _sortBy = val);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _buildFilterDropdown(
-                  value: _dateRangeFilter,
-                  items: const ['All Time', '7D', '30D', '90D', '1Y'],
-                  icon: Icons.calendar_today_rounded,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _dateRangeFilter = val);
-                  },
-                ),
-                if (hasActiveFilters) ...[
-                  const SizedBox(width: 8),
-                  AppResetFilterButton(
-                    onTap: () {
-                      setState(() {
-                        _isBookmarkedOnly = false;
-                        _typeFilter = 'All';
-                        _senderFilter = 'All Senders';
-                        _dateRangeFilter = 'All Time';
-                        _sortBy = 'Date: Newest';
-                      });
-                    },
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Filter Pills Row (Horizontal Scroll with edge-to-edge scroll area)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              _buildBookmarkFilterPill(),
+              const SizedBox(width: 8),
+              _buildFilterDropdown(
+                value: _typeFilter,
+                items: const ['All', 'Income', 'Expense'],
+                onChanged: (val) {
+                  if (val != null) setState(() => _typeFilter = val);
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildFilterDropdown(
+                value: _senderFilter,
+                items: senderOptions,
+                maxWidth: 140,
+                onChanged: (val) {
+                  if (val != null) setState(() => _senderFilter = val);
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildFilterDropdown(
+                value: _sortBy,
+                items: const [
+                  'Date: Newest',
+                  'Date: Oldest',
+                  'Amount: High-Low',
+                  'Amount: Low-High',
                 ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _sortBy = val);
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildFilterDropdown(
+                value: _dateRangeFilter,
+                items: const ['All Time', '7D', '30D', '90D', '1Y'],
+                onChanged: (val) {
+                  if (val != null) setState(() => _dateRangeFilter = val);
+                },
+              ),
+              if (hasActiveFilters) ...[
+                const SizedBox(width: 8),
+                AppResetFilterButton(
+                  onTap: () {
+                    setState(() {
+                      _isBookmarkedOnly = false;
+                      _typeFilter = 'All';
+                      _senderFilter = 'All Senders';
+                      _dateRangeFilter = 'All Time';
+                      _sortBy = 'Date: Newest';
+                    });
+                  },
+                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(height: 18),
+        ),
+        const SizedBox(height: 18),
 
-          // Header Label with Count
-          Row(
+        // Header Label with Count
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
@@ -1458,9 +1430,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+      ],
     );
   }
 
@@ -1513,7 +1485,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   Widget _buildFilterDropdown({
     required String value,
     required List<String> items,
-    required IconData icon,
     required ValueChanged<String?> onChanged,
     double? maxWidth,
   }) {
@@ -1523,7 +1494,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       onChanged: onChanged,
       variant: AppDropdownVariant.dark,
       maxWidth: maxWidth,
-      icon: icon,
     );
   }
 

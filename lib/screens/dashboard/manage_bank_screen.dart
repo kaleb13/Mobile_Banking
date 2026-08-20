@@ -111,9 +111,15 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: false,
+        titleSpacing: 10,
+        leadingWidth: 48,
         title: Text('Manage ${widget.sender.senderName}',
             style: const TextStyle(fontSize: 18)),
-        leading: const AppBackButton(),
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 12.0),
+          child: AppBackButton(),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

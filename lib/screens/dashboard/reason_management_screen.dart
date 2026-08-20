@@ -296,11 +296,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             children: [
               // ── Header ───────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                padding: const EdgeInsets.fromLTRB(12, 0, 16, 20),
                 child: Row(
                   children: [
                     const AppBackButton(),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     const Text(
                       'Category Management',
                       style: TextStyle(

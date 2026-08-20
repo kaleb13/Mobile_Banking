@@ -21,6 +21,7 @@ import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_reset_filter_button.dart';
+import '../../widgets/app_capsule_tab_bar.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../domain/usecases/analytics/get_balance_history_usecase.dart';
@@ -850,40 +851,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         // Chart Filters
-        Padding(
+        AppTertiaryTabBar(
+          tabs: const ['1D', '7D', '30D', '180D', '360D'],
+          selectedTab: _chartFilter,
+          onTabChanged: (val) => setState(() => _chartFilter = val),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: ['1D', '7D', '30D', '180D', '360D'].map((f) {
-              final isSelected = _chartFilter == f;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _chartFilter = f);
-                },
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(24),
-                                      ),
-                  child: Text(
-                    f,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textSoft,
-                      fontSize: 10,
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.w600,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
         ),
       ],
     );

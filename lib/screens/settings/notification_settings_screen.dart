@@ -31,7 +31,8 @@ class NotificationSettingsScreen extends StatelessWidget {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           centerTitle: false,
-          titleSpacing: 0,
+          titleSpacing: 10,
+          leadingWidth: 48,
           title: const Text(
             'Notification Settings',
             style: TextStyle(
@@ -43,7 +44,10 @@ class NotificationSettingsScreen extends StatelessWidget {
           backgroundColor: AppColors.background.withValues(alpha: 0.85),
           elevation: 0,
           scrolledUnderElevation: 0,
-          leading: const AppBackButton(),
+          leading: const Padding(
+            padding: EdgeInsets.only(left: 12.0),
+            child: AppBackButton(),
+          ),
         ),
         body: Consumer<FinanceProvider>(
           builder: (context, provider, _) {

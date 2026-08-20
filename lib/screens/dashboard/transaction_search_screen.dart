@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../providers/finance_provider.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
@@ -134,29 +135,11 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
 
   Widget _buildSearchHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                color: AppColors.lightGreyBackground,
-                shape: BoxShape.circle,
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: AppColors.darkCharcoal,
-                  size: 16,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+          const AppBackButton.light(),
+          const SizedBox(width: 10),
           Expanded(
             child: AppSearchBar(
               mode: AppSearchBarMode.bar,

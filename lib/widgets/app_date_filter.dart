@@ -281,7 +281,7 @@ class AppDateFilter extends StatelessWidget {
 
     // Trigger background styling (Zero borders)
     final Color triggerBg = backgroundColor ??
-        (isLight ? AppColors.lightGreyBackground : AppColors.surface);
+        (isLight ? AppColors.lightGreyBackground : AppColors.heatmapNeutral);
 
     final Color effectiveTextColor = textColor ??
         (isLight

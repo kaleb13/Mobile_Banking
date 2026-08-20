@@ -228,11 +228,11 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   // ─── Header ─────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
       child: Row(
         children: [
           const AppBackButton(),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           const Text(
             'Backup & Restore',
             style: TextStyle(
@@ -249,12 +249,10 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   // ─── Tab Bar ─────────────────────────────────────────────────────────────
   Widget _buildTabBar() {
-    return AppCapsuleTabBar(
+    return AppPrimaryTabBar(
       tabs: const ['Backup', 'Restore'],
       controller: _tabController,
-      height: 40,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      fontSize: 12,
     );
   }
 

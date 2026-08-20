@@ -154,7 +154,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 12,
         bottom: 12,
-        left: 20,
+        left: 12,
         right: 20,
       ),
       child: Column(
@@ -164,7 +164,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           Row(
             children: [
               const AppBackButton(),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

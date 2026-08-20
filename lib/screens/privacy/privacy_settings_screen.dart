@@ -534,17 +534,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => setState(() => _showPinEntry = false),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: context.themeSurface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.arrow_back_ios_new_rounded,
-                          color: context.themeTextPrimary, size: 16),
-                    ),
+                  AppBackButton(
+                    onPressed: () => setState(() => _showPinEntry = false),
                   ),
                 ],
               ),

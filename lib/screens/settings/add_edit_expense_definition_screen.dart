@@ -184,7 +184,13 @@ class _AddEditExpenseDefinitionScreenState
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: const AppBackButton(),
+        centerTitle: false,
+        titleSpacing: 10,
+        leadingWidth: 48,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 12.0),
+          child: AppBackButton(),
+        ),
         title: Text(
           widget.expenseDefinition == null
               ? 'New Expense Definition'

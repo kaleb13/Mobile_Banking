@@ -31,7 +31,7 @@ class AppHeader extends StatelessWidget {
         children: [
           if (showBackButton) ...[
             AppBackButton(onPressed: onBack),
-            const SizedBox(width: 6),
+            const SizedBox(width: 10),
           ] else if (!centerTitle)
             const SizedBox(width: 8),
 

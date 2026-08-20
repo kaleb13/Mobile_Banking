@@ -15,11 +15,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
               child: Row(
                 children: [
                   const AppBackButton(),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   const Text(
                     'Privacy Policy',
                     style: TextStyle(

@@ -13,6 +13,7 @@ import '../../widgets/interactive_drag_handle.dart';
 import '../../widgets/hold_to_refresh.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/app_back_button.dart';
 import 'manual_transaction_sheet.dart';
 
 /// A pill widget that morphs in-place into a full notifications panel.
@@ -574,24 +575,11 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                 widget.onDragEnd?.call(details.velocity.pixelsPerSecond.dy);
               },
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                padding: const EdgeInsets.fromLTRB(12, 14, 16, 10),
                 child: Row(
                   children: [
-                    GestureDetector(
-                      onTap: widget.onClose,
-                      behavior: HitTestBehavior.opaque,
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: SvgPicture.asset(
-                          'assets/images/BackForNav.svg',
-                          colorFilter: const ColorFilter.mode(
-                              Colors.white, BlendMode.srcIn),
-                          width: 18,
-                          height: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
+                    AppBackButton.dark(onPressed: widget.onClose),
+                    const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
                         'Unread Notifications',
@@ -1349,19 +1337,10 @@ class NotificationsScreen extends StatelessWidget {
           children: [
             Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                  const EdgeInsets.fromLTRB(12.0, 16.0, 16.0, 16.0),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: SvgPicture.asset(
-                      'assets/images/BackForNav.svg',
-                      colorFilter: const ColorFilter.mode(
-                          Colors.white, BlendMode.srcIn),
-                      width: 18,
-                      height: 18,
-                    ),
-                  ),
+                  const AppBackButton.dark(),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
