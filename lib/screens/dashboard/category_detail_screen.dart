@@ -919,9 +919,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final provider = Provider.of<FinanceProvider>(context, listen: false);
     final fmt = NumberFormat('#,##0');
     final String countLabel = netAmount != null && netAmount > 0
-        ? '$count • ${fmt.format(netAmount)} ETB'
+        ? (provider.isBalanceVisible
+            ? '$count • ${fmt.format(netAmount)} ETB'
+            : '$count')
         : '$count';
 
     return GestureDetector(

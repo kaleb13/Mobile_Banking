@@ -343,8 +343,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(
               child: Text(
                 overdueCount == 1
-                    ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
-                    : '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB',
+                    ? (provider.isBalanceVisible
+                        ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
+                        : 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ••••••••)')
+                    : (provider.isBalanceVisible
+                        ? '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB'
+                        : '$overdueCount LOANS ARE OVERDUE — Total: ••••••••'),
                 style: const TextStyle(
                   color: AppColors.negative,
                   fontSize: 12,
@@ -516,7 +520,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Row(
                             children: [
                               Text(
-                                '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}',
+                                provider.isBalanceVisible
+                                    ? '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}'
+                                    : '••••••',
                                 style: TextStyle(
                                   color: isPositive ? AppColors.positive : AppColors.negative,
                                   fontSize: 10,
@@ -757,16 +763,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         '',
                         const TextStyle(),
                         children: [
-                          TextSpan(
-                            text: 'ETB ',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w400,
+                          if (provider.isBalanceVisible)
+                            TextSpan(
+                              text: 'ETB ',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.6),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
-                          ),
                           TextSpan(
-                            text: NumberFormat('#,##0').format(s.y),
+                            text: provider.isBalanceVisible
+                                ? NumberFormat('#,##0').format(s.y)
+                                : '••••••••',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,

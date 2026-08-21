@@ -60,6 +60,11 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
         context,
         message: 'Credentials Updated',
         subtitle: '${widget.sender.senderName} information saved successfully',
+        details: 'Account credentials and security PIN have been encrypted and saved securely to local storage.',
+        metadata: {
+          'Account': widget.sender.senderName,
+          'Security': 'Encrypted',
+        },
       );
       Navigator.pop(context);
     }
@@ -100,6 +105,11 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
         context,
         message: 'Account Unlinked',
         subtitle: '${widget.sender.senderName} credentials removed',
+        details: 'Account credentials and linkage for ${widget.sender.senderName} have been removed from this device.',
+        metadata: {
+          'Account': widget.sender.senderName,
+          'Status': 'Unlinked',
+        },
       );
       Navigator.pop(context);
     }

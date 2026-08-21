@@ -123,7 +123,9 @@ class AppColors {
   static const Color cardGrayMid    = Color(0xFF4F4F59); // Wallet — gray mid
   static const Color cardGrayLight  = Color(0xFF3E3E4A); // Wallet — gray light
 
-  // ── CBE Birr Palette ───────────────────────────────────────────────────────
+  // ── CBE & CBE Birr Palette ────────────────────────────────────────────────
+  static const Color cbePurple         = Color(0xFF6B4C9A); // Commercial Bank of Ethiopia Purple
+  static const Color cbeBirrMagenta    = Color(0xFFE91E63); // CBE Birr Magenta
   static const Color cardCbeBirrWhite  = Color(0xFFFFFFFF); // Pure white
   static const Color cardCbeBirrSilver = Color(0xFFE2E8F0); // Sleek white-gray contrast
 

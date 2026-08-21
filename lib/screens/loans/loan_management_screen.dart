@@ -371,8 +371,9 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  fmt.format(
-                                                      widget.totalLent),
+                                                  widget.provider.isBalanceVisible
+                                                      ? fmt.format(widget.totalLent)
+                                                      : '••••••',
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 11.5,
@@ -385,11 +386,13 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                                           .ellipsis,
                                                 ),
                                               ),
-                                              const SizedBox(width: 3),
-                                              const CurrencySymbolWidget(
-                                                color: Colors.white,
-                                                size: 10,
-                                              ),
+                                              if (widget.provider.isBalanceVisible) ...[
+                                                const SizedBox(width: 3),
+                                                const CurrencySymbolWidget(
+                                                  color: Colors.white,
+                                                  size: 10,
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ),
@@ -441,8 +444,9 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  fmt.format(widget
-                                                      .totalBorrowed),
+                                                  widget.provider.isBalanceVisible
+                                                      ? fmt.format(widget.totalBorrowed)
+                                                      : '••••••',
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 11.5,
@@ -455,11 +459,13 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                                           .ellipsis,
                                                 ),
                                               ),
-                                              const SizedBox(width: 3),
-                                              const CurrencySymbolWidget(
-                                                color: Colors.white,
-                                                size: 10,
-                                              ),
+                                              if (widget.provider.isBalanceVisible) ...[
+                                                const SizedBox(width: 3),
+                                                const CurrencySymbolWidget(
+                                                  color: Colors.white,
+                                                  size: 10,
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         ),
@@ -597,6 +603,19 @@ class _LoanCard extends StatelessWidget {
       {required this.loan, required this.accentColor, this.showPaid = false});
 
   Widget _buildAmount(BuildContext context, double amount, {bool isRightAligned = false}) {
+    final provider = context.watch<FinanceProvider>();
+    if (!provider.isBalanceVisible) {
+      return Text(
+        '••••••••',
+        textAlign: isRightAligned ? TextAlign.right : TextAlign.left,
+        style: TextStyle(
+          color: context.themeTextPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.5,
+        ),
+      );
+    }
     final fmt = NumberFormat('#,##0.00');
     final formattedStr = fmt.format(amount);
     final parts = formattedStr.split('.');
@@ -1067,28 +1086,39 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  NumberFormat('#,##0').format(current.principalAmount),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1,
+                if (provider.isBalanceVisible) ...[
+                  Text(
+                    NumberFormat('#,##0').format(current.principalAmount),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1,
+                    ),
                   ),
-                ),
-                Text(
-                  '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
-                  style: const TextStyle(
+                  Text(
+                    '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const CurrencySymbolWidget(
+                    size: 18,
                     color: AppColors.textSoft,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w400,
                   ),
-                ),
-                const SizedBox(width: 6),
-                const CurrencySymbolWidget(
-                  size: 18,
-                  color: AppColors.textSoft,
-                ),
+                ] else
+                  const Text(
+                    '••••••••',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 14),
@@ -1105,11 +1135,21 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildProgressStat('Principal', '${fmt.format(current.principalAmount)} ETB', Colors.white),
-                _buildProgressStat('Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)', '${fmt.format(current.paidAmount)} ETB', AppColors.positive),
+                _buildProgressStat(
+                  'Principal',
+                  provider.isBalanceVisible ? '${fmt.format(current.principalAmount)} ETB' : '••••••••',
+                  Colors.white,
+                ),
+                _buildProgressStat(
+                  'Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)',
+                  provider.isBalanceVisible ? '${fmt.format(current.paidAmount)} ETB' : '••••••••',
+                  AppColors.positive,
+                ),
                 _buildProgressStat(
                   'Remaining',
-                  '${fmt.format(current.remainingAmount)} ETB',
+                  provider.isBalanceVisible
+                      ? '${fmt.format(current.remainingAmount)} ETB'
+                      : '••••••••',
                   current.remainingAmount > 0 ? accentColor : AppColors.textSoft,
                 ),
               ],

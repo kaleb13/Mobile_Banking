@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../models/sender.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
@@ -114,7 +115,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                 isBalanceVisible: provider.isBalanceVisible,
                                 isPaused: false,
                                 onTap: () => Navigator.push(
-                                   context,
+                                  context,
                                   MaterialPageRoute(
                                     builder: (_) =>
                                         SenderDetailScreen(sender: sender),
@@ -128,55 +129,21 @@ class _WalletsScreenState extends State<WalletsScreen> {
                               return _buildCashWalletRow(context, provider);
                             }
 
-                            // 3. Paused Section Collapsible Header Card
+                            // 3. Paused Tracking Section Card (Fits screen width and contains paused cards inside)
                             if (index == activeCount + 1 &&
                                 pausedSenders.isNotEmpty) {
-                              return _buildPausedSectionHeader(
+                              return _buildPausedSection(
                                 context,
-                                pausedSenders.length,
-                                isExpanded: _isPausedSectionExpanded,
-                                onToggle: () {
-                                  setState(() {
-                                    _isPausedSectionExpanded =
-                                        !_isPausedSectionExpanded;
-                                  });
-                                },
+                                provider,
+                                pausedSenders,
                               );
-                            }
-
-                            // 4. Paused Bank Cards (Shown only when expanded)
-                            if (_isPausedSectionExpanded) {
-                              final int pausedIndex =
-                                  index - (activeCount + 2);
-                              if (pausedIndex >= 0 &&
-                                  pausedIndex < pausedSenders.length) {
-                                final sender = pausedSenders[pausedIndex];
-                                final double balance =
-                                    provider.balanceForSender(sender.senderName);
-                                final int txCount =
-                                    provider.txCountForSender(sender.senderName);
-
-                                return _WalletCard(
-                                  senderName: sender.senderName,
-                                  balance: balance,
-                                  txCount: txCount,
-                                  isBalanceVisible: false,
-                                  isPaused: true,
-                                  onTap: () {},
-                                );
-                              }
                             }
 
                             return const SizedBox.shrink();
                           },
                           childCount: provider.activeSenders.length +
                               1 +
-                              (provider.pausedSenders.isNotEmpty
-                                  ? (1 +
-                                      (_isPausedSectionExpanded
-                                          ? provider.pausedSenders.length
-                                          : 0))
-                                  : 0),
+                              (provider.pausedSenders.isNotEmpty ? 1 : 0),
                         ),
                       ),
                     ),
@@ -187,53 +154,95 @@ class _WalletsScreenState extends State<WalletsScreen> {
     );
   }
 
-  Widget _buildPausedSectionHeader(
+  Widget _buildPausedSection(
     BuildContext context,
-    int count, {
-    required bool isExpanded,
-    required VoidCallback onToggle,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onToggle();
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
-            AppBadge.warning(
-              text: 'PAUSED TRACKING ($count)',
-              icon: Icons.pause_circle_rounded,
-              size: AppBadgeSize.small,
-            ),
-            const Spacer(),
-            Text(
-              isExpanded ? 'Hide' : 'Show',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.55),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+    FinanceProvider provider,
+    List<AppSender> pausedSenders,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Tappable Header Tile ────────────────────────────────────
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              setState(() {
+                _isPausedSectionExpanded = !_isPausedSectionExpanded;
+              });
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Row(
+                children: [
+                  AppBadge.warning(
+                    text: 'PAUSED TRACKING (${pausedSenders.length})',
+                    icon: Icons.pause_circle_rounded,
+                    size: AppBadgeSize.small,
+                  ),
+                  const Spacer(),
+                  Text(
+                    _isPausedSectionExpanded ? 'Hide' : 'Show',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.60),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  AnimatedRotation(
+                    turns: _isPausedSectionExpanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white.withValues(alpha: 0.65),
+                      size: 18,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 4),
-            AnimatedRotation(
-              turns: isExpanded ? 0.5 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: Colors.white.withValues(alpha: 0.65),
-                size: 18,
-              ),
-            ),
-          ],
-        ),
+          ),
+
+          // ── Paused Bank Cards Inside the Section Card ───────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _isPausedSectionExpanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: pausedSenders.map((sender) {
+                        final double balance =
+                            provider.balanceForSender(sender.senderName);
+                        final int txCount =
+                            provider.txCountForSender(sender.senderName);
+
+                        return _WalletCard(
+                          senderName: sender.senderName,
+                          balance: balance,
+                          txCount: txCount,
+                          isBalanceVisible: false,
+                          isPaused: true,
+                          onTap: () {},
+                        );
+                      }).toList(),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }

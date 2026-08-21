@@ -3321,7 +3321,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${activeInsight.totalCount} transactions • ${fmt.format(activeInsight.totalVolume)} volume',
+                                '${activeInsight.totalCount} transactions • ${isBalanceVisible ? '${fmt.format(activeInsight.totalVolume)} volume' : '••••••••'}',
                                 style: const TextStyle(
                                   color: AppColors.textDisabled,
                                   fontSize: 10.5,
@@ -3480,7 +3480,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               return c.name.toLowerCase().contains(query.trim().toLowerCase());
             }).toList();
 
+            final provider = Provider.of<FinanceProvider>(context, listen: false);
             final fmt = NumberFormat('#,##0.00');
+            final isBalanceVisible = provider.isBalanceVisible;
 
             return AppDrawer(
               heightFactor: 0.78,
@@ -3572,7 +3574,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   subtitle: Text(
-                                    '${item.totalCount} txs • ETB ${fmt.format(item.totalVolume)} volume',
+                                    '${item.totalCount} txs • ${isBalanceVisible ? 'ETB ${fmt.format(item.totalVolume)} volume' : '••••••••'}',
                                     style: const TextStyle(
                                       color: AppColors.textSoft,
                                       fontSize: 11,

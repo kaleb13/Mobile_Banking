@@ -5,6 +5,7 @@ import '../../../theme/app_theme.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/app_text_field.dart';
+import '../../../widgets/app_toast.dart';
 
 /// Shows the manual cash addition drawer.
 void showAddCashModal(BuildContext context, FinanceProvider provider) {
@@ -41,6 +42,16 @@ void showAddCashModal(BuildContext context, FinanceProvider provider) {
                 ),
               );
               Navigator.pop(context);
+              AppToast.success(
+                context,
+                message: 'Cash Added: ${amt.toStringAsFixed(2)} ETB',
+                subtitle: 'Funds added to Cash Wallet',
+                details: 'Added ${amt.toStringAsFixed(2)} ETB to your physical cash wallet. Your total cash balance has been updated.',
+                metadata: {
+                  'Wallet': 'Cash Wallet',
+                  'Amount': '${amt.toStringAsFixed(2)} ETB',
+                },
+              );
             }
           },
         ),

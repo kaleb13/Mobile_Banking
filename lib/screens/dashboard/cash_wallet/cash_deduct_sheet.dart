@@ -14,6 +14,7 @@ import '../../../widgets/app_drawer.dart';
 import '../../../widgets/app_note_card.dart';
 import '../../../widgets/app_switch.dart';
 import '../../../widgets/app_text_field.dart';
+import '../../../widgets/app_toast.dart';
 import '../reason_selection_sheet.dart';
 
 /// Shows the unified cash expense deduction drawer with amount validation,
@@ -121,6 +122,17 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
 
                       if (!context.mounted) return;
                       Navigator.pop(context);
+                      AppToast.success(
+                        context,
+                        message: 'Expense Recorded: ${amt.toStringAsFixed(2)} ETB',
+                        subtitle: selectedReason?.name ?? 'Cash expense',
+                        details: 'Deducted ${amt.toStringAsFixed(2)} ETB from your cash wallet. Recorded under ${selectedReason?.name ?? "General Expense"}.',
+                        metadata: {
+                          'Wallet': 'Cash Wallet',
+                          'Category': selectedReason?.name ?? 'General',
+                          'Amount': '${amt.toStringAsFixed(2)} ETB',
+                        },
+                      );
                     },
             ),
             child: ListView(

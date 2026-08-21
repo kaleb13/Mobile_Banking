@@ -569,9 +569,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (touchedSpots) {
+                final provider = Provider.of<FinanceProvider>(context, listen: false);
                 return touchedSpots.map((spot) {
                   return LineTooltipItem(
-                    NumberFormat("#,##0").format(spot.y),
+                    provider.isBalanceVisible
+                        ? NumberFormat("#,##0").format(spot.y)
+                        : '••••••••',
                     const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

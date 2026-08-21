@@ -241,6 +241,11 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                                     context,
                                     message: '$name Tracking Resumed',
                                     subtitle: 'SMS auto-detection & balance updates are active',
+                                    details: 'Automated SMS parsing and balance sync for $name have been re-enabled in real time.',
+                                    metadata: {
+                                      'Account': name,
+                                      'Status': 'Active',
+                                    },
                                   );
                                 }
                               } else {
@@ -250,6 +255,11 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                                     context,
                                     message: '$name Tracking Paused',
                                     subtitle: 'SMS auto-detection & notifications are silenced',
+                                    details: 'Tracking and transaction alerts for $name are temporarily paused. Existing transactions remain untouched.',
+                                    metadata: {
+                                      'Account': name,
+                                      'Status': 'Paused',
+                                    },
                                   );
                                 }
                               }

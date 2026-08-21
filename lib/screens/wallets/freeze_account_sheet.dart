@@ -83,12 +83,30 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           if (wasPaused) {
             await provider.resumeTracking(name);
             if (context.mounted) {
-              AppToast.success(context, message: '$name tracking resumed');
+              AppToast.success(
+                context,
+                message: '$name Tracking Resumed',
+                subtitle: 'SMS auto-detection & balance updates are active',
+                details: 'Automated SMS detection and analytics tracking for $name have been re-enabled in real time.',
+                metadata: {
+                  'Account': name,
+                  'Status': 'Active',
+                },
+              );
             }
           } else {
             await provider.pauseTracking(name);
             if (context.mounted) {
-              AppToast.info(context, message: '$name tracking paused');
+              AppToast.warning(
+                context,
+                message: '$name Tracking Paused',
+                subtitle: 'SMS auto-detection & notifications are silenced',
+                details: 'Tracking and transaction notifications for $name are temporarily paused. Existing history is safely preserved.',
+                metadata: {
+                  'Account': name,
+                  'Status': 'Paused',
+                },
+              );
             }
           }
         },
