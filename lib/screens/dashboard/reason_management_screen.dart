@@ -7,6 +7,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_modal_dialog.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_drawer.dart';
 
@@ -48,53 +50,46 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     final ctrl = TextEditingController(text: existing?.name ?? '');
     final isSubcategory = parentCategory != null || (existing != null && existing.isSubcategory);
 
-    showDialog(
+    AppModalDialog.show(
       context: context,
       builder: (ctx) {
         String? errorMsg;
         return StatefulBuilder(builder: (ctx, setInner) {
-          return AlertDialog(
-            backgroundColor: AppColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(
-              existing == null
-                  ? (isSubcategory ? 'New Subcategory' : 'New Category')
-                  : (isSubcategory ? 'Edit Subcategory' : 'Edit Category'),
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            content: Column(
+          return AppModalDialog(
+            title: existing == null
+                ? (isSubcategory ? 'New Subcategory' : 'New Category')
+                : (isSubcategory ? 'Edit Subcategory' : 'Edit Category'),
+            subtitle: parentCategory != null ? 'Parent: ${parentCategory.name}' : null,
+            confirmText: 'Save',
+            cancelText: 'Cancel',
+            onConfirm: () async {
+              final name = ctrl.text.trim();
+              if (name.isEmpty) return;
+
+              if (existing != null) {
+                await provider.updateCategory(existing.id!, name);
+              } else if (parentCategory != null) {
+                await provider.addSubcategory(parentCategory.id!, name);
+              } else {
+                await provider.addTopLevelCategory(name);
+              }
+
+              if (context.mounted) {
+                Navigator.pop(ctx);
+              }
+            },
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (parentCategory != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      'Parent: ${parentCategory.name}',
-                      style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                TextField(
+                AppTextField.modal(
                   controller: ctrl,
                   autofocus: true,
-                  style: const TextStyle(color: Colors.white),
+                  hint: isSubcategory ? 'Subcategory name...' : 'Category name...',
+                  borderRadius: AppRadius.cardRadiusSm,
                   onChanged: (_) {
                     if (errorMsg != null) setInner(() => errorMsg = null);
                   },
-                  decoration: InputDecoration(
-                    hintText: isSubcategory ? 'Subcategory name...' : 'Category name...',
-                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.05),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
                 ),
                 if (errorMsg != null) ...[
                   const SizedBox(height: 8),
@@ -102,39 +97,6 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 ],
               ],
             ),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            actions: [
-              AppButton.secondary(
-                text: 'Cancel',
-                fullWidth: false,
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-              const SizedBox(width: 8),
-              AppButton.primary(
-                text: 'Save',
-                fullWidth: false,
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                onPressed: () async {
-                  final name = ctrl.text.trim();
-                  if (name.isEmpty) return;
-
-                  if (existing != null) {
-                    await provider.updateCategory(existing.id!, name);
-                  } else if (parentCategory != null) {
-                    await provider.addSubcategory(parentCategory.id!, name);
-                  } else {
-                    await provider.addTopLevelCategory(name);
-                  }
-
-                  if (context.mounted) {
-                    Navigator.pop(ctx);
-                  }
-                },
-              ),
-            ],
           );
         });
       },
@@ -210,25 +172,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
-                  title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    _showAddCategoryDialog(context, provider, parentCategory: reason);
-                  },
-                ),
-              ] else ...[
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Colors.white70),
-                  title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    _showAddCategoryDialog(context, provider, existing: reason);
-                  },
-                ),
-                if (reason.isTopLevelCategory)
-                  ListTile(
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: AppRadius.cardRadius,
+                  ),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
                     leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
                     title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
                     onTap: () {
@@ -236,13 +187,56 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       _showAddCategoryDialog(context, provider, parentCategory: reason);
                     },
                   ),
-                ListTile(
-                  leading: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
-                  title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    Navigator.pop(sheetCtx);
-                    _confirmDeleteCategory(context, provider, reason);
-                  },
+                ),
+              ] else ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: AppRadius.cardRadius,
+                  ),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
+                    leading: const Icon(Icons.edit_outlined, color: Colors.white70),
+                    title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _showAddCategoryDialog(context, provider, existing: reason);
+                    },
+                  ),
+                ),
+                if (reason.isTopLevelCategory)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      borderRadius: AppRadius.cardRadius,
+                    ),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
+                      leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
+                      title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
+                      onTap: () {
+                        Navigator.pop(sheetCtx);
+                        _showAddCategoryDialog(context, provider, parentCategory: reason);
+                      },
+                    ),
+                  ),
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.negative.withValues(alpha: 0.08),
+                    borderRadius: AppRadius.cardRadius,
+                  ),
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
+                    leading: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
+                    title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _confirmDeleteCategory(context, provider, reason);
+                    },
+                  ),
                 ),
               ],
             ],
@@ -292,6 +286,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         body: SafeArea(
           bottom: false,
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             padding: const EdgeInsets.only(left: 0, right: 0, top: 16, bottom: 100),
             children: [
               // ── Header ───────────────────────────────────────────
@@ -370,7 +367,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [
@@ -407,14 +404,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
         child: Column(
           children: [
             ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
               contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
               title: Row(
                 children: [

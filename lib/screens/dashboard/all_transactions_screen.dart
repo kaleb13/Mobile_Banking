@@ -396,25 +396,34 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildTransactionList(
       List<AppTransaction> transactions, FinanceProvider provider) {
     if (transactions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off_rounded,
-                size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
-            const SizedBox(height: 16),
-            const Text(
-              'No transactions found',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
-            ),
-          ],
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.only(top: 100, bottom: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off_rounded,
+                  size: 64, color: AppColors.textSecondary.withValues(alpha: 0.3)),
+              const SizedBox(height: 16),
+              const Text(
+                'No transactions found',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       itemCount: transactions.length,
       separatorBuilder: (context, index) => Divider(
         height: 1,
@@ -580,7 +589,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildAmountText(AppTransaction tx, FinanceProvider provider) {
     if (!provider.isBalanceVisible) {
       return const Text(
-        '****',
+        '••••••••',
         style: TextStyle(
           color: AppColors.textPrimary,
           fontSize: 14,

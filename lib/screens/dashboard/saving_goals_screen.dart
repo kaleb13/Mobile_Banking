@@ -8,12 +8,7 @@ import '../../models/saving_goal.dart';
 import '../../models/goal_feasibility.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/custom_progress_bar.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_back_button.dart';
-import '../../widgets/app_confirm_dialog.dart';
-import '../../widgets/app_badges.dart';
-import '../../widgets/app_drawer.dart';
+import '../../widgets/widgets.dart';
 
 class SavingGoalsScreen extends StatefulWidget {
   const SavingGoalsScreen({super.key});
@@ -81,69 +76,76 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                       final goals = provider.savingGoals;
 
                       if (goals.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 72,
-                                height: 72,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF111821),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Icon(
-                                  Icons.savings_outlined,
-                                  color: AppColors.gold,
-                                  size: 36,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              const Text(
-                                'No Saving Goals Yet',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Set a target and track your savings progress',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 28),
-                              GestureDetector(
-                                onTap: () => _showAddGoalSheet(context),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 13),
+                        return SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          child: Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.fromLTRB(16, 60, 16, 40),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: const Color(0xFF111821),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.add,
-                                          color: AppColors.background, size: 18),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Add Your First Goal',
-                                        style: TextStyle(
-                                          color: AppColors.background,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
+                                  child: const Icon(
+                                    Icons.savings_outlined,
+                                    color: AppColors.gold,
+                                    size: 36,
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 20),
+                                const Text(
+                                  'No Saving Goals Yet',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Set a target and track your savings progress',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
+                                GestureDetector(
+                                  onTap: () => _showAddGoalSheet(context),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24, vertical: 13),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.add,
+                                            color: AppColors.background, size: 18),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Add Your First Goal',
+                                          style: TextStyle(
+                                            color: AppColors.background,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }
@@ -158,10 +160,12 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                       });
 
                       return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
                         itemCount: sortedGoals.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 20),
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, index) =>
                             _buildGoalCard(context, sortedGoals[index], provider),
                       );
@@ -177,17 +181,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // GOAL CARD
-  // Structure:
-  //   ┌──────────────────────────────────────┐  ← red gradient card (full)
-  //   │  ┌────────────────────────────────┐  │  ← white rounded info box
-  //   │  │  [img]  title / price / badge  │  │
-  //   │  └────────────────────────────────┘  │
-  //   │                                      │
-  //   │  P R O G R E S S   (on gradient)    │
-  //   │  [===●──────────────]               │
-  //   │  $saved               $remaining    │
-  //   └──────────────────────────────────────┘
+  // GOAL CARD (Minimalist, Clean AppCard without Gradients)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildGoalCard(
       BuildContext context, SavingGoal goal, FinanceProvider provider) {
@@ -200,185 +194,167 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
     final isOnHold = goal.status == 'on_hold';
     final isCompleted = goal.savedAmount >= goal.targetAmount;
 
-    final theme = GoalGradientTheme.fromId(goal.colorTheme);
+    Widget cardWidget = AppCard(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Top Row: Thumbnail + Title / Target + Status Badge ──
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Goal thumbnail / icon
+              _buildGoalThumbnail(goal.imagePath, size: 48),
+              const SizedBox(width: 14),
 
-    Widget cardWidget = Container(
-      // ── Outer card: Mesh/Linear Gradient background ───────────────────────
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: theme.gradientColors,
-          stops: const [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Top Info Box — Dark background ──────────────
-            Container(
-              width: double.infinity,
-              color: AppColors.surface,
-              padding: const EdgeInsets.all(12),
-              child: Stack(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Goal image/icon thumbnail
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Container(
-                          width: 62,
-                          height: 62,
-                          color: Colors.transparent,
-                          alignment: Alignment.center,
-                          child: _buildGoalThumbnail(goal.imagePath, size: 62),
-                        ),
+              // Title and Target
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      goal.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
                       ),
-                      const SizedBox(width: 12),
-
-                      // Goal text info
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 65),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Goal',
-                                style: TextStyle(
-                                  color: Color(0xFF8E95A2),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                goal.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.3,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                currencyFmt.format(goal.targetAmount),
-                                style: TextStyle(
-                                  color: theme.accentColor,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Text(
+                          'Target: ${currencyFmt.format(goal.targetAmount)}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-
-                  // Fully rounded Active / Completed / On Hold status badge at the top right
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: isCompleted
-                        ? const AppBadge.success(
-                            text: 'Completed',
-                            size: AppBadgeSize.small,
-                          )
-                        : isOnHold
-                            ? const AppBadge.neutral(
-                                text: 'On Hold',
-                                size: AppBadgeSize.small,
-                              )
-                            : const AppBadge.success(
-                                text: 'Active',
-                                size: AppBadgeSize.small,
-                              ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Progress section — directly on the gradient background ─────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-              child: Column(
-                children: [
-                  const Center(
-                    child: Text(
-                      'P R O G R E S S',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 3.0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Progress bar
-                  CustomProgressBar(
-                    progress: fraction,
-                    height: 22,
-                    backgroundColor: theme.darkProgressBg,
-                    progressGradient: LinearGradient(
-                      colors: [
-                        theme.accentColor,
-                        theme.accentColor.withValues(alpha: 0.85),
+                        const SizedBox(width: 3),
+                        const CurrencySymbolWidget(
+                          size: 11,
+                          color: AppColors.textSecondary,
+                        ),
                       ],
                     ),
-                    centerLabel: '$pctInt%',
-                    labelInFilledOnly: true,
-                    labelStyle: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Status Badge
+              if (isCompleted)
+                const AppBadge.success(
+                  text: 'Completed',
+                  size: AppBadgeSize.small,
+                )
+              else if (isOnHold)
+                const AppBadge.neutral(
+                  text: 'On Hold',
+                  size: AppBadgeSize.small,
+                )
+              else
+                const AppBadge.success(
+                  text: 'Active',
+                  size: AppBadgeSize.small,
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── Progress Bar ──
+          CustomProgressBar(
+            progress: fraction,
+            height: 22,
+            backgroundColor: AppColors.tabBackground,
+            progressColor: isCompleted
+                ? AppColors.positive
+                : AppColors.emeraldBright,
+            centerLabel: '$pctInt% Saved',
+            labelInFilledOnly: false,
+            labelStyle: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── Saved vs Remaining Amounts Row ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Saved: ',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    currencyFmt.format(goal.savedAmount),
+                    style: const TextStyle(
+                      color: AppColors.positive,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Bottom text: Left accent color and Right White
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        currencyFmt.format(goal.savedAmount),
-                        style: TextStyle(
-                          color: theme.accentColor,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        currencyFmt.format(goal.targetAmount),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 2),
+                  const CurrencySymbolWidget(
+                    size: 10,
+                    color: AppColors.positive,
                   ),
                 ],
               ),
-            ),
+              Row(
+                children: [
+                  const Text(
+                    'Remaining: ',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    currencyFmt.format((goal.targetAmount - goal.savedAmount).clamp(0, double.infinity)),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const CurrencySymbolWidget(
+                    size: 10,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // ── Feasibility note / warning inside the card ──
+          if (!isOnHold && (feasibility.hasConflict || feasibility.canAffordNow)) ...[
+            const SizedBox(height: 10),
+            Divider(color: Colors.white.withValues(alpha: 0.06), height: 1),
+            const SizedBox(height: 8),
+            _buildFeasibilityRow(feasibility),
           ],
-        ),
+        ],
       ),
     );
-
-    // ── Feasibility chip — rendered BELOW the card ──────────────────────────
-    Widget chipRow = _buildFeasibilityChip(feasibility, goal);
 
     // Apply Grayscale Filter for On-Hold goals
     if (isOnHold) {
@@ -395,72 +371,56 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
 
     return GestureDetector(
       onTap: () => _showGoalOptionsSheet(context, goal, provider),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          cardWidget,
-          chipRow,
-        ],
-      ),
+      child: cardWidget,
     );
   }
 
-  Widget _buildFeasibilityChip(GoalFeasibility f, SavingGoal goal) {
-    if (goal.status == 'on_hold') return const SizedBox.shrink();
-
+  Widget _buildFeasibilityRow(GoalFeasibility f) {
     if (f.hasConflict) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 6, left: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF6B6B), size: 13),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                f.conflictWarning,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFFFF6B6B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppColors.negative, size: 13),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              f.conflictWarning,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.negative,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     } else if (f.canAffordNow) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 6, left: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.check_circle_rounded, color: AppColors.positive, size: 13),
-            const SizedBox(width: 5),
-            const Flexible(
-              child: Text(
-                'You can afford this now',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.positive,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
+      return const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded, color: AppColors.positive, size: 13),
+          SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              'You can afford this now',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.positive,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
-
-    // Text saying "% covered by your allocation" removed per user request
     return const SizedBox.shrink();
   }
 
-  Widget _buildGoalThumbnail(String imagePath, {double size = 62}) {
+  Widget _buildGoalThumbnail(String imagePath, {double size = 48}) {
     Widget innerContent;
 
     if (imagePath.startsWith('/')) {
@@ -475,8 +435,8 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
       } else {
         innerContent = Icon(
           Icons.savings_rounded,
-          size: size * 0.5,
-          color: AppColors.background,
+          size: size * 0.52,
+          color: AppColors.positive,
         );
       }
     } else if (imagePath.startsWith('assets/')) {
@@ -766,7 +726,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         text: edit != null ? edit.savedAmount.toStringAsFixed(0) : '0');
 
     if (edit != null) {
-      _selectedThemeId = edit.colorTheme;
       if (edit.imagePath.startsWith('/')) {
         _pickedImagePath = edit.imagePath;
         _useCustomImage = true;
@@ -805,7 +764,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         imagePath: _finalImagePath,
         allocationMode: _allocationMode,
         accountAllocations: allocMap,
-        colorTheme: _selectedThemeId,
+        colorTheme: 'green',
       );
       context.read<FinanceProvider>().updateSavingGoal(updated);
     } else {
@@ -817,7 +776,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         imagePath: _finalImagePath,
         allocationMode: _allocationMode,
         accountAllocations: allocMap,
-        colorTheme: _selectedThemeId,
+        colorTheme: 'green',
       );
       context.read<FinanceProvider>().addSavingGoal(newGoal);
     }
@@ -860,7 +819,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
       heightFactor: 0.88,
       headerCard: AppDrawerHeaderCard(
         icon: Icons.savings_outlined,
-        iconColor: AppColors.gold,
+        iconColor: AppColors.positive,
         title: isEditing ? 'Edit Saving Goal' : 'New Saving Goal',
         subtitle: isEditing
             ? 'Update your target, saved amount, or icon'
@@ -872,7 +831,9 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         onPressed: _saveGoal,
       ),
       child: ListView(
-        physics: const BouncingScrollPhysics(),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.only(bottom: 16),
         children: [
           _buildField(
@@ -898,8 +859,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 16),
-          _buildThemeSelector(),
-          const SizedBox(height: 20),
           ValueListenableBuilder(
             valueListenable: _targetCtrl,
             builder: (_, __, ___) {
@@ -916,7 +875,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Progress preview', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                          const Text('Progress preview', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                           Text('${pct.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -926,7 +885,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                         height: 10,
                         progressColor: AppColors.positive,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                     ],
                   );
                 },
@@ -939,7 +898,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
               final balances = prov.latestBalancesMap;
               final fmt = NumberFormat('#,##0');
               return Container(
-                margin: const EdgeInsets.only(bottom: 20),
+                margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: AppColors.previewCardBg, borderRadius: BorderRadius.circular(16)),
                 child: Column(
@@ -951,8 +910,8 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: AppColors.savingProgressGradStart.withValues(alpha: 0.15), shape: BoxShape.circle),
-                            child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.savingProgressGradStart, size: 15),
+                            decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.15), shape: BoxShape.circle),
+                            child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.positive, size: 15),
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
@@ -971,14 +930,25 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                     ),
                     if (_allocationExpanded) ...[
                       const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          _modePill('Global %', AllocationMode.globalPercent),
-                          const SizedBox(width: 6),
-                          _modePill('Specific Bank', AllocationMode.accountSpecific),
-                          const SizedBox(width: 6),
-                          _modePill('Custom %', AllocationMode.multiAccount),
-                        ],
+                      AppPrimaryTabBar(
+                        tabs: const ['Global %', 'Specific Bank', 'Custom %'],
+                        selectedIndex: _allocationMode == AllocationMode.globalPercent
+                            ? 0
+                            : (_allocationMode == AllocationMode.accountSpecific ? 1 : 2),
+                        onTabChanged: (idx) {
+                          setState(() {
+                            if (idx == 0) {
+                              _allocationMode = AllocationMode.globalPercent;
+                              _accountPcts.clear();
+                            } else if (idx == 1) {
+                              _allocationMode = AllocationMode.accountSpecific;
+                            } else {
+                              _allocationMode = AllocationMode.multiAccount;
+                            }
+                          });
+                        },
+                        backgroundColor: AppColors.tabBackground,
+                        margin: EdgeInsets.zero,
                       ),
                       const SizedBox(height: 14),
                       if (_allocationMode == AllocationMode.globalPercent) ...[
@@ -988,14 +958,14 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                           children: [
                             Expanded(
                               child: SliderTheme(
-                                data: SliderThemeData(activeTrackColor: AppColors.savingProgressGradStart, inactiveTrackColor: Colors.white.withValues(alpha: 0.12), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7)),
+                                data: SliderThemeData(activeTrackColor: AppColors.positive, inactiveTrackColor: Colors.white.withValues(alpha: 0.12), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7)),
                                 child: Slider(value: _globalPct, min: 5, max: 100, divisions: 19, onChanged: (v) => setState(() => _globalPct = v)),
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: AppColors.savingProgressGradStart.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-                              child: Text('${_globalPct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.savingProgressGradStart, fontSize: 12, fontWeight: FontWeight.bold)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(100)),
+                              child: Text('${_globalPct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
@@ -1011,8 +981,11 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                             final pct = _accountPcts[name] ?? 50.0;
                             return Container(
                               margin: const EdgeInsets.only(bottom: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(color: isSelected ? Colors.white.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.02), borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.positive.withValues(alpha: 0.10) : Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1033,26 +1006,30 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                           duration: const Duration(milliseconds: 160),
                                           width: 20,
                                           height: 20,
-                                          decoration: BoxDecoration(color: isSelected ? AppColors.savingProgressGradStart : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-                                          child: isSelected ? const Icon(Icons.check_rounded, color: Colors.white, size: 13) : null,
+                                          decoration: BoxDecoration(
+                                            color: isSelected ? AppColors.positive : Colors.transparent,
+                                            shape: BoxShape.circle,
+                                            border: isSelected ? null : Border.all(color: Colors.white24, width: 1.5),
+                                          ),
+                                          child: isSelected ? const Icon(Icons.check_rounded, color: Colors.black, size: 13) : null,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
-                                      Expanded(child: Text(name, style: TextStyle(color: isSelected ? Colors.white : AppColors.textSecondary, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))),
-                                      Text('ETB ${fmt.format(bal)}', style: TextStyle(color: isSelected ? AppColors.positive : AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                                      Expanded(child: Text(name, style: TextStyle(color: isSelected ? Colors.white : AppColors.textSecondary, fontSize: 12.5, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))),
+                                      Text('ETB ${fmt.format(bal)}', style: TextStyle(color: isSelected ? AppColors.positive : AppColors.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600)),
                                     ],
                                   ),
                                   if (isSelected && _allocationMode == AllocationMode.multiAccount) ...[
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 6),
                                     Row(
                                       children: [
                                         Expanded(
                                           child: SliderTheme(
-                                            data: SliderThemeData(activeTrackColor: AppColors.savingProgressGradStart, inactiveTrackColor: Colors.white.withValues(alpha: 0.1), thumbColor: Colors.white, trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
+                                            data: SliderThemeData(activeTrackColor: AppColors.positive, inactiveTrackColor: Colors.white.withValues(alpha: 0.1), thumbColor: Colors.white, trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
                                             child: Slider(value: pct, min: 5, max: 100, divisions: 19, onChanged: (v) => setState(() => _accountPcts[name] = v)),
                                           ),
                                         ),
-                                        Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.savingProgressGradStart, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.positive, fontSize: 11, fontWeight: FontWeight.bold)),
                                       ],
                                     ),
                                   ],
@@ -1074,7 +1051,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
               decoration: BoxDecoration(color: AppColors.previewCardBg, borderRadius: BorderRadius.circular(14)),
               child: Row(
                 children: [
-                  Icon(_iconSectionExpanded ? Icons.palette_rounded : Icons.palette_outlined, color: _iconSectionExpanded ? AppColors.gold : AppColors.textSecondary, size: 18),
+                  Icon(_iconSectionExpanded ? Icons.palette_rounded : Icons.palette_outlined, color: _iconSectionExpanded ? AppColors.positive : AppColors.textSecondary, size: 18),
                   const SizedBox(width: 10),
                   Expanded(child: Text('Customize Icon / Image', style: TextStyle(color: _iconSectionExpanded ? Colors.white : AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600))),
                   ClipRRect(borderRadius: BorderRadius.circular(8), child: Container(width: 28, height: 28, color: Colors.transparent, child: _buildPreviewThumbnail())),
@@ -1128,14 +1105,14 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                 height: 44,
                                 decoration: BoxDecoration(
                                   color: isSel
-                                      ? AppColors.gold.withValues(alpha: 0.2)
+                                      ? AppColors.positive.withValues(alpha: 0.2)
                                       : Colors.white.withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Icon(
                                   item['icon'] as IconData,
                                   color: isSel
-                                      ? AppColors.gold
+                                      ? AppColors.positive
                                       : AppColors.textSecondary,
                                   size: 20,
                                 ),
@@ -1182,22 +1159,21 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                 onTap: _pickImage,
                                 child: Container(
                                   height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white
-                                        .withValues(alpha: 0.06),
-                                    borderRadius: BorderRadius.circular(12),
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.buttonSecondary,
+                                    borderRadius: BorderRadius.all(Radius.circular(100)),
                                   ),
                                   child: const Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.center,
                                     children: [
                                       Icon(Icons.upload_rounded,
-                                          color: AppColors.textSecondary, size: 18),
+                                          color: Colors.white, size: 18),
                                       SizedBox(width: 8),
                                       Text(
                                         'Upload Photo',
                                         style: TextStyle(
-                                          color: AppColors.textSecondary,
+                                          color: Colors.white,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -1220,85 +1196,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
     );
   }
 
-  /// Horizontal gradient color theme selector
-  Widget _buildThemeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Card Color Theme',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: GoalGradientTheme.themes.map((theme) {
-            final isSelected = _selectedThemeId == theme.id;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedThemeId = theme.id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 76,
-                height: 46,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: theme.gradientColors,
-                  ),
-                ),
-                child: isSelected
-                    ? const Icon(
-                        Icons.check_circle_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      )
-                    : null,
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  /// Pill-shaped mode selector tab
-  Widget _modePill(String label, AllocationMode mode) {
-    final selected = _allocationMode == mode;
-    return GestureDetector(
-      onTap: () => setState(() {
-        _allocationMode = mode;
-        if (mode == AllocationMode.globalPercent) _accountPcts.clear();
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.savingProgressGradStart.withValues(alpha: 0.18)
-              : Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected
-                ? AppColors.savingProgressGradStart
-                : AppColors.textSecondary,
-            fontSize: 11,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Preview thumbnail rendered in white background container with dark icon
+  /// Preview thumbnail rendered in positive tint background container with dark/accent icon
   Widget _buildPreviewThumbnail() {
     if (_useCustomImage && _pickedImagePath != null) {
       final file = File(_pickedImagePath!);
@@ -1315,10 +1213,10 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.positive.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Icon(iconData, color: AppColors.background, size: 18),
+        child: Icon(iconData, color: AppColors.positive, size: 16),
       ),
     );
   }
@@ -1329,121 +1227,13 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
     required String hint,
     required TextInputType keyboardType,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-            filled: true,
-            fillColor: AppColors.previewCardBg,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Goal Gradient Themes
-// ─────────────────────────────────────────────────────────────────────────────
-class GoalGradientTheme {
-  final String id;
-  final String name;
-  final List<Color> gradientColors;
-  final Color accentColor;
-  final Color darkProgressBg;
-
-  const GoalGradientTheme({
-    required this.id,
-    required this.name,
-    required this.gradientColors,
-    required this.accentColor,
-    required this.darkProgressBg,
-  });
-
-  static const green = GoalGradientTheme(
-    id: 'green',
-    name: 'Emerald Green',
-    gradientColors: [
-      Color(0xFF059669),
-      Color(0xFF047857),
-      Color(0xFF065F46),
-    ],
-    accentColor: Color(0xFF10B981),
-    darkProgressBg: Color(0xFF064E3B),
-  );
-
-  static const red = GoalGradientTheme(
-    id: 'red',
-    name: 'Crimson Red',
-    gradientColors: [
-      Color(0xFFD55B43),
-      Color(0xFF8B2231),
-      Color(0xFF9A2551),
-    ],
-    accentColor: Color(0xFFFF6846),
-    darkProgressBg: Color(0xFF7E1C30),
-  );
-
-  static const purple = GoalGradientTheme(
-    id: 'purple',
-    name: 'Royal Purple',
-    gradientColors: [
-      Color(0xFF7C3AED),
-      Color(0xFF5B21B6),
-      Color(0xFF4C1D95),
-    ],
-    accentColor: Color(0xFFA855F7),
-    darkProgressBg: Color(0xFF3B0764),
-  );
-
-  static const blue = GoalGradientTheme(
-    id: 'blue',
-    name: 'Midnight Blue',
-    gradientColors: [
-      Color(0xFF2563EB),
-      Color(0xFF1E40AF),
-      Color(0xFF1E3A8A),
-    ],
-    accentColor: Color(0xFF3B82F6),
-    darkProgressBg: Color(0xFF172554),
-  );
-
-  static const List<GoalGradientTheme> themes = [
-    green,
-    red,
-    purple,
-    blue,
-  ];
-
-  static GoalGradientTheme fromId(String? id) {
-    return themes.firstWhere(
-      (t) => t.id == id,
-      orElse: () => green,
+    return AppTextField(
+      controller: controller,
+      label: label,
+      hint: hint,
+      keyboardType: keyboardType,
+      backgroundColor: AppColors.previewCardBg,
+      borderRadius: BorderRadius.circular(16),
     );
   }
 }

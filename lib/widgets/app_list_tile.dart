@@ -15,6 +15,8 @@ class AppListTile extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double borderRadius;
   final Widget? badge;
+  final Color? backgroundColor;
+  final bool isSelected;
 
   const AppListTile({
     super.key,
@@ -28,8 +30,10 @@ class AppListTile extends StatelessWidget {
     this.isDestructive = false,
     this.showChevron = true,
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    this.borderRadius = 16.0,
+    this.borderRadius = AppRadius.card,
     this.badge,
+    this.backgroundColor,
+    this.isSelected = false,
   });
 
   @override
@@ -40,24 +44,34 @@ class AppListTile extends StatelessWidget {
     } else if (leadingIcon != null) {
       final iconColor = isDestructive
           ? AppColors.destructiveRed
-          : (leadingColor ?? context.themeTextPrimary);
+          : (isSelected
+              ? AppColors.positive
+              : (leadingColor ?? context.themeTextPrimary));
       final boxBg = isDestructive
           ? AppColors.destructiveRed.withValues(alpha: 0.12)
-          : context.themeTileBg;
+          : (isSelected
+              ? AppColors.positive.withValues(alpha: 0.20)
+              : context.themeTileBg);
 
       leadingContent = Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
           color: boxBg,
-          borderRadius: BorderRadius.circular(12),
+          shape: BoxShape.circle,
         ),
         child: Icon(leadingIcon, color: iconColor, size: 20),
       );
     }
 
     Widget? effectiveTrailing = trailing;
-    if (effectiveTrailing == null && showChevron && onTap != null) {
+    if (effectiveTrailing == null && isSelected) {
+      effectiveTrailing = const Icon(
+        Icons.check_circle_rounded,
+        color: AppColors.positive,
+        size: 20,
+      );
+    } else if (effectiveTrailing == null && showChevron && onTap != null) {
       effectiveTrailing = Icon(
         Icons.chevron_right_rounded,
         color: context.themeTextSecondary,
@@ -68,7 +82,9 @@ class AppListTile extends StatelessWidget {
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: context.themeSurface,
+        color: isSelected
+            ? AppColors.positive.withValues(alpha: 0.14)
+            : (backgroundColor ?? context.themeSurface),
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Row(

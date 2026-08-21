@@ -319,18 +319,21 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── 1. Summary Header Banner ─────────────────────────────
                     Container(
                       width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: AppRadius.cardRadius,
                       ),
                       child: Column(
                         children: [
@@ -419,7 +422,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                       Text(
                                         isBalanceVisible
                                             ? '${fmt.format(totalOutflow)} ETB'
-                                            : '****',
+                                            : '••••••••',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13.5,
@@ -468,7 +471,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                       Text(
                                         isBalanceVisible
                                             ? '${fmt.format(totalInflow)} ETB'
-                                            : '****',
+                                            : '••••••••',
                                         style: const TextStyle(
                                           color: AppColors.positive,
                                           fontSize: 13.5,
@@ -549,6 +552,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
                           children: [
                             // Bookmark Toggle Pill
@@ -743,19 +747,19 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
     bool isBalanceVisible,
   ) {
     final isIncome = item.isIncome;
-    final amountStr = isBalanceVisible ? fmt.format(item.amount) : '****';
+    final amountStr = isBalanceVisible ? fmt.format(item.amount) : '••••••••';
     final String label = isIncome ? 'Deposit' : 'Transferred';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.cardRadius,
           onTap: item.isBank
               ? () {
                   Navigator.push(

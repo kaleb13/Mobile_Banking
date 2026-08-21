@@ -37,7 +37,7 @@ class AppDrawer extends StatelessWidget {
     this.heightFactor,
     this.maxHeightFactor = 0.90,
     this.backgroundColor = AppColors.surfaceElevated,
-    this.topRadius = 28.0,
+    this.topRadius = AppRadius.sheet,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 16),
     this.showDragHandle = true,
     this.isBodyScrollable = true,
@@ -78,7 +78,9 @@ class AppDrawer extends StatelessWidget {
       bodyWidget = isBodyScrollable
           ? Flexible(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 child: child,
               ),
             )
@@ -216,8 +218,8 @@ class AppDrawerHeaderCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(16),
+        color: backgroundColor ?? AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [

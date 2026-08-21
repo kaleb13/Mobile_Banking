@@ -34,14 +34,14 @@ class AboutAppScreen extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 padding: const EdgeInsets.fromLTRB(0, 8, 0, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildDeveloperCard(),
-                    const SizedBox(height: 28),
-                    _buildSectionLabel('CONTRIBUTOR'),
-                    _buildContributorCard('Kaleab Afesha Abayneh'),
                     const SizedBox(height: 28),
                     _buildSectionLabel('ABOUT SHIBRE'),
                     _buildAboutContent(),
@@ -60,7 +60,7 @@ class AboutAppScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [
@@ -148,38 +148,6 @@ class AboutAppScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildContributorCard(String name) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person_outline_rounded,
-                color: AppColors.textSoft, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Text(
-            name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildAboutContent() {
     return Container(
@@ -187,7 +155,7 @@ class AboutAppScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Text(
         'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from CBE, Telebirr, and CBE Birr, providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',

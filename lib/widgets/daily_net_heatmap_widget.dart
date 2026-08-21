@@ -241,7 +241,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                 }
 
                 final formattedNet =
-                    isBalanceVisible ? formatCompactNet(net) : '***';
+                    isBalanceVisible ? formatCompactNet(net) : '•••';
 
                 return InkWell(
                   onTap: () {
@@ -402,7 +402,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     }
 
     final formattedTotal =
-        isBalanceVisible ? formatCompactNet(monthTotalNet) : '***';
+        isBalanceVisible ? formatCompactNet(monthTotalNet) : '••••';
 
     final Color totalColor = monthTotalNet > 0
         ? AppColors.positive
@@ -578,7 +578,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
             }
 
             final formattedNet =
-                isBalanceVisible ? formatCompactNet(monthNet) : '***';
+                isBalanceVisible ? formatCompactNet(monthNet) : '•••';
 
             return InkWell(
               onTap: () {

@@ -11,7 +11,7 @@ class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
-  final double borderRadius;
+  final double? borderRadius;
   final VoidCallback? onTap;
   final Color? customColor;
   final Clip clipBehavior;
@@ -21,7 +21,7 @@ class AppCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.margin,
-    this.borderRadius = 16,
+    this.borderRadius,
     this.onTap,
     this.customColor,
     this.clipBehavior = Clip.antiAlias,
@@ -29,6 +29,7 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveRadius = borderRadius ?? AppRadius.card;
     final cardBg = customColor ?? context.themeSurface;
 
     final cardContent = Container(
@@ -36,7 +37,7 @@ class AppCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(effectiveRadius),
       ),
       clipBehavior: clipBehavior,
       child: child,
@@ -47,7 +48,7 @@ class AppCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(borderRadius),
+          borderRadius: BorderRadius.circular(effectiveRadius),
           child: cardContent,
         ),
       );

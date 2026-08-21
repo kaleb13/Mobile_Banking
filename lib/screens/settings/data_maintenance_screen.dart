@@ -185,6 +185,9 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildRefreshTab() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         children: [
@@ -212,6 +215,9 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
   Widget _buildResetTab() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         children: [
@@ -246,7 +252,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

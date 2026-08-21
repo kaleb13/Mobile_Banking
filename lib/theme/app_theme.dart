@@ -17,7 +17,9 @@ class AppColors {
 
   // ── Surfaces & Cards ──────────────────────────────────────────────────────
   static const Color surface        = Color(0xFF111821); // Base card/panel surface (#111821)
-  static const Color surfaceElevated = Color(0xFF141D28); // Elevated surface tone
+  static const Color surfaceElevated = Color(0xFF141D28); // Elevated surface tone (modal & bottom drawer background)
+  static const Color drawerCard     = Color(0x0AFFFFFF); // 4% subtle white translucent glass surface over surfaceElevated for modal & drawer cards/inputs
+  static const Color modalCard      = drawerCard; // Alias for drawerCard
   static const Color overlay        = surfaceElevated; // Replaced legacy #2A2A34 with #141D28
   static const Color bottomNavDark  = Color(0xFF08101C); // Deep navy-slate (between background #050C16 and surface #111821)
   static const Color bottomNavBg    = Color(0xD908101C); // 85% translucent frosted deep dark glass (#08101C @ 85%)
@@ -60,7 +62,7 @@ class AppColors {
   static const Color tealDark      = Color(0xFF1A2530); // Dark blue-teal surface
   static const Color statusActiveBg  = Color(0xFF0F3A2E); // Deep emerald background for active status
   static const Color statusWarningBg = Color(0xFF3A240F); // Deep amber background for warning status
-  static const Color previewCardBg   = Color(0xFF141D2B); // Dark navy tint for notification preview card
+  static const Color previewCardBg   = drawerCard; // 4% subtle white glass for modal/drawer cards & preview sections
 
   // ── Badge Solid Colors ────────────────────────────────────────────────────
   static const Color badgeSuccessBg     = Color(0xFF0BA751); // Solid Emerald Green (#0BA751)
@@ -276,6 +278,34 @@ class AppColors {
       bgMidLight,
     ],
   );
+}
+
+/// Centralized corner radius design tokens across the application.
+/// Strictly enforces a single source of truth for cards, sheets, dialogs, and buttons.
+class AppRadius {
+  /// Single source of truth for all card corner rounding across the application.
+  /// Modifying this value will instantly and uniformly change the roundness
+  /// of every card throughout the entire app.
+  static const double card = 32.0;
+
+  /// Corner radius for smaller / compact card sub-elements or inner cards.
+  static const double cardSm = 20.0;
+
+  /// Convenience [BorderRadius] getters:
+  static BorderRadius get cardRadius => BorderRadius.circular(card);
+  static BorderRadius get cardRadiusSm => BorderRadius.circular(cardSm);
+
+  /// Standard sheet corner radius
+  static const double sheet = 32.0;
+  static BorderRadius get sheetRadius => const BorderRadius.vertical(top: Radius.circular(sheet));
+
+  /// Standard dialog corner radius
+  static const double dialog = 32.0;
+  static BorderRadius get dialogRadius => BorderRadius.circular(dialog);
+
+  /// 100% fully rounded pill button radius
+  static const double button = 100.0;
+  static BorderRadius get buttonRadius => BorderRadius.circular(button);
 }
 
 /// Official Material 3 ThemeExtension for full theme-switching tweening,
@@ -569,22 +599,22 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: Colors.transparent,
         modalBackgroundColor: Colors.transparent,
-        modalBarrierColor: Color(0xA6000000), // 65% dark black barrier
+        modalBarrierColor: const Color(0xA6000000), // 65% dark black barrier
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          borderRadius: AppRadius.sheetRadius,
         ),
       ),
-      dialogTheme: const DialogThemeData(
+      dialogTheme: DialogThemeData(
         backgroundColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(32)),
+          borderRadius: AppRadius.dialogRadius,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -614,22 +644,22 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.surfaceLight,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: Colors.transparent,
         modalBackgroundColor: Colors.transparent,
-        modalBarrierColor: Color(0x8C000000),
+        modalBarrierColor: const Color(0x8C000000),
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          borderRadius: AppRadius.sheetRadius,
         ),
       ),
-      dialogTheme: const DialogThemeData(
+      dialogTheme: DialogThemeData(
         backgroundColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(32)),
+          borderRadius: AppRadius.dialogRadius,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

@@ -111,8 +111,8 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: context.themeSurface,
-              borderRadius: BorderRadius.circular(20),
+              color: AppColors.drawerCard,
+              borderRadius: AppRadius.cardRadius,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -297,8 +297,8 @@ class __InteractiveFrozenCardPreviewState
     final fmt = NumberFormat('#,##0.00');
     final balStr = (widget.isBalanceVisible && !widget.isPaused)
         ? fmt.format(widget.balance)
-        : '****,***.**';
-    final parts = balStr.split('.');
+        : '••••••••';
+    final parts = balStr.contains('.') ? balStr.split('.') : [balStr, ''];
 
     final bool isDarkTextTheme = BankCardWidget.isDarkTextTheme(
         widget.senderName,
@@ -337,7 +337,7 @@ class __InteractiveFrozenCardPreviewState
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: AppRadius.cardRadius,
                       gradient: RadialGradient(
                         center: Alignment(centerX, 0.0),
                         radius: 1.8,
@@ -406,16 +406,18 @@ class __InteractiveFrozenCardPreviewState
                                 color: textColorPrimary,
                                 fontSize: 28,
                                 fontWeight: FontWeight.w800,
+                                letterSpacing: widget.isBalanceVisible ? -0.6 : 1.5,
                               ),
                             ),
-                            Text(
-                              '.${parts[1]}',
-                              style: TextStyle(
-                                color: textColorSub,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
+                            if (parts[1].isNotEmpty)
+                              Text(
+                                '.${parts[1]}',
+                                style: TextStyle(
+                                  color: textColorSub,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 4),

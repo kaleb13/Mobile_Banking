@@ -3505,11 +3505,27 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
       throw ArgumentError('Cash expense deductions must have an assigned reason.');
     }
 
-    final id =
-        await DatabaseService.instance.insertCashTransaction(transaction);
-    final mapped = transaction.toMap();
-    mapped['id'] = id;
-    _cashTransactions.insert(0, CashTransaction.fromMap(mapped));
+    // 1. Optimistically insert into memory and notify listeners instantly (0ms delay)
+    _cashTransactions.insert(0, transaction);
+    _calculateStats();
+    notifyListeners();
+
+    // 2. Persist to database asynchronously and patch the real id back
+    final id = await DatabaseService.instance.insertCashTransaction(transaction);
+    final idx = _cashTransactions.indexOf(transaction);
+    if (idx != -1) {
+      _cashTransactions[idx] = CashTransaction(
+        id: id,
+        type: transaction.type,
+        amount: transaction.amount,
+        date: transaction.date,
+        description: transaction.description,
+        expenseDefinitionId: transaction.expenseDefinitionId,
+        reasonId: transaction.reasonId,
+        reasonName: transaction.reasonName,
+        linkedTransactionId: transaction.linkedTransactionId,
+      );
+    }
 
     // Update the last applied date if it's an expense linked to a definition
     if (transaction.type == 'expense' &&
@@ -3524,16 +3540,13 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
         }
       }
     }
-
-    _calculateStats();
-    notifyListeners();
   }
 
   Future<void> deleteCashTransaction(int id) async {
-    await DatabaseService.instance.deleteCashTransaction(id);
     _cashTransactions.removeWhere((t) => t.id == id);
     _calculateStats();
     notifyListeners();
+    await DatabaseService.instance.deleteCashTransaction(id);
   }
 
   Future<void> updateCashTransactionAmount(int id, double newAmount) async {
@@ -3541,10 +3554,10 @@ class FinanceProvider with ChangeNotifier, WidgetsBindingObserver {
     if (idx != -1) {
       final oldTx = _cashTransactions[idx];
       final newTx = oldTx.copyWith(amount: newAmount);
-      await DatabaseService.instance.updateCashTransaction(newTx);
       _cashTransactions[idx] = newTx;
       _calculateStats();
       notifyListeners();
+      await DatabaseService.instance.updateCashTransaction(newTx);
     }
   }
 

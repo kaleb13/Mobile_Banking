@@ -348,7 +348,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
+                    color: AppColors.drawerCard,
                     borderRadius: BorderRadius.circular(16),
                                       ),
                   child: Row(
@@ -469,7 +469,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
       decoration: BoxDecoration(
         color: isParentSelected
             ? AppColors.positive.withValues(alpha: 0.12)
-            : Colors.white.withValues(alpha: 0.04),
+            : AppColors.drawerCard,
         borderRadius: BorderRadius.circular(16),
               ),
       child: Column(

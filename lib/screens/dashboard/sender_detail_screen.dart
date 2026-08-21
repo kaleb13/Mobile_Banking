@@ -8,19 +8,16 @@ import '../../models/sender.dart';
 import '../../models/transaction.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_back_button.dart';
-import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_drawer.dart';
-import '../../widgets/app_search_bar.dart';
-import '../../widgets/bank_card_widget.dart';
+import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_toast.dart';
-import '../../widgets/animated_balance_text.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_reset_filter_button.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
+import 'bank_detail/bank_detail_header.dart';
 import 'transaction_detail_screen.dart';
 import 'analysis_screen.dart';
 
@@ -42,15 +39,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _sortBy = 'Date: Newest';
   String _dateRangeFilter = 'All Time'; // All Time, 7D, 30D, 90D, 1Y
   final TextEditingController _searchController = TextEditingController();
-  final PageController _cardPageController = PageController();
-  int _cardPageIndex = 0;
   bool _isChartVisible = false;
   double? _touchedX;
 
   @override
   void dispose() {
     _searchController.dispose();
-    _cardPageController.dispose();
     super.dispose();
   }
 
@@ -89,13 +83,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
+    final topSafeArea = MediaQuery.paddingOf(context).top;
+
     // Get latest sender info from provider to reflect linked status
     final currentSender = provider.senders.firstWhere(
       (s) => s.id == widget.sender.id,
       orElse: () => widget.sender,
     );
-    final isLinked =
-        currentSender.accountNumber != null && currentSender.pin != null;
 
     final sNameUp = widget.sender.senderName.toUpperCase();
     final allTxForSender = provider.transactions.where((tx) {
@@ -142,16 +136,24 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       bool matchesDateRange = true;
       final now = DateTime.now();
       if (_dateRangeFilter == '7D') {
-        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 7)));
+        matchesDateRange =
+            tx.date.isAfter(now.subtract(const Duration(days: 7)));
       } else if (_dateRangeFilter == '30D') {
-        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 30)));
+        matchesDateRange =
+            tx.date.isAfter(now.subtract(const Duration(days: 30)));
       } else if (_dateRangeFilter == '90D') {
-        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 90)));
+        matchesDateRange =
+            tx.date.isAfter(now.subtract(const Duration(days: 90)));
       } else if (_dateRangeFilter == '1Y') {
-        matchesDateRange = tx.date.isAfter(now.subtract(const Duration(days: 365)));
+        matchesDateRange =
+            tx.date.isAfter(now.subtract(const Duration(days: 365)));
       }
 
-      return matchesSearch && matchesType && matchesSender && matchesBookmark && matchesDateRange;
+      return matchesSearch &&
+          matchesType &&
+          matchesSender &&
+          matchesBookmark &&
+          matchesDateRange;
     }).toList();
 
     // Sort transactions
@@ -202,847 +204,182 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         extendBody: true,
-        extendBodyBehindAppBar: true,
-        floatingActionButton: AppButton.primary(
-          text: 'Add Transaction',
-          icon: Icons.add_rounded,
-          fullWidth: false,
-          height: 48,
-          elevation: 6.0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          onPressed: () {
-            AppBottomSheet.show(
-              context: context,
-              isScrollControlled: true,
-              builder: (context) => ManualTransactionSheet(
-                provider: provider,
-                initialSender: widget.sender,
-              ),
-            );
-          },
-        ),
-        body: Stack(
-          children: [
-            // Background Gradient
-            _buildBackground(),
-
-            SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  _buildSearchHeader(context),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        children: [
-                          if (widget.sender.senderName.toUpperCase() == 'TELEBIRR' &&
-                              provider.telebirrSavingBalance > 0)
-                            _buildTelebirrCardCarousel(
-                              currentBalance,
-                              provider.telebirrSavingBalance,
-                              monthChange,
-                              monthPercent,
-                              allTxForSender.length,
-                            )
-                          else
-                            _buildBankCard(
-                              currentBalance,
-                              monthChange,
-                              monthPercent,
-                              allTxForSender.length,
-                            ),
-                          if (isLinked)
-                            _buildDynamicButtons(context, currentSender)
-                          else
-                            _buildAddAccountButton(context),
-                          if (_isChartVisible) ...[
-                            const SizedBox(height: 16),
-                            _buildChartSection(allTxForSender),
-                            _buildChartFilters(),
-                          ],
-                          const SizedBox(height: 32),
-                          _buildActivityFilterSection(
-                              filteredTransactions.length, senderOptions),
-                          _buildTransactionList(filteredTransactions),
-                          const SizedBox(height: 80),
-                        ],
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+              colors: [
+                AppColors.background,
+                AppColors.bgMid,
+              ],
+            ),
+          ),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              // ── Dynamic Collapsing Interactive Bank Card Header ──
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: BankDetailHeaderDelegate(
+                  sender: currentSender,
+                  provider: provider,
+                  topSafeArea: topSafeArea,
+                  currentBalance: currentBalance,
+                  monthChange: monthChange,
+                  monthPercent: monthPercent,
+                  txCount: allTxForSender.length,
+                  isChartVisible: _isChartVisible,
+                  onAddTransaction: () {
+                    AppBottomSheet.show(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (context) => ManualTransactionSheet(
+                        provider: provider,
+                        initialSender: widget.sender,
                       ),
+                    );
+                  },
+                  onAnalytics: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AnalysisScreen(
+                          initialBankFilter: widget.sender.senderName,
+                        ),
+                      ),
+                    );
+                  },
+                  onShowPnlInfo: () => _showPNLInfo(context),
+                  onCredentials: () => _showRefreshChooser(context, provider),
+                  onToggleChart: () => setState(() => _isChartVisible = !_isChartVisible),
+                ),
+              ),
+
+              // ── Extra Bank Details (Telebirr Savings, Charts, Filters) ──
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    if (widget.sender.senderName.toUpperCase() == 'TELEBIRR' &&
+                        provider.telebirrSavingBalance > 0)
+                      _buildTelebirrSavingSummaryCard(
+                        provider.telebirrSavingBalance,
+                      ),
+                    if (_isChartVisible) ...[
+                      const SizedBox(height: 16),
+                      _buildChartSection(allTxForSender),
+                      _buildChartFilters(),
+                    ],
+                    const SizedBox(height: 16),
+                    _buildActivityFilterSection(
+                      filteredTransactions.length,
+                      senderOptions,
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Transaction List (Full Width, edge-to-edge) ──
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
+                sliver: SliverToBoxAdapter(
+                  child: _buildTransactionList(filteredTransactions),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Summary card for Telebirr Savings (Sanduq) when savings balance exists
+  Widget _buildTelebirrSavingSummaryCard(double savingBalance) {
+    final fmt = NumberFormat('#,##0.00');
+    final provider = context.watch<FinanceProvider>();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.telebirrGreen.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.savings_rounded,
+                color: AppColors.telebirrGreen,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Telebirr Sanduq (Savings)',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'High-yield savings vault',
+                    style: TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 11,
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchHeader(BuildContext context) {
-    final senderName = widget.sender.senderName.toUpperCase().contains('AHADU')
-        ? 'Ahadu Bank'
-        : widget.sender.senderName;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
-      child: AppSearchBar(
-        mode: AppSearchBarMode.icon,
-        controller: _searchController,
-        hint: 'Search in $senderName...',
-        title: senderName,
-        leading: const AppBackButton(),
-        onChanged: (val) {
-          setState(() {
-            _searchQuery = val;
-          });
-        },
-        onClear: () {
-          setState(() {
-            _searchQuery = '';
-          });
-        },
-        onClose: () {
-          setState(() {
-            _searchQuery = '';
-          });
-        },
-        backgroundColor: AppColors.surface,
-        textColor: Colors.white,
-        hintColor: AppColors.textSoft,
-        iconColor: Colors.white70,
-        closeIconColor: Colors.white,
-      ),
-    );
-  }
-
-  /// Carousel view showing both Main Telebirr Wallet & Telebirr Savings (Sanduq) Account.
-  Widget _buildTelebirrCardCarousel(
-    double mainBalance,
-    double savingBalance,
-    double change,
-    double percent,
-    int txCount,
-  ) {
-    final cardGradient = BankCardWidget.getCardGradient('Telebirr');
-    final bool isDarkTextTheme = BankCardWidget.isDarkTextTheme('Telebirr');
-    final Color textColorPrimary =
-        isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
-    final Color textColorSub = isDarkTextTheme
-        ? AppColors.darkCharcoal.withValues(alpha: 0.6)
-        : Colors.white.withValues(alpha: 0.8);
-
-    return Column(
-      children: [
-        SizedBox(
-          height: 215,
-          child: PageView(
-            controller: _cardPageController,
-            onPageChanged: (idx) {
-              setState(() {
-                _cardPageIndex = idx;
-              });
-            },
-            physics: const BouncingScrollPhysics(),
-            children: [
-              // ── 1. Main Telebirr Wallet Card ──────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomLeft,
-                      end: Alignment.topRight,
-                      colors: cardGradient,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            provider.isBalanceVisible
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Top Row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          BankCardWidget.bankLogo(
-                            'Telebirr',
-                            38,
-                            isDarkTextTheme
-                                ? AppColors.darkCharcoal
-                                : Colors.white,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Telebirr',
-                                      style: TextStyle(
-                                        color: textColorPrimary,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2.5),
-                                      decoration: BoxDecoration(
-                                        color: isDarkTextTheme
-                                            ? Colors.black.withValues(alpha: 0.09)
-                                            : Colors.white.withValues(alpha: 0.2),
-                                        borderRadius:
-                                            BorderRadius.circular(100),
-                                      ),
-                                      child: Text(
-                                        'Main Wallet',
-                                        style: TextStyle(
-                                          color: textColorPrimary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Ethio Telecom , E- money',
-                                  style: TextStyle(
-                                    color: textColorSub,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _buildCardRefreshButton(
-                              textColorPrimary, isDarkTextTheme),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      // Large Balance Display
-                      _buildLargeBalanceDisplay(
-                          mainBalance, textColorPrimary, isDarkTextTheme),
-                      const SizedBox(height: 8),
-                      // Bottom row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '$txCount total Transactions',
-                            style: TextStyle(
-                              color: textColorSub,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                          _build30DPnlChip(change, percent, textColorPrimary,
-                              isDarkTextTheme),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── 2. Telebirr Savings Account (Sanduq) Card ──────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: const LinearGradient(
-                      begin: Alignment.bottomLeft,
-                      end: Alignment.topRight,
-                      colors: [
-                        AppColors.success,
-                        AppColors.cardLime,
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top Row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          BankCardWidget.bankLogo('Telebirr', 38, Colors.white),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Telebirr Saving',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2.5),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.2),
-                                        borderRadius:
-                                            BorderRadius.circular(100),
-                                      ),
-                                      child: const Text(
-                                        'Sanduq',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'High-Yield Savings Account',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.8),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _buildCardRefreshButton(Colors.white, false),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      // Large Balance Display
-                      _buildLargeBalanceDisplay(
-                          savingBalance, Colors.white, false),
-                      const SizedBox(height: 8),
-                      // Bottom row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Compounding Interest Vault',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.lock_outline_rounded,
-                                    color: Colors.white, size: 12),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Protected Vault',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // ── Smooth Page Indicators ───────────────────────────────────────────
-        const SizedBox(height: 2),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: _cardPageIndex == 0 ? 20 : 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: _cardPageIndex == 0
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
-            const SizedBox(width: 6),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: _cardPageIndex == 1 ? 20 : 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: _cardPageIndex == 1
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
-          ],
-        ),
-
-        // ── Combined Total Assets Summary ──────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total Telebirr Net Worth',
-                      style: TextStyle(
-                        color: AppColors.textSoft,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Consumer<FinanceProvider>(
-                      builder: (context, prov, _) {
-                        final total = mainBalance + savingBalance;
-                        final fmt = NumberFormat('#,##0.00');
-                        final valStr = prov.isBalanceVisible
-                            ? 'ETB ${fmt.format(total)}'
-                            : 'ETB ****,***.**';
-                        return Text(
-                          valStr,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.2,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
+                      Text(
+                        fmt.format(savingBalance),
+                        style: const TextStyle(
                           color: AppColors.telebirrGreen,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '2 Accounts',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLargeBalanceDisplay(
-      double balance, Color textColorPrimary, bool isDarkTextTheme) {
-    return Consumer<FinanceProvider>(
-      builder: (context, provider, child) {
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            provider.toggleBalanceVisibility();
-          },
-          behavior: HitTestBehavior.opaque,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: AnimatedBalanceText(
-              value: balance,
-              isMasked: !provider.isBalanceVisible ||
-                  provider.isTrackingPaused(widget.sender.senderName),
-              integerStyle: TextStyle(
-                color: textColorPrimary,
-                fontSize: 32,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-                height: 1.0,
-              ),
-              decimalStyle: TextStyle(
-                color: isDarkTextTheme
-                    ? AppColors.darkCharcoal.withValues(alpha: 0.5)
-                    : Colors.white.withValues(alpha: 0.65),
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCardRefreshButton(
-      Color textColorPrimary, bool isDarkTextTheme) {
-    return GestureDetector(
-      onTap: () => _showRefreshChooser(
-        context,
-        Provider.of<FinanceProvider>(context, listen: false),
-      ),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isDarkTextTheme
-              ? Colors.black.withValues(alpha: 0.08)
-              : Colors.white.withValues(alpha: 0.15),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.refresh_rounded,
-          color: textColorPrimary,
-          size: 18,
-        ),
-      ),
-    );
-  }
-
-  Widget _build30DPnlChip(double change, double percent, Color textColorPrimary,
-      bool isDarkTextTheme) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() {
-          _isChartVisible = !_isChartVisible;
-        });
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: isDarkTextTheme
-              ? Colors.black.withValues(alpha: 0.08)
-              : Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: () => _showPNLInfo(context),
-              behavior: HitTestBehavior.opaque,
-              child: IntrinsicWidth(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '30D PNL',
-                      style: TextStyle(
-                        color: textColorPrimary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.2,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 1),
-                    CustomPaint(
-                      size: const Size(double.infinity, 1),
-                      painter: DashedUnderlinePainter(
-                        color: textColorPrimary.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '${change >= 0 ? '+' : '-'}${NumberFormat('#,##0').format(change.abs())} (${percent.abs().toStringAsFixed(1)}%)',
-              style: TextStyle(
-                color: textColorPrimary,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              _isChartVisible
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
-              color: textColorPrimary,
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBankCard(
-      double balance, double change, double percent, int txCount) {
-    final senderName = widget.sender.senderName;
-    final cardGradient = BankCardWidget.getCardGradient(senderName);
-    final bool isDarkTextTheme = BankCardWidget.isDarkTextTheme(senderName);
-    final Color textColorPrimary =
-        isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
-    final Color textColorSub = isDarkTextTheme
-        ? AppColors.darkCharcoal.withValues(alpha: 0.6)
-        : Colors.white.withValues(alpha: 0.8);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: LinearGradient(
-            begin: Alignment.bottomLeft,
-            end: Alignment.topRight,
-            colors: cardGradient,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Row: Logo + Bank Title + Sub-description + Top-Right Refresh Button
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                BankCardWidget.bankLogo(
-                  senderName,
-                  38,
-                  isDarkTextTheme ? AppColors.darkCharcoal : Colors.white,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        senderName.toUpperCase().contains('AHADU')
-                            ? 'Ahadu Bank'
-                            : senderName,
-                        style: TextStyle(
-                          color: textColorPrimary,
-                          fontSize: 18,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: -0.3,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        BankCardWidget.subtitle(senderName),
-                        style: TextStyle(
-                          color: textColorSub,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(width: 4),
+                      const CurrencySymbolWidget(
+                        color: AppColors.telebirrGreen,
+                        size: 13,
                       ),
                     ],
-                  ),
-                ),
-                _buildCardRefreshButton(textColorPrimary, isDarkTextTheme),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            // Large Balance Display (Integer + Decimals)
-            _buildLargeBalanceDisplay(
-                balance, textColorPrimary, isDarkTextTheme),
-            const SizedBox(height: 8),
-
-            // Bottom Info & Chart Toggle Row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '$txCount total Transactions',
-                  style: TextStyle(
-                    color: textColorSub,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                _build30DPnlChip(
-                    change, percent, textColorPrimary, isDarkTextTheme),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-      ),
-    );
-  }
-
-  Widget _buildDynamicButtons(BuildContext context, AppSender sender) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionButton(
-                  context,
-                  label: "Credentials",
-                  icon: Icons.vpn_key_rounded,
-                  color: AppColors.surfaceElevated,
-                  badge: const AppBadge.neutral(
-                    text: 'Soon',
-                    size: AppBadgeSize.small,
-                  ),
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    AppToast.info(
-                      context,
-                      message: 'Coming Soon',
-                      subtitle:
-                          'Bank credentials and account setup are coming soon!',
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionButton(
-                  context,
-                  label: "Spending Analytics",
-                  icon: Icons.insights_rounded,
-                  color: AppColors.surfaceElevated,
-                  textColor: Colors.white,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AnalysisScreen(
-                        initialBankFilter: sender.senderName,
-                      ),
+                  )
+                : const Text(
+                    '••••••••',
+                    style: TextStyle(
+                      color: AppColors.telebirrGreen,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton(
-    BuildContext context, {
-    required String label,
-    required IconData icon,
-    required Color color,
-    Color textColor = Colors.white,
-    Widget? badge,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
           ],
         ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: textColor.withValues(alpha: 0.8), size: 24),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            if (badge != null)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: badge,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddAccountButton(BuildContext context) {
-    return const SizedBox.shrink();
+      );
   }
 
   /// Lets the user pick how far back to re-scan SMS, then refreshes.
@@ -1082,8 +419,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(16),
+                color: AppColors.drawerCard,
+                borderRadius: AppRadius.cardRadius,
               ),
               child: Row(
                 children: [
@@ -1092,20 +429,30 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text(subtitle,
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 12)),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                   const Spacer(),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: AppColors.textSecondary, size: 20),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
                 ],
               ),
             ),
@@ -1148,151 +495,114 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
     if (_chartFilter == '1D') {
       cutoff = DateTime.now().subtract(const Duration(days: 1));
-    } else if (_chartFilter == '7D') {
+    }
+    if (_chartFilter == '7D') {
       cutoff = DateTime.now().subtract(const Duration(days: 7));
-    } else if (_chartFilter == '30D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 30));
-    } else if (_chartFilter == '180D') {
+    }
+    if (_chartFilter == '180D') {
       cutoff = DateTime.now().subtract(const Duration(days: 180));
-    } else if (_chartFilter == '360D') {
+    }
+    if (_chartFilter == '360D') {
       cutoff = DateTime.now().subtract(const Duration(days: 360));
     }
 
-    final filtered = transactions
-        .where((tx) => tx.date.isAfter(cutoff) && tx.totalBalance > 0)
-        .toList()
-        .reversed
-        .toList();
-    if (filtered.isEmpty) return const SizedBox(height: 100);
+    final filtered =
+        transactions.where((t) => t.date.isAfter(cutoff)).toList();
+    if (filtered.isEmpty) {
+      return const SizedBox(
+        height: 180,
+        child: Center(
+          child: Text(
+            "No data for this time frame",
+            style: TextStyle(color: AppColors.textSoft, fontSize: 13),
+          ),
+        ),
+      );
+    }
 
-    List<FlSpot> spots = filtered.asMap().entries.map((e) {
-      return FlSpot(e.key.toDouble(), e.value.totalBalance);
-    }).toList();
+    // Sort ascending for chart
+    filtered.sort((a, b) => a.date.compareTo(b.date));
+
+    // Compute cumulative balance trend points
+    List<FlSpot> spots = [];
+    double runningBalance = 0;
+    for (int i = 0; i < filtered.length; i++) {
+      final t = filtered[i];
+      if (t.totalBalance > 0) {
+        runningBalance = t.totalBalance;
+      } else {
+        if (t.type == 'income') {
+          runningBalance += t.amount;
+        } else {
+          runningBalance -= t.amount;
+        }
+      }
+      spots.add(FlSpot(i.toDouble(), runningBalance));
+    }
 
     if (spots.length == 1) {
-      spots = [
-        FlSpot(0, spots.first.y),
-        FlSpot(1, spots.first.y),
-      ];
+      spots = [FlSpot(0, spots[0].y), FlSpot(1, spots[0].y)];
     }
 
-    // Gradient configuration
-    List<double> lineStops = [0.0, 1.0];
-    List<Color> lineColors = [AppColors.positive, AppColors.positive];
-
-    List<Color> fillColors = [
-      AppColors.positive.withValues(alpha: 0.28),
-      AppColors.positive.withValues(alpha: 0.0),
-    ];
-
-    if (_touchedX != null && spots.isNotEmpty) {
-      final maxX = spots.last.x;
-      if (maxX > 0) {
-        double ratio = (_touchedX! / maxX).clamp(0.0, 1.0);
-        lineStops = [0.0, ratio, ratio, 1.0];
-        lineColors = [
-          AppColors.positive,
-          AppColors.positive,
-          AppColors.positive.withValues(alpha: 0.08),
-          AppColors.positive.withValues(alpha: 0.08),
-        ];
-        fillColors = [
-          AppColors.positive.withValues(alpha: 0.07),
-          AppColors.positive.withValues(alpha: 0.0),
-        ];
-      }
+    double minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    double maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    if (minY == maxY) {
+      minY = minY * 0.9;
+      maxY = maxY * 1.1;
     }
+    final rangeY = (maxY - minY).abs();
+    minY -= rangeY * 0.1;
+    maxY += rangeY * 0.1;
 
     return Container(
-      height: 120, // Match Dashboard height
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      height: 180,
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      color: Colors.transparent,
       child: LineChart(
         LineChartData(
+          minY: minY,
+          maxY: maxY,
           gridData: const FlGridData(show: false),
           titlesData: const FlTitlesData(show: false),
           borderData: FlBorderData(show: false),
           lineTouchData: LineTouchData(
-            touchCallback:
-                (FlTouchEvent event, LineTouchResponse? touchResponse) {
-              setState(() {
-                if (!event.isInterestedForInteractions ||
-                    touchResponse == null ||
-                    touchResponse.lineBarSpots == null ||
-                    touchResponse.lineBarSpots!.isEmpty) {
-                  _touchedX = null;
-                  return;
-                }
-                final newX = touchResponse.lineBarSpots!.first.x;
-                if (_touchedX != newX) {
-                  HapticFeedback.selectionClick();
-                  _touchedX = newX;
-                }
-              });
-            },
-            getTouchedSpotIndicator:
-                (LineChartBarData barData, List<int> spotIndexes) {
-              return spotIndexes.map((index) {
-                return TouchedSpotIndicatorData(
-                  FlLine(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    strokeWidth: 1,
-                    dashArray: [4, 4],
-                  ),
-                  FlDotData(
-                    show: true,
-                    getDotPainter: (spot, percent, barData, index) =>
-                        FlDotCirclePainter(
-                      radius: 3,
-                      color: AppColors.gold,
-                      strokeWidth: 0,
-                      strokeColor: Colors.transparent,
-                    ),
-                  ),
-                );
-              }).toList();
-            },
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) => Colors.transparent,
-              tooltipPadding: EdgeInsets.zero,
-              tooltipMargin: 8,
               getTooltipItems: (touchedSpots) {
-                return touchedSpots.map((s) {
+                return touchedSpots.map((spot) {
                   return LineTooltipItem(
-                    '',
-                    const TextStyle(),
-                    children: [
-                      TextSpan(
-                        text: 'ETB ',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                      TextSpan(
-                        text: NumberFormat('#,##0').format(s.y),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                    NumberFormat("#,##0").format(spot.y),
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   );
                 }).toList();
               },
             ),
+            touchCallback: (event, response) {
+              if (event is FlTapUpEvent || event is FlPanUpdateEvent) {
+                if (response?.lineBarSpots != null &&
+                    response!.lineBarSpots!.isNotEmpty) {
+                  setState(() {
+                    _touchedX = response.lineBarSpots!.first.x;
+                  });
+                }
+              } else if (event is FlPanEndEvent || event is FlTapCancelEvent) {
+                setState(() {
+                  _touchedX = null;
+                });
+              }
+            },
           ),
           lineBarsData: [
             LineChartBarData(
               spots: spots,
               isCurved: true,
-              gradient: LinearGradient(
-                colors: lineColors,
-                stops: lineStops,
-              ),
-              barWidth: 1.8,
+              curveSmoothness: 0.35,
+              color: AppColors.positive,
+              barWidth: 2.5,
               isStrokeCapRound: true,
               dotData: const FlDotData(show: false),
               belowBarData: BarAreaData(
@@ -1300,7 +610,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: fillColors,
+                  colors: [
+                    AppColors.positive.withValues(alpha: 0.25),
+                    AppColors.positive.withValues(alpha: 0.0),
+                  ],
                 ),
               ),
             ),
@@ -1311,29 +624,35 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   Widget _buildChartFilters() {
-    return AppTertiaryTabBar(
-      tabs: const ['1D', '7D', '30D', '180D', '360D'],
-      selectedTab: _chartFilter,
-      onTabChanged: (val) => setState(() => _chartFilter = val),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    final filters = ['1D', '7D', '30D', '180D', '360D'];
+    return Center(
+      child: AppTertiaryTabBar(
+        tabs: filters,
+        selectedTab: _chartFilter,
+        onTabChanged: (val) {
+          setState(() {
+            _chartFilter = val;
+          });
+        },
+      ),
     );
   }
 
   Widget _buildActivityFilterSection(
       int totalCount, List<String> senderOptions) {
-    final bool hasActiveFilters = _isBookmarkedOnly ||
+    final hasActiveFilters = _isBookmarkedOnly ||
         _typeFilter != 'All' ||
         _senderFilter != 'All Senders' ||
         _dateRangeFilter != 'All Time' ||
-        _sortBy != 'Date: Newest';
+        _sortBy != 'Date: Newest' ||
+        _searchQuery.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Filter Pills Row (Horizontal Scroll with edge-to-edge scroll area)
+        // Horizontal Scrollable Filter Row
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -1387,6 +706,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       _senderFilter = 'All Senders';
                       _dateRangeFilter = 'All Time';
                       _sortBy = 'Date: Newest';
+                      _searchQuery = '';
+                      _searchController.clear();
                     });
                   },
                 ),
@@ -1571,10 +892,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           children: [
             _buildDateGroupHeader(headerLabel, isFirst: groupIdx == 0),
             Container(
-              margin: const EdgeInsets.only(bottom: 6),
+              margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: AppRadius.cardRadius,
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -1610,7 +931,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (context) => TransactionDetailScreen(transaction: tx)),
+            builder: (context) => TransactionDetailScreen(transaction: tx),
+          ),
         ),
         splashColor: Colors.white.withValues(alpha: 0.04),
         highlightColor: Colors.white.withValues(alpha: 0.02),
@@ -1628,7 +950,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       : AppColors.negative.withValues(alpha: 0.12),
                 ),
                 child: Icon(
-                  isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
+                  isIncome
+                      ? Icons.south_west_rounded
+                      : Icons.north_east_rounded,
                   size: 20,
                   color: isIncome ? AppColors.positive : AppColors.negative,
                 ),
@@ -1642,7 +966,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            tx.resolvedReason ?? (isIncome ? 'Deposit' : 'Expense'),
+                            tx.resolvedReason ??
+                                (isIncome ? 'Deposit' : 'Expense'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1683,17 +1008,21 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                               amount: tx.amount,
                               showSign: true,
                               style: TextStyle(
-                                color: isIncome ? AppColors.positive : Colors.white,
+                                color: isIncome
+                                    ? AppColors.positive
+                                    : Colors.white,
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
                               ),
-                              customFormattedStr:
-                                  NumberFormat('#,##0.00').format(tx.amount),
+                              customFormattedStr: NumberFormat('#,##0.00')
+                                  .format(tx.amount),
                             )
                           : Text(
-                              '****',
+                              '••••••••',
                               style: TextStyle(
-                                color: isIncome ? AppColors.positive : Colors.white,
+                                color: isIncome
+                                    ? AppColors.positive
+                                    : Colors.white,
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1717,28 +1046,4 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       ),
     );
   }
-}
-
-class DashedUnderlinePainter extends CustomPainter {
-  final Color color;
-  DashedUnderlinePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-
-    const dashWidth = 1.5;
-    const dashSpace = 1.0;
-    double startX = 0;
-    while (startX < size.width) {
-      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
-      startX += dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

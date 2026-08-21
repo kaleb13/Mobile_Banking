@@ -4,9 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/interactive_drag_handle.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_search_bar.dart';
+import '../../widgets/widgets.dart';
 
 class ReasonSelectionSheet extends StatefulWidget {
   final AppReason? initialReason;
@@ -21,6 +19,26 @@ class ReasonSelectionSheet extends StatefulWidget {
     this.isCashSpending = false,
     required this.onReasonSelected,
   });
+
+  /// Static helper to display this selection sheet using [AppBottomSheet].
+  static Future<void> show(
+    BuildContext context, {
+    AppReason? initialReason,
+    String? transactionType,
+    bool isCashSpending = false,
+    required Function(AppReason) onReasonSelected,
+  }) {
+    return AppBottomSheet.show(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => ReasonSelectionSheet(
+        initialReason: initialReason,
+        transactionType: transactionType,
+        isCashSpending: isCashSpending,
+        onReasonSelected: onReasonSelected,
+      ),
+    );
+  }
 
   @override
   State<ReasonSelectionSheet> createState() => _ReasonSelectionSheetState();
@@ -63,6 +81,75 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
       return _selectedReason!.id == r.id;
     }
     return _selectedReason!.name.trim().toLowerCase() == r.name.trim().toLowerCase();
+  }
+
+  void _showAddCategoryDialog(BuildContext context, FinanceProvider provider,
+      {AppReason? parentCategory}) {
+    final ctrl = TextEditingController();
+    final isSubcategory = parentCategory != null;
+
+    AppModalDialog.show(
+      context: context,
+      builder: (ctx) {
+        String? errorMsg;
+        return StatefulBuilder(builder: (ctx, setInner) {
+          return AppModalDialog(
+            title: isSubcategory ? 'New Subcategory' : 'New Category',
+            subtitle:
+                parentCategory != null ? 'Parent: ${parentCategory.name}' : null,
+            confirmText: 'Save',
+            cancelText: 'Cancel',
+            onConfirm: () async {
+              final name = ctrl.text.trim();
+              if (name.isEmpty) return;
+
+              AppReason newReason;
+              if (parentCategory != null) {
+                newReason =
+                    await provider.addSubcategory(parentCategory.id!, name);
+              } else {
+                newReason = await provider.addTopLevelCategory(name);
+              }
+
+              if (mounted) {
+                setState(() {
+                  _selectedReason = newReason;
+                  if (parentCategory != null) {
+                    _expandedCategoryId = parentCategory.id;
+                  }
+                });
+              }
+              if (ctx.mounted) {
+                Navigator.pop(ctx);
+              }
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppTextField.modal(
+                  controller: ctrl,
+                  autofocus: true,
+                  hint: isSubcategory
+                      ? 'Subcategory name...'
+                      : 'Category name...',
+                  borderRadius: AppRadius.cardRadiusSm,
+                  onChanged: (_) {
+                    if (errorMsg != null) setInner(() => errorMsg = null);
+                  },
+                ),
+                if (errorMsg != null) ...[
+                  const SizedBox(height: 8),
+                  Text(errorMsg!,
+                      style: const TextStyle(
+                          color: AppColors.negative, fontSize: 12)),
+                ],
+              ],
+            ),
+          );
+        });
+      },
+    );
   }
 
   bool _isScrolledToTop = false;
@@ -108,16 +195,16 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
         : MediaQuery.of(context).size.height * 0.82;
 
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: AppRadius.sheetRadius,
       clipBehavior: Clip.antiAlias,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         height: targetHeight,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.surfaceElevated,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: AppRadius.sheetRadius,
         ),
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,7 +244,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                 _searchQuery = '';
               });
             },
-            backgroundColor: Colors.white.withValues(alpha: 0.08),
+            backgroundColor: AppColors.drawerCard,
             iconColor: AppColors.positive,
             textColor: Colors.white,
             hintColor: AppColors.textSoft,
@@ -186,7 +273,34 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                   ],
 
                   // ── Categories & Subcategories Section ──────────────────────
-                  _buildSectionHeader('CATEGORIES & SUBCATEGORIES', Icons.category_outlined),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildSectionHeader('CATEGORIES & SUBCATEGORIES', Icons.category_outlined),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _showAddCategoryDialog(context, provider),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add_rounded, color: AppColors.positive, size: 14),
+                              SizedBox(width: 4),
+                              Text(
+                                'Add Category',
+                                style: TextStyle(
+                                  color: AppColors.positive,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   if (topCategories.isEmpty)
                     const Padding(
@@ -266,17 +380,18 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     final descText = _getSpecialDescription(reason.name);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: isSelected
             ? AppColors.positive.withValues(alpha: 0.14)
-            : Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(12),
-              ),
+            : AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
+      ),
       child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
         dense: true,
         visualDensity: VisualDensity.compact,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         leading: Container(
           width: 28,
           height: 28,
@@ -343,19 +458,20 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     final isCategorySelected = _isSelected(category);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: isCategorySelected
             ? AppColors.positive.withValues(alpha: 0.08)
-            : Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(12),
-              ),
+            : AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
+      ),
       child: Column(
         children: [
           ListTile(
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
             dense: true,
             visualDensity: VisualDensity.compact,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             leading: Container(
               width: 28,
               height: 28,
@@ -458,17 +574,18 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                   ...subcategories.map((sub) {
                     final isSubSelected = _isSelected(sub);
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 2),
+                      margin: const EdgeInsets.only(bottom: 4),
                       decoration: BoxDecoration(
                         color: isSubSelected
                             ? AppColors.positive.withValues(alpha: 0.12)
-                            : Colors.white.withValues(alpha: 0.015),
-                        borderRadius: BorderRadius.circular(8),
+                            : Colors.white.withValues(alpha: 0.02),
+                        borderRadius: AppRadius.cardRadius,
                       ),
                       child: ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
                         dense: true,
                         visualDensity: VisualDensity.compact,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                         leading: Container(
                           width: 24,
                           height: 24,
@@ -512,9 +629,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                         height: 34,
                         fontSize: 12,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
+                        onPressed: () => _showAddCategoryDialog(context, provider, parentCategory: category),
                       ),
                     ),
                 ],

@@ -261,6 +261,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   // ═══════════════════════════════════════════════════════════════════════════
   Widget _buildBackupTab() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,7 +318,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.positive.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,7 +368,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.negative.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [
@@ -393,7 +396,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [
@@ -449,6 +452,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
 
   Widget _buildRestoreFileList() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -569,7 +575,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.cardRadius,
         ),
         child: Row(
           children: [
@@ -718,6 +724,9 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         // Results list
         Expanded(
           child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 24),
             itemCount: results.length,
             itemBuilder: (context, i) {
@@ -833,7 +842,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

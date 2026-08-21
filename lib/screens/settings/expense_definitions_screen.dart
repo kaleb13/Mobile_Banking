@@ -83,13 +83,17 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                     final defs = provider.expenseDefinitions;
 
                     if (defs.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Text(
+                      return SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.fromLTRB(32, 120, 32, 32),
+                          child: const Text(
                             'No Expense Templates Defined.\n\nCreate templates for manual or recurring cash expenses.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 color: AppColors.textSoft,
                                 fontSize: 15,
                                 height: 1.5),
@@ -99,6 +103,9 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                     }
 
                     return ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
                       padding: const EdgeInsets.only(top: 16, bottom: 120),
                       itemCount: defs.length,
                       itemBuilder: (context, index) {
@@ -250,13 +257,9 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                               color: AppColors.textSecondary,
                                               size: 18),
                                           onPressed: () {
-                                            Navigator.push(
+                                            AddEditExpenseDefinitionScreen.show(
                                               context,
-                                              MaterialPageRoute(
-                                                builder: (context) =>
-                                                    AddEditExpenseDefinitionScreen(
-                                                        expenseDefinition: def),
-                                              ),
+                                              expenseDefinition: def,
                                             );
                                           },
                                         ),
@@ -307,13 +310,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
               text: 'Add Definition',
               icon: Icons.add_rounded,
               height: 50,
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      const AddEditExpenseDefinitionScreen(),
-                ),
-              ),
+              onPressed: () => AddEditExpenseDefinitionScreen.show(context),
             ),
           ),
         ),

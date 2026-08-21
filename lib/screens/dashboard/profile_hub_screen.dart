@@ -49,7 +49,9 @@ class ProfileHubScreen extends StatelessWidget {
           ),
           child: SafeArea(
             child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 0),
                 child: Column(
@@ -141,7 +143,7 @@ class ProfileHubScreen extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                               decoration: BoxDecoration(
                                 color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(28),
+                                borderRadius: AppRadius.cardRadius,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +201,7 @@ class ProfileHubScreen extends StatelessWidget {
                                         Text(
                                           isVisible
                                               ? '${fmt.format(provider.totalBalance)} ETB'
-                                              : '****,***.** ETB',
+                                              : '•••••••• ETB',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
@@ -219,7 +221,7 @@ class ProfileHubScreen extends StatelessWidget {
                                     Text(
                                       isVisible
                                           ? 'Need ${fmt.format(remaining)} ETB more to unlock Level ${level + 1} ($nextLvName)'
-                                          : 'Need ****,***.** ETB more to unlock Level ${level + 1} ($nextLvName)',
+                                          : 'Need •••••••• ETB more to unlock Level ${level + 1} ($nextLvName)',
                                       style: TextStyle(
                                         color: Colors.white.withValues(alpha: 0.7),
                                         fontSize: 12,
@@ -322,7 +324,7 @@ class ProfileHubScreen extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -429,7 +431,7 @@ class ProfileHubScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: AppColors.previewCardBg,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: AppRadius.cardRadius,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

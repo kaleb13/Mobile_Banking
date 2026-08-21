@@ -654,7 +654,9 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                   : ListView.builder(
                       padding:
                           const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      physics: const BouncingScrollPhysics(),
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
                       itemCount: provider.notifications.length,
                       itemBuilder: (context, index) {
                         return _buildCard(
@@ -723,14 +725,14 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 320),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: AppRadius.cardRadius,
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                         child: Container(
                           padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
                           decoration: BoxDecoration(
                             color: AppColors.surface.withValues(alpha: 0.88),
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: AppRadius.cardRadius,
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -817,14 +819,14 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 320),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: AppRadius.cardRadius,
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                         child: Container(
                           padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
                           decoration: BoxDecoration(
                             color: AppColors.surface.withValues(alpha: 0.88),
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: AppRadius.cardRadius,
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -1097,25 +1099,32 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.notifications_none_rounded,
-              color: Colors.white30, size: 40),
-          const SizedBox(height: 12),
-          const Text(
-            'No Unread Notifications',
-            style: TextStyle(
-                color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Unrecognized messages will appear here',
-            style:
-                TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 13),
-          ),
-        ],
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.only(top: 80, bottom: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.notifications_none_rounded,
+                color: Colors.white30, size: 40),
+            const SizedBox(height: 12),
+            const Text(
+              'No Unread Notifications',
+              style: TextStyle(
+                  color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Unrecognized messages will appear here',
+              style:
+                  TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 13),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1160,13 +1169,13 @@ class _NotificationPanelContentState extends State<_NotificationPanelContent> {
         notif.sender.startsWith('Loan') || notif.sender.startsWith('System');
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: AppRadius.cardRadius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           decoration: BoxDecoration(
             color: AppColors.surface.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: AppRadius.cardRadius,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1394,8 +1403,8 @@ void showNotificationsOverlay(BuildContext context) {
           bottom: 12,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF141419),
-          borderRadius: BorderRadius.circular(32),
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(AppRadius.sheet),
                     boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.4),

@@ -163,9 +163,9 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: screenH * 0.82),
         child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: AppRadius.sheetRadius,
           ),
           child: Stack(
             clipBehavior: Clip.none,
@@ -173,8 +173,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
               // ── Radial glow background ─────────────────────────────────
               Positioned.fill(
                 child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: AppRadius.sheetRadius,
                   child: AnimatedBuilder(
                     animation: _fadeAnim,
                     builder: (_, __) => Opacity(
@@ -354,9 +353,9 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(20),
-                  ),
+          color: AppColors.surface,
+          borderRadius: AppRadius.cardRadius,
+        ),
         child: Row(
           children: [
             Container(
@@ -364,7 +363,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
               height: 40,
               decoration: BoxDecoration(
                 color: glowColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(12),
+                shape: BoxShape.circle,
               ),
               child: Icon(Icons.emoji_events_rounded,
                   color: glowColor, size: 22),
@@ -402,9 +401,9 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(20),
-              ),
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

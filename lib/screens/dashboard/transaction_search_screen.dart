@@ -337,25 +337,32 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   }
 
   Widget _buildInitialState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search_rounded,
-            size: 56,
-            color: AppColors.mediumGreyText.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Search by name, amount, or reason',
-            style: TextStyle(
-              color: AppColors.mediumGreyText,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w400,
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.only(top: 100, bottom: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 56,
+              color: AppColors.mediumGreyText.withValues(alpha: 0.3),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            const Text(
+              'Search by name, amount, or reason',
+              style: TextStyle(
+                color: AppColors.mediumGreyText,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -363,32 +370,41 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   Widget _buildSearchResults(
       List<AppTransaction> transactions, FinanceProvider provider) {
     if (transactions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off_rounded,
-              size: 56,
-              color: AppColors.mediumGreyText.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'No transactions found',
-              style: TextStyle(
-                color: AppColors.greyText,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w400,
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.only(top: 100, bottom: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off_rounded,
+                size: 56,
+                color: AppColors.mediumGreyText.withValues(alpha: 0.3),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              const Text(
+                'No transactions found',
+                style: TextStyle(
+                  color: AppColors.greyText,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return ListView.separated(
       padding: const EdgeInsets.only(top: 4, bottom: 24),
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       itemCount: transactions.length,
       separatorBuilder: (context, index) => const Divider(
         height: 1,
@@ -411,7 +427,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
     final String amountStr = provider.isBalanceVisible
         ? NumberFormat('#,##0.1').format(tx.amount)
-        : '****';
+        : '••••••••';
     final String label = isIncome ? 'Deposit' : 'Transferred';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 

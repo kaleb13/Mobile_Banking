@@ -4,6 +4,8 @@ import '../theme/app_theme.dart';
 import 'app_dropdown.dart';
 import 'app_bottom_sheet.dart';
 import 'app_button.dart';
+import 'app_drawer.dart';
+import 'app_date_picker_drawer.dart';
 
 /// Available preset date filter options.
 enum AppDateFilterPreset {
@@ -352,30 +354,12 @@ class _AppDateFilterSheet extends StatelessWidget {
     final now = DateTime.now();
     final initialDate = currentValue.customDate ?? now;
 
-    final picked = await showDatePicker(
+    final picked = await AppDatePickerDrawer.showSingleDate(
       context: context,
       initialDate: initialDate.isAfter(now) ? now : initialDate,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 2),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.brandGreen,
-              onPrimary: AppColors.buttonPrimaryText,
-              surface: AppColors.surfaceElevated,
-              onSurface: Colors.white,
-            ),
-            dialogTheme: const DialogThemeData(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
+      title: 'Filter Single Date',
     );
 
     if (context.mounted && picked != null) {
@@ -391,30 +375,12 @@ class _AppDateFilterSheet extends StatelessWidget {
           end: now,
         );
 
-    final picked = await showDateRangePicker(
+    final picked = await AppDatePickerDrawer.showDateRange(
       context: context,
-      initialDateRange: initialRange,
+      initialRange: initialRange,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 2),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.brandGreen,
-              onPrimary: AppColors.buttonPrimaryText,
-              surface: AppColors.surfaceElevated,
-              onSurface: Colors.white,
-            ),
-            dialogTheme: const DialogThemeData(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
+      title: 'Filter Date Range',
     );
 
     if (context.mounted && picked != null) {
@@ -434,143 +400,123 @@ class _AppDateFilterSheet extends StatelessWidget {
       {'label': 'This Year', 'value': const AppDateFilterValue.thisYear()},
     ];
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row
-            Row(
-              children: [
-                const Icon(
-                  Icons.calendar_month_rounded,
-                  color: AppColors.brandGreen,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Filter by Date',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.3,
+    return AppDrawer(
+      headerCard: AppDrawerHeaderCard(
+        icon: Icons.calendar_month_rounded,
+        iconColor: AppColors.positive,
+        title: 'Filter by Date',
+        subtitle: 'Select a time preset or pick a custom range',
+        trailing: !currentValue.isDefault
+            ? GestureDetector(
+                onTap: () => onSelected(const AppDateFilterValue.anyTime()),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.buttonSecondary,
+                    borderRadius: BorderRadius.circular(100),
                   ),
-                ),
-                const Spacer(),
-                if (!currentValue.isDefault)
-                  GestureDetector(
-                    onTap: () => onSelected(const AppDateFilterValue.anyTime()),
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.buttonSecondary,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: const Text(
-                        'Reset',
-                        style: TextStyle(
-                          color: AppColors.brandGreen,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                  child: const Text(
+                    'Reset',
+                    style: TextStyle(
+                      color: AppColors.positive,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                ),
+              )
+            : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Quick Presets
+          ...presets.map((item) {
+            final val = item['value'] as AppDateFilterValue;
+            final isSelected = currentValue.preset == val.preset;
 
-            // Quick Presets
-            ...presets.map((item) {
-              final val = item['value'] as AppDateFilterValue;
-              final isSelected = currentValue.preset == val.preset;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: Material(
-                  color: isSelected
-                      ? AppColors.brandGreen.withValues(alpha: 0.15)
-                      : AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    onTap: () => onSelected(val),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item['label'] as String,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : AppColors.textSoft,
-                                fontSize: 13.5,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                              ),
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.positive.withValues(alpha: 0.14)
+                    : AppColors.drawerCard,
+                borderRadius: AppRadius.cardRadius,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: AppRadius.cardRadius,
+                child: InkWell(
+                  onTap: () => onSelected(val),
+                  borderRadius: AppRadius.cardRadius,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item['label'] as String,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.9),
+                              fontSize: 13.5,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                             ),
                           ),
-                          if (isSelected)
-                            const Icon(
-                              Icons.check_circle_rounded,
-                              color: AppColors.brandGreen,
-                              size: 18,
-                            ),
-                        ],
-                      ),
+                        ),
+                        if (isSelected)
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.positive,
+                            size: 18,
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              );
-            }),
+              ),
+            );
+          }),
 
-            const SizedBox(height: 10),
+          const SizedBox(height: 10),
 
-            // Custom Pickers Section
-            Row(
-              children: [
-                // Single Date Picker Action Pill
-                Expanded(
-                  child: AppButton.secondary(
-                    text: currentValue.preset == AppDateFilterPreset.customDate
-                        ? currentValue.label
-                        : 'Pick Date',
-                    icon: Icons.event_outlined,
-                    height: 44,
-                    fontSize: 12.5,
-                    onPressed: () => _pickSingleDate(context),
-                  ),
+          // Custom Pickers Section
+          Row(
+            children: [
+              // Single Date Picker Action Pill
+              Expanded(
+                child: AppButton.secondary(
+                  text: currentValue.preset == AppDateFilterPreset.customDate
+                      ? currentValue.label
+                      : 'Pick Date',
+                  icon: Icons.event_outlined,
+                  height: 44,
+                  fontSize: 12.5,
+                  onPressed: () => _pickSingleDate(context),
                 ),
-                const SizedBox(width: 8),
-                // Date Range Picker Action Pill
-                Expanded(
-                  child: AppButton.secondary(
-                    text: currentValue.preset == AppDateFilterPreset.customRange
-                        ? 'Range Active'
-                        : 'Date Range',
-                    icon: Icons.date_range_rounded,
-                    height: 44,
-                    fontSize: 12.5,
-                    onPressed: () => _pickDateRange(context),
-                  ),
+              ),
+              const SizedBox(width: 8),
+              // Date Range Picker Action Pill
+              Expanded(
+                child: AppButton.secondary(
+                  text: currentValue.preset == AppDateFilterPreset.customRange
+                      ? 'Range Active'
+                      : 'Date Range',
+                  icon: Icons.date_range_rounded,
+                  height: 44,
+                  fontSize: 12.5,
+                  onPressed: () => _pickDateRange(context),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

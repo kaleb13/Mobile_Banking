@@ -34,6 +34,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             Expanded(
               child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 padding: const EdgeInsets.fromLTRB(0, 8, 0, 48),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,7 +47,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: AppRadius.cardRadius,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,7 +179,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.gold.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: AppRadius.cardRadius,
               ),
               child: Text(
                 'For questions or concerns about this Privacy Policy, contact the developer directly via Telegram: @Shibre_Plus',
@@ -211,7 +214,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.cardRadius,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

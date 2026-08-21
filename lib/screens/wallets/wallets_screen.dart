@@ -49,7 +49,9 @@ class _WalletsScreenState extends State<WalletsScreen> {
                 : AppColors.screenBackgroundGradient,
           ),
           child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             slivers: [
               // ── Header Title & Add New Button ─────────────────────────────
               SliverToBoxAdapter(
@@ -291,7 +293,7 @@ class _WalletCard extends StatelessWidget {
         height: 172,
         decoration: BoxDecoration(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppRadius.cardRadius,
         ),
       );
     }

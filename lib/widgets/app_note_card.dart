@@ -1,7 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/transaction_attachment.dart';
 import '../theme/app_theme.dart';
 import 'app_button.dart';
+import 'app_drawer.dart';
+import 'app_modal_dialog.dart';
+import 'app_text_field.dart';
+import 'app_toast.dart';
 
 /// Reusable, system-wide Personal Note & Media Attachment Card Component.
 /// Adheres strictly to:
@@ -54,63 +61,177 @@ class _AppNoteCardState extends State<AppNoteCard> {
     _isExpanded = widget.initialExpanded || !widget.isCollapsible;
   }
 
-  Future<void> _showAttachMediaModal() async {
-    final pathController = TextEditingController();
-    final result = await showDialog<String>(
+  Future<void> _showAttachMediaPicker() async {
+    AppDrawer.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          children: [
-            Icon(
-              Icons.attach_file_rounded,
-              color: widget.accentColor ?? AppColors.positive,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Attach Media / Receipt',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+      builder: (sheetCtx) {
+        Widget option({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required VoidCallback onTap,
+        }) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              Navigator.pop(sheetCtx);
+              onTap();
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+                borderRadius: AppRadius.cardRadius,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.positive.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: AppColors.positive, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        content: TextField(
+          );
+        }
+
+        return AppDrawer(
+          headerCard: const AppDrawerHeaderCard(
+            icon: Icons.attach_file_rounded,
+            iconColor: AppColors.positive,
+            title: 'Attach Media / Receipt',
+            subtitle: 'Upload a picture, receipt, document, or web link',
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              option(
+                icon: Icons.photo_library_rounded,
+                title: 'Photo / Receipt Picture',
+                subtitle: 'Upload photo from gallery or receipt snapshot',
+                onTap: () => _pickFile(FileType.image),
+              ),
+              option(
+                icon: Icons.picture_as_pdf_rounded,
+                title: 'PDF / Document',
+                subtitle: 'Upload PDF statement, invoice, or report',
+                onTap: () => _pickFile(
+                  FileType.custom,
+                  allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'csv'],
+                ),
+              ),
+              option(
+                icon: Icons.folder_open_rounded,
+                title: 'Browse Files',
+                subtitle: 'Select any file or audio note from storage',
+                onTap: () => _pickFile(FileType.any),
+              ),
+              option(
+                icon: Icons.link_rounded,
+                title: 'Web Receipt / URL Link',
+                subtitle: 'Attach an online payment or invoice URL',
+                onTap: _showUrlAttachDialog,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickFile(FileType fileType, {List<String>? allowedExtensions}) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: fileType,
+        allowedExtensions: allowedExtensions,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        final path = file.path;
+        if (path == null || path.isEmpty) return;
+
+        final ext = (file.extension ?? '').toLowerCase();
+        String type = 'image';
+        if (['pdf', 'doc', 'docx', 'txt', 'csv'].contains(ext)) {
+          type = 'pdf';
+        } else if (['mp3', 'wav', 'm4a', 'aac', 'ogg'].contains(ext)) {
+          type = 'audio';
+        } else if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic'].contains(ext)) {
+          type = 'image';
+        }
+
+        if (widget.onAttachMedia != null) {
+          await widget.onAttachMedia!(path, type, file.name);
+          if (mounted) {
+            setState(() {
+              _isExpanded = true;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking attachment file: $e');
+    }
+  }
+
+  Future<void> _showUrlAttachDialog() async {
+    final pathController = TextEditingController();
+    final result = await AppModalDialog.show<String>(
+      context: context,
+      builder: (ctx) => AppModalDialog(
+        title: 'Attach Web Receipt Link',
+        subtitle: 'Enter public or web invoice URL',
+        confirmText: 'Attach',
+        cancelText: 'Cancel',
+        onConfirm: () {
+          final path = pathController.text.trim();
+          if (path.isNotEmpty) {
+            Navigator.pop(ctx, path);
+          }
+        },
+        child: AppTextField.modal(
           controller: pathController,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          decoration: InputDecoration(
-            hintText: 'Enter local file path or URL...',
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 13),
-            filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.05),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-          ),
+          autofocus: true,
+          hint: 'https://...',
+          borderRadius: AppRadius.cardRadiusSm,
         ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          AppButton.secondary(
-            text: 'Cancel',
-            fullWidth: false,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          const SizedBox(width: 8),
-          AppButton.primary(
-            text: 'Attach',
-            fullWidth: false,
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            onPressed: () => Navigator.pop(ctx, pathController.text.trim()),
-          ),
-        ],
       ),
     );
 
@@ -123,13 +244,46 @@ class _AppNoteCardState extends State<AppNoteCard> {
         type = 'audio';
       }
 
-      final fileName = result.contains('/') ? result.split('/').last : result.split('\\').last;
+      final fileName = result.contains('/') ? result.split('/').last : result;
       await widget.onAttachMedia!(result, type, fileName);
       if (mounted) {
         setState(() {
           _isExpanded = true;
         });
       }
+    }
+  }
+
+  void _previewAttachment(TransactionAttachment att) {
+    if (att.filePath.startsWith('http://') || att.filePath.startsWith('https://')) {
+      launchUrl(Uri.parse(att.filePath), mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    final file = File(att.filePath);
+    if (att.fileType == 'image' && file.existsSync()) {
+      AppModalDialog.show(
+        context: context,
+        builder: (ctx) => AppModalDialog(
+          title: att.fileName ?? 'Receipt Image',
+          confirmText: 'Close',
+          cancelText: '',
+          onConfirm: () => Navigator.pop(ctx),
+          child: ClipRRect(
+            borderRadius: AppRadius.cardRadius,
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: Image.file(file, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      );
+    } else {
+      AppToast.info(
+        context,
+        message: att.fileName ?? 'Attachment',
+        subtitle: 'File saved at ${att.filePath}',
+      );
     }
   }
 
@@ -150,13 +304,13 @@ class _AppNoteCardState extends State<AppNoteCard> {
       margin: widget.margin,
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppRadius.cardRadius,
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -228,7 +382,7 @@ class _AppNoteCardState extends State<AppNoteCard> {
                         fontSize: 11,
                         iconSize: 13,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        onPressed: _showAttachMediaModal,
+                        onPressed: _showAttachMediaPicker,
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -288,21 +442,14 @@ class _AppNoteCardState extends State<AppNoteCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
+        AppTextField(
           controller: widget.controller,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          hint: widget.hintText,
           maxLines: 3,
-          decoration: InputDecoration(
-            hintText: widget.hintText,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.25)),
-            filled: false,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            contentPadding: EdgeInsets.zero,
-          ),
+          backgroundColor: Colors.transparent,
+          contentPadding: EdgeInsets.zero,
           onChanged: widget.onChanged,
-          onEditingComplete: () {
+          onSubmitted: (_) {
             FocusScope.of(context).unfocus();
             widget.onEditingComplete?.call();
           },
@@ -325,29 +472,34 @@ class _AppNoteCardState extends State<AppNoteCard> {
             children: widget.attachments.map((att) {
               final attIcon = _getAttachmentIcon(att.fileType);
 
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(attIcon, color: accent, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      att.fileName ?? att.fileType.toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
-                    ),
-                    if (widget.onDeleteAttachment != null) ...[
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _previewAttachment(att),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(attIcon, color: accent, size: 14),
                       const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => widget.onDeleteAttachment!(att),
-                        child: const Icon(Icons.close_rounded, color: Colors.white38, size: 14),
+                      Text(
+                        att.fileName ?? att.fileType.toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
                       ),
+                      if (widget.onDeleteAttachment != null) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => widget.onDeleteAttachment!(att),
+                          child: const Icon(Icons.close_rounded, color: Colors.white38, size: 14),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               );
             }).toList(),

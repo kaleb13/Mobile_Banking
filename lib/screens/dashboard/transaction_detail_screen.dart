@@ -21,6 +21,7 @@ import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_note_card.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/counterparty_insight_sheet.dart';
@@ -370,6 +371,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ],
         ),
         body: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -623,7 +627,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,7 +735,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -946,27 +950,21 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 16),
               children: [
-                TextField(
+                AppTextField(
                   controller: amountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.center,
+                  variant: AppTextFieldVariant.modal,
+                  backgroundColor: Colors.transparent,
                   style: TextStyle(
                     color: isExceeded ? AppColors.negative : Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.center,
+                  hint: '0.00',
+                  hintColor: Colors.white.withValues(alpha: 0.15),
+                  prefixText: provider.currentCurrency.shortLabel + ' ',
                   onChanged: (_) => setModalState(() {}),
-                  decoration: InputDecoration(
-                    hintText: '0.00',
-                    hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.15)),
-                    suffixText: provider.currentCurrency.shortLabel,
-                    suffixStyle: TextStyle(
-                      color: isExceeded ? AppColors.negative : AppColors.textSoft,
-                      fontSize: 16,
-                    ),
-                    enabledBorder: const UnderlineInputBorder(borderSide: BorderSide.none),
-                    focusedBorder: const UnderlineInputBorder(borderSide: BorderSide.none),
-                  ),
                 ),
                 if (isExceeded) ...[
                   const SizedBox(height: 6),
@@ -999,8 +997,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     decoration: BoxDecoration(
                       color: selectedReason != null
                           ? AppColors.positive.withValues(alpha: 0.1)
-                          : Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(14),
+                          : AppColors.drawerCard,
+                      borderRadius: AppRadius.cardRadius,
                     ),
                     child: Row(
                       children: [
@@ -1267,13 +1265,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 0),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppRadius.cardRadius,
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -1467,13 +1465,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppRadius.cardRadius,
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -1583,13 +1581,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppRadius.cardRadius,
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
           hoverColor: Colors.transparent,
@@ -1810,7 +1808,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: AppRadius.cardRadius,
           boxShadow: [
             BoxShadow(
               color: accentColor.withValues(alpha: 0.1),
@@ -1924,8 +1922,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           children: [
             ListTile(
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              tileColor: Colors.white.withValues(alpha: 0.04),
+                  borderRadius: AppRadius.cardRadius),
+              tileColor: AppColors.drawerCard,
               leading: const Icon(Icons.open_in_new, color: AppColors.brandGreen),
               title: const Text('Open in Loan Manager',
                   style: TextStyle(
@@ -1941,7 +1939,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             const SizedBox(height: 10),
             ListTile(
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
+                  borderRadius: AppRadius.cardRadius),
               tileColor: AppColors.negative.withValues(alpha: 0.1),
               leading: const Icon(Icons.delete_outline,
                   color: AppColors.negative),
@@ -1992,7 +1990,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [
@@ -2065,7 +2063,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Row(
         children: [
@@ -2139,7 +2137,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

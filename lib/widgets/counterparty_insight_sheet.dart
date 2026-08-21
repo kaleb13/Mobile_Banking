@@ -142,8 +142,8 @@ class CounterpartyInsightSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.drawerCard,
+              borderRadius: AppRadius.cardRadius,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,7 +192,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
                         customFormattedStr: fmt.format(netStanding.abs()),
                       )
                     : const Text(
-                        'ETB ****',
+                        'ETB ••••••••',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 22,
@@ -269,8 +269,8 @@ class CounterpartyInsightSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.drawerCard,
+              borderRadius: AppRadius.cardRadius,
             ),
             child: Row(
               children: [
@@ -328,8 +328,8 @@ class CounterpartyInsightSheet extends StatelessWidget {
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
+                color: AppColors.drawerCard,
+                borderRadius: AppRadius.cardRadius,
               ),
               child: Column(
                 children: [
@@ -386,8 +386,8 @@ class CounterpartyInsightSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,7 +412,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            isBalanceVisible ? 'ETB ${fmt.format(amount)}' : 'ETB ****',
+            isBalanceVisible ? 'ETB ${fmt.format(amount)}' : 'ETB ••••••••',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 14,
@@ -487,7 +487,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
             Text(
               isBalanceVisible
                   ? '${isIncome ? '+' : '-'} ETB ${fmt.format(tx.amount)}'
-                  : 'ETB ****',
+                  : 'ETB ••••••••',
               style: TextStyle(
                 color: isIncome ? AppColors.positive : AppColors.negative,
                 fontSize: 12.5,

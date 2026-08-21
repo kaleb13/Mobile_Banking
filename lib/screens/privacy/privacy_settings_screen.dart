@@ -208,7 +208,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
       decoration: BoxDecoration(
         color: context.themeSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadius.cardRadius,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(children: children),
@@ -392,7 +392,9 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
             SafeArea(
               bottom: false,
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

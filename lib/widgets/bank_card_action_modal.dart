@@ -162,7 +162,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: AppRadius.cardRadius,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.4),

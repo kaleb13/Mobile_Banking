@@ -7,6 +7,8 @@ import '../../models/loan_repayment_request.dart';
 import '../../providers/finance_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
+import '../dashboard/bank_detail/bank_behind_info_panel.dart';
+import '../dashboard/bank_detail/bank_metadata.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loan Management Screen
@@ -52,6 +54,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<FinanceProvider>(context);
+    final topSafeArea = MediaQuery.paddingOf(context).top;
     final targetTab = provider.activeLoanTabIndex.clamp(0, 2);
     if (_tabCtrl.index != targetTab && !_tabCtrl.indexIsChanging) {
       _tabCtrl.animateTo(targetTab);
@@ -69,6 +72,9 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
         lentLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
     final totalBorrowed =
         borrowedLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
+
+    final bool hasPending = provider.pendingRepaymentRequests.isNotEmpty;
+    final double cardRestingHeight = topSafeArea + (hasPending ? 218.0 : 172.0);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -93,21 +99,11 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
               ],
             ),
           ),
-          child: Column(
+          child: Stack(
             children: [
-              // ── Drawer-Style Top Card (Title, Add Button, Metrics, & Tabs) ──
-              _LoanTopDrawerCard(
-                totalLent: totalLent,
-                totalBorrowed: totalBorrowed,
-                lentCount: lentLoans.length,
-                borrowedCount: borrowedLoans.length,
-                settledCount: paidLoans.length,
-                tabController: _tabCtrl,
-                provider: provider,
-              ),
-
-              // ── Tab views ──
-              Expanded(
+              // ── Tab views (Rendered underneath, padded by card resting height) ──
+              Padding(
+                padding: EdgeInsets.only(top: cardRestingHeight),
                 child: TabBarView(
                   controller: _tabCtrl,
                   children: [
@@ -134,6 +130,22 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                   ],
                 ),
               ),
+
+              // ── Interactive Stacked Sliding Loan Card (On TOP so slide translates over body) ──
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _InteractiveLoanCard(
+                  totalLent: totalLent,
+                  totalBorrowed: totalBorrowed,
+                  lentCount: lentLoans.length,
+                  borrowedCount: borrowedLoans.length,
+                  settledCount: paidLoans.length,
+                  tabController: _tabCtrl,
+                  provider: provider,
+                ),
+              ),
             ],
           ),
         ),
@@ -143,9 +155,9 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Drawer-Style Top Card
+// Interactive Sliding Loan Card & Behind Info Panel
 // ─────────────────────────────────────────────────────────────────────────────
-class _LoanTopDrawerCard extends StatelessWidget {
+class _InteractiveLoanCard extends StatefulWidget {
   final double totalLent;
   final double totalBorrowed;
   final int lentCount;
@@ -154,7 +166,7 @@ class _LoanTopDrawerCard extends StatelessWidget {
   final TabController tabController;
   final FinanceProvider provider;
 
-  const _LoanTopDrawerCard({
+  const _InteractiveLoanCard({
     required this.totalLent,
     required this.totalBorrowed,
     required this.lentCount,
@@ -164,201 +176,349 @@ class _LoanTopDrawerCard extends StatelessWidget {
     required this.provider,
   });
 
-  Widget _buildMetricCard({
-    required BuildContext context,
-    required String title,
-    required double amount,
-    required int count,
-    required bool isLent,
-    required VoidCallback onTap,
-  }) {
-    final fmt = NumberFormat('#,##0.00');
-    final formattedStr = fmt.format(amount);
-    final parts = formattedStr.split('.');
-    final intPart = parts[0];
-    final fracPart = parts.length > 1 ? '.${parts[1]}' : '.00';
+  @override
+  State<_InteractiveLoanCard> createState() => _InteractiveLoanCardState();
+}
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.heatmapNeutral,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (isLent)
-                    const AppBadge.success(
-                      text: 'Lent Out',
-                      size: AppBadgeSize.micro,
-                    )
-                  else
-                    const AppBadge.warning(
-                      text: 'Borrowed',
-                      size: AppBadgeSize.micro,
-                    ),
-                  Text(
-                    '$count ${count == 1 ? (isLent ? 'loan' : 'debt') : (isLent ? 'loans' : 'debts')}',
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      intPart,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    Text(
-                      '$fracPart ETB',
-                      style: const TextStyle(
-                        color: AppColors.textSoft,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  double _dragOffset = 0.0;
+  static const double _maxSlideDown = 184.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
     );
   }
 
   @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _dragOffset =
+          (_dragOffset + details.primaryDelta!).clamp(0.0, _maxSlideDown);
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (_dragOffset > 0.0) {
+      _animCtrl.value = _dragOffset / _maxSlideDown;
+      setState(() => _dragOffset = 0.0);
+      _animCtrl.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  void _togglePeek() {
+    if (_animCtrl.isAnimating) return;
+
+    // Quick subtle bounce (~5-6% slide down) to act as a clue that the card can be dragged
+    _animCtrl
+        .animateTo(
+          0.06,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+        )
+        .then((_) {
+      if (mounted) {
+        _animCtrl.animateTo(
+          0.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutBack,
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned(
-          top: -1000,
-          left: 0,
-          right: 0,
-          bottom: 28,
-          child: Container(
-            color: AppColors.surface,
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          clipBehavior: Clip.antiAlias,
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(28),
+    final topSafeArea = MediaQuery.paddingOf(context).top;
+    final fmt = NumberFormat('#,##0.00');
+    final infoData = BankInfoData.forBank('Loan Tracker');
+
+    return AnimatedBuilder(
+      animation: _animCtrl,
+      builder: (context, _) {
+        final double animatedSlide = _animCtrl.value * _maxSlideDown;
+        final double currentSlide =
+            (_dragOffset + animatedSlide).clamp(0.0, _maxSlideDown);
+        final double revealProgress =
+            (currentSlide / _maxSlideDown).clamp(0.0, 1.0);
+        final double topCornerRadius =
+            (currentSlide / 20.0).clamp(0.0, 1.0) * 24.0;
+
+        return Stack(
+          alignment: Alignment.topCenter,
+          clipBehavior: Clip.none,
+          children: [
+            // ── Revealed Behind Info Card (Full Width behind front card) ──
+            BankBehindInfoPanel(
+              topSafeArea: topSafeArea,
+              currentSlide: currentSlide,
+              revealProgress: revealProgress,
+              infoData: infoData,
             ),
-          ),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header: AppHeader with Add Loan Action
-                  AppHeader(
-                    title: 'Loan Tracker',
-                    showBackButton: false,
-                    padding: EdgeInsets.zero,
-                    trailing: AppButton.primary(
-                      text: 'Add Loan',
-                      icon: Icons.add_rounded,
-                      fullWidth: false,
-                      height: 28,
-                      fontSize: 11.5,
-                      iconSize: 13,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      onPressed: () {
-                        AppBottomSheet.show(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (_) => AddLoanSheet(provider: provider),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 14),
 
-                  // Summary metric cards (Lent Out and Borrowed)
-                  Row(
-                    children: [
-                      _buildMetricCard(
-                        context: context,
-                        title: 'Lent Out',
-                        amount: totalLent,
-                        count: lentCount,
-                        isLent: true,
-                        onTap: () => tabController.animateTo(0),
-                      ),
-                      const SizedBox(width: 10),
-                      _buildMetricCard(
-                        context: context,
-                        title: 'Borrowed',
-                        amount: totalBorrowed,
-                        count: borrowedCount,
-                        isLent: false,
-                        onTap: () => tabController.animateTo(1),
-                      ),
-                    ],
+            // ── Front Sliding Loan Card ──
+            Transform.translate(
+              offset: Offset(0, currentSlide),
+              child: Container(
+                width: double.infinity,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(topCornerRadius),
+                    topRight: Radius.circular(topCornerRadius),
+                    bottomLeft: const Radius.circular(28),
+                    bottomRight: const Radius.circular(28),
                   ),
-
-                  // Pending approvals inside header drawer
-                  if (provider.pendingRepaymentRequests.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _PendingApprovalsBanner(
-                      requests: provider.pendingRepaymentRequests,
-                      loans: provider.loanRecords,
-                      provider: provider,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
                     ),
                   ],
+                ),
+                child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header: AppHeader with Page Title & Add Loan Action in top right
+                          AppHeader(
+                            title: 'Loan Tracker',
+                            showBackButton: false,
+                            padding: EdgeInsets.zero,
+                            trailing: AppButton.primary(
+                              text: 'Add Loan',
+                              icon: Icons.add_rounded,
+                              fullWidth: false,
+                              height: 28,
+                              fontSize: 11.5,
+                              iconSize: 13,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              onPressed: () {
+                                AppBottomSheet.show(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (_) => AddLoanSheet(
+                                      provider: widget.provider),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
 
-                  const SizedBox(height: 14),
+                          // Compact Sub-metric Pills (Lent Out & Borrowed)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      widget.tabController.animateTo(0),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.08),
+                                      borderRadius:
+                                          BorderRadius.circular(100),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 7,
+                                          height: 7,
+                                          decoration:
+                                              const BoxDecoration(
+                                            color: AppColors.positive,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'Lent: ',
+                                          style: TextStyle(
+                                            color:
+                                                AppColors.textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisSize:
+                                                MainAxisSize.min,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  fmt.format(
+                                                      widget.totalLent),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11.5,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 3),
+                                              const CurrencySymbolWidget(
+                                                color: Colors.white,
+                                                size: 10,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      widget.tabController.animateTo(1),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.08),
+                                      borderRadius:
+                                          BorderRadius.circular(100),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 7,
+                                          height: 7,
+                                          decoration:
+                                              const BoxDecoration(
+                                            color: AppColors.warning,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'Owed: ',
+                                          style: TextStyle(
+                                            color:
+                                                AppColors.textSecondary,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisSize:
+                                                MainAxisSize.min,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  fmt.format(widget
+                                                      .totalBorrowed),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 11.5,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow
+                                                          .ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 3),
+                                              const CurrencySymbolWidget(
+                                                color: Colors.white,
+                                                size: 10,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
 
-                  // Primary Tab Bar inside the bottom of the card
-                  AppPrimaryTabBar(
-                    tabs: const [
-                      'Lent Out',
-                      'Borrowed',
-                      'Settled',
-                    ],
-                    controller: tabController,
-                    backgroundColor: AppColors.tabBackground,
-                    margin: EdgeInsets.zero,
+                          // Pending approvals banner inside card
+                          if (widget.provider.pendingRepaymentRequests
+                              .isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _PendingApprovalsBanner(
+                              requests: widget
+                                  .provider.pendingRepaymentRequests,
+                              loans: widget.provider.loanRecords,
+                              provider: widget.provider,
+                            ),
+                          ],
+
+                          const SizedBox(height: 12),
+
+                          // Primary Tab Bar inside the card
+                          AppPrimaryTabBar(
+                            tabs: const [
+                              'Lent Out',
+                              'Borrowed',
+                              'Settled',
+                            ],
+                            controller: widget.tabController,
+                            backgroundColor: AppColors.tabBackground,
+                            margin: EdgeInsets.zero,
+                          ),
+
+                          // Grab Handle at Bottom of Card (Just like Bank Detail Page)
+                          Center(
+                            child: InteractiveDragHandle(
+                              onTap: _togglePeek,
+                              onVerticalDragUpdate: _onDragUpdate,
+                              onVerticalDragEnd: _onDragEnd,
+                              padding: const EdgeInsets.only(
+                                  top: 10, bottom: 2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ),
-      ],
-    );
+            ],
+          );
+        },
+      );
+    }
   }
-}
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -382,31 +542,40 @@ class _LoanList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loans.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.handshake_outlined,
-                color: context.themeTextSecondary.withValues(alpha: 0.5), size: 52),
-            const SizedBox(height: 16),
-            Text(emptyTitle,
-                style: TextStyle(
-                    color: context.themeTextPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(height: 6),
-            Text(emptySubtitle,
-                style:
-                    TextStyle(color: context.themeTextSecondary, fontSize: 12),
-                textAlign: TextAlign.center),
-          ],
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.only(top: 80, bottom: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.handshake_outlined,
+                  color: context.themeTextSecondary.withValues(alpha: 0.5), size: 52),
+              const SizedBox(height: 16),
+              Text(emptyTitle,
+                  style: TextStyle(
+                      color: context.themeTextPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              Text(emptySubtitle,
+                  style:
+                      TextStyle(color: context.themeTextSecondary, fontSize: 12),
+                  textAlign: TextAlign.center),
+            ],
+          ),
         ),
       );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
-      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 140),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       itemCount: loans.length,
       itemBuilder: (ctx, i) => _LoanCard(
         loan: loans[i],
@@ -465,15 +634,12 @@ class _LoanCard extends StatelessWidget {
     final provider = context.read<FinanceProvider>();
     final pct = loan.progressPercent;
 
-    return GestureDetector(
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       onTap: () => _openDetail(context, provider),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        decoration: BoxDecoration(
-          color: context.themeSurface,
-          borderRadius: BorderRadius.circular(28),
-        ),
+      child: SizedBox(
+        width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -853,181 +1019,170 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     FinanceProvider provider,
     bool isLent,
   ) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        children: [
-          // Top Row: Status Badge + Due/Created Date
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (current.isPaid)
-                const AppBadge.success(
-                  text: 'SETTLED • PAID',
-                  size: AppBadgeSize.small,
-                )
-              else if (current.isOverdue)
-                AppBadge.destructive(
-                  text: 'OVERDUE BY ${current.daysOverdue}D',
-                  size: AppBadgeSize.small,
-                )
-              else if (isLent)
-                const AppBadge.success(
-                  text: 'MONEY LENT',
-                  size: AppBadgeSize.small,
-                )
-              else
-                const AppBadge.warning(
-                  text: 'DEBT BORROWED',
-                  size: AppBadgeSize.small,
-                ),
-              Text(
-                'Due ${DateFormat('MMM d, yyyy').format(current.dueDate)}',
-                style: TextStyle(
-                  color: current.isOverdue ? AppColors.negative : AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: current.isOverdue ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Hero Amount
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                NumberFormat('#,##0').format(current.principalAmount),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1,
-                ),
-              ),
-              Text(
-                '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
-                style: const TextStyle(
-                  color: AppColors.textSoft,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              const SizedBox(width: 6),
-              const CurrencySymbolWidget(
-                size: 18,
-                color: AppColors.textSoft,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Progress Bar
-          CustomProgressBar(
-            progress: current.progressPercent,
-            height: 8,
-            progressColor: accentColor,
-          ),
-          const SizedBox(height: 12),
-
-          // Stats summary
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildProgressStat('Principal', '${fmt.format(current.principalAmount)} ETB', Colors.white),
-              _buildProgressStat('Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)', '${fmt.format(current.paidAmount)} ETB', AppColors.positive),
-              _buildProgressStat(
-                'Remaining',
-                '${fmt.format(current.remainingAmount)} ETB',
-                current.remainingAmount > 0 ? accentColor : AppColors.textSoft,
-              ),
-            ],
-          ),
-
-          // Quick Action Buttons directly in the hero if not paid
-          if (!current.isPaid) ...[
-            const SizedBox(height: 16),
-            Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-            const SizedBox(height: 14),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: [
+            // Top Row: Status Badge + Due/Created Date
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: AppButton.primary(
-                    text: 'Record Payment',
-                    icon: Icons.add_rounded,
-                    height: 40,
-                    fontSize: 13,
-                    iconSize: 16,
-                    onPressed: () {
-                      AppBottomSheet.show(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (_) => RecordPaymentSheet(
-                          loan: current,
-                          provider: provider,
-                        ),
-                      );
-                    },
+                if (current.isPaid)
+                  const AppBadge.success(
+                    text: 'SETTLED • PAID',
+                    size: AppBadgeSize.small,
+                  )
+                else if (current.isOverdue)
+                  AppBadge.destructive(
+                    text: 'OVERDUE BY ${current.daysOverdue}D',
+                    size: AppBadgeSize.small,
+                  )
+                else if (isLent)
+                  const AppBadge.success(
+                    text: 'MONEY LENT',
+                    size: AppBadgeSize.small,
+                  )
+                else
+                  const AppBadge.warning(
+                    text: 'DEBT BORROWED',
+                    size: AppBadgeSize.small,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: AppButton.secondary(
-                    text: 'Extend Due Date',
-                    icon: Icons.event_repeat_rounded,
-                    height: 40,
-                    fontSize: 13,
-                    iconSize: 16,
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: current.dueDate.isBefore(DateTime.now())
-                            ? DateTime.now()
-                            : current.dueDate,
-                        firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                        lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                        builder: (ctx, child) => Theme(
-                          data: Theme.of(ctx).copyWith(
-                            colorScheme: const ColorScheme.dark(
-                              primary: AppColors.positive,
-                              surface: AppColors.surface,
-                            ),
-                          ),
-                          child: child!,
-                        ),
-                      );
-                      if (picked != null && current.id != null) {
-                        await provider.updateLoanDueDate(current.id!, picked);
-                      }
-                    },
+                Text(
+                  'Due ${DateFormat('MMM d, yyyy').format(current.dueDate)}',
+                  style: TextStyle(
+                    color: current.isOverdue ? AppColors.negative : AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: current.isOverdue ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 14),
+
+            // Hero Amount
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  NumberFormat('#,##0').format(current.principalAmount),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
+                  ),
+                ),
+                Text(
+                  '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
+                  style: const TextStyle(
+                    color: AppColors.textSoft,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const CurrencySymbolWidget(
+                  size: 18,
+                  color: AppColors.textSoft,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Progress Bar
+            CustomProgressBar(
+              progress: current.progressPercent,
+              height: 8,
+              progressColor: accentColor,
+            ),
+            const SizedBox(height: 12),
+
+            // Stats summary
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildProgressStat('Principal', '${fmt.format(current.principalAmount)} ETB', Colors.white),
+                _buildProgressStat('Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)', '${fmt.format(current.paidAmount)} ETB', AppColors.positive),
+                _buildProgressStat(
+                  'Remaining',
+                  '${fmt.format(current.remainingAmount)} ETB',
+                  current.remainingAmount > 0 ? accentColor : AppColors.textSoft,
+                ),
+              ],
+            ),
+
+            // Quick Action Buttons directly in the hero if not paid
+            if (!current.isPaid) ...[
+              const SizedBox(height: 16),
+              Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton.primary(
+                      text: 'Record Payment',
+                      icon: Icons.add_rounded,
+                      height: 40,
+                      fontSize: 13,
+                      iconSize: 16,
+                      onPressed: () {
+                        AppBottomSheet.show(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => RecordPaymentSheet(
+                            loan: current,
+                            provider: provider,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppButton.secondary(
+                      text: 'Extend Due Date',
+                      icon: Icons.event_repeat_rounded,
+                      height: 40,
+                      fontSize: 13,
+                      iconSize: 16,
+                      onPressed: () async {
+                        final picked = await AppDatePickerDrawer.showSingleDate(
+                          context: context,
+                          initialDate: current.dueDate.isBefore(DateTime.now())
+                              ? DateTime.now()
+                              : current.dueDate,
+                          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                          title: 'Extend Due Date',
+                        );
+                        if (picked != null && current.id != null) {
+                          await provider.updateLoanDueDate(current.id!, picked);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildLoanInfoCard(BuildContext context, LoanRecord current, bool isLent) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Header row
           Row(
             children: [
@@ -1113,8 +1268,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildPaymentHistorySection(
       BuildContext context,
@@ -1126,7 +1282,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Column(
@@ -1302,13 +1458,16 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'LINKED SMS MESSAGES',
-          style: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'LINKED SMS MESSAGES',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1405,7 +1564,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               ],
               onSelected: (value) async {
                 if (value == 'extend') {
-                  final picked = await showDatePicker(
+                  final picked = await AppDatePickerDrawer.showSingleDate(
                     context: context,
                     initialDate: current.dueDate.isBefore(DateTime.now())
                         ? DateTime.now()
@@ -1413,15 +1572,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     firstDate:
                         DateTime.now().subtract(const Duration(days: 365)),
                     lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-                    builder: (ctx, child) => Theme(
-                      data: Theme.of(ctx).copyWith(
-                        colorScheme: const ColorScheme.dark(
-                          primary: AppColors.positive,
-                          surface: AppColors.surface,
-                        ),
-                      ),
-                      child: child!,
-                    ),
+                    title: 'Extend Due Date',
                   );
                   if (picked != null && current.id != null) {
                     await provider.updateLoanDueDate(current.id!, picked);
@@ -1480,14 +1631,14 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               ),
 
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── 3. Payment History Section ─────────────────────
                     _buildPaymentHistorySection(context, current, payments, accentColor, fmt, provider),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // ── 4. Linked Messages Section ─────────────────────
                     _buildLinkedMessagesSection(context, current, payments, accentColor, fmt, provider),
@@ -1530,7 +1681,7 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         children: [
@@ -1675,7 +1826,6 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
   late Set<String> _selectedBanks;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
   bool _saving = false;
-  bool _isNoteExpanded = false;
 
   @override
   void initState() {
@@ -1724,21 +1874,12 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final picked = await AppDatePickerDrawer.showSingleDate(
       context: context,
       initialDate: _dueDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-      builder: (ctx, child) {
-        return Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: const ColorScheme.dark(
-                primary: AppColors.positive,
-                surface: AppColors.bgMid,
-              ),
-            ),
-            child: child!);
-      },
+      title: 'Select Due Date',
     );
     if (picked != null) setState(() => _dueDate = picked);
   }
@@ -1809,32 +1950,23 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
         onPressed: _saving ? null : _save,
       ),
       child: ListView(
-        physics: const BouncingScrollPhysics(),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.only(bottom: 16),
         children: [
           // ── Auto-detected Loan Type Toggle (When no prefilled type) ─
           if (widget.prefilledType == null) ...[
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  _TypeToggle(
-                    label: '↑ Money Lent Out',
-                    active: _loanType == 'lent',
-                    activeColor: AppColors.positive,
-                    onTap: () => setState(() => _loanType = 'lent'),
-                  ),
-                  _TypeToggle(
-                    label: '↓ Debt Borrowed',
-                    active: _loanType == 'borrowed',
-                    activeColor: AppColors.warning,
-                    onTap: () => setState(() => _loanType = 'borrowed'),
-                  ),
-                ],
-              ),
+            AppPrimaryTabBar(
+              tabs: const ['Money Lent Out', 'Debt Borrowed'],
+              selectedIndex: _loanType == 'lent' ? 0 : 1,
+              onTabChanged: (idx) {
+                setState(() {
+                  _loanType = idx == 0 ? 'lent' : 'borrowed';
+                });
+              },
+              backgroundColor: AppColors.tabBackground,
+              margin: EdgeInsets.zero,
             ),
             const SizedBox(height: 16),
           ],
@@ -1872,7 +2004,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                   padding: const EdgeInsets.fromLTRB(10, 4, 6, 4),
                   decoration: BoxDecoration(
                     color: AppColors.positive.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(100),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1909,7 +2041,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
           // ── Amount Field ────────────────────────────────────────
           const Text(
             'Principal Amount',
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -2037,123 +2169,76 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: bankNames.map((bank) {
-                      final isSelected = _selectedBanks.contains(bank);
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6.0),
-                        child: GestureDetector(
-                          onTap: () => setState(() {
-                            if (isSelected) {
-                              _selectedBanks.remove(bank);
-                            } else {
-                              _selectedBanks.add(bank);
-                            }
-                          }),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.positive.withValues(alpha: 0.18)
-                                  : Colors.white.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  isSelected
-                                      ? Icons.check_circle_rounded
-                                      : Icons.radio_button_unchecked_rounded,
-                                  color: isSelected
-                                      ? AppColors.positive
-                                      : AppColors.textSoft,
-                                  size: 12,
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  bank,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : AppColors.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: bankNames.map((bank) {
+                    final isSelected = _selectedBanks.contains(bank);
+                    return GestureDetector(
+                      onTap: () => setState(() {
+                        if (isSelected) {
+                          _selectedBanks.remove(bank);
+                        } else {
+                          _selectedBanks.add(bank);
+                        }
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.positive.withValues(alpha: 0.18)
+                              : Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(100),
                         ),
-                      );
-                    }).toList(),
-                  ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isSelected
+                                  ? Icons.check_circle_rounded
+                                  : Icons.radio_button_unchecked_rounded,
+                              color: isSelected
+                                  ? AppColors.positive
+                                  : AppColors.textSoft,
+                              size: 13,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              bank,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                                fontSize: 11.5,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
 
-          // ── Expandable Note / Remarks Section ─────────────────────
-          if (!_isNoteExpanded) ...[
-            GestureDetector(
-              onTap: () => setState(() => _isNoteExpanded = true),
-              behavior: HitTestBehavior.opaque,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add_rounded, color: AppColors.positive, size: 15),
-                    SizedBox(width: 4),
-                    Text(
-                      'Add Note / Remarks',
-                      style: TextStyle(
-                        color: AppColors.positive,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Note / Remarks',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => setState(() {
-                    _noteCtrl.clear();
-                    _isNoteExpanded = false;
-                  }),
-                  child: const Icon(Icons.close_rounded, color: AppColors.textSoft, size: 16),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            _SheetField(
-              controller: _noteCtrl,
-              hint: 'Optional note / remarks…',
-              icon: Icons.notes_rounded,
-            ),
-          ],
+          // ── Collapsible Note / Remarks Component ───────────────────
+          AppNoteCard(
+            controller: _noteCtrl,
+            title: 'NOTE / REMARKS',
+            hintText: 'Add optional note or remarks…',
+            isCollapsible: true,
+            initialExpanded: false,
+            backgroundColor: AppColors.previewCardBg,
+            accentColor: _loanType == 'lent' ? AppColors.positive : AppColors.warning,
+          ),
         ],
       ),
     );
@@ -2270,66 +2355,80 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                         style: TextStyle(color: AppColors.textSecondary)),
                   )
                 : ListView.separated(
-                    physics: const BouncingScrollPhysics(),
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
                     itemCount: _filtered.length,
-                    separatorBuilder: (_, __) => const Divider(
-                        color: AppColors.surfaceElevated, height: 1, thickness: 1),
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
                     itemBuilder: (_, i) {
                       final name = _filtered[i];
                       final isSelected = _selectedNames.contains(name);
-                      return InkWell(
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              _selectedNames.remove(name);
-                            } else {
-                              _selectedNames.add(name);
-                            }
-                          });
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 12),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? AppColors.positive.withValues(alpha: 0.15)
-                                      : AppColors.gold.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    name.isNotEmpty
-                                        ? name[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                        color: isSelected ? AppColors.positive : AppColors.gold,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14),
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.positive.withValues(alpha: 0.14)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: AppRadius.cardRadius,
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: AppRadius.cardRadius,
+                          child: InkWell(
+                            borderRadius: AppRadius.cardRadius,
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedNames.remove(name);
+                                } else {
+                                  _selectedNames.add(name);
+                                }
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? AppColors.positive.withValues(alpha: 0.20)
+                                          : Colors.white.withValues(alpha: 0.06),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        name.isNotEmpty
+                                            ? name[0].toUpperCase()
+                                            : '?',
+                                        style: TextStyle(
+                                            color: isSelected ? AppColors.positive : Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: TextStyle(
-                                    color: isSelected ? AppColors.positive : Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.9),
+                                        fontSize: 13.5,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  Icon(
+                                    isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                                    color: isSelected ? AppColors.positive : Colors.white24,
+                                    size: 18,
+                                  ),
+                                ],
                               ),
-                              Icon(
-                                isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                                color: isSelected ? AppColors.positive : AppColors.textSecondary,
-                                size: 20,
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       );
@@ -2337,45 +2436,6 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TypeToggle extends StatelessWidget {
-  final String label;
-  final bool active;
-  final Color activeColor;
-  final VoidCallback onTap;
-  const _TypeToggle(
-      {required this.label,
-      required this.active,
-      required this.activeColor,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: active ? activeColor.withValues(alpha: 0.15) : null,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: active ? activeColor : AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2404,44 +2464,17 @@ class _SheetField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return AppTextField(
       controller: controller,
-      keyboardType: keyboardType,
+      keyboardType: keyboardType ?? TextInputType.text,
       onChanged: onChanged,
       onTap: onTap,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      decoration: InputDecoration(
-        prefixIcon: prefixWidget != null
-            ? Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: prefixWidget,
-              )
-            : (icon != null
-                ? Icon(icon, color: AppColors.textSecondary, size: 18)
-                : null),
-        prefixIconConstraints: const BoxConstraints(
-          minWidth: 40,
-          minHeight: 40,
-        ),
-        suffixIcon: suffixIcon,
-        hintText: hint,
-        hintStyle: TextStyle(
-            color: AppColors.textSecondary.withValues(alpha: 0.6), fontSize: 13),
-        filled: true,
-        fillColor: AppColors.previewCardBg,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      ),
+      prefix: prefixWidget,
+      prefixIcon: icon,
+      suffix: suffixIcon,
+      hint: hint,
+      backgroundColor: AppColors.previewCardBg,
+      borderRadius: BorderRadius.circular(16),
     );
   }
 }

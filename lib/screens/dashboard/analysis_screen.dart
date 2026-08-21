@@ -1038,7 +1038,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           child: FadeTransition(
             opacity: _fadeAnim,
             child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1133,7 +1135,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(28),
+                      borderRadius: AppRadius.cardRadius,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1447,7 +1449,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           width: totalW,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppRadius.cardRadius,
             gradient: const LinearGradient(
               colors: [
                 Color(0xFF0C3025), // Deep emerald glow top-right
@@ -1564,7 +1566,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 ),
                               )
                             : const Text(
-                                '****',
+                                '••••••••',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white,
@@ -1668,7 +1670,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: AppRadius.cardRadius,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.12),
@@ -1974,6 +1976,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 ),
                               ],
                             ),
+                          ] else if (_drilledCategory != null) ...[
+                            AppButton.primary(
+                              text: 'Back',
+                              icon: Icons.arrow_back_rounded,
+                              height: 26,
+                              fontSize: 10,
+                              iconSize: 12,
+                              fullWidth: false,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 0),
+                              onPressed: () {
+                                _changeFilter(() {
+                                  _drilledCategory = null;
+                                  _selectedArcIndex = null;
+                                });
+                              },
+                            ),
                           ],
                         ],
                       ),
@@ -2130,7 +2149,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     child: Text(
                       isBalanceVisible
                           ? _formatCompactAmount(item.amount)
-                          : '****',
+                          : '••••••••',
                       style: TextStyle(
                         color: isSelected
                             ? item.color
@@ -2500,7 +2519,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2667,7 +2686,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                                     ),
                                                     const SizedBox(width: 2),
                                                     Text(
-                                                      '****',
+                                                      '••••••••',
                                                       style: TextStyle(
                                                         color: color,
                                                         fontSize: 13.5,
@@ -2769,7 +2788,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2861,7 +2880,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                         customFormattedStr: fmt.format(bank.net.abs()),
                                       )
                                     : const Text(
-                                        '****',
+                                        '••••••••',
                                         style: TextStyle(
                                           color: AppColors.textSecondary,
                                           fontSize: 13,
@@ -2944,7 +2963,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3005,7 +3024,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         title: 'Avg. Outflow',
                         value: isBalanceVisible
                             ? 'ETB ${fmt.format(avgExpense)}'
-                            : 'ETB ****',
+                            : 'ETB ••••••••',
                         subtitle: '${expenseTxs.length} outgoing txs',
                       ),
                     ),
@@ -3017,7 +3036,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         title: 'Peak Deposit',
                         value: isBalanceVisible
                             ? 'ETB ${fmt.format(maxIncome)}'
-                            : 'ETB ****',
+                            : 'ETB ••••••••',
                         subtitle: '${incomeTxs.length} incoming txs',
                       ),
                     ),
@@ -3033,7 +3052,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         title: 'Largest Expense',
                         value: isBalanceVisible
                             ? 'ETB ${fmt.format(maxExpense)}'
-                            : 'ETB ****',
+                            : 'ETB ••••••••',
                         subtitle: 'Single peak outgoing',
                       ),
                     ),
@@ -3203,7 +3222,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3266,10 +3285,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   behavior: HitTestBehavior.opaque,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
-                      borderRadius: BorderRadius.circular(14),
+                      color: AppColors.heatmapNeutral,
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: Row(
                       children: [
@@ -3332,7 +3351,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         label: 'Sent',
                         value: isBalanceVisible
                             ? fmt.format(activeInsight.totalSent)
-                            : '****',
+                            : '••••••••',
                         color: AppColors.textSoft,
                         count: '${activeInsight.sentCount} out',
                       ),
@@ -3343,7 +3362,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         label: 'Received',
                         value: isBalanceVisible
                             ? fmt.format(activeInsight.totalReceived)
-                            : '****',
+                            : '••••••••',
                         color: AppColors.textSoft,
                         count: '${activeInsight.receivedCount} in',
                       ),
@@ -3354,7 +3373,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                         label: 'Net',
                         value: isBalanceVisible
                             ? '${activeInsight.netStanding >= 0 ? '+' : '-'}${fmt.format(activeInsight.netStanding.abs())}'
-                            : '****',
+                            : '••••••••',
                         color: activeInsight.netStanding >= 0
                             ? AppColors.positive
                             : AppColors.negative,
@@ -3406,7 +3425,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
+        color: AppColors.heatmapNeutral,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -3504,11 +3523,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               return Container(
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? AppColors.surfaceElevated
-                                      : AppColors.surface,
-                                  borderRadius: BorderRadius.circular(14),
+                                      ? AppColors.positive.withValues(alpha: 0.14)
+                                      : AppColors.drawerCard,
+                                  borderRadius: AppRadius.cardRadius,
                                 ),
                                 child: ListTile(
+                                  shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: const EdgeInsets.symmetric(

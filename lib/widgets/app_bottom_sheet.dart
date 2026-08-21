@@ -71,7 +71,7 @@ class AppBottomSheet extends StatelessWidget {
     final maxHeight = MediaQuery.of(context).size.height * maxHeightFactor;
 
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      borderRadius: AppRadius.sheetRadius,
       child: BackdropFilter(
         filter: ImageFilter.blur(
           sigmaX: AppColors.glassBlurSigma,
@@ -79,9 +79,9 @@ class AppBottomSheet extends StatelessWidget {
         ),
         child: Container(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: AppRadius.sheetRadius,
           ),
           padding: EdgeInsets.fromLTRB(
             (padding as EdgeInsets).left,
@@ -139,7 +139,9 @@ class AppBottomSheet extends StatelessWidget {
 
               Flexible(
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   child: child,
                 ),
               ),

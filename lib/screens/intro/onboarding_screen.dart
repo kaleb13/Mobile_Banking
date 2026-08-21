@@ -402,7 +402,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppRadius.cardRadius,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -752,10 +752,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppRadius.cardRadius,
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppRadius.cardRadius,
                   child: SingleChildScrollView(
                     controller: _termsScrollController,
                     physics: const BouncingScrollPhysics(),
@@ -975,7 +975,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: AppRadius.cardRadius,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

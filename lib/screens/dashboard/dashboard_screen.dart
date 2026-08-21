@@ -17,6 +17,7 @@ import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_drawer.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
@@ -166,77 +167,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showPNLInfo(BuildContext context, bool isToday) {
-    AppBottomSheet.show(
+    AppDrawer.show(
       context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha: 0.85),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 25,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title Row: Star/sparkle icon inline with white title text
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.auto_awesome_rounded,
-                          color: Colors.white,
-                          size: 15,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isToday ? "Today's PNL" : "Overall PNL",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Description: Smaller, clean text directly below title
-                    Text(
-                      isToday
-                          ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\nIt represents your net increase or decrease in wealth today."
-                          : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\nThis shows your cumulative financial progress since using the app.",
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.70),
-                        fontSize: 11.5,
-                        height: 1.45,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Got It button — standardized fully rounded primary button
-                    AppButton.primary(
-                      text: "Got It",
-                      height: 48,
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
+      builder: (ctx) {
+        return AppDrawer(
+          headerCard: AppDrawerHeaderCard(
+            icon: Icons.auto_awesome_rounded,
+            iconColor: AppColors.positive,
+            title: isToday ? "Today's PNL" : "Overall PNL",
+            subtitle: isToday
+                ? "Today's Profit or Loss Summary"
+                : "Overall Cumulative Net Progress",
+          ),
+          bottomAction: AppButton.primary(
+            text: "Got It",
+            height: 48,
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              isToday
+                  ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\n\nIt represents your net increase or decrease in wealth today."
+                  : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\n\nThis shows your cumulative financial progress since using the app.",
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.70),
+                fontSize: 13,
+                height: 1.5,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -477,17 +435,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Baseline(
-                            baseline: 32,
-                            baselineType: TextBaseline.alphabetic,
-                            child: CurrencySymbolWidget(
-                              size: 26,
-                              color: Colors.white,
-                            ),
+                          const CurrencySymbolWidget(
+                            size: 26,
+                            color: Colors.white,
                           ),
                           const SizedBox(width: 8),
                           AnimatedBalanceText(
@@ -1172,6 +1125,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: AppSearchBar(
                   mode: AppSearchBarMode.icon,
+                  centerTitle: true,
                   isExpanded: _isSearchActive,
                   controller: _searchController,
                   focusNode: _searchFocusNode,
@@ -1456,7 +1410,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final provider = Provider.of<FinanceProvider>(context, listen: false);
     final String amountStr = provider.isBalanceVisible
         ? NumberFormat('#,##0.1').format(tx.amount)
-        : '****';
+        : '••••••••';
     final String label = isIncome ? 'Deposit' : 'Transferred';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 

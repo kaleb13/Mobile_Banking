@@ -163,14 +163,14 @@ class LinkReasonDrawer extends StatelessWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppRadius.cardRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: AppRadius.cardRadius,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -443,14 +443,14 @@ class UnlinkReasonDrawer extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDestructive
             ? AppColors.negative.withValues(alpha: 0.08)
-            : AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
+            : AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppRadius.cardRadius,
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: AppRadius.cardRadius,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(14),

@@ -10,6 +10,7 @@ import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import 'reason_selection_sheet.dart';
 
@@ -193,11 +194,10 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
           const SizedBox(height: 16),
 
           // Amount Field Card
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          Container(            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.drawerCard,
+              borderRadius: AppRadius.cardRadius,
             ),
             child: Row(
               children: [
@@ -218,27 +218,20 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
+                  child: AppTextField(
                     controller: _amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    backgroundColor: Colors.transparent,
+                    contentPadding: EdgeInsets.zero,
                     style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
-                    decoration: const InputDecoration(
-                      hintText: '0.00',
-                      hintStyle: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                    hint: '0.00',
+                    hintColor: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -247,33 +240,12 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
           const SizedBox(height: 12),
 
           // Sender / Receiver Field Card
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.person_outline_rounded,
-                    size: 18, color: AppColors.textSecondary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _receiverController,
-                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5),
-                    decoration: InputDecoration(
-                      hintText: isIncome ? 'Sender / Source Name' : 'Recipient / Merchant Name',
-                      hintStyle: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          AppTextField(
+            controller: _receiverController,
+            prefixIcon: Icons.person_outline_rounded,
+            backgroundColor: AppColors.drawerCard,
+            borderRadius: AppRadius.cardRadius,
+            hint: isIncome ? 'Sender / Source Name' : 'Recipient / Merchant Name',
           ),
           const SizedBox(height: 12),
 
@@ -283,8 +255,8 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
+                color: AppColors.drawerCard,
+                borderRadius: AppRadius.cardRadius,
               ),
               child: Row(
                 children: [

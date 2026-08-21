@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../screens/wallets/freeze_account_sheet.dart';
 import 'app_badges.dart';
 import 'bank_card_action_modal.dart';
+import 'currency_symbol_widget.dart';
 
 /// Single source-of-truth card widget used in both WalletsScreen list
 /// and MainShell's flight overlay animation.
@@ -96,6 +97,12 @@ class BankCardWidget extends StatelessWidget {
           BlendMode.srcIn,
         ),
       );
+    } else if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
+      return Icon(
+        Icons.handshake_rounded,
+        color: iconColor ?? Colors.white,
+        size: size,
+      );
     }
 
     return Icon(
@@ -114,6 +121,7 @@ class BankCardWidget extends StatelessWidget {
     if (n.contains('ABYSSINIA') || n == 'BOA') return 'Bank of Abyssinia S.C.';
     if (n.contains('DASHEN')) return 'Dashen Bank S.C.';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
+    if (n == 'LOAN TRACKER' || n == 'LOANS' || n == 'LOAN') return 'Personal Debt & Loan Ledger';
     return 'Bank Account';
   }
 
@@ -143,6 +151,11 @@ class BankCardWidget extends StatelessWidget {
       return [
         AppColors.cardGrayDark,
         AppColors.cardGrayMid,
+      ];
+    } else if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
+      return [
+        AppColors.surfaceElevated,
+        AppColors.tealDark,
       ];
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA') {
       return [
@@ -176,8 +189,8 @@ class BankCardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = animationFactor.clamp(0.0, 1.0);
     final fmt = NumberFormat('#,##0.00');
-    final balStr = (isBalanceVisible && !isPaused) ? fmt.format(balance) : '****,***.**';
-    final parts = balStr.split('.');
+    final balStr = (isBalanceVisible && !isPaused) ? fmt.format(balance) : '••••••••';
+    final parts = balStr.contains('.') ? balStr.split('.') : [balStr, ''];
 
     // When paused: use defined greyscale palette; otherwise use brand gradient
     final List<Color> cardGradient = isPaused
@@ -239,7 +252,7 @@ class BankCardWidget extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 14),
             padding: EdgeInsets.all(cardPadding),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: AppRadius.cardRadius,
               gradient: LinearGradient(
                 begin: Alignment.bottomLeft,
                 end: Alignment.topRight,
@@ -328,33 +341,45 @@ class BankCardWidget extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          parts[0],
-                          style: TextStyle(
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: parts[0],
+                                style: TextStyle(
+                                  color: textColorPrimary,
+                                  fontSize: balanceFontSize,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: isBalanceVisible ? -0.6 : 1.5,
+                                  height: 1.0,
+                                ),
+                              ),
+                              if (parts[1].isNotEmpty)
+                                TextSpan(
+                                  text: '.${parts[1]}',
+                                  style: TextStyle(
+                                    color: isDarkTextTheme
+                                        ? AppColors.darkCharcoal
+                                            .withValues(alpha: 0.5)
+                                        : Colors.white.withValues(alpha: 0.65),
+                                    fontSize: decimalFontSize,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          maxLines: 1,
+                        ),
+                        if (isBalanceVisible && !isPaused) ...[
+                          const SizedBox(width: 5),
+                          CurrencySymbolWidget(
                             color: textColorPrimary,
-                            fontSize: balanceFontSize,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                            height: 1.0,
+                            size: decimalFontSize + 2,
                           ),
-                          maxLines: 1,
-                        ),
-                        Text(
-                          '.${parts[1]}',
-                          style: TextStyle(
-                            color: isDarkTextTheme
-                                ? AppColors.darkCharcoal
-                                    .withValues(alpha: 0.5)
-                                : Colors.white.withValues(alpha: 0.65),
-                            fontSize: decimalFontSize,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                        ),
+                        ],
                       ],
                     ),
                   ),

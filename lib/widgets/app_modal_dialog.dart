@@ -3,56 +3,42 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'app_button.dart';
 
-/// Standardized Confirmation Dialog adhering strictly to:
-/// - Low-opacity soft dark shade backdrop with subtle blur (`sigma = 6.0`).
-/// - Compact, balanced card proportions (`maxWidth: 320`).
-/// - Dark, translucent, and glass-like surface card (`borderRadius = 24.0`).
-/// - Zero borders / stroke lines.
-/// - Left-aligned title & description (no distracting icons).
-/// - Two side-by-side 100% fully rounded pill buttons at the bottom.
-class AppConfirmDialog extends StatelessWidget {
+/// Standardized Modal Dialog container following the exact same visual design,
+/// glass surface styling, left-aligned typography, and button pill layout
+/// as [AppConfirmDialog].
+class AppModalDialog extends StatelessWidget {
   final String title;
-  final String? message;
-  final String? details;
-  final Widget? customContent;
+  final String? subtitle;
+  final Widget child;
   final String confirmText;
   final String cancelText;
   final VoidCallback onConfirm;
   final VoidCallback? onCancel;
   final bool isDestructive;
+  final bool isLoading;
 
-  const AppConfirmDialog({
+  const AppModalDialog({
     super.key,
     required this.title,
-    this.message,
-    this.details,
-    this.customContent,
-    this.confirmText = 'Confirm',
+    this.subtitle,
+    required this.child,
+    this.confirmText = 'Save',
     this.cancelText = 'Cancel',
     required this.onConfirm,
     this.onCancel,
     this.isDestructive = false,
+    this.isLoading = false,
   });
 
   /// Standard static launcher with subtle background blur and soft shade barrier.
-  static Future<bool?> show({
+  static Future<T?> show<T>({
     required BuildContext context,
-    required String title,
-    String? message,
-    String? details,
-    Widget? customContent,
-    String confirmText = 'Confirm',
-    String cancelText = 'Cancel',
-    required VoidCallback onConfirm,
-    VoidCallback? onCancel,
-    bool isDestructive = false,
-    // Deprecated parameters kept for API compatibility but omitted visually
-    IconData? icon,
-    Color? iconColor,
+    required Widget Function(BuildContext ctx) builder,
+    bool barrierDismissible = true,
   }) {
-    return showGeneralDialog<bool>(
+    return showGeneralDialog<T>(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: barrierDismissible,
       barrierLabel: 'Dismiss',
       barrierColor: Colors.black.withValues(alpha: 0.35),
       transitionDuration: const Duration(milliseconds: 200),
@@ -61,7 +47,6 @@ class AppConfirmDialog extends StatelessWidget {
         return Stack(
           alignment: Alignment.center,
           children: [
-            // Soft subtle blur on the background behind the modal
             BackdropFilter(
               filter: ImageFilter.blur(
                 sigmaX: 6.0 * anim1.value,
@@ -75,17 +60,7 @@ class AppConfirmDialog extends StatelessWidget {
                 scale: Tween<double>(begin: 0.95, end: 1.0).animate(
                   CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic),
                 ),
-                child: AppConfirmDialog(
-                  title: title,
-                  message: message,
-                  details: details,
-                  customContent: customContent,
-                  confirmText: confirmText,
-                  cancelText: cancelText,
-                  onConfirm: onConfirm,
-                  onCancel: onCancel,
-                  isDestructive: isDestructive,
-                ),
+                child: builder(ctx),
               ),
             ),
           ],
@@ -130,12 +105,10 @@ class AppConfirmDialog extends StatelessWidget {
                       letterSpacing: -0.2,
                     ),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Left-aligned Description / Message
-                  if (message != null && message!.isNotEmpty)
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
                     Text(
-                      message!,
+                      subtitle!,
                       textAlign: TextAlign.left,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
@@ -143,34 +116,10 @@ class AppConfirmDialog extends StatelessWidget {
                         height: 1.45,
                       ),
                     ),
-
-                  // Optional details in translucent glass card
-                  if (details != null && details!.isNotEmpty)
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(top: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.buttonSecondary,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        details!,
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textPrimary,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-
-                  if (customContent != null) ...[
-                    if (message != null) const SizedBox(height: 12),
-                    customContent!,
                   ],
-
+                  const SizedBox(height: 16),
+                  child,
                   const SizedBox(height: 20),
-
-                  // Two side-by-side 100% Fully Rounded Pill Buttons
                   Row(
                     children: [
                       Expanded(
@@ -178,7 +127,7 @@ class AppConfirmDialog extends StatelessWidget {
                           text: cancelText,
                           height: 42,
                           onPressed: () {
-                            Navigator.pop(context, false);
+                            Navigator.pop(context);
                             onCancel?.call();
                           },
                         ),
@@ -189,18 +138,14 @@ class AppConfirmDialog extends StatelessWidget {
                             ? AppButton.destructive(
                                 text: confirmText,
                                 height: 42,
-                                onPressed: () {
-                                  Navigator.pop(context, true);
-                                  onConfirm();
-                                },
+                                isLoading: isLoading,
+                                onPressed: onConfirm,
                               )
                             : AppButton.primary(
                                 text: confirmText,
                                 height: 42,
-                                onPressed: () {
-                                  Navigator.pop(context, true);
-                                  onConfirm();
-                                },
+                                isLoading: isLoading,
+                                onPressed: onConfirm,
                               ),
                       ),
                     ],

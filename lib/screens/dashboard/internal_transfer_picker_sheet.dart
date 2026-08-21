@@ -65,9 +65,10 @@ class InternalTransferPickerSheet extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.cardRadius,
                   ),
                   child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     onTap: () async {

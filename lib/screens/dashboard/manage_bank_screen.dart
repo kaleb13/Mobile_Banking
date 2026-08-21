@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toast.dart';
 
 class ManageBankScreen extends StatefulWidget {
@@ -122,6 +123,9 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
         ),
       ),
       body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,42 +171,17 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
   Widget _buildField(
       String label, TextEditingController controller, IconData icon,
       {bool isPassword = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(color: AppColors.textSoft, fontSize: 12)),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.surfaceElevated,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: TextField(
-            controller: controller,
-            obscureText: isPassword && !_isPinVisible,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              prefixIcon: Icon(icon, color: AppColors.textSoft, size: 20),
-              suffixIcon: isPassword
-                  ? IconButton(
-                      icon: Icon(
-                          _isPinVisible
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: AppColors.textSoft,
-                          size: 20),
-                      onPressed: () =>
-                          setState(() => _isPinVisible = !_isPinVisible),
-                    )
-                  : null,
-              border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-          ),
-        ),
-      ],
+    return AppTextField(
+      controller: controller,
+      label: label,
+      prefixIcon: icon,
+      obscureText: isPassword && !_isPinVisible,
+      suffixIcon: isPassword
+          ? (_isPinVisible ? Icons.visibility_off_rounded : Icons.visibility_rounded)
+          : null,
+      onSuffixTap: isPassword
+          ? () => setState(() => _isPinVisible = !_isPinVisible)
+          : null,
     );
   }
 

@@ -78,6 +78,9 @@ class AppSearchBar extends StatefulWidget {
   /// Outer padding around the search bar component.
   final EdgeInsetsGeometry padding;
 
+  /// Whether to center the title horizontally when unopened.
+  final bool centerTitle;
+
   const AppSearchBar({
     super.key,
     this.controller,
@@ -106,6 +109,7 @@ class AppSearchBar extends StatefulWidget {
     this.height = 42,
     this.borderRadius = 100,
     this.padding = EdgeInsets.zero,
+    this.centerTitle = false,
   });
 
   @override
@@ -361,6 +365,74 @@ class _AppSearchBarState extends State<AppSearchBar> {
         (isLight ? AppColors.lightGreyBackground : AppColors.surface);
 
     if (widget.mode == AppSearchBarMode.pill) {
+      if (widget.centerTitle) {
+        return SizedBox(
+          height: widget.height,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 80),
+                  child: widget.titleWidget ??
+                      Text(
+                        widget.title ?? '',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                child: GestureDetector(
+                  onTap: _expand,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: isLight
+                          ? AppColors.lightGreyBackground
+                          : AppColors.buttonSecondary,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          color: widget.iconColor ??
+                              (isLight
+                                  ? AppColors.darkCharcoal
+                                  : AppColors.positive),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.pillLabel,
+                          style: TextStyle(
+                            color: widget.textColor ??
+                                (isLight ? AppColors.darkCharcoal : Colors.white),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
       return SizedBox(
         height: widget.height,
         child: Row(
@@ -421,6 +493,73 @@ class _AppSearchBarState extends State<AppSearchBar> {
     }
 
     if (widget.mode == AppSearchBarMode.icon) {
+      if (widget.centerTitle) {
+        return SizedBox(
+          height: widget.height,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 48),
+                  child: widget.titleWidget ??
+                      Text(
+                        widget.title ?? '',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                ),
+              ),
+              if (widget.leading != null)
+                Positioned(
+                  left: 0,
+                  child: widget.leading!,
+                ),
+              Positioned(
+                right: 0,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        _expand();
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: buttonBg,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.search_rounded,
+                          color: iconColor,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    if (widget.trailing != null) ...[
+                      const SizedBox(width: 4),
+                      widget.trailing!,
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
       return SizedBox(
         height: widget.height,
         child: Row(
