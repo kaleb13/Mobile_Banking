@@ -77,82 +77,73 @@ class AppModalDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
-        child: ClipRRect(
-          borderRadius: AppRadius.dialogRadius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: AppColors.glassBlurSigma,
-              sigmaY: AppColors.glassBlurSigma,
-            ),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-              decoration: BoxDecoration(
-                color: AppColors.glassSurfaceModal,
-                borderRadius: AppRadius.dialogRadius,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: AppRadius.dialogRadius,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left-aligned Title
+              Text(
+                title,
+                textAlign: TextAlign.left,
+                style: AppTypography.heading2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              if (subtitle != null && subtitle!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  subtitle!,
+                  textAlign: TextAlign.left,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              child,
+              const SizedBox(height: 20),
+              Row(
                 children: [
-                  // Left-aligned Title
-                  Text(
-                    title,
-                    textAlign: TextAlign.left,
-                    style: AppTypography.heading2.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
+                  Expanded(
+                    child: AppButton.secondary(
+                      text: cancelText,
+                      height: 42,
+                      onPressed: () {
+                        Navigator.pop(context);
+                        onCancel?.call();
+                      },
                     ),
                   ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle!,
-                      textAlign: TextAlign.left,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  child,
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppButton.secondary(
-                          text: cancelText,
-                          height: 42,
-                          onPressed: () {
-                            Navigator.pop(context);
-                            onCancel?.call();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: isDestructive
-                            ? AppButton.destructive(
-                                text: confirmText,
-                                height: 42,
-                                isLoading: isLoading,
-                                onPressed: onConfirm,
-                              )
-                            : AppButton.primary(
-                                text: confirmText,
-                                height: 42,
-                                isLoading: isLoading,
-                                onPressed: onConfirm,
-                              ),
-                      ),
-                    ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: isDestructive
+                        ? AppButton.destructive(
+                            text: confirmText,
+                            height: 42,
+                            isLoading: isLoading,
+                            onPressed: onConfirm,
+                          )
+                        : AppButton.primary(
+                            text: confirmText,
+                            height: 42,
+                            isLoading: isLoading,
+                            onPressed: onConfirm,
+                          ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       ),

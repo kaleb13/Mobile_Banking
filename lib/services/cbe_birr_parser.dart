@@ -120,7 +120,7 @@ class CbeBirrParser {
       }
 
       final dateMatch = RegExp(
-              r'on\s+(.*?)(\s*,eqn|\s*,txn id|\s+with txn id)',
+              r'on\s+(.*?)(\s*,eqn|\s*,txn id|\s+with txn id|,\s*the\s+transaction\s+id)',
               caseSensitive: false)
           .firstMatch(message);
       if (dateMatch != null) dateStr = dateMatch.group(1)!.trim();
@@ -159,7 +159,7 @@ class CbeBirrParser {
       }
 
       final dateMatch = RegExp(
-              r'on\s+(.*?)(\.txn id|,txn id|\s+with reference)',
+              r'on\s+(.*?)(\.txn id|,txn id|\s+with reference|,\s*the\s+transaction\s+id)',
               caseSensitive: false)
           .firstMatch(message);
       if (dateMatch != null) dateStr = dateMatch.group(1)!.trim();
@@ -171,7 +171,9 @@ class CbeBirrParser {
 
     // 3. Extract Txn ID
     String? id;
-    final idMatch = RegExp(r'txn id\s+([A-Z0-9]+)', caseSensitive: false)
+    final idMatch = RegExp(
+            r'(?:txn id|transaction id is)\s+([A-Z0-9]+)',
+            caseSensitive: false)
         .firstMatch(message);
     if (idMatch != null) {
       id = idMatch.group(1);

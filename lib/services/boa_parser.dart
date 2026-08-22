@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import '../models/parsed_sms_result.dart';
 
 class BoaParser {
@@ -183,9 +185,14 @@ class BoaParser {
 
     if (amount <= 0) return null;
 
-    final id = refId != null
-        ? 'boa_ref_$refId'
-        : 'boa_${type}_${txDate.year}${txDate.month.toString().padLeft(2, '0')}${txDate.day.toString().padLeft(2, '0')}_${amount.toStringAsFixed(2)}';
+    final String id;
+    if (refId != null) {
+      id = 'boa_ref_$refId';
+    } else {
+      final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final hash = sha256.convert(utf8.encode(normalised)).toString();
+      id = 'BOA-${hash.substring(0, 16)}';
+    }
 
     return ParsedSmsResult(
       id: id,

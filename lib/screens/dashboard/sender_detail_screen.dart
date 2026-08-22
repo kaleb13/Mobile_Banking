@@ -37,7 +37,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _senderFilter = 'All Senders';
   bool _isBookmarkedOnly = false;
   String _sortBy = 'Date: Newest';
-  String _dateRangeFilter = 'All Time'; // All Time, 7D, 30D, 90D, 1Y
+  String _dateRangeFilter = '30D'; // Default to 30D for instant loading
+  int _displayLimit = 30; // Progressive virtualized page limit
   final TextEditingController _searchController = TextEditingController();
   bool _isChartVisible = false;
 
@@ -169,8 +170,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     }
 
     // Calculate Balance & Trends
-    double currentBalance =
-        allTxForSender.isNotEmpty ? allTxForSender.first.totalBalance : 0;
+    final double currentBalance =
+        txVM.balanceForSender(widget.sender.senderName);
 
     // Trend calculation
     double monthChange = 0;
@@ -289,13 +290,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 ),
               ),
 
-              // ── Transaction List (Full Width, edge-to-edge) ──
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
-                sliver: SliverToBoxAdapter(
-                  child: _buildTransactionList(filteredTransactions),
-                ),
-              ),
+              // ── Transaction List (Virtualized SliverList with Lazy Loading) ──
+              _buildTransactionSliverList(filteredTransactions),
             ],
           ),
         ),
@@ -518,7 +514,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 value: _typeFilter,
                 items: const ['All', 'Income', 'Expense'],
                 onChanged: (val) {
-                  if (val != null) setState(() => _typeFilter = val);
+                  if (val != null) {
+                    setState(() {
+                      _typeFilter = val;
+                      _displayLimit = 30;
+                    });
+                  }
                 },
               ),
               const SizedBox(width: 8),
@@ -527,7 +528,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 items: senderOptions,
                 maxWidth: 140,
                 onChanged: (val) {
-                  if (val != null) setState(() => _senderFilter = val);
+                  if (val != null) {
+                    setState(() {
+                      _senderFilter = val;
+                      _displayLimit = 30;
+                    });
+                  }
                 },
               ),
               const SizedBox(width: 8),
@@ -540,15 +546,25 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   'Amount: Low-High',
                 ],
                 onChanged: (val) {
-                  if (val != null) setState(() => _sortBy = val);
+                  if (val != null) {
+                    setState(() {
+                      _sortBy = val;
+                      _displayLimit = 30;
+                    });
+                  }
                 },
               ),
               const SizedBox(width: 8),
               _buildFilterDropdown(
                 value: _dateRangeFilter,
-                items: const ['All Time', '7D', '30D', '90D', '1Y'],
+                items: const ['30D', '7D', '90D', '1Y', 'All Time'],
                 onChanged: (val) {
-                  if (val != null) setState(() => _dateRangeFilter = val);
+                  if (val != null) {
+                    setState(() {
+                      _dateRangeFilter = val;
+                      _displayLimit = 30;
+                    });
+                  }
                 },
               ),
               if (hasActiveFilters) ...[
@@ -559,9 +575,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       _isBookmarkedOnly = false;
                       _typeFilter = 'All';
                       _senderFilter = 'All Senders';
-                      _dateRangeFilter = 'All Time';
+                      _dateRangeFilter = '30D';
                       _sortBy = 'Date: Newest';
                       _searchQuery = '';
+                      _displayLimit = 30;
                       _searchController.clear();
                     });
                   },
@@ -618,6 +635,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         HapticFeedback.selectionClick();
         setState(() {
           _isBookmarkedOnly = !_isBookmarkedOnly;
+          _displayLimit = 30;
         });
       },
       behavior: HitTestBehavior.opaque,
@@ -710,20 +728,27 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     );
   }
 
-  Widget _buildTransactionList(List<AppTransaction> transactions) {
+  Widget _buildTransactionSliverList(List<AppTransaction> transactions) {
     if (transactions.isEmpty) {
-      return const Center(
+      return const SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
-          child: Text('No matching transactions.',
-              style: TextStyle(color: AppColors.textSoft)),
+          child: Center(
+            child: Text(
+              'No matching transactions.',
+              style: TextStyle(color: AppColors.textSoft),
+            ),
+          ),
         ),
       );
     }
 
-    // Group transactions by calendar day
+    final displayedTransactions = transactions.take(_displayLimit).toList();
+    final bool hasMore = transactions.length > _displayLimit;
+
+    // Group displayed transactions by calendar day
     final Map<DateTime, List<AppTransaction>> grouped = {};
-    for (final tx in transactions) {
+    for (final tx in displayedTransactions) {
       final dayKey = DateTime(tx.date.year, tx.date.month, tx.date.day);
       grouped.putIfAbsent(dayKey, () => []).add(tx);
     }
@@ -732,44 +757,71 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     final sortedDayKeys = grouped.keys.toList()
       ..sort((a, b) => b.compareTo(a));
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 0),
-      itemCount: sortedDayKeys.length,
-      itemBuilder: (context, groupIdx) {
-        final dayKey = sortedDayKeys[groupIdx];
-        final dayTxs = grouped[dayKey]!;
-        final headerLabel = _getDateHeaderLabel(dayKey);
+    final int groupCount = sortedDayKeys.length;
+    final int totalCount = groupCount + (hasMore ? 1 : 0);
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDateGroupHeader(headerLabel, isFirst: groupIdx == 0),
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.cardRadius,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  for (int i = 0; i < dayTxs.length; i++) ...[
-                    _buildTransactionItem(dayTxs[i]),
-                    if (i < dayTxs.length - 1)
-                      Container(
-                        height: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        color: Colors.white.withValues(alpha: 0.05),
-                      ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            if (index == groupCount && hasMore) {
+              final remaining = transactions.length - _displayLimit;
+              final nextBatch = remaining > 30 ? 30 : remaining;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Center(
+                  child: AppButton.secondary(
+                    text: 'Load More (+$nextBatch of $remaining)',
+                    icon: Icons.expand_more_rounded,
+                    height: 42,
+                    fullWidth: true,
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _displayLimit += 30;
+                      });
+                    },
+                  ),
+                ),
+              );
+            }
+
+            final dayKey = sortedDayKeys[index];
+            final dayTxs = grouped[dayKey]!;
+            final headerLabel = _getDateHeaderLabel(dayKey);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDateGroupHeader(headerLabel, isFirst: index == 0),
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.cardRadius,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < dayTxs.length; i++) ...[
+                        _buildTransactionItem(dayTxs[i]),
+                        if (i < dayTxs.length - 1)
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(horizontal: 16),
+                            color: Colors.white.withValues(alpha: 0.05),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+          childCount: totalCount,
+        ),
+      ),
     );
   }
 

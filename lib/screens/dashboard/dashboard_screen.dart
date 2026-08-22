@@ -1380,7 +1380,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Color bgColor = AppColors.lightGreyBackground;
 
     if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
-      img = Image.asset('assets/images/CBE logo 1.webp', width: 22, height: 22);
+      img = SvgPicture.asset('assets/images/CBE logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
       img = Image.asset(
@@ -1441,14 +1441,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return Icon(Icons.account_balance, color: overrideColor ?? Colors.white, size: size);
     }
     final nameUp = name.toUpperCase();
-    if (nameUp == 'CBE') {
-      return Image.asset(
-        'assets/images/CBE logo 1.webp',
+    if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
+      return SvgPicture.asset(
+        'assets/images/CBE logo.svg',
         width: size,
         height: size,
         fit: BoxFit.contain,
-        color: overrideColor,
-        colorBlendMode: overrideColor != null ? BlendMode.srcIn : null,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
       );
     } else if (nameUp == 'TELEBIRR') {
       return Image.asset(
@@ -1484,6 +1485,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         width: size,
         height: size,
         fit: BoxFit.contain,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
+      );
+    } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
+      return SvgPicture.asset(
+        'assets/images/Dashen_Bank_Logo.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
+      );
+    } else if (nameUp.contains('CASH')) {
+      return SvgPicture.asset(
+        'assets/images/Wallet Icon.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
       );
     }
     return Icon(Icons.account_balance, color: overrideColor ?? Colors.white, size: size);

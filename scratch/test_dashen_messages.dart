@@ -1,4 +1,4 @@
-import '../lib/services/dashen_parser.dart';
+import 'package:mobile_banking_app/services/dashen_parser.dart';
 
 void main() {
   print('=== Testing Dashen Bank Parser with Various Messages ===\n');
@@ -23,7 +23,8 @@ void main() {
       print('[FAIL] Message #${i + 1} could not be parsed!');
       continue;
     }
-    print('[PASS #${i + 1}] Bank: "${tx.name}" | Party: "${tx.sender}" | Type: ${tx.type} | Amt: ${tx.amount} | Bal: ${tx.totalBalance} | Date: ${tx.date}');
+    print(
+        '[PASS #${i + 1}] Bank: "${tx.name}" | Party: "${tx.sender}" | Type: ${tx.type} | Amt: ${tx.amount} | Bal: ${tx.totalBalance} | Date: ${tx.date}');
   }
 
   print('\nAll Dashen parser tests passed successfully! 🎉');

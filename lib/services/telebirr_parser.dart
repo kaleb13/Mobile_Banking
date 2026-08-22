@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'bank_senders.dart';
 import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
@@ -186,10 +188,17 @@ class TelebirrParser {
       }
     } else if (lowerMsg.contains('paid')) {
       type = 'expense';
-      amount = extractAmount(RegExp(r'paid ETB ([0-9,.]+)'));
+      amount = extractAmount(
+          RegExp(r'paid\s+ETB\s+([0-9,.]+)', caseSensitive: false));
 
-      final forMatch =
-          RegExp(r'for\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
+      var forMatch = RegExp(
+              r'(?:to|for)\s+(.*?)\s+(?:on\s+\d{2}/\d{2}|for\s+)',
+              caseSensitive: false)
+          .firstMatch(message);
+      forMatch ??= RegExp(
+              r'(?:to|for)\s+(.*?)\s+on\s+\d{2}/\d{2}',
+              caseSensitive: false)
+          .firstMatch(message);
       if (forMatch != null) {
         final rawDesc = forMatch.group(1)?.trim() ?? '';
 
@@ -204,8 +213,37 @@ class TelebirrParser {
           senderOrRecipient = rawDesc;
         }
       }
+    } else if (lowerMsg.contains('credited with etb') ||
+        lowerMsg.contains('credited with')) {
+      type = 'income';
+      amount = extractAmount(RegExp(r'credited\s+with\s+ETB\s+([0-9,.]+)'));
+
+      final agentMatch = RegExp(
+              r'via\s+(?:telebirr\s+agent|agent)\s+([0-9A-Za-z]+)',
+              caseSensitive: false)
+          .firstMatch(message);
+      if (agentMatch != null) {
+        senderOrRecipient = 'telebirr agent ${agentMatch.group(1)}';
+      } else {
+        senderOrRecipient = 'Telebirr Deposit';
+      }
+    } else if (lowerMsg.contains('deposited') && lowerMsg.contains('to')) {
+      type = 'expense';
+      amount = extractAmount(RegExp(r'deposited\s+ETB\s+([0-9,.]+)'));
+      final toMatch =
+          RegExp(r'to\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
+      if (toMatch != null) {
+        String rawRecip = toMatch.group(1)?.trim() ?? '';
+        final dashSplit = rawRecip.split(' - ');
+        if (dashSplit.length >= 2 &&
+            RegExp(r'^\d+$').hasMatch(dashSplit.first.trim())) {
+          senderOrRecipient = dashSplit.sublist(1).join(' - ').trim();
+        } else {
+          senderOrRecipient = rawRecip;
+        }
+      }
     } else {
-      // Must contain airtime, package, received, transferred, debited, paid, or saving
+      // Must contain airtime, package, received, transferred, debited, paid, credited, deposited, or saving
       return null;
     }
 
@@ -223,19 +261,23 @@ class TelebirrParser {
         r'transaction\s+number\s+(?:is\s+)?([A-Za-z0-9]+)',
         caseSensitive: false);
     final idMatch = idRegex.firstMatch(singleLineMsg);
-    final id = idMatch?.group(1)?.trim() ??
-        'TB_${type}_${fallbackDate.millisecondsSinceEpoch}_$amount';
+    String? id = idMatch?.group(1)?.trim();
+    if (id == null) {
+      final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final hash = sha256.convert(utf8.encode(normalised)).toString();
+      id = 'TB-${hash.substring(0, 16)}';
+    }
 
     // 4. Extract Post Balance
     // Supports:
     //   OLD: "Your current balance is ETB 123.45"
     //   OLD (double space): "Your current  balance is  ETB 123.45"
     //   NEW: "Your current balance is ETB 123.45."
-    //   E-Money: "Your current E-Money Account balance is ETB 123.45."
+    //   E-Money: "Your current telebirr E-Money Account balance is ETB 123.45."
     //   Saving: "your current saving balance is ETB 123.45"
     double totalBalance = 0.0;
     final balanceRegex = RegExp(
-        r'(?:current\s+(?:E-Money\s+Account\s+|saving\s+)?balance\s+is\s+ETB\s+|balance\s+is\s+ETB\s+)([0-9,]+(?:\.[0-9]+)?)',
+        r'(?:current\s+(?:telebirr\s+)?(?:E-Money\s+Account\s+|saving\s+)?balance\s+is\s+ETB\s+|balance\s+is\s+ETB\s+)([0-9,]+(?:\.[0-9]+)?)',
         caseSensitive: false);
     final balanceMatch = balanceRegex.firstMatch(singleLineMsg);
     if (balanceMatch != null) {

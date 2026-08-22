@@ -1,5 +1,5 @@
 import 'dart:io';
-import '../lib/services/dashen_parser.dart';
+import 'package:mobile_banking_app/services/dashen_parser.dart';
 
 void main() {
   final file = File('Dashin_Bank_SMS.xml');
@@ -38,7 +38,8 @@ void main() {
 
     if (tx != null) {
       parsedCount++;
-      print('[$parsedCount/${matches.length}] [OK] ${tx.type.toUpperCase().padRight(7)} | ETB ${tx.amount.toStringAsFixed(2).padLeft(9)} | Bal: ETB ${tx.totalBalance.toStringAsFixed(2).padLeft(9)} | Bank: ${tx.name} | Party: ${tx.sender} | Date: ${tx.date}');
+      print(
+          '[$parsedCount/${matches.length}] [OK] ${tx.type.toUpperCase().padRight(7)} | ETB ${tx.amount.toStringAsFixed(2).padLeft(9)} | Bal: ETB ${tx.totalBalance.toStringAsFixed(2).padLeft(9)} | Bank: ${tx.name} | Party: ${tx.sender} | Date: ${tx.date}');
     } else {
       failedCount++;
       print('[FAIL #${i + 1}] Could not parse:\n$rawBody\n');
@@ -47,7 +48,8 @@ void main() {
 
   print('\n=== Dashen Bank Parsing Summary ===');
   print('Total Messages: ${matches.length}');
-  print('Parsed Successfully: $parsedCount (${(parsedCount / matches.length * 100).toStringAsFixed(1)}%)');
+  print(
+      'Parsed Successfully: $parsedCount (${(parsedCount / matches.length * 100).toStringAsFixed(1)}%)');
   print('Failed: $failedCount');
   print('Extracted Owner Name: $extractedOwner');
 

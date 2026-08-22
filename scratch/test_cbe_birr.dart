@@ -1,6 +1,6 @@
 import 'dart:io';
-import '../lib/services/cbe_birr_parser.dart';
-import '../lib/models/transaction.dart';
+import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
+import 'package:mobile_banking_app/models/transaction.dart';
 
 void main() {
   final file = File('CBE Birr.xml');
@@ -8,7 +8,9 @@ void main() {
 
   final lines = file.readAsLinesSync();
   final smsLines = lines.where((l) => l.trim().startsWith('<sms ')).toList();
-  final latest100 = smsLines.length > 100 ? smsLines.sublist(smsLines.length - 100) : smsLines;
+  final latest100 = smsLines.length > 100
+      ? smsLines.sublist(smsLines.length - 100)
+      : smsLines;
 
   print('=== Final Verification of CbeBirrParser on Latest 100 SMS ===');
   int parsedCount = 0;
@@ -32,7 +34,8 @@ void main() {
 
     DateTime date = DateTime.now();
     if (dateMatch != null) {
-      date = DateTime.fromMillisecondsSinceEpoch(int.parse(dateMatch.group(1)!));
+      date =
+          DateTime.fromMillisecondsSinceEpoch(int.parse(dateMatch.group(1)!));
     }
 
     final tx = CbeBirrParser.parse(body, date);
@@ -45,7 +48,8 @@ void main() {
   }
 
   print('Parsed Transactions: $parsedCount / 100');
-  print('Ignored non-transaction SMS (Vouchers, Wrong PIN): $unparsedCount / 100');
+  print(
+      'Ignored non-transaction SMS (Vouchers, Wrong PIN): $unparsedCount / 100');
   print('\nIgnored SMS list:');
   for (var u in unparsedList.toSet()) {
     print('  - $u');

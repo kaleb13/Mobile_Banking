@@ -70,89 +70,80 @@ class AppBottomSheet extends StatelessWidget {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final maxHeight = MediaQuery.of(context).size.height * maxHeightFactor;
 
-    return ClipRRect(
-      borderRadius: AppRadius.sheetRadius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: AppColors.glassBlurSigma,
-          sigmaY: AppColors.glassBlurSigma,
-        ),
-        child: Container(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceElevated,
-            borderRadius: AppRadius.sheetRadius,
-          ),
-          padding: EdgeInsets.fromLTRB(
-            (padding as EdgeInsets).left,
-            (padding as EdgeInsets).top,
-            (padding as EdgeInsets).right,
-            (padding as EdgeInsets).bottom + bottomInset,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (showDragHandle)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 16),
-                    child: InteractiveDragHandle(),
-                  ),
-                ),
-
-              if (title != null && title!.isNotEmpty) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            title!,
-                            style: AppTypography.heading1.copyWith(
-                              color: context.themeTextPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (subtitle != null && subtitle!.isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            Text(
-                              subtitle!,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: context.themeTextSecondary,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    if (trailingHeader != null) trailingHeader!,
-                  ],
-                ),
-                const SizedBox(height: 18),
-              ],
-
-              Flexible(
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  child: child,
-                ),
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: AppRadius.sheetRadius,
+      ),
+      padding: EdgeInsets.fromLTRB(
+        (padding as EdgeInsets).left,
+        (padding as EdgeInsets).top,
+        (padding as EdgeInsets).right,
+        (padding as EdgeInsets).bottom + bottomInset,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showDragHandle)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: InteractiveDragHandle(),
               ),
+            ),
 
-              if (footer != null) ...[
-                const SizedBox(height: 16),
-                footer!,
+          if (title != null && title!.isNotEmpty) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title!,
+                        style: AppTypography.heading1.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subtitle != null && subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle!,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: context.themeTextSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailingHeader != null) trailingHeader!,
               ],
-            ],
+            ),
+            const SizedBox(height: 18),
+          ],
+
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              child: child,
+            ),
           ),
-        ),
+
+          if (footer != null) ...[
+            const SizedBox(height: 16),
+            footer!,
+          ],
+        ],
       ),
     );
   }

@@ -290,13 +290,6 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                     bottomLeft: const Radius.circular(28),
                     bottomRight: const Radius.circular(28),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: SafeArea(
                     bottom: false,
@@ -562,7 +555,7 @@ class _LoanList extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.handshake_outlined,
+              Icon(Icons.handshake,
                   color: context.themeTextSecondary.withValues(alpha: 0.5), size: 52),
               const SizedBox(height: 16),
               Text(emptyTitle,

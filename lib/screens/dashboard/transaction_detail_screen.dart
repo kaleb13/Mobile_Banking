@@ -673,7 +673,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       shortName = 'Dashen';
       bg = AppColors.cardDashenLight.withValues(alpha: 0.18);
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
-      iconWidget = Image.asset('assets/images/CBE logo 1.webp', width: 24, height: 24);
+      iconWidget = SvgPicture.asset('assets/images/CBE logo.svg', width: 24, height: 24, fit: BoxFit.contain);
       bankName = 'Commercial Bank of Ethiopia';
       shortName = 'CBE';
       bg = AppColors.slackPurple.withValues(alpha: 0.15);
@@ -2056,7 +2056,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   fontSize: 10,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   onPressed: () {
-                    settingsVM.setScreenIndex(3);
+                    settingsVM.animateToTab(3);
                     Navigator.popUntil(context, (route) => route.isFirst);
                   },
                 ),
@@ -2120,7 +2120,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   style: TextStyle(color: AppColors.textSoft, fontSize: 12)),
               onTap: () {
                 Navigator.pop(ctx);
-                settingsVM.setScreenIndex(3);
+                settingsVM.animateToTab(3);
                 Navigator.popUntil(context, (route) => route.isFirst);
               },
             ),

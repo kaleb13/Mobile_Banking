@@ -10,6 +10,7 @@ abstract class SavingsRepository {
   Future<void> insertSavingGoal(SavingGoal goal);
   Future<void> updateSavingGoal(SavingGoal goal);
   Future<void> deleteSavingGoal(String goalId);
+  Future<void> updateGoalsPriority(List<SavingGoal> goals);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,4 +37,8 @@ class SavingsRepositoryImpl implements SavingsRepository {
   @override
   Future<void> deleteSavingGoal(String goalId) =>
       _db.deleteSavingGoal(goalId);
+
+  @override
+  Future<void> updateGoalsPriority(List<SavingGoal> goals) =>
+      _db.updateGoalsPriority(goals);
 }

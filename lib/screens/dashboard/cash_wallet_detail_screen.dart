@@ -130,7 +130,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
         'id': ctx.id,
         'date': ctx.date,
         'title': ctx.type == 'addition'
-            ? 'Manual Addition'
+            ? 'Cash Added'
             : (ctx.reasonName ?? 'Cash Expense'),
         'subtitle': sub,
         'amount': ctx.amount,

@@ -696,9 +696,83 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
     if (insertedCount > 0) {
       await checkpointWal();
+      await reconcilePendingNotificationReasons();
     }
 
     return insertedCount;
+  }
+
+  /// Reconciles any pending reasons saved in `notifications` (from notification actions or
+  /// quick edit drawer) into matching `transactions` by rawMessage.
+  /// Resolves `reasonId`, `categoryId`, and `subcategoryId` hierarchy from `reasons` table,
+  /// and prunes successfully reconciled notifications.
+  Future<int> reconcilePendingNotificationReasons() async {
+    final db = await instance.database;
+    int reconciledCount = 0;
+
+    try {
+      final pendingNotifs = await db.rawQuery(
+        "SELECT id, body, reason FROM notifications WHERE reason IS NOT NULL AND TRIM(reason) != ''",
+      );
+      if (pendingNotifs.isEmpty) return 0;
+
+      final reasons = await getReasons();
+      final reasonMap = <String, AppReason>{};
+      for (final r in reasons) {
+        reasonMap[r.name.toLowerCase().trim()] = r;
+      }
+
+      for (final notif in pendingNotifs) {
+        final notifId = notif['id'] as String;
+        final notifBody = (notif['body'] as String? ?? '')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        final reasonName = (notif['reason'] as String? ?? '').trim();
+        if (notifBody.isEmpty || reasonName.isEmpty) continue;
+
+        final matchedReason = reasonMap[reasonName.toLowerCase()];
+        final int? reasonId = matchedReason?.id;
+        final int? categoryId = matchedReason?.isSubcategory == true
+            ? matchedReason?.parentId
+            : (matchedReason?.isTopLevelCategory == true ? matchedReason?.id : null);
+        final int? subcategoryId =
+            matchedReason?.isSubcategory == true ? matchedReason?.id : null;
+        final resolvedReasonName = matchedReason?.name ?? reasonName;
+
+        final txRows = await db.rawQuery(
+          "SELECT id, rawMessage, reason FROM transactions WHERE reason IS NULL OR TRIM(reason) = '' OR LOWER(TRIM(reason)) = 'uncategorized'",
+        );
+
+        bool matched = false;
+        for (final tx in txRows) {
+          final txRaw = (tx['rawMessage'] as String? ?? '')
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim();
+          if (txRaw == notifBody) {
+            await db.update(
+              'transactions',
+              {
+                'reason': resolvedReasonName,
+                'reasonId': reasonId,
+                'categoryId': categoryId,
+                'subcategoryId': subcategoryId,
+              },
+              where: 'id = ?',
+              whereArgs: [tx['id']],
+            );
+            reconciledCount++;
+            matched = true;
+            break;
+          }
+        }
+
+        if (matched) {
+          await db.delete('notifications', where: 'id = ?', whereArgs: [notifId]);
+        }
+      }
+    } catch (_) {}
+
+    return reconciledCount;
   }
 
   Future<int> updateTransaction(AppTransaction transaction) async {
@@ -1452,6 +1526,21 @@ CREATE TABLE IF NOT EXISTS saving_goals (
   Future<int> deleteSavingGoal(String id) async {
     final db = await instance.database;
     return await db.delete('saving_goals', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateGoalsPriority(List<SavingGoal> goals) async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      for (int i = 0; i < goals.length; i++) {
+        final goal = goals[i];
+        await txn.update(
+          'saving_goals',
+          {'priority': i + 1},
+          where: 'id = ?',
+          whereArgs: [goal.id],
+        );
+      }
+    });
   }
 
   // ──────────────────────────────────────────────

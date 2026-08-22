@@ -102,23 +102,16 @@ class AppConfirmDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
-        child: ClipRRect(
-          borderRadius: AppRadius.dialogRadius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: AppColors.glassBlurSigma,
-              sigmaY: AppColors.glassBlurSigma,
-            ),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-              decoration: BoxDecoration(
-                color: AppColors.glassSurfaceModal,
-                borderRadius: AppRadius.dialogRadius,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceElevated,
+            borderRadius: AppRadius.dialogRadius,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                   // Left-aligned Title
                   Text(
                     title,
@@ -208,8 +201,6 @@ class AppConfirmDialog extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
       ),
     );
   }

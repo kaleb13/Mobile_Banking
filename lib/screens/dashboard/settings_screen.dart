@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
@@ -20,7 +19,6 @@ import '../../widgets/app_modal_dialog.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/custom_progress_bar.dart';
-import '../../widgets/bank_card_widget.dart';
 import 'privacy_policy_screen.dart';
 import '../privacy/privacy_settings_screen.dart';
 import '../settings/notification_settings_screen.dart';
@@ -583,8 +581,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         try {
                           await provider.setScanWindowOption(option, rescanImmediately: true);
 
-                          final count = await txVM.scanSms(
-                            scanWindowOption: option,
+                          final count = await txVM.updateScanWindowRange(
+                            option,
                             onProgress: (status) {
                               provider.updateScanProgress(status);
                             },
@@ -747,119 +745,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
             insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
-              child: ClipRRect(
-                borderRadius: AppRadius.dialogRadius,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: AppColors.glassBlurSigma,
-                    sigmaY: AppColors.glassBlurSigma,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
-                    decoration: BoxDecoration(
-                      color: AppColors.glassSurfaceModal,
-                      borderRadius: AppRadius.dialogRadius,
-                    ),
-                    child: Consumer<SettingsViewModel>(
-                      builder: (context, provider, _) {
-                        final scanProgress = provider.scanProgress;
-                        final pct = scanProgress.progress > 0
-                            ? scanProgress.progress.clamp(0.05, 1.0)
-                            : 0.15;
-                        final stage = scanProgress.stage.isNotEmpty
-                            ? scanProgress.stage
-                            : 'Rescanning verified banking records…';
-                        final banks = scanProgress.scannedBanks;
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: AppRadius.dialogRadius,
+                ),
+                child: Consumer<SettingsViewModel>(
+                  builder: (context, provider, _) {
+                    final scanProgress = provider.scanProgress;
+                    final pct = scanProgress.progress > 0
+                        ? scanProgress.progress.clamp(0.05, 1.0)
+                        : 0.15;
+                    final stage = scanProgress.stage.isNotEmpty
+                        ? scanProgress.stage
+                        : 'Rescanning verified banking records…';
+                    final banks = scanProgress.scannedBanks;
 
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Updating Scan Range',
-                                  style: AppTypography.heading2.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 16.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                                Text(
-                                  '${(pct * 100).toInt()}%',
-                                  style: const TextStyle(
-                                    color: AppColors.positive,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            CustomProgressBar(
-                              progress: pct,
-                              height: 6,
-                              progressColor: AppColors.positive,
-                              backgroundColor: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            const SizedBox(height: 12),
                             Text(
-                              stage,
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12.5,
-                                height: 1.4,
+                              'Updating Scan Range',
+                              style: AppTypography.heading2.copyWith(
+                                color: AppColors.textPrimary,
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.2,
                               ),
                             ),
-                            if (banks.isNotEmpty) ...[
-                              const SizedBox(height: 16),
-                              ...banks.take(4).map((b) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 24,
-                                          height: 24,
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.06),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Center(
-                                            child: BankCardWidget.bankLogo(b.bankName, 14),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            b.bankName,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          '${b.transactionCount} msgs',
-                                          style: const TextStyle(
-                                            color: AppColors.positive,
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  )),
-                            ],
+                            Text(
+                              '${(pct * 100).toInt()}%',
+                              style: const TextStyle(
+                                color: AppColors.positive,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ],
-                        );
-                      },
-                    ),
-                  ),
+                        ),
+                        const SizedBox(height: 14),
+                        CustomProgressBar(
+                          progress: pct,
+                          height: 8,
+                          progressColor: AppColors.positive,
+                          backgroundColor: AppColors.tabBackground,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          stage,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                            height: 1.4,
+                          ),
+                        ),
+                        if (banks.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          ...banks.take(4).map((b) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        b.bankName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '${b.transactionCount} msgs',
+                                      style: const TextStyle(
+                                        color: AppColors.positive,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

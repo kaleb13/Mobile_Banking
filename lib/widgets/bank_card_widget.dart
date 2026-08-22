@@ -39,8 +39,13 @@ class BankCardWidget extends StatelessWidget {
     final nameUp = name.toUpperCase();
     String imagePath = '';
 
-    if (nameUp == 'CBE') {
-      imagePath = 'assets/images/CBE logo 1.webp';
+    if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL BANK') || nameUp.contains('COMMERCIAL')) {
+      return SvgPicture.asset(
+        'assets/images/CBE logo.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+      );
     } else if (nameUp == 'TELEBIRR') {
       imagePath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
@@ -51,9 +56,10 @@ class BankCardWidget extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.contain,
-        colorFilter: iconColor != null
-            ? ColorFilter.mode(iconColor, BlendMode.srcIn)
-            : null,
+        colorFilter: ColorFilter.mode(
+          iconColor ?? Colors.white,
+          BlendMode.srcIn,
+        ),
       );
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
       return SvgPicture.asset(
@@ -61,9 +67,10 @@ class BankCardWidget extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.contain,
-        colorFilter: iconColor != null
-            ? ColorFilter.mode(iconColor, BlendMode.srcIn)
-            : null,
+        colorFilter: ColorFilter.mode(
+          iconColor ?? Colors.white,
+          BlendMode.srcIn,
+        ),
       );
     } else if (nameUp.contains('DASHEN')) {
       return SvgPicture.asset(
@@ -71,9 +78,10 @@ class BankCardWidget extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.contain,
-        colorFilter: iconColor != null
-            ? ColorFilter.mode(iconColor, BlendMode.srcIn)
-            : null,
+        colorFilter: ColorFilter.mode(
+          iconColor ?? Colors.white,
+          BlendMode.srcIn,
+        ),
       );
     }
 
@@ -132,7 +140,7 @@ class BankCardWidget extends StatelessWidget {
         AppColors.success,
         AppColors.cardLime,
       ];
-    } else if (nameUp == 'CBE') {
+    } else if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
       return [
         AppColors.cardBrownDark,
         AppColors.cardBrownMid,
@@ -147,7 +155,7 @@ class BankCardWidget extends StatelessWidget {
         AppColors.cardAhaduRedDark,
         AppColors.cardAhaduRedLight,
       ];
-    } else if (nameUp == 'CASH WALLET') {
+    } else if (nameUp == 'CASH WALLET' || nameUp == 'CASH') {
       return [
         AppColors.cardGrayDark,
         AppColors.cardGrayMid,

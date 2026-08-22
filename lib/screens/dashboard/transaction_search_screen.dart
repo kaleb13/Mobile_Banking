@@ -536,7 +536,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     Color bgColor = AppColors.lightGreyBackground;
 
     if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
-      img = Image.asset('assets/images/CBE logo 1.webp', width: 22, height: 22);
+      img = SvgPicture.asset('assets/images/CBE logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
       img = Image.asset(

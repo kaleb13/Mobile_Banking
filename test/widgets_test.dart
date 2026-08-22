@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile_banking_app/widgets/app_switch.dart';
 import 'package:mobile_banking_app/widgets/custom_progress_bar.dart';
 import 'package:mobile_banking_app/widgets/confirmation_dialog.dart';
 import 'package:mobile_banking_app/widgets/app_capsule_tab_bar.dart';

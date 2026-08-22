@@ -8,8 +8,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/app_notification.dart';
+import '../../models/transaction.dart';
+import '../../models/reason.dart';
 import '../../data/repositories/notification_repository.dart';
 import '../../services/sms_service.dart';
+import '../../services/bank_senders.dart';
 
 class NotificationsViewModel extends ChangeNotifier {
   final NotificationRepository _repository;
@@ -30,6 +33,12 @@ class NotificationsViewModel extends ChangeNotifier {
   bool _hasPermission = false;
   bool get hasPermission => _hasPermission;
 
+  // ── Cross-VM callbacks (wired by main.dart ProxyProvider) ────────────────
+  List<AppTransaction> Function()? getTransactions;
+  List<AppReason> Function()? getReasons;
+  Future<void> Function(String txId, String reason, int? reasonId)?
+      updateTransactionReason;
+
   Future<bool> requestPermission() async {
     _hasPermission = await SmsService().requestPermission();
     notifyListeners();
@@ -44,8 +53,68 @@ class NotificationsViewModel extends ChangeNotifier {
       // Check current SMS permission status so the pill shows correctly
       _hasPermission = await Permission.sms.status.isGranted;
       final all = await _repository.getNotifications();
+
+      // Automatically purge any stale legacy notifications matching updated ignore rules
+      final stale =
+          all.where((n) => BankSenders.isIgnoredMessage(n.body)).toList();
+      if (stale.isNotEmpty) {
+        for (final s in stale) {
+          await _repository.deleteNotification(s.id);
+        }
+        all.removeWhere((n) => BankSenders.isIgnoredMessage(n.body));
+      }
+
+      // ── Reconciliation: prune notifications already parsed as transactions ──
+      final transactions = getTransactions?.call();
+      if (transactions != null && transactions.isNotEmpty) {
+        final reasons = getReasons?.call() ?? [];
+        final List<String> idsToDelete = [];
+
+        for (final n in all) {
+          final bodyNorm = n.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+          // Check if this notification's body matches any existing transaction
+          final matchedTx = transactions.cast<AppTransaction?>().firstWhere(
+            (t) =>
+                t!.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() ==
+                bodyNorm,
+            orElse: () => null,
+          );
+
+          if (matchedTx != null) {
+            // Transfer pending reason from notification → transaction
+            if (n.reason != null &&
+                n.reason!.isNotEmpty &&
+                (matchedTx.reason == null ||
+                    matchedTx.reason!.isEmpty ||
+                    matchedTx.reason!.toLowerCase() == 'uncategorized') &&
+                updateTransactionReason != null &&
+                matchedTx.id != null) {
+              final matchedReason = reasons.cast<AppReason?>().firstWhere(
+                (r) =>
+                    r!.name.toLowerCase().trim() ==
+                    n.reason!.toLowerCase().trim(),
+                orElse: () => null,
+              );
+              await updateTransactionReason!(
+                matchedTx.id!,
+                matchedReason?.name ?? n.reason!,
+                matchedReason?.id,
+              );
+            }
+            idsToDelete.add(n.id);
+          }
+        }
+
+        // Delete reconciled notifications from DB and in-memory list
+        for (final id in idsToDelete) {
+          _repository.deleteNotification(id);
+        }
+        all.removeWhere((n) => idsToDelete.contains(n.id));
+      }
+
       _notifications = all;
-      _unreadCount = await _repository.getUnreadCount();
+      _unreadCount = all.where((n) => !n.isRead).length;
     } catch (_) {
     } finally {
       _isLoading = false;
@@ -144,10 +213,12 @@ class NotificationsViewModel extends ChangeNotifier {
     if (savedPath != null) {
       try {
         // Trigger native share sheet with file attached so user can choose Telegram / @zkaleb
-        await Share.shareXFiles(
-          [XFile(savedPath)],
-          text: 'Unrecognized SMS report for Shibre developer (@zkaleb)',
-          subject: 'Shibre Unrecognized SMS Report',
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(savedPath)],
+            text: 'Unrecognized SMS report for Shibre developer (@zkaleb)',
+            subject: 'Shibre Unrecognized SMS Report',
+          ),
         );
       } catch (_) {}
     }

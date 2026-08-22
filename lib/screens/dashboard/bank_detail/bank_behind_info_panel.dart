@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../theme/app_theme.dart';
 import 'bank_metadata.dart';
 
 /// Reusable behind-card information panel revealed when dragging down any bank card.
@@ -11,11 +12,7 @@ class BankBehindInfoPanel extends StatelessWidget {
   final BankInfoData infoData;
 
   /// Single unified primary gradient for the info section across the entire app
-  static const List<Color> primaryGradient = [
-    Color(0xFF047857), // Deep emerald
-    Color(0xFF059669),
-    Color(0xFF10B981), // Vibrant mint emerald
-  ];
+  static const List<Color> primaryGradient = AppColors.unifiedBankBehindGradient;
 
   const BankBehindInfoPanel({
     super.key,

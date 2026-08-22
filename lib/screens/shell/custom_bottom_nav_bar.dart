@@ -16,7 +16,7 @@ import '../../theme/app_theme.dart';
 // Each item's activationT = clamp(1 − |page − itemIndex|, 0, 1)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class CustomBottomNavBar extends StatelessWidget {
+class CustomBottomNavBar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int>? onTap;
 
@@ -31,16 +31,92 @@ class CustomBottomNavBar extends StatelessWidget {
     required this.pageController,
   });
 
+  @override
+  State<CustomBottomNavBar> createState() => _CustomBottomNavBarState();
+}
+
+class _CustomBottomNavBarState extends State<CustomBottomNavBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animController;
+  int _prevIndex = 0;
+  int _targetIndex = 0;
+  bool _isDirectJump = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prevIndex = widget.currentIndex;
+    _targetIndex = widget.currentIndex;
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomBottomNavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex) {
+      final diff = (widget.currentIndex - oldWidget.currentIndex).abs();
+      _prevIndex = oldWidget.currentIndex;
+      _targetIndex = widget.currentIndex;
+
+      if (diff > 1) {
+        // Non-adjacent jump: animate only prev and target items directly without middle items
+        _isDirectJump = true;
+        _animController.forward(from: 0.0).then((_) {
+          if (mounted) {
+            setState(() {
+              _isDirectJump = false;
+              _prevIndex = _targetIndex;
+            });
+          }
+        });
+      } else {
+        _isDirectJump = false;
+        _prevIndex = _targetIndex;
+        _animController.value = 1.0;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
   // Helper: compute 0→1 activation fraction for item at [index]
   // given the current fractional page position [page].
   static double _activationT(double page, int index) {
     return (1.0 - (page - index).abs()).clamp(0.0, 1.0);
   }
 
+  double _getItemActivation(int index, double page) {
+    if (_isDirectJump && _animController.isAnimating) {
+      final progress = Curves.easeOutCubic.transform(_animController.value);
+      if (index == _prevIndex) {
+        return (1.0 - progress).clamp(0.0, 1.0);
+      } else if (index == _targetIndex) {
+        return progress.clamp(0.0, 1.0);
+      } else {
+        return 0.0;
+      }
+    }
+    return _activationT(page, index);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Dynamically pad above the system navigation bar (3-button nav, gesture
+    // bar, etc.).  MediaQuery.padding.bottom reflects whatever the OS insets
+    // are, so on gesture-nav devices it is 0 and on 3-button-nav devices it is
+    // the height of that bar.  We keep a 12 px base gap on top of that.
+    final systemNavBottom = MediaQuery.paddingOf(context).bottom;
+    final bottomMargin = systemNavBottom + 12.0;
+
     return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+      margin: EdgeInsets.only(left: 16, right: 16, bottom: bottomMargin),
       height: 60,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(100),
@@ -65,14 +141,14 @@ class CustomBottomNavBar extends StatelessWidget {
                 ),
               ],
             ),
-            // AnimatedBuilder rebuilds the row on every PageController tick
+            // AnimatedBuilder rebuilds the row on either PageController scroll or direct jump animation
             child: AnimatedBuilder(
-              animation: pageController,
+              animation: Listenable.merge([widget.pageController, _animController]),
               builder: (context, _) {
-                final page = (pageController.hasClients &&
-                        pageController.page != null)
-                    ? pageController.page!
-                    : currentIndex.toDouble();
+                final page = (widget.pageController.hasClients &&
+                        widget.pageController.page != null)
+                    ? widget.pageController.page!
+                    : widget.currentIndex.toDouble();
 
                 return LayoutBuilder(
                   builder: (context, constraints) {
@@ -86,42 +162,42 @@ class CustomBottomNavBar extends StatelessWidget {
                         _NavItem(
                           label: 'Home Overview',
                           assetPath: 'assets/images/Shibre Icon.png',
-                          activationT: _activationT(page, 0),
+                          activationT: _getItemActivation(0, page),
                           activeWidth: activeW,
                           inactiveWidth: inactiveW,
-                          onTap: () => onTap?.call(0),
+                          onTap: () => widget.onTap?.call(0),
                         ),
                         _NavItem(
                           label: 'Wallet Manager',
                           svgPath: 'assets/images/Wallet Icon.svg',
-                          activationT: _activationT(page, 1),
+                          activationT: _getItemActivation(1, page),
                           activeWidth: activeW,
                           inactiveWidth: inactiveW,
-                          onTap: () => onTap?.call(1),
+                          onTap: () => widget.onTap?.call(1),
                         ),
                         _NavItem(
                           label: 'Spending Charts',
                           svgPath: 'assets/images/Analysis Icon.svg',
-                          activationT: _activationT(page, 2),
+                          activationT: _getItemActivation(2, page),
                           activeWidth: activeW,
                           inactiveWidth: inactiveW,
-                          onTap: () => onTap?.call(2),
+                          onTap: () => widget.onTap?.call(2),
                         ),
                         _NavItem(
                           label: 'Loan Tracker',
                           svgPath: 'assets/images/Loan Icon.svg',
-                          activationT: _activationT(page, 3),
+                          activationT: _getItemActivation(3, page),
                           activeWidth: activeW,
                           inactiveWidth: inactiveW,
-                          onTap: () => onTap?.call(3),
+                          onTap: () => widget.onTap?.call(3),
                         ),
                         _NavItem(
                           label: 'Profile Hub',
                           svgPath: 'assets/images/Profile_Icon.svg',
-                          activationT: _activationT(page, 4),
+                          activationT: _getItemActivation(4, page),
                           activeWidth: activeW,
                           inactiveWidth: inactiveW,
-                          onTap: () => onTap?.call(4),
+                          onTap: () => widget.onTap?.call(4),
                         ),
                       ],
                     );

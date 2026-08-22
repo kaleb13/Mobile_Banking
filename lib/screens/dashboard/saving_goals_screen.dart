@@ -92,7 +92,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                                   width: 72,
                                   height: 72,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF111821),
+                                    color: AppColors.surface,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: const Icon(
@@ -105,7 +105,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                                 const Text(
                                   'No Saving Goals Yet',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: AppColors.textPrimary,
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -114,7 +114,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                                 Text(
                                   'Set a target and track your savings progress',
                                   style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
+                                    color: AppColors.textSecondary,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -125,21 +125,21 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 24, vertical: 13),
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
+                                      color: AppColors.buttonPrimary,
+                                      borderRadius: BorderRadius.circular(100),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(Icons.add,
-                                            color: AppColors.background, size: 18),
+                                            color: AppColors.buttonPrimaryText, size: 18),
                                         SizedBox(width: 8),
                                         Text(
-                                          'Add Your First Goal',
+                                          'Create Goal',
                                           style: TextStyle(
-                                            color: AppColors.background,
-                                            fontSize: 14,
+                                            color: AppColors.buttonPrimaryText,
                                             fontWeight: FontWeight.bold,
+                                            fontSize: 14,
                                           ),
                                         ),
                                       ],
@@ -152,24 +152,45 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                         );
                       }
 
-                      // Sort: active/completed first, on_hold goals last
+                      // Sort: active/completed first, on_hold goals last, preserving priority order within active
                       final sortedGoals = List<SavingGoal>.from(goals)..sort((a, b) {
                         final aOnHold = a.status == 'on_hold';
                         final bOnHold = b.status == 'on_hold';
                         if (aOnHold && !bOnHold) return 1;
                         if (!aOnHold && bOnHold) return -1;
-                        return 0;
+                        return a.priority.compareTo(b.priority);
                       });
 
-                      return ListView.separated(
+                      return ReorderableListView.builder(
                         padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
                         physics: const AlwaysScrollableScrollPhysics(
                           parent: BouncingScrollPhysics(),
                         ),
                         itemCount: sortedGoals.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) =>
-                            _buildGoalCard(context, sortedGoals[index], savingsVM, settingsVM, analyticsVM),
+                        onReorder: (oldIndex, newIndex) {
+                          savingsVM.reorderGoals(oldIndex, newIndex);
+                        },
+                        proxyDecorator: (child, index, animation) {
+                          return Material(
+                            color: Colors.transparent,
+                            elevation: 8,
+                            shadowColor: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                            child: child,
+                          );
+                        },
+                        itemBuilder: (context, index) => Padding(
+                          key: ValueKey(sortedGoals[index].id),
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildGoalCard(
+                            context,
+                            sortedGoals[index],
+                            savingsVM,
+                            settingsVM,
+                            analyticsVM,
+                            dragIndex: index,
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -190,19 +211,22 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
       SavingGoal goal,
       SavingsViewModel savingsVM,
       SettingsViewModel settingsVM,
-      AnalyticsViewModel analyticsVM) {
+      AnalyticsViewModel analyticsVM,
+      {int dragIndex = 0}) {
     final feasibility = savingsVM.goalFeasibility(
       goal,
       liveBalances: analyticsVM.latestBalancesMap,
       totalBalance: analyticsVM.totalBalance,
     );
+    final isOnHold = goal.status == 'on_hold';
+    final allocatedFromBanks = isOnHold ? 0.0 : feasibility.availableAmount;
+    final totalCovered =
+        (goal.savedAmount + allocatedFromBanks).clamp(0.0, goal.targetAmount);
     final fraction = goal.targetAmount > 0
-        ? (goal.savedAmount / goal.targetAmount).clamp(0.0, 1.0)
+        ? (totalCovered / goal.targetAmount).clamp(0.0, 1.0)
         : 0.0;
     final pctInt = (fraction * 100).round();
-
-    final isOnHold = goal.status == 'on_hold';
-    final isCompleted = goal.savedAmount >= goal.targetAmount;
+    final isCompleted = totalCovered >= goal.targetAmount;
 
     Widget cardWidget = AppCard(
       margin: EdgeInsets.zero,
@@ -210,7 +234,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Top Row: Thumbnail + Title / Target + Status Badge ──
+          // ── Top Row: Thumbnail + Title / Target + Status & Priority Badges + Drag Handle ──
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -262,22 +286,58 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
 
               const SizedBox(width: 8),
 
-              // Status Badge
-              if (isCompleted)
-                const AppBadge.success(
-                  text: 'Completed',
-                  size: AppBadgeSize.small,
-                )
-              else if (isOnHold)
-                const AppBadge.neutral(
-                  text: 'On Hold',
-                  size: AppBadgeSize.small,
-                )
-              else
-                const AppBadge.success(
-                  text: 'Active',
-                  size: AppBadgeSize.small,
+              // Badges Column (Status + Priority)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (isCompleted)
+                    const AppBadge.success(
+                      text: 'Ready',
+                      size: AppBadgeSize.small,
+                    )
+                  else if (isOnHold)
+                    const AppBadge.neutral(
+                      text: 'On Hold',
+                      size: AppBadgeSize.small,
+                    )
+                  else
+                    const AppBadge.success(
+                      text: 'Active',
+                      size: AppBadgeSize.small,
+                    ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.buttonSecondary,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      '#${goal.priority} Priority',
+                      style: const TextStyle(
+                        color: AppColors.positive,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(width: 4),
+
+              // Reorder drag handle
+              ReorderableDragStartListener(
+                index: dragIndex,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Icon(
+                    Icons.drag_indicator_rounded,
+                    color: Colors.white.withValues(alpha: 0.35),
+                    size: 20,
+                  ),
                 ),
+              ),
             ],
           ),
 
@@ -291,7 +351,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
             progressColor: isCompleted
                 ? AppColors.positive
                 : AppColors.emeraldBright,
-            centerLabel: '$pctInt% Saved',
+            centerLabel: '$pctInt% Covered',
             labelInFilledOnly: false,
             labelStyle: const TextStyle(
               color: Colors.white,
@@ -302,14 +362,14 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
 
           const SizedBox(height: 10),
 
-          // ── Saved vs Remaining Metrics ──
+          // ── Covered vs Remaining Metrics ──
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
                   const Text(
-                    'Saved: ',
+                    'Covered: ',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -318,7 +378,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                   ),
                   Text(
                     settingsVM.isBalanceVisible
-                        ? currencyFmt.format(goal.savedAmount)
+                        ? currencyFmt.format(totalCovered)
                         : '••••••••',
                     style: const TextStyle(
                       color: AppColors.positive,
@@ -347,7 +407,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                   ),
                   Text(
                     settingsVM.isBalanceVisible
-                        ? currencyFmt.format((goal.targetAmount - goal.savedAmount).clamp(0, double.infinity))
+                        ? currencyFmt.format((goal.targetAmount - totalCovered).clamp(0, double.infinity))
                         : '••••••••',
                     style: const TextStyle(
                       color: Colors.white,
@@ -368,11 +428,11 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
           ),
 
           // ── Feasibility note / warning inside the card ──
-          if (!isOnHold && (feasibility.hasConflict || feasibility.canAffordNow)) ...[
+          if (!isOnHold && (feasibility.hasConflict || feasibility.canAffordNow || allocatedFromBanks > 0)) ...[
             const SizedBox(height: 10),
             Divider(color: Colors.white.withValues(alpha: 0.06), height: 1),
             const SizedBox(height: 8),
-            _buildFeasibilityRow(feasibility),
+            _buildFeasibilityRow(feasibility, allocatedFromBanks: allocatedFromBanks),
           ],
         ],
       ),
@@ -397,7 +457,8 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
     );
   }
 
-  Widget _buildFeasibilityRow(GoalFeasibility f) {
+  Widget _buildFeasibilityRow(GoalFeasibility f,
+      {double allocatedFromBanks = 0.0}) {
     if (f.hasConflict) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -426,13 +487,34 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
           SizedBox(width: 5),
           Flexible(
             child: Text(
-              'You can afford this now',
+              '100% funded • Ready to achieve',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppColors.positive,
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else if (allocatedFromBanks > 0) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.account_balance_wallet_outlined,
+              color: AppColors.positive, size: 13),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              'ETB ${currencyFmt.format(allocatedFromBanks)} allocated from live bank balances',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -527,6 +609,21 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   void _showGoalOptionsSheet(
       BuildContext context, SavingGoal goal, SavingsViewModel savingsVM) {
+    final analyticsVM = Provider.of<AnalyticsViewModel>(context, listen: false);
+    final feasibility = savingsVM.goalFeasibility(
+      goal,
+      liveBalances: analyticsVM.latestBalancesMap,
+      totalBalance: analyticsVM.totalBalance,
+    );
+    final isOnHold = goal.status == 'on_hold';
+    final allocatedFromBanks = isOnHold ? 0.0 : feasibility.availableAmount;
+    final totalCovered =
+        (goal.savedAmount + allocatedFromBanks).clamp(0.0, goal.targetAmount);
+    final fraction = goal.targetAmount > 0
+        ? (totalCovered / goal.targetAmount).clamp(0.0, 1.0)
+        : 0.0;
+    final pctInt = (fraction * 100).round();
+
     AppDrawer.show(
       context: context,
       builder: (ctx) => AppDrawer(
@@ -541,7 +638,8 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
             ),
           ),
           title: goal.title,
-          subtitle: '${currencyFmt.format(goal.savedAmount)} ETB of ${currencyFmt.format(goal.targetAmount)} ETB',
+          subtitle:
+              '${currencyFmt.format(totalCovered)} ETB of ${currencyFmt.format(goal.targetAmount)} ETB ($pctInt% covered)',
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -585,7 +683,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
             // 3. Delete Goal
             _buildOptionTile(
               icon: Icons.delete_outline_rounded,
-              iconColor: const Color(0xFFFF5252),
+              iconColor: AppColors.destructiveRed,
               title: 'Delete Goal',
               subtitle: 'Permanently remove this saving goal',
               isDestructive: true,
@@ -613,7 +711,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        splashColor: Colors.white.withValues(alpha: 0.05),
+        splashColor: AppColors.buttonSecondary,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Row(
@@ -623,8 +721,8 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                 height: 40,
                 decoration: BoxDecoration(
                   color: isDestructive
-                      ? const Color(0xFFFF5252).withValues(alpha: 0.12)
-                      : Colors.white.withValues(alpha: 0.07),
+                      ? AppColors.buttonSoftDestructiveBg
+                      : AppColors.buttonSecondary,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: iconColor, size: 20),
@@ -637,7 +735,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     Text(
                       title,
                       style: TextStyle(
-                        color: isDestructive ? const Color(0xFFFF5252) : Colors.white,
+                        color: isDestructive ? AppColors.destructiveRed : AppColors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -711,13 +809,14 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
   late final TextEditingController _savedCtrl;
   String? _pickedImagePath;
   bool _useCustomImage = false;
-  bool _iconSectionExpanded = false; // collapsed by default
+  bool _iconSectionExpanded = false;
 
-  // ── Allocation state ────────────────────────────────────────────
+  // ── Priority & Allocation state ─────────────────────────────────
+  int _priority = 1;
   AllocationMode _allocationMode = AllocationMode.globalPercent;
-  double _globalPct = 30.0; // % of total balance (global mode)
+  double _globalPct = 100.0; // default 100% of global
   Map<String, double> _accountPcts = {};
-  bool _allocationExpanded = true; // comfortable expanded state by default
+  bool _allocationExpanded = true;
 
   static const _iconOptions = <Map<String, dynamic>>[
     {'icon': Icons.directions_car_rounded,  'label': 'Car',       'id': 'icon:car'},
@@ -746,6 +845,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         text: edit != null ? edit.savedAmount.toStringAsFixed(0) : '0');
 
     if (edit != null) {
+      _priority = edit.priority;
       if (edit.imagePath.startsWith('/')) {
         _pickedImagePath = edit.imagePath;
         _useCustomImage = true;
@@ -754,12 +854,32 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         final idx = _iconOptions.indexWhere((opt) => opt['id'] == edit.imagePath);
         if (idx != -1) _selectedIconIndex = idx;
       }
-      _allocationMode = edit.allocationMode;
-      _globalPct = edit.accountAllocations['*'] ?? 30.0;
+      _allocationMode = edit.allocationMode == AllocationMode.globalPercent
+          ? AllocationMode.globalPercent
+          : AllocationMode.multiAccount;
+      _globalPct = edit.accountAllocations['*'] ?? 100.0;
       if (edit.allocationMode != AllocationMode.globalPercent) {
         _accountPcts = Map<String, double>.from(edit.accountAllocations);
       }
+    } else {
+      final existingGoals = context.read<SavingsViewModel>().savingGoals;
+      _priority = existingGoals.length + 1;
     }
+  }
+
+  double _calculateAllocatedFromBanks(
+    Map<String, double> balances,
+    double totalBalance,
+  ) {
+    if (_allocationMode == AllocationMode.globalPercent) {
+      return (totalBalance * (_globalPct / 100.0)).clamp(0.0, double.infinity);
+    }
+    double sum = 0.0;
+    _accountPcts.forEach((acc, pct) {
+      final b = balances[acc] ?? 0.0;
+      sum += b * (pct / 100.0);
+    });
+    return sum.clamp(0.0, double.infinity);
   }
 
   void _saveGoal() {
@@ -782,6 +902,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         targetAmount: target,
         savedAmount: saved,
         imagePath: _finalImagePath,
+        priority: _priority,
         allocationMode: _allocationMode,
         accountAllocations: allocMap,
         colorTheme: 'green',
@@ -794,6 +915,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         targetAmount: target,
         savedAmount: saved,
         imagePath: _finalImagePath,
+        priority: _priority,
         allocationMode: _allocationMode,
         accountAllocations: allocMap,
         colorTheme: 'green',
@@ -842,8 +964,8 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         iconColor: AppColors.positive,
         title: isEditing ? 'Edit Saving Goal' : 'New Saving Goal',
         subtitle: isEditing
-            ? 'Update your target, saved amount, or icon'
-            : 'Set a target price and track your progress',
+            ? 'Update your target, priority, or bank allocations'
+            : 'Set a target amount, priority rank, and funding allocation',
       ),
       bottomAction: AppButton.primary(
         text: isEditing ? 'Update Goal' : 'Save Goal',
@@ -878,49 +1000,203 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
             hint: '0',
             keyboardType: TextInputType.number,
           ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder(
-            valueListenable: _targetCtrl,
-            builder: (_, __, ___) {
-              return ValueListenableBuilder(
-                valueListenable: _savedCtrl,
-                builder: (_, __, ___) {
-                  final target = double.tryParse(_targetCtrl.text.trim()) ?? 0;
-                  final saved = double.tryParse(_savedCtrl.text.trim()) ?? 0;
-                  if (target <= 0) return const SizedBox.shrink();
-                  final pct = ((saved / target) * 100).clamp(0.0, 100.0);
-                  return Column(
+          const SizedBox(height: 12),
+
+          // ── Goal Priority Stepper ──
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.previewCardBg,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.positive.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.format_list_numbered_rounded,
+                      color: AppColors.positive, size: 16),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Progress preview', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                          Text('${pct.toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      CustomProgressBar(
-                        progress: pct / 100,
-                        height: 10,
-                        progressColor: AppColors.positive,
-                      ),
-                      const SizedBox(height: 16),
+                      Text('Goal Priority Rank',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                      SizedBox(height: 1),
+                      Text('Priority #1 claims available funds first',
+                          style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 10.5)),
                     ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        if (_priority > 1) {
+                          setState(() => _priority--);
+                        }
+                      },
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: AppColors.buttonSecondary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.remove_rounded,
+                            color: Colors.white, size: 16),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        '#$_priority',
+                        style: const TextStyle(
+                          color: AppColors.positive,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _priority++);
+                      },
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: AppColors.buttonSecondary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add_rounded,
+                            color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Dynamic Live Progress & Coverage Preview ──
+          Consumer<AnalyticsViewModel>(
+            builder: (context, analyticsVM, _) {
+              final balances = analyticsVM.latestBalancesMap;
+              final totalBal = analyticsVM.totalBalance;
+              final fmt = NumberFormat('#,##0');
+              final currencyLabel = Provider.of<SettingsViewModel>(context, listen: false)
+                  .currentCurrency
+                  .shortLabel;
+
+              return ListenableBuilder(
+                listenable: Listenable.merge([_targetCtrl, _savedCtrl]),
+                builder: (_, __) {
+                  final target = double.tryParse(_targetCtrl.text.trim()) ?? 0.0;
+                  final manualSaved = double.tryParse(_savedCtrl.text.trim()) ?? 0.0;
+                  final allocatedFromBanks =
+                      _calculateAllocatedFromBanks(balances, totalBal);
+                  final totalCovered = manualSaved + allocatedFromBanks;
+                  final progressPct = target > 0
+                      ? ((totalCovered / target) * 100.0).clamp(0.0, 100.0)
+                      : 0.0;
+
+                  if (target <= 0) return const SizedBox.shrink();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.previewCardBg,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Coverage: ${fmt.format(totalCovered)} of ${fmt.format(target)} $currencyLabel',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              '${progressPct.toStringAsFixed(1)}%',
+                              style: const TextStyle(
+                                color: AppColors.positive,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        CustomProgressBar(
+                          progress: progressPct / 100.0,
+                          height: 10,
+                          progressColor: AppColors.positive,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Bank allocation: ${fmt.format(allocatedFromBanks)} $currencyLabel',
+                              style: const TextStyle(
+                                color: AppColors.positive,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (manualSaved > 0)
+                              Text(
+                                'Manual saved: ${fmt.format(manualSaved)} $currencyLabel',
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   );
                 },
               );
             },
           ),
+
+          // ── Funding Source & Allocation (Global % and Custom %) ──
           Consumer<AnalyticsViewModel>(
             builder: (context, prov, _) {
               final accountNames = prov.allAccountNames;
               final balances = prov.latestBalancesMap;
+              final totalBal = prov.totalBalance;
               final fmt = NumberFormat('#,##0');
+              final globalAllocated = totalBal * (_globalPct / 100.0);
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: AppColors.previewCardBg, borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(
+                  color: AppColors.previewCardBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -930,40 +1206,66 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.15), shape: BoxShape.circle),
-                            child: const Icon(Icons.account_balance_wallet_outlined, color: AppColors.positive, size: 15),
+                            decoration: BoxDecoration(
+                              color: AppColors.positive.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.account_balance_wallet_outlined,
+                              color: AppColors.positive,
+                              size: 15,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Funding Source & Allocation', style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                                Text(
+                                  'Funding Source & Allocation',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                                 SizedBox(height: 1),
-                                Text('Choose how your bank balances count toward this goal', style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                                Text(
+                                  'Choose how bank balances fund this goal',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 10,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                          AnimatedRotation(turns: _allocationExpanded ? 0.5 : 0.0, duration: const Duration(milliseconds: 200), child: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary, size: 20)),
+                          AnimatedRotation(
+                            turns: _allocationExpanded ? 0.5 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: AppColors.textSecondary,
+                              size: 20,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     if (_allocationExpanded) ...[
                       const SizedBox(height: 14),
                       AppPrimaryTabBar(
-                        tabs: const ['Global %', 'Specific Bank', 'Custom %'],
-                        selectedIndex: _allocationMode == AllocationMode.globalPercent
-                            ? 0
-                            : (_allocationMode == AllocationMode.accountSpecific ? 1 : 2),
+                        tabs: const ['Global %', 'Custom %'],
+                        selectedIndex: _allocationMode == AllocationMode.globalPercent ? 0 : 1,
                         onTabChanged: (idx) {
                           setState(() {
                             if (idx == 0) {
                               _allocationMode = AllocationMode.globalPercent;
-                              _accountPcts.clear();
-                            } else if (idx == 1) {
-                              _allocationMode = AllocationMode.accountSpecific;
                             } else {
                               _allocationMode = AllocationMode.multiAccount;
+                              if (_accountPcts.isEmpty && accountNames.isNotEmpty) {
+                                _accountPcts[accountNames.first] = 100.0;
+                              }
                             }
                           });
                         },
@@ -972,38 +1274,95 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                       ),
                       const SizedBox(height: 14),
                       if (_allocationMode == AllocationMode.globalPercent) ...[
-                        Text('Use ${_globalPct.toStringAsFixed(0)}% of your total balance across ALL accounts.', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Global Balance: ETB ${fmt.format(totalBal)}',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                            Text(
+                              'ETB ${fmt.format(globalAllocated)}',
+                              style: const TextStyle(
+                                color: AppColors.positive,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
                               child: SliderTheme(
-                                data: SliderThemeData(activeTrackColor: AppColors.positive, inactiveTrackColor: Colors.white.withValues(alpha: 0.12), thumbColor: Colors.white, trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7)),
-                                child: Slider(value: _globalPct, min: 5, max: 100, divisions: 19, onChanged: (v) => setState(() => _globalPct = v)),
+                                data: SliderThemeData(
+                                  activeTrackColor: AppColors.positive,
+                                  inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
+                                  thumbColor: Colors.white,
+                                  trackHeight: 4,
+                                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                                ),
+                                child: Slider(
+                                  value: _globalPct,
+                                  min: 5,
+                                  max: 100,
+                                  divisions: 19,
+                                  onChanged: (v) => setState(() => _globalPct = v),
+                                ),
                               ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(color: AppColors.positive.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(100)),
-                              child: Text('${_globalPct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.positive, fontSize: 12, fontWeight: FontWeight.bold)),
+                              decoration: BoxDecoration(
+                                color: AppColors.positive.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                '${_globalPct.toStringAsFixed(0)}%',
+                                style: const TextStyle(
+                                  color: AppColors.positive,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ] else ...[
-                        Text(_allocationMode == AllocationMode.accountSpecific ? 'Select ONE bank account to fund this goal:' : 'Assign custom % to multiple bank accounts:', style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+                        const Text(
+                          'Select bank accounts and assign custom % allocations:',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         if (accountNames.isEmpty)
-                          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('No bank accounts detected yet.', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)))
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'No bank accounts detected yet.',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            ),
+                          )
                         else
                           ...accountNames.map((name) {
                             final bal = balances[name] ?? 0.0;
                             final isSelected = _accountPcts.containsKey(name);
-                            final pct = _accountPcts[name] ?? 50.0;
+                            final pct = _accountPcts[name] ?? 100.0;
+                            final accAllocated = bal * (pct / 100.0);
+
                             return Container(
                               margin: const EdgeInsets.only(bottom: 6),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.positive.withValues(alpha: 0.10) : Colors.white.withValues(alpha: 0.04),
+                                color: isSelected
+                                    ? AppColors.positive.withValues(alpha: 0.10)
+                                    : Colors.white.withValues(alpha: 0.04),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Column(
@@ -1016,10 +1375,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                           if (isSelected) {
                                             _accountPcts.remove(name);
                                           } else {
-                                            _accountPcts[name] = 50.0;
-                                            if (_allocationMode == AllocationMode.accountSpecific) {
-                                              _accountPcts.removeWhere((k, v) => k != name);
-                                            }
+                                            _accountPcts[name] = 100.0;
                                           }
                                         }),
                                         child: AnimatedContainer(
@@ -1027,29 +1383,79 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                                           width: 20,
                                           height: 20,
                                           decoration: BoxDecoration(
-                                            color: isSelected ? AppColors.positive : Colors.transparent,
+                                            color: isSelected
+                                                ? AppColors.positive
+                                                : Colors.white.withValues(alpha: 0.12),
                                             shape: BoxShape.circle,
-                                            border: isSelected ? null : Border.all(color: Colors.white24, width: 1.5),
                                           ),
-                                          child: isSelected ? const Icon(Icons.check_rounded, color: Colors.black, size: 13) : null,
+                                          child: isSelected
+                                              ? const Icon(Icons.check_rounded,
+                                                  color: Colors.black, size: 13)
+                                              : null,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
-                                      Expanded(child: Text(name, style: TextStyle(color: isSelected ? Colors.white : AppColors.textSecondary, fontSize: 12.5, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))),
-                                      Text('ETB ${fmt.format(bal)}', style: TextStyle(color: isSelected ? AppColors.positive : AppColors.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                                      Expanded(
+                                        child: Text(
+                                          name,
+                                          style: TextStyle(
+                                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                                            fontSize: 12.5,
+                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        isSelected
+                                            ? 'ETB ${fmt.format(accAllocated)} (${pct.toStringAsFixed(0)}%)'
+                                            : 'ETB ${fmt.format(bal)}',
+                                        style: TextStyle(
+                                          color: isSelected ? AppColors.positive : AppColors.textSecondary,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ],
                                   ),
-                                  if (isSelected && _allocationMode == AllocationMode.multiAccount) ...[
+                                  if (isSelected) ...[
                                     const SizedBox(height: 6),
                                     Row(
                                       children: [
                                         Expanded(
                                           child: SliderTheme(
-                                            data: SliderThemeData(activeTrackColor: AppColors.positive, inactiveTrackColor: Colors.white.withValues(alpha: 0.1), thumbColor: Colors.white, trackHeight: 3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5)),
-                                            child: Slider(value: pct, min: 5, max: 100, divisions: 19, onChanged: (v) => setState(() => _accountPcts[name] = v)),
+                                            data: SliderThemeData(
+                                              activeTrackColor: AppColors.positive,
+                                              inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
+                                              thumbColor: Colors.white,
+                                              trackHeight: 3,
+                                              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                                            ),
+                                            child: Slider(
+                                              value: pct,
+                                              min: 5,
+                                              max: 100,
+                                              divisions: 19,
+                                              onChanged: (v) => setState(() {
+                                                _accountPcts[name] = v;
+                                              }),
+                                            ),
                                           ),
                                         ),
-                                        Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.positive, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.positive.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(100),
+                                          ),
+                                          child: Text(
+                                            '${pct.toStringAsFixed(0)}%',
+                                            style: const TextStyle(
+                                              color: AppColors.positive,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ],

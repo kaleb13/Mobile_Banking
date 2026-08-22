@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
 
@@ -151,10 +153,15 @@ class AhaduParser {
     }
 
     // Build unique transaction ID: prefer reference number, fall back to
-    // type+amount+date (e.g. for deposit messages that have no ref number).
-    final txId = refId != null
-        ? 'ahadu_ref_$refId'
-        : 'ahadu_${type}_${txDate.year}${txDate.month.toString().padLeft(2,'0')}${txDate.day.toString().padLeft(2,'0')}_${amount.toStringAsFixed(2)}';
+    // deterministic SHA-256 hash of normalized body for collision-free idempotency.
+    final String txId;
+    if (refId != null) {
+      txId = 'ahadu_ref_$refId';
+    } else {
+      final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final hash = sha256.convert(utf8.encode(normalised)).toString();
+      txId = 'AHADU-${hash.substring(0, 16)}';
+    }
 
     // Clean up recipient/sender label
     if (recipientOrSender.isEmpty) {

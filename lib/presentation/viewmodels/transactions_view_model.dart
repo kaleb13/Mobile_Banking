@@ -95,7 +95,14 @@ class TransactionsViewModel extends ChangeNotifier {
     final sNameUp = senderName.trim().toUpperCase();
     return _transactions.where((t) {
       final txName = t.name.trim().toUpperCase();
-      return txName == sNameUp || t.sender.trim().toUpperCase() == sNameUp;
+      final tSender = t.sender.trim().toUpperCase();
+      if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
+        return txName == 'BOA' ||
+            tSender == 'BOA' ||
+            txName.contains('ABYSSINIA') ||
+            tSender.contains('ABYSSINIA');
+      }
+      return txName == sNameUp || tSender == sNameUp;
     }).toList();
   }
 
@@ -192,6 +199,56 @@ class TransactionsViewModel extends ChangeNotifier {
     }).toList();
   }
 
+  // ── Category Resolution ─────────────────────────────────────────────────
+
+  /// Resolves a transaction's reason to its top-level category name.
+  /// Used by AnalyticsViewModel to compute expense highlights (carousel pills).
+  String getTopLevelCategoryForTransaction(AppTransaction tx) {
+    // 1. Resolve by reasonId → walk up to parent if subcategory
+    if (tx.reasonId != null) {
+      final r = _reasons.where((item) => item.id == tx.reasonId).firstOrNull;
+      if (r != null) {
+        if (r.isSpecial || r.name.toLowerCase() == 'loan') return r.name;
+        if (r.isSubcategory && r.parentId != null) {
+          final parent =
+              _reasons.where((p) => p.id == r.parentId).firstOrNull;
+          if (parent != null) return parent.name;
+        }
+        if (r.isTopLevelCategory) return r.name;
+      }
+    }
+
+    // 2. Resolve by categoryId
+    if (tx.categoryId != null) {
+      final cat =
+          _reasons.where((c) => c.id == tx.categoryId).firstOrNull;
+      if (cat != null) return cat.name;
+    }
+
+    // 3. Fallback: match by resolved reason string
+    final reasonStr = tx.resolvedReason?.trim();
+    if (reasonStr != null && reasonStr.isNotEmpty) {
+      final matched = _reasons
+          .where((r) => r.name.toLowerCase() == reasonStr.toLowerCase())
+          .firstOrNull;
+      if (matched != null) {
+        if (matched.isSpecial || matched.name.toLowerCase() == 'loan') {
+          return matched.name;
+        }
+        if (matched.isSubcategory && matched.parentId != null) {
+          final parent =
+              _reasons.where((p) => p.id == matched.parentId).firstOrNull;
+          if (parent != null) return parent.name;
+        }
+        if (matched.isTopLevelCategory) return matched.name;
+        return matched.name;
+      }
+      return reasonStr;
+    }
+
+    return 'Uncategorized';
+  }
+
   // ── Paused Banks ──────────────────────────────────────────────────────────
 
   Set<String> get pausedBanks => Set.unmodifiable(_pausedBanks);
@@ -270,20 +327,33 @@ class TransactionsViewModel extends ChangeNotifier {
       _reasonLinks = results[3] as List<AppReasonLink>;
       _pausedBanks = results[4] as Set<String>;
 
-      // Auto-backfill in-memory and DB reasons for any records where reasonId is set but reason name is missing
+      // Auto-backfill in-memory and DB reasons for any records where reason or reasonId is set
       for (int i = 0; i < _transactions.length; i++) {
         final tx = _transactions[i];
-        if (tx.reasonId != null && (tx.reason == null || tx.reason!.isEmpty)) {
-          final matched = _reasons.where((r) => r.id == tx.reasonId).firstOrNull;
+        if (tx.reasonId != null || (tx.reason != null && tx.reason!.isNotEmpty && tx.reason!.toLowerCase() != 'uncategorized')) {
+          final matched = tx.reasonId != null
+              ? _reasons.where((r) => r.id == tx.reasonId).firstOrNull
+              : _reasons.where((r) => r.name.toLowerCase().trim() == tx.reason!.toLowerCase().trim()).firstOrNull;
           if (matched != null) {
             final isSub = matched.isSubcategory;
             final isTop = matched.isTopLevelCategory;
-            _transactions[i] = tx.copyWith(
-              reason: matched.name,
-              categoryId: tx.categoryId ?? (isSub ? matched.parentId : (isTop ? matched.id : null)),
-              subcategoryId: tx.subcategoryId ?? (isSub ? matched.id : null),
-            );
-            _repository.updateTransaction(_transactions[i]);
+            final expectedCategoryId = isSub ? matched.parentId : (isTop ? matched.id : null);
+            final expectedSubcategoryId = isSub ? matched.id : null;
+            final expectedReasonId = matched.id;
+            final expectedReasonName = matched.name;
+
+            if (tx.reason != expectedReasonName ||
+                tx.reasonId != expectedReasonId ||
+                tx.categoryId != expectedCategoryId ||
+                tx.subcategoryId != expectedSubcategoryId) {
+              _transactions[i] = tx.copyWith(
+                reason: expectedReasonName,
+                reasonId: expectedReasonId,
+                categoryId: expectedCategoryId,
+                subcategoryId: expectedSubcategoryId,
+              );
+              _repository.updateTransaction(_transactions[i]);
+            }
           }
         }
       }
@@ -421,12 +491,15 @@ class TransactionsViewModel extends ChangeNotifier {
       final insertedCount = await _repository
           .insertTransactionsBatch(parseResult.transactions);
 
+      await _repository.reconcilePendingNotificationReasons();
+
       if (parseResult.unrecognizedNotifications.isNotEmpty) {
         await insertNotificationsBatch?.call(
             parseResult.unrecognizedNotifications);
       }
 
       await loadAll();
+      onSmsEventReceived?.call();
 
       onProgress?.call(ScanProgressStatus(
         progress: 1.0,
@@ -450,6 +523,49 @@ class TransactionsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Reconciles any pending notification reasons and refreshes state on app resume
+  Future<void> reconcileOnResume() async {
+    try {
+      await _repository.reconcilePendingNotificationReasons();
+      await loadAll();
+    } catch (_) {}
+  }
+
+  /// Adjusts the historical scan range, purging transactions that fall outside
+  /// the new window when narrowing, and ingesting SMS up to the new anchor date.
+  Future<int> updateScanWindowRange(
+    ScanWindowOption newOption, {
+    void Function(ScanProgressStatus)? onProgress,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      onProgress?.call(const ScanProgressStatus(
+        progress: 0.05,
+        stage: 'Adjusting historical scan window…',
+      ));
+
+      // If narrowing the window, purge transactions older than the new anchor date
+      if (newOption != ScanWindowOption.allTime) {
+        final cutoff = newOption.anchorDate;
+        await _repository.deleteTransactionsOlderThan(cutoff);
+        await loadAll();
+      }
+
+      // Ingest SMS within the updated window
+      final count = await scanSms(
+        scanWindowOption: newOption,
+        onProgress: onProgress,
+      );
+
+      return count;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Reloads recent data by scanning SMS for the specified lookback days.
   Future<void> refreshData({int? lastDays}) async {
     final days = lastDays ?? 30;
@@ -466,12 +582,39 @@ class TransactionsViewModel extends ChangeNotifier {
     await scanSms(scanWindowOption: scanWindowOption, onProgress: onProgress);
   }
 
-  /// Full reset: clears transactions and re-scans all available history.
+  /// Full reset: clears transactions, custom reasons, notifications and re-scans all available history.
   Future<void> fullReset({
     void Function(ScanProgressStatus)? onProgress,
   }) async {
     await _repository.deleteAllTransactions();
+    _transactions = [];
+    await _repository.deleteAllUserReasons();
+    _reasons = await _repository.getReasons();
+    _reasonLinks = [];
+    await _repository.deleteAllNotifications();
+    notifyListeners();
     await scanSms(scanWindowOption: ScanWindowOption.allTime, onProgress: onProgress);
+  }
+
+  /// Step 1 of full reset: delete all transactions from database.
+  Future<void> fullResetStep1DeleteTransactions() async {
+    await _repository.deleteAllTransactions();
+    _transactions = [];
+    notifyListeners();
+  }
+
+  /// Step 2 of full reset: clear all custom reasons and reason links.
+  Future<void> fullResetStep2ClearCustomReasons() async {
+    await _repository.deleteAllUserReasons();
+    _reasons = await _repository.getReasons();
+    _reasonLinks = [];
+    notifyListeners();
+  }
+
+  /// Step 3 of full reset: delete all notifications from database.
+  Future<void> fullResetStep3DeleteNotifications() async {
+    await _repository.deleteAllNotifications();
+    notifyListeners();
   }
 
   // ── Transaction CRUD ──────────────────────────────────────────────────────
@@ -505,23 +648,44 @@ class TransactionsViewModel extends ChangeNotifier {
     int? subcategoryId,
     String? note,
   }) async {
+    int? resolvedCategoryId = categoryId;
+    int? resolvedSubcategoryId = subcategoryId;
+    int? resolvedReasonId = reasonId;
+    String? resolvedReason = reason;
+
+    if (resolvedReasonId != null) {
+      final matched = _reasons.where((r) => r.id == resolvedReasonId).firstOrNull;
+      if (matched != null) {
+        resolvedReason ??= matched.name;
+        resolvedCategoryId ??= matched.isSubcategory ? matched.parentId : (matched.isTopLevelCategory ? matched.id : null);
+        resolvedSubcategoryId ??= matched.isSubcategory ? matched.id : null;
+      }
+    } else if (resolvedReason != null && resolvedReason.isNotEmpty) {
+      final matched = _reasons.where((r) => r.name.toLowerCase().trim() == resolvedReason!.toLowerCase().trim()).firstOrNull;
+      if (matched != null) {
+        resolvedReasonId = matched.id;
+        resolvedCategoryId ??= matched.isSubcategory ? matched.parentId : (matched.isTopLevelCategory ? matched.id : null);
+        resolvedSubcategoryId ??= matched.isSubcategory ? matched.id : null;
+      }
+    }
+
     final idx = _transactions.indexWhere((t) => t.id == id);
     if (idx != -1) {
-      String? resolvedReason = reason;
-      if ((resolvedReason == null || resolvedReason.isEmpty) && reasonId != null) {
-        resolvedReason = _reasons.where((r) => r.id == reasonId).firstOrNull?.name;
-      }
       final updated = _transactions[idx].copyWith(
-        reasonId: reasonId,
-        categoryId: categoryId,
-        subcategoryId: subcategoryId,
+        reasonId: resolvedReasonId,
+        categoryId: resolvedCategoryId,
+        subcategoryId: resolvedSubcategoryId,
         note: note,
         reason: resolvedReason,
-        customReasonText: customReasonText ?? (reasonId == null ? resolvedReason : null),
+        customReasonText: customReasonText ?? (resolvedReasonId == null ? resolvedReason : null),
       );
       _transactions[idx] = updated;
       notifyListeners();
       await _repository.updateTransaction(updated);
+    } else {
+      if (resolvedReason != null) {
+        await _repository.updateTransactionReason(id, resolvedReason, resolvedReasonId);
+      }
     }
   }
 

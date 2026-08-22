@@ -30,15 +30,15 @@ class BankAvatar extends StatelessWidget {
     Color bgColor;
 
     if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
-      img = Image.asset(
-        'assets/images/CBE logo 1.webp',
+      img = SvgPicture.asset(
+        'assets/images/CBE logo.svg',
         width: iconSize,
         height: iconSize,
         fit: BoxFit.contain,
       );
       bgColor = isLight
           ? AppColors.slackPurple.withValues(alpha: 0.12)
-          : const Color(0xFF6B4C9A).withValues(alpha: 0.20);
+          : AppColors.cbePurple.withValues(alpha: 0.20);
     } else if (nameUp == 'TELEBIRR') {
       img = Image.asset(
         'assets/images/Telebirr Logo.png',
@@ -60,7 +60,7 @@ class BankAvatar extends StatelessWidget {
       );
       bgColor = isLight
           ? AppColors.cbeBirrPink.withValues(alpha: 0.10)
-          : const Color(0xFFE91E63).withValues(alpha: 0.20);
+          : AppColors.cbeBirrMagenta.withValues(alpha: 0.20);
     } else if (nameUp.contains('AHADU')) {
       img = SvgPicture.asset(
         'assets/images/Ahadu_Logo.svg',

@@ -152,7 +152,7 @@ class SmsBatchParser {
       final date = msg.date;
 
       if (_isAmharicMessage(body)) continue;
-      if (BankSenders.isSecurityOrAuthMessage(body)) continue;
+      if (BankSenders.isIgnoredMessage(body)) continue;
       if (!_isEnglishBankingMessage(body)) continue;
 
       // Extract user owner name if not yet found

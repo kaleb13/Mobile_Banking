@@ -37,10 +37,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   late TextEditingController _searchController;
   String _searchQuery = '';
   late String _selectedSender;
-  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.thisMonth();
   String _selectedType = 'All';
   bool _isBookmarkedOnly = false;
   String _sortBy = 'Date: Newest';
+  int _displayLimit = 30;
 
   @override
   void initState() {
@@ -226,6 +227,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     HapticFeedback.selectionClick();
                     setState(() {
                       _isBookmarkedOnly = !_isBookmarkedOnly;
+                      _displayLimit = 30;
                     });
                   },
                   behavior: HitTestBehavior.opaque,
@@ -278,7 +280,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 AppDateFilter.dark(
                   value: _dateFilterValue,
                   onChanged: (val) {
-                    setState(() => _dateFilterValue = val);
+                    setState(() {
+                      _dateFilterValue = val;
+                      _displayLimit = 30;
+                    });
                   },
                 ),
                 const SizedBox(width: 8),
@@ -299,10 +304,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       setState(() {
                         _isBookmarkedOnly = false;
                         _selectedType = 'All';
-                        _dateFilterValue = const AppDateFilterValue.anyTime();
+                        _dateFilterValue = const AppDateFilterValue.thisMonth();
                         _selectedSender = 'All';
                         _sortBy = 'Date: Newest';
                         _searchQuery = '';
+                        _displayLimit = 30;
                         _searchController.clear();
                       });
                     },
@@ -327,7 +333,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         'Name: A-Z',
       ],
       onChanged: (val) {
-        if (val != null) setState(() => _sortBy = val);
+        if (val != null) {
+          setState(() {
+            _sortBy = val;
+            _displayLimit = 30;
+          });
+        }
       },
       variant: AppDropdownVariant.dark,
       maxWidth: 130,
@@ -345,7 +356,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       value: _selectedSender,
       items: senderNames,
       onChanged: (name) {
-        if (name != null) setState(() => _selectedSender = name);
+        if (name != null) {
+          setState(() {
+            _selectedSender = name;
+            _displayLimit = 30;
+          });
+        }
       },
       variant: AppDropdownVariant.dark,
       maxWidth: 120,
@@ -363,7 +379,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       value: _selectedType,
       items: const ['All', 'Income', 'Expense'],
       onChanged: (type) {
-        if (type != null) setState(() => _selectedType = type);
+        if (type != null) {
+          setState(() {
+            _selectedType = type;
+            _displayLimit = 30;
+          });
+        }
       },
       variant: AppDropdownVariant.dark,
       maxWidth: 100,
@@ -397,21 +418,47 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       );
     }
 
+    final displayedTransactions = transactions.take(_displayLimit).toList();
+    final bool hasMore = transactions.length > _displayLimit;
+    final int count = displayedTransactions.length + (hasMore ? 1 : 0);
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
-      itemCount: transactions.length,
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        thickness: 0.5,
-        indent: 66,
-        endIndent: 16,
-        color: Colors.white.withValues(alpha: 0.05),
-      ),
+      itemCount: count,
+      separatorBuilder: (context, index) {
+        if (index >= displayedTransactions.length - 1 && hasMore) {
+          return const SizedBox(height: 8);
+        }
+        return Divider(
+          height: 1,
+          thickness: 0.5,
+          indent: 66,
+          endIndent: 16,
+          color: Colors.white.withValues(alpha: 0.05),
+        );
+      },
       itemBuilder: (context, index) {
-        final tx = transactions[index];
+        if (index == displayedTransactions.length && hasMore) {
+          final remaining = transactions.length - _displayLimit;
+          final nextBatch = remaining > 30 ? 30 : remaining;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: AppButton.secondary(
+              text: 'Load More (+$nextBatch of $remaining)',
+              icon: Icons.expand_more_rounded,
+              height: 42,
+              fullWidth: true,
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                setState(() => _displayLimit += 30);
+              },
+            ),
+          );
+        }
+        final tx = displayedTransactions[index];
         return _buildTransactionRowItem(context, tx, settingsVM);
       },
     );
@@ -521,8 +568,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     Color bgColor = AppColors.buttonSecondary;
 
     if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
-      img = Image.asset(
-        'assets/images/CBE logo 1.webp',
+      img = SvgPicture.asset(
+        'assets/images/CBE logo.svg',
         width: 20,
         height: 20,
         fit: BoxFit.contain,

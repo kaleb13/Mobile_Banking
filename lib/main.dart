@@ -118,6 +118,12 @@ void main() async {
             );
             // Wire SMS event callback to also reload notifications
             txVM.onSmsEventReceived = () => notifsVM.loadNotifications();
+            // Wire notification reconciliation callbacks
+            notifsVM.getTransactions = () => txVM.allTransactionsUnfiltered;
+            notifsVM.getReasons = () => txVM.reasons;
+            notifsVM.updateTransactionReason = (txId, reason, reasonId) async {
+              await txVM.updateTransactionReason(txId, reason: reason, reasonId: reasonId);
+            };
             // Wire notification batch insert through the notification repo
             txVM.insertNotificationsBatch = (notifications) async {
               await notificationRepo.insertNotificationsBatch(notifications);
@@ -136,7 +142,11 @@ void main() async {
             vm.getTotalBalance = () => txVM.totalBalance;
             vm.getTotalBorrowedLiability = () => loansVM.totalBorrowedLiability;
             // Recalculate wallet balances, levels, and expense highlights
-            vm.recalculate(pausedBanks: txVM.pausedBanks);
+            vm.recalculate(
+              pausedBanks: txVM.pausedBanks,
+              getTopLevelCategory: txVM.getTopLevelCategoryForTransaction,
+              isDateInMonthOf: (d, ref) => d.year == ref.year && d.month == ref.month,
+            );
             return vm;
           },
         ),
@@ -153,14 +163,32 @@ class MobileBankingApp extends StatefulWidget {
   State<MobileBankingApp> createState() => _MobileBankingAppState();
 }
 
-class _MobileBankingAppState extends State<MobileBankingApp> {
+class _MobileBankingAppState extends State<MobileBankingApp>
+    with WidgetsBindingObserver {
   bool _isLocked = false;
   bool _checkedOnStart = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkInitialLock();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      try {
+        context.read<TransactionsViewModel>().reconcileOnResume();
+        context.read<NotificationsViewModel>().loadNotifications();
+      } catch (_) {}
+    }
   }
 
   Future<void> _checkInitialLock() async {

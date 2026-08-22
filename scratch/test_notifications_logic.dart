@@ -1,7 +1,7 @@
-import '../lib/services/bank_senders.dart';
-import '../lib/services/cbe_birr_parser.dart';
-import '../lib/services/telebirr_parser.dart';
-import '../lib/services/cbe_parser.dart';
+import 'package:mobile_banking_app/services/bank_senders.dart';
+import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
+import 'package:mobile_banking_app/services/telebirr_parser.dart';
+import 'package:mobile_banking_app/services/cbe_parser.dart';
 
 void main() {
   print('=== Testing Notification & Parsing Logic ===\n');
@@ -33,18 +33,22 @@ void main() {
     final isParsable = CbeBirrParser.parse(msg, DateTime.now()) != null ||
         TelebirrParser.parse(msg, DateTime.now()) != null;
     if (!isParsable) throw Exception('Parsable message failed parsing: "$msg"');
-    print('[PASS] Parsable Financial SMS Identified: "${msg.split('\n').first}"');
+    print(
+        '[PASS] Parsable Financial SMS Identified: "${msg.split('\n').first}"');
   }
 
   // Test 3: Unparsable financial message (contains financial keywords, not security, but parser returns null)
-  const unparsableSms = 'Dear Customer, your mystery account was credited with 500 dollars on unknown date.';
+  const unparsableSms =
+      'Dear Customer, your mystery account was credited with 500 dollars on unknown date.';
   final isSec = BankSenders.isSecurityOrAuthMessage(unparsableSms);
-  final isParsable = TelebirrParser.parse(unparsableSms, DateTime.now()) != null ||
-      CbeParser.parse(unparsableSms, DateTime.now()) != null ||
-      CbeBirrParser.parse(unparsableSms, DateTime.now()) != null;
+  final isParsable =
+      TelebirrParser.parse(unparsableSms, DateTime.now()) != null ||
+          CbeParser.parse(unparsableSms, DateTime.now()) != null ||
+          CbeBirrParser.parse(unparsableSms, DateTime.now()) != null;
   assert(!isSec, 'Should not be security message');
   assert(!isParsable, 'Should not be parsable');
-  print('[PASS] Unparsed Financial SMS correctly routed for developer reporting: "$unparsableSms"');
+  print(
+      '[PASS] Unparsed Financial SMS correctly routed for developer reporting: "$unparsableSms"');
 
   print('\nAll notification logic verifications passed successfully! 🎉');
 }

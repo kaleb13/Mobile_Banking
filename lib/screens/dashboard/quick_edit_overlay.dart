@@ -257,7 +257,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
       width: double.infinity,
       constraints: BoxConstraints(maxHeight: threeQuarterHeight),
       decoration: const BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceElevated,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
@@ -268,16 +268,11 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      padding: EdgeInsets.fromLTRB(20, topPadding + 12, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                 // ── Drawer Handle & Title Section ──────────────────────
                 Row(
                   children: [
@@ -453,9 +448,6 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                 ),
               ],
             ),
-          ),
-        ),
-      ),
     );
   }
 

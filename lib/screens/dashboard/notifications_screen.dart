@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
@@ -72,30 +71,27 @@ void showNotificationsOverlay(BuildContext context) {
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.65),
-    builder: (ctx) => BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-      child: Container(
-        height: MediaQuery.of(ctx).size.height * 0.92,
-        margin: EdgeInsets.only(
-          top: MediaQuery.of(ctx).padding.top + 8,
-          left: 12,
-          right: 12,
-          bottom: 12,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(AppRadius.sheet),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: NotificationsModalWidget(
-          onClose: () => Navigator.of(ctx, rootNavigator: true).pop(),
-        ),
+    builder: (ctx) => Container(
+      height: MediaQuery.of(ctx).size.height * 0.92,
+      margin: EdgeInsets.only(
+        top: MediaQuery.of(ctx).padding.top + 8,
+        left: 12,
+        right: 12,
+        bottom: 12,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadius.sheet),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: NotificationsModalWidget(
+        onClose: () => Navigator.of(ctx, rootNavigator: true).pop(),
       ),
     ),
   );

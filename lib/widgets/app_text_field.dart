@@ -228,7 +228,7 @@ class _AppTextFieldState extends State<AppTextField> {
       case AppTextFieldVariant.light:
         defaultBg = Colors.black.withValues(alpha: 0.05);
         defaultTextColor = AppColors.buttonPrimaryText; // Dark Slate #0F172A
-        defaultHintColor = const Color(0xFF64748B); // Slate Gray
+        defaultHintColor = AppColors.textSecondaryLight; // Slate Gray #64748B
         defaultPrefixColor = AppColors.buttonPrimaryText;
         break;
       case AppTextFieldVariant.modal:

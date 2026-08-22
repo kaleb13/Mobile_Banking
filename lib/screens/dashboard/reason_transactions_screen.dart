@@ -11,6 +11,7 @@ import '../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
@@ -47,9 +48,10 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
   bool _isBookmarkedOnly = false;
   String _typeFilter = 'All'; // 'All', 'Withdrawals', 'Deposits', 'Bookmarked'
   String _sortBy = 'Date: Newest';
-  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.thisMonth();
   String _bankFilter = 'All Banks';
   String _senderFilter = 'All Senders';
+  int _displayLimit = 30;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -525,22 +527,26 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                       onExpandChanged: (expanded) {
                         setState(() {
                           _isSearchActive = expanded;
+                          _displayLimit = 30;
                         });
                       },
                       onChanged: (val) {
                         setState(() {
                           _searchQuery = val;
+                          _displayLimit = 30;
                         });
                       },
                       onClear: () {
                         setState(() {
                           _searchQuery = '';
+                          _displayLimit = 30;
                         });
                       },
                       onClose: () {
                         setState(() {
                           _isSearchActive = false;
                           _searchQuery = '';
+                          _displayLimit = 30;
                         });
                       },
                       backgroundColor: AppColors.surface,
@@ -564,6 +570,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                               onTap: () {
                                 setState(() {
                                   _isBookmarkedOnly = !_isBookmarkedOnly;
+                                  _displayLimit = 30;
                                 });
                               },
                               behavior: HitTestBehavior.opaque,
@@ -623,6 +630,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                 if (val != null) {
                                   setState(() {
                                     _typeFilter = val;
+                                    _displayLimit = 30;
                                   });
                                 }
                               },
@@ -645,6 +653,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                 if (val != null) {
                                   setState(() {
                                     _sortBy = val;
+                                    _displayLimit = 30;
                                   });
                                 }
                               },
@@ -657,6 +666,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                               onChanged: (val) {
                                 setState(() {
                                   _dateFilterValue = val;
+                                  _displayLimit = 30;
                                 });
                               },
                             ),
@@ -672,6 +682,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                 if (val != null) {
                                   setState(() {
                                     _bankFilter = val;
+                                    _displayLimit = 30;
                                   });
                                 }
                               },
@@ -688,6 +699,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                 if (val != null) {
                                   setState(() {
                                     _senderFilter = val;
+                                    _displayLimit = 30;
                                   });
                                 }
                               },
@@ -731,10 +743,27 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                           ),
                         ),
                       )
-                    else
-                      ...combinedItems.map((item) {
+                    else ...[
+                      ...combinedItems.take(_displayLimit).map((item) {
                         return _buildTransactionItem(item, fmt, isBalanceVisible);
                       }),
+                      if (combinedItems.length > _displayLimit)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Center(
+                            child: AppButton.secondary(
+                              text: 'Load More (+${(combinedItems.length - _displayLimit) > 30 ? 30 : (combinedItems.length - _displayLimit)} of ${combinedItems.length - _displayLimit})',
+                              icon: Icons.expand_more_rounded,
+                              height: 42,
+                              fullWidth: true,
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                setState(() => _displayLimit += 30);
+                              },
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),

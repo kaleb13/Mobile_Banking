@@ -113,15 +113,18 @@ class BankSenders {
 
     // ── Reset / change / credential delivery requests ─────────────────────────
     if (lower.contains('pin reset')) return true;
+    if (lower.contains('pin is reset')) return true;
     if (lower.contains('password reset')) return true;
     if (lower.contains('reset your pin')) return true;
     if (lower.contains('reset your password')) return true;
     if (lower.contains('change your pin')) return true;
     if (lower.contains('change your password')) return true;
     if (lower.contains('pin changed') || lower.contains('password changed')) return true;
+    if (lower.contains('pin code has been successfully changed')) return true;
+    if (lower.contains('changed your telebirr pin')) return true;
     if (lower.contains('temporary pin') || lower.contains('temporary password')) return true;
     if (lower.contains('initial pin') || lower.contains('initial password')) return true;
-    if (lower.contains('your pin is') || lower.contains('your password is')) return true;
+    if (lower.contains('your pin is') || lower.contains('your password is') || lower.contains('new pin is')) return true;
 
     // ── Security warnings with PIN / code context ────────────────────────────
     if ((lower.contains('do not share') ||
@@ -158,6 +161,126 @@ class BankSenders {
         lower.contains('የማረጋገጫ ኮድ') ||
         lower.contains('የማረጋገጫ ቁጥር') ||
         (lower.contains('ኮድ') && (lower.contains('አይስጡ') || lower.contains('አያጋሩ')))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Returns true if [body] is a non-transactional or informational message
+  /// that should be completely auto-ignored and never saved as an unread notification:
+  /// - PIN / OTP / Security messages
+  /// - Loan / Credit / Sanduq contract notices & loan repayments
+  /// - Inbound airtime gifts (SIM top-ups from other people)
+  /// - Promotional points, lottery tickets, lucky draws, and marketing
+  /// - ATM cash-out vouchers and OTP requests
+  /// - Payment request prompts (pending / review prompts)
+  /// - Cancellation and system error alerts
+  /// - Account activation, status, and welcome notices
+  static bool isIgnoredMessage(String? body) {
+    if (body == null || body.trim().isEmpty) return false;
+    final lower = body.toLowerCase();
+
+    // 1. Security / OTP / PIN
+    if (isSecurityOrAuthMessage(body)) return true;
+
+    // 2. Loans / Credit / Sanduq contract notices, reminders & repayments
+    if (lower.contains('outstanding credit') ||
+        lower.contains('credit request with') ||
+        lower.contains('credit limit') ||
+        lower.contains('credit service') ||
+        lower.contains('endekise service') ||
+        lower.contains('ethiotel credit') ||
+        lower.contains('telebirr mela') ||
+        lower.contains('rmelaservice') ||
+        lower.contains('loan balance') ||
+        lower.contains('loan repayment') ||
+        lower.contains('unpaid credit amount') ||
+        lower.contains('repaid') ||
+        lower.contains('penalty fee') ||
+        lower.contains('facilitation fee')) {
+      return true;
+    }
+
+    // 3. Inbound Airtime Gifts (SIM balance top-ups from other users)
+    if (RegExp(r'(?:received|you received)\s+(?:etb\s+)?[0-9.,]+\s*(?:br\.?\s*)?airtime\s+from',
+            caseSensitive: false)
+        .hasMatch(lower) ||
+        (lower.contains('received') && lower.contains('airtime from'))) {
+      return true;
+    }
+
+    // 4. Marketing, Lottery, Points, Draws, KYC, Gift Letters
+    if (lower.contains('lottery ticket') ||
+        lower.contains('lottery id') ||
+        lower.contains('received 1 point') ||
+        lower.contains('received point') ||
+        lower.contains('lucky draw') ||
+        lower.contains('spins on superapp') ||
+        lower.contains('kyc upgrade') ||
+        lower.contains('won 1 gb') ||
+        lower.contains('thank you lucky draw') ||
+        lower.contains('chance to draw') ||
+        lower.contains('chance(s) to draw') ||
+        lower.contains('gift letter') ||
+        lower.contains('yegena chewata') ||
+        lower.contains('adey flowers') ||
+        lower.contains('enkutatesh gift') ||
+        lower.contains('enkutatash gift')) {
+      return true;
+    }
+
+    // 5. ATM Cash-Out & Deposit Voucher codes / temporary invitations
+    if (lower.contains('atm cash out') ||
+        lower.contains('cash out voucher') ||
+        lower.contains('voucher number is') ||
+        lower.contains('deposit voucher code') ||
+        lower.contains('voucher code is') ||
+        lower.contains('secret word is') ||
+        lower.contains('invitation code is') ||
+        lower.contains('you have invited')) {
+      return true;
+    }
+
+    // 6. Payment Requests (Pending / Prompt to review)
+    if (lower.contains('payment request of') ||
+        lower.contains('is requesting money on') ||
+        lower.contains('please review and approve or reject')) {
+      return true;
+    }
+
+    // 7. System Failures, Errors, Insufficient balance, Cancellations, Reversals
+    if (lower.contains('is cancelled') ||
+        lower.contains('has not been successful') ||
+        lower.contains('was unsuccessful') ||
+        lower.contains('fails to be sent') ||
+        lower.contains('reversed to your account') ||
+        lower.contains('processing failure response') ||
+        lower.contains('insufficient balance for the requested transaction') ||
+        lower.contains('is insufficient for the transaction') ||
+        lower.contains('balance is insufficient to comp') ||
+        lower.contains('wrong amount') ||
+        lower.contains('account you try to transfer is not active') ||
+        lower.contains('account you try to pay is not active')) {
+      return true;
+    }
+
+    // 8. Account Activations & Welcome Notices
+    if (lower.contains('saving service') ||
+        lower.contains('customer status has been change') ||
+        lower.contains('registered for mobile banking') ||
+        lower.contains('register yourself for') ||
+        lower.contains('account has been successfully activated') ||
+        lower.contains('has been activated successfully') ||
+        lower.contains('account is activated successfully') ||
+        lower.contains('welcome! we are delighted') ||
+        lower.contains('new login to your mobile')) {
+      return true;
+    }
+
+    // 9. Informational balance breakdowns without transaction
+    if (lower.contains('customer incentive account balance is') ||
+        lower.contains('pocketmoneyaccount balance is')) {
       return true;
     }
 

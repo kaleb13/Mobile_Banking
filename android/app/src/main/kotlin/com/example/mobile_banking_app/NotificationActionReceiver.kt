@@ -117,11 +117,25 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 SQLiteDatabase.OPEN_READWRITE
             )
 
-            // 1. Look up reasonId from reasons table
+            // 1. Look up reasonId, categoryId, subcategoryId from reasons table
             var reasonId: Int? = null
-            val cursorReason = db.rawQuery("SELECT id FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1", arrayOf(reasonName))
+            var categoryId: Int? = null
+            var subcategoryId: Int? = null
+
+            val cursorReason = db.rawQuery(
+                "SELECT id, name, parentId FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1",
+                arrayOf(reasonName)
+            )
             if (cursorReason.moveToFirst()) {
                 reasonId = cursorReason.getInt(0)
+                val parentId = if (cursorReason.isNull(2)) null else cursorReason.getInt(2)
+                if (parentId != null) {
+                    categoryId = parentId
+                    subcategoryId = reasonId
+                } else {
+                    categoryId = reasonId
+                    subcategoryId = null
+                }
             }
             cursorReason.close()
 
@@ -145,6 +159,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 } else {
                     putNull("reasonId")
                 }
+                if (categoryId != null) {
+                    put("categoryId", categoryId)
+                }
+                if (subcategoryId != null) {
+                    put("subcategoryId", subcategoryId)
+                }
             }
 
             // 3a. Primary: match by rawMessage (normalized whitespace to bridge \r\n vs \n differences)
@@ -164,26 +184,23 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 cursorTx.close()
             }
 
-            // 3b. Fallback: try direct id match (works for custom senders using SHA-256 IDs)
+            // 3b. Fallback: try direct id or bankReference match
             if (!realTxFound) {
                 val cursorById = db.rawQuery(
-                    "SELECT id FROM transactions WHERE id = ? LIMIT 1",
-                    arrayOf(txId)
+                    "SELECT id FROM transactions WHERE id = ? OR bankReference = ? LIMIT 1",
+                    arrayOf(txId, txId)
                 )
                 if (cursorById.moveToFirst()) {
+                    val targetId = cursorById.getString(0)
                     cursorById.close()
-                    db.update("transactions", values, "id = ?", arrayOf(txId))
+                    db.update("transactions", values, "id = ?", arrayOf(targetId))
                     realTxFound = true
                 } else {
                     cursorById.close()
                 }
             }
 
-            // 4. ALWAYS store reason in notifications row so Dart's
-            //    _loadNotifications() can reliably transfer it even if the
-            //    transaction match above succeeded (belt-and-suspenders).
-            //    Guard: check the reason column exists before updating (old DBs
-            //    that haven't run migration v22 may not have it).
+            // 4. ALWAYS store reason in notifications row (by ID and normalized body)
             try {
                 val colCheck = db.rawQuery(
                     "SELECT COUNT(*) FROM pragma_table_info('notifications') WHERE name='reason'",
@@ -193,10 +210,28 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 colCheck.close()
 
                 if (hasReasonCol) {
-                    db.execSQL(
-                        "UPDATE notifications SET reason = ? WHERE id = ?",
-                        arrayOf(reasonName, txId)
-                    )
+                    if (txId.isNotBlank()) {
+                        db.execSQL(
+                            "UPDATE notifications SET reason = ? WHERE id = ?",
+                            arrayOf(reasonName, txId)
+                        )
+                    }
+                    if (!notifBody.isNullOrBlank()) {
+                        val normalizedNotifBody = notifBody.replace(Regex("\\s+"), " ").trim()
+                        val cursorNotifs = db.rawQuery("SELECT id, body FROM notifications", null)
+                        while (cursorNotifs.moveToNext()) {
+                            val nId = cursorNotifs.getString(0)
+                            val nBody = cursorNotifs.getString(1) ?: ""
+                            if (nBody.replace(Regex("\\s+"), " ").trim() == normalizedNotifBody) {
+                                db.execSQL(
+                                    "UPDATE notifications SET reason = ? WHERE id = ?",
+                                    arrayOf(reasonName, nId)
+                                )
+                                break
+                            }
+                        }
+                        cursorNotifs.close()
+                    }
                 } else {
                     Log.w(TAG, "notifications.reason column missing — skipping reason update for notif $txId")
                 }

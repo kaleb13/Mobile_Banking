@@ -15,6 +15,7 @@ import '../../models/scan_window_option.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/carousel_page_indicator.dart';
 import '../../widgets/interactive_3d_badge.dart';
@@ -54,11 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _bgInitStarted = false;
   ScanWindowOption _selectedScanOption = ScanWindowOption.sevenDays;
 
-  // Pulse animation for scanner
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnim;
-
-  // Scan progress simulator animation
+  // Scan progress animation
   late AnimationController _scanProgressController;
   late Animation<double> _scanProgressAnim;
 
@@ -71,13 +68,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.92, end: 1.08).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
 
     _scanProgressController = AnimationController(
       vsync: this,
@@ -100,7 +90,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void dispose() {
     _pageController.dispose();
     _termsScrollController.dispose();
-    _pulseController.dispose();
     _scanProgressController.dispose();
     _balanceCountController.dispose();
     super.dispose();
@@ -130,16 +119,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _scanProgressController.forward();
     final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
-    final analyticsVM = Provider.of<AnalyticsViewModel>(context, listen: false);
 
     settingsVM.setScanWindowOption(_selectedScanOption);
     txVM.scanSms(
       scanWindowOption: _selectedScanOption,
       onProgress: (status) {
         settingsVM.updateScanProgress(status);
-        if (status.isComplete && mounted) {
-          _triggerBalanceCountUp(analyticsVM.totalBalance);
-        }
       },
     );
   }
@@ -293,7 +278,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     child: SvgPicture.asset(
                       'assets/images/Shibre_Outline.svg',
                       width: 400,
-                      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                      colorFilter: ColorFilter.mode(
+                        context.themeTextPrimary,
+                        BlendMode.srcIn,
+                      ),
                     ),
                   ),
                 ),
@@ -324,7 +312,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildWelcomePageBody() {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 0, 28, 124),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 124),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -334,10 +322,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               size: AppBadgeSize.small,
             ),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               'Manage your finances\nwith clarity.',
-              style: TextStyle(
-                color: Colors.white,
+              style: AppTypography.heading1.copyWith(
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
                 height: 1.2,
@@ -347,9 +334,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             const SizedBox(height: 12),
             Text(
               'Automatically analyze bank SMS, track spending, and discover your financial level in real time.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.65),
-                fontSize: 13,
+              style: AppTypography.bodyMedium.copyWith(
+                color: context.themeTextSecondary,
                 height: 1.5,
               ),
             ),
@@ -360,7 +346,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 1: CLEAN SUPPORTED BANKS LIST ---
+  // --- PAGE 1: CLEAN SUPPORTED BANKS LIST (EDGE-TO-EDGE CARDS) ---
   Widget _buildSupportedBanksPageBody() {
     final supportedBanks = [
       {'name': 'Telebirr', 'type': 'Ethio Telecom Mobile Money'},
@@ -375,68 +361,77 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return SafeArea(
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header with back arrow and title
-            Row(
-              children: [
-                AppBackButton(onPressed: _previousPage),
-                const SizedBox(width: 12),
-                const Text(
-                  'Supported Banks',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+            // Header with back arrow and title (16px screen padding)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppBackButton(onPressed: _previousPage),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Supported Banks',
+                        style: AppTypography.heading1.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Shibre automatically syncs SMS from these supported Ethiopian institutions:',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.55),
-                fontSize: 13.5,
-                height: 1.4,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Shibre automatically syncs SMS from these supported Ethiopian institutions:',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.themeTextSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Compact, clean bank tiles container hugging content
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppRadius.cardRadius,
-              ),
+            // Bank tiles container stretching 100% full-width edge-to-edge
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              customColor: AppColors.surface,
+              borderRadius: AppRadius.card,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (int i = 0; i < supportedBanks.length; i++) ...[
                     if (i > 0)
-                      Divider(
+                      Container(
                         height: 1,
-                        thickness: 0.5,
-                        color: Colors.white.withValues(alpha: 0.06),
+                        color: AppColors.surfaceElevated.withValues(alpha: 0.5),
                       ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                       child: Row(
                         children: [
                           Container(
-                            width: 38,
-                            height: 38,
-                            padding: const EdgeInsets.all(5),
+                            width: 40,
+                            height: 40,
+                            padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceElevated,
-                              borderRadius: BorderRadius.circular(10),
+                              gradient: LinearGradient(
+                                colors: BankCardWidget.getCardGradient(
+                                  supportedBanks[i]['name']!,
+                                ),
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(11),
                             ),
                             child: Center(
-                              child: BankCardWidget.bankLogo(supportedBanks[i]['name']!, 26, Colors.white),
+                              child: BankCardWidget.bankLogo(
+                                supportedBanks[i]['name']!,
+                                24,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -446,18 +441,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               children: [
                                 Text(
                                   supportedBanks[i]['name']!,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
+                                  style: AppTypography.bodyMedium.copyWith(
+                                    color: context.themeTextPrimary,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   supportedBanks[i]['type']!,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.45),
-                                    fontSize: 11.5,
+                                  style: AppTypography.caption.copyWith(
+                                    color: context.themeTextSecondary,
                                   ),
                                 ),
                               ],
@@ -476,13 +469,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ),
             const SizedBox(height: 12),
 
-            // Compact security footnote
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(14),
-              ),
+            // Security footnote container stretching 100% full-width edge-to-edge
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              customColor: AppColors.surfaceElevated,
+              borderRadius: AppRadius.cardSm,
               child: Row(
                 children: [
                   const Icon(
@@ -494,10 +485,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   Expanded(
                     child: Text(
                       'Personal messages, private texts, and OTP codes are strictly ignored.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.60),
-                        fontSize: 11.5,
-                        height: 1.3,
+                      style: AppTypography.caption.copyWith(
+                        color: context.themeTextSecondary,
+                        height: 1.35,
                       ),
                     ),
                   ),
@@ -510,42 +500,45 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 2: HISTORICAL SCAN RANGE SELECTION PAGE (NEW) ---
+  // --- PAGE 2: HISTORICAL SCAN RANGE SELECTION (EDGE-TO-EDGE CARDS) ---
   Widget _buildScanWindowPageBody() {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header with back arrow and title
-            Row(
-              children: [
-                AppBackButton(onPressed: _previousPage),
-                const SizedBox(width: 12),
-                const Text(
-                  'Transaction History',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+            // Header with back arrow and title (16px screen padding)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppBackButton(onPressed: _previousPage),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Transaction History',
+                        style: AppTypography.heading1.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Select how much past transaction history you want to import from your banking SMS:',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.55),
-                fontSize: 13.5,
-                height: 1.4,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Select how much past transaction history you want to import from your banking SMS:',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.themeTextSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Scan Options List (Compact, sleek cards)
+            // Scan Options List (Cards stretching cleanly edge-to-edge)
             Expanded(
               child: ListView.separated(
                 physics: const BouncingScrollPhysics(),
@@ -583,12 +576,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     behavior: HitTestBehavior.opaque,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.brandGreen.withValues(alpha: 0.12)
                             : AppColors.surface,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(AppRadius.card),
                       ),
                       child: Row(
                         children: [
@@ -602,7 +595,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             ),
                             child: Icon(
                               _getScanOptionIcon(option),
-                              color: isSelected ? AppColors.brandGreen : Colors.white70,
+                              color: isSelected ? AppColors.brandGreen : AppColors.textSecondary,
                               size: 18,
                             ),
                           ),
@@ -616,11 +609,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                     Expanded(
                                       child: Text(
                                         option.title,
-                                        style: TextStyle(
+                                        style: AppTypography.bodyMedium.copyWith(
                                           color: isSelected
-                                              ? Colors.white
-                                              : Colors.white.withValues(alpha: 0.90),
-                                          fontSize: 13.5,
+                                              ? AppColors.brandGreen
+                                              : context.themeTextPrimary,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -634,12 +626,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                 const SizedBox(height: 2),
                                 Text(
                                   option.subtitle,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white.withValues(alpha: 0.70)
-                                        : Colors.white.withValues(alpha: 0.45),
-                                    fontSize: 11.5,
-                                    height: 1.25,
+                                  style: AppTypography.caption.copyWith(
+                                    color: context.themeTextSecondary,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -656,7 +644,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                               color: isSelected ? AppColors.brandGreen : Colors.transparent,
                             ),
                             child: isSelected
-                                ? const Icon(Icons.check, color: Colors.white, size: 13)
+                                ? Icon(Icons.check, color: AppColors.buttonPrimaryText, size: 13)
                                 : Container(
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
@@ -674,26 +662,23 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             const SizedBox(height: 8),
 
             // Performance advice card
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(14),
-              ),
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              customColor: AppColors.surfaceElevated,
+              borderRadius: AppRadius.cardSm,
               child: Row(
                 children: [
                   const Icon(
                     Icons.speed_rounded,
                     color: AppColors.brandGreen,
-                    size: 15,
+                    size: 16,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       '7 Days or Today is recommended for instant setup and maximum smoothness across all phones.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.65),
-                        fontSize: 11,
+                      style: AppTypography.caption.copyWith(
+                        color: context.themeTextSecondary,
                         height: 1.3,
                       ),
                     ),
@@ -722,53 +707,56 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
-  // --- PAGE 3: TERMS & PRIVACY PAGE ---
+  // --- PAGE 3: TERMS & PRIVACY (EDGE-TO-EDGE CARDS) ---
   Widget _buildTermsPageBody() {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header with back arrow and title
-            Row(
-              children: [
-                AppBackButton(onPressed: _previousPage),
-                const SizedBox(width: 12),
-                const Text(
-                  'Terms & Privacy',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
+            // Header with back arrow and title (16px screen padding)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppBackButton(onPressed: _previousPage),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Terms & Privacy',
+                        style: AppTypography.heading1.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Please read and accept the terms below to grant access for ${_selectedScanOption.title.toLowerCase()}.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.50),
-                fontSize: 13.5,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please read and accept the terms below to grant access for ${_selectedScanOption.title.toLowerCase()}.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.themeTextSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // Scrollable Bounded Terms Card using surface color
+            // Scrollable Bounded Terms Card
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: AppRadius.cardRadius,
-                ),
+              child: AppCard(
+                padding: EdgeInsets.zero,
+                customColor: AppColors.surface,
+                borderRadius: AppRadius.card,
                 child: ClipRRect(
-                  borderRadius: AppRadius.cardRadius,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   child: SingleChildScrollView(
                     controller: _termsScrollController,
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -808,14 +796,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   _isTermsAccepted = !_isTermsAccepted;
                 });
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: _isTermsAccepted
-                      ? AppColors.brandGreen.withValues(alpha: 0.12)
-                      : AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                ),
+              child: AppCard(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                customColor: _isTermsAccepted
+                    ? AppColors.brandGreen.withValues(alpha: 0.12)
+                    : AppColors.surface,
+                borderRadius: AppRadius.cardSm,
                 child: Row(
                   children: [
                     SizedBox(
@@ -824,7 +810,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       child: Checkbox(
                         value: _isTermsAccepted,
                         activeColor: AppColors.brandGreen,
-                        checkColor: Colors.white,
+                        checkColor: AppColors.buttonPrimaryText,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -837,12 +823,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'I agree and accept the terms & conditions',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: context.themeTextPrimary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -859,35 +844,35 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Widget _buildTermsSection(String title, String content) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
+            style: AppTypography.heading2.copyWith(
+              color: context.themeTextPrimary,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             content,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
-              fontSize: 13,
+            style: AppTypography.bodySmall.copyWith(
+              color: context.themeTextSecondary,
               height: 1.55,
             ),
           ),
           const SizedBox(height: 10),
-          Divider(color: Colors.white.withValues(alpha: 0.07)),
+          Container(
+            height: 1,
+            color: AppColors.surfaceElevated.withValues(alpha: 0.5),
+          ),
         ],
       ),
     );
   }
 
-  // --- PAGE 4: LEVEL CALCULATION & DISCOVERY ANIMATION ---
+  // --- PAGE 4: LEVEL REVEAL & DISCOVERY SCREEN ---
   Widget _buildLevelRevealPageBody() {
     return Consumer4<SettingsViewModel, TransactionsViewModel, AnalyticsViewModel, CashWalletViewModel>(
       builder: (context, settingsVM, txVM, analyticsVM, cashVM, _) {
@@ -913,7 +898,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         return SafeArea(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(28, 16, 28, 130),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 130),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -931,8 +916,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       const SizedBox(height: 24),
                       Text(
                         levelName,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: AppTypography.heading1.copyWith(
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
@@ -941,9 +925,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       const SizedBox(height: 4),
                       Text(
                         'Level $level',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.50),
-                          fontSize: 15,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: context.themeTextSecondary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -953,11 +936,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 const SizedBox(height: 32),
                 Text(
                   'Total Amount',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.3,
+                  style: AppTypography.caption.copyWith(
+                    color: context.themeTextSecondary,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -971,29 +953,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 const SizedBox(height: 8),
                 Text(
                   levelDesc,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50),
-                    fontSize: 13,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: context.themeTextSecondary,
                     height: 1.60,
                   ),
                 ),
                 const SizedBox(height: 24),
                 if (balancesMap.isNotEmpty || cashBalance > 0) ...[
-                  Container(
-                    width: double.infinity,
+                  AppCard(
                     padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: AppRadius.cardRadius,
-                    ),
+                    customColor: AppColors.surface,
+                    borderRadius: AppRadius.card,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'How we calculated this',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
-                            fontSize: 12,
+                          style: AppTypography.caption.copyWith(
+                            color: context.themeTextSecondary,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.8,
                           ),
@@ -1001,8 +978,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         const SizedBox(height: 10),
                         ...balancesMap.entries.map((e) => _buildBankRow(e.key, e.value, glowColor)),
                         if (cashBalance > 0) _buildBankRow('Cash Wallet', cashBalance, glowColor),
-                        const SizedBox(height: 4),
-                        Divider(color: Colors.white.withValues(alpha: 0.08)),
+                        const SizedBox(height: 6),
+                        Container(
+                          height: 1,
+                          color: AppColors.surfaceElevated.withValues(alpha: 0.5),
+                        ),
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Row(
@@ -1010,9 +990,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             children: [
                               Text(
                                 'Total',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.70),
-                                  fontSize: 13,
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: context.themeTextPrimary,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -1022,9 +1001,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                   final currentVal = _targetBalance * _balanceCountAnim.value;
                                   return Text(
                                     '${_formatAmount(currentVal)} ETB',
-                                    style: TextStyle(
+                                    style: AppTypography.bodyMedium.copyWith(
                                       color: glowColor,
-                                      fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   );
@@ -1045,152 +1023,161 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  // --- CLEAN, DIRECT CALCULATING / SCANNING VIEW WITH PROGRESS BAR & FOUND BANKS ---
   Widget _buildMinimalistCalculatingView(ScanProgressStatus scanProgress) {
     final double pct = scanProgress.progress > 0
         ? scanProgress.progress.clamp(0.05, 1.0)
         : _scanProgressAnim.value.clamp(0.05, 1.0);
     final String stageText = scanProgress.stage.isNotEmpty
         ? scanProgress.stage
-        : 'Analyzing verified banking records…';
+        : 'Scanning verified banking messages…';
     final banks = scanProgress.scannedBanks;
 
-    return Center(
+    return SafeArea(
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+        padding: const EdgeInsets.fromLTRB(16, 28, 16, 120),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Minimalistic Indicator Icon
-            ScaleTransition(
-              scale: _pulseAnim,
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.brandGreen.withValues(alpha: 0.12),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.auto_graph_rounded,
-                  color: AppColors.brandGreen,
-                  size: 26,
-                ),
+            Text(
+              'Analyzing Bank SMS',
+              style: AppTypography.heading1.copyWith(
+                color: context.themeTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              stageText,
+              style: AppTypography.bodySmall.copyWith(
+                color: context.themeTextSecondary,
               ),
             ),
             const SizedBox(height: 24),
 
-            // Title
-            const Text(
-              'Calculating Your Financial Tier',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Percentage at Top of Progress Bar
-            Text(
-              '${(pct * 100).toInt()}%',
-              style: const TextStyle(
-                color: AppColors.brandGreen,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Standard Design System Progress Bar (CustomProgressBar)
-            SizedBox(
-              width: 250,
-              child: CustomProgressBar(
-                progress: pct,
-                height: 8,
-                progressColor: AppColors.brandGreen,
-                backgroundColor: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(100),
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Active Reading Status
-            Text(
-              stageText,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.60),
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-
-            // Dynamic Discovered Banks Listing
-            if (banks.isNotEmpty) ...[
-              const SizedBox(height: 28),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'DISCOVERED ACCOUNTS (${banks.length})',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
+            // Progress Header Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Scan Progress',
+                  style: AppTypography.caption.copyWith(
+                    color: context.themeTextSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                Text(
+                  '${(pct * 100).toInt()}%',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.brandGreen,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Standard Design System Linear Progress Bar
+            CustomProgressBar(
+              progress: pct,
+              height: 8,
+              progressColor: AppColors.brandGreen,
+              backgroundColor: AppColors.tabBackground,
+            ),
+            const SizedBox(height: 32),
+
+            // Dynamic Discovered Banks List
+            if (banks.isNotEmpty) ...[
+              Text(
+                'DISCOVERED ACCOUNTS (${banks.length})',
+                style: AppTypography.caption.copyWith(
+                  color: context.themeTextSecondary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                ),
               ),
-              const SizedBox(height: 10),
-              ...banks.map((b) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          padding: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Center(
-                            child: BankCardWidget.bankLogo(b.bankName, 18, Colors.white),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            b.bankName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
+              const SizedBox(height: 12),
+              ...banks.map((b) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: AppCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      customColor: AppColors.surface,
+                      borderRadius: AppRadius.cardSm,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: BankCardWidget.bankLogo(
+                                b.bankName,
+                                22,
+                                context.themeTextPrimary,
+                              ),
                             ),
                           ),
-                        ),
-                        AppBadge.success(
-                          text: '${b.transactionCount} msgs',
-                          size: AppBadgeSize.micro,
-                        ),
-                      ],
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  b.bankName,
+                                  style: AppTypography.bodyMedium.copyWith(
+                                    color: context.themeTextPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (b.latestBalance != null && b.latestBalance! > 0) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Balance: ${_formatAmount(b.latestBalance!)} ETB',
+                                    style: AppTypography.caption.copyWith(
+                                      color: context.themeTextSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          AppBadge.success(
+                            text: '${b.transactionCount} SMS scanned',
+                            size: AppBadgeSize.micro,
+                          ),
+                        ],
+                      ),
                     ),
                   )),
+            ] else ...[
+              AppCard(
+                padding: const EdgeInsets.all(20),
+                customColor: AppColors.surface,
+                borderRadius: AppRadius.card,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.sms_rounded,
+                      color: AppColors.brandGreen,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        'Connecting to inbox and scanning for banking records…',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: context.themeTextSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ],
         ),
@@ -1208,7 +1195,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         return SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1258,15 +1245,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.telebirrGreen),
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.brandGreen),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          'Analyzing transactions…',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.70),
-                            fontSize: 13.5,
+                          'Importing banking records…',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: context.themeTextSecondary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1339,8 +1325,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         children: [
           TextSpan(
             text: whole,
-            style: const TextStyle(
-              color: Colors.white,
+            style: AppTypography.heading1.copyWith(
+              color: context.themeTextPrimary,
               fontSize: 42,
               fontWeight: FontWeight.w900,
               letterSpacing: -1.5,
@@ -1348,8 +1334,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           ),
           TextSpan(
             text: '.$decimal',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.60),
+            style: AppTypography.heading2.copyWith(
+              color: context.themeTextSecondary,
               fontSize: 28,
               fontWeight: FontWeight.w600,
             ),
@@ -1373,25 +1359,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
-              child: BankCardWidget.bankLogo(bankName, 20, Colors.white),
+              child: BankCardWidget.bankLogo(
+                bankName,
+                20,
+                context.themeTextPrimary,
+              ),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               bankName,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.70),
-                fontSize: 14,
+              style: AppTypography.bodyMedium.copyWith(
+                color: context.themeTextSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
           Text(
             '${_formatAmount(balance)} ETB',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.80),
-              fontSize: 14,
+            style: AppTypography.bodyMedium.copyWith(
+              color: context.themeTextPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),

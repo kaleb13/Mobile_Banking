@@ -53,6 +53,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   PeriodFilter _selectedPeriod = PeriodFilter.month;
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
   int _selectedSubPeriodIndex = 0;
+  int _selectedYear = DateTime.now().year;
   late PageController _subPeriodScrollController;
 
   DateTime? _selectedHeatmapDay;
@@ -83,10 +84,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         return DateTime(currentMonday.year, currentMonday.month, currentMonday.day)
             .subtract(Duration(days: 7 * weeksOffset));
       case PeriodFilter.month:
-        return DateTime(now.year, _selectedSubPeriodIndex + 1, 1);
+        return DateTime(_selectedYear, _selectedSubPeriodIndex + 1, 1);
       case PeriodFilter.quarter:
         final startMonth = (_selectedSubPeriodIndex * 3) + 1;
-        return DateTime(now.year, startMonth, 1);
+        return DateTime(_selectedYear, startMonth, 1);
       case PeriodFilter.year:
         final targetYear = now.year - (2 - _selectedSubPeriodIndex);
         return DateTime(targetYear, 1, 1);
@@ -109,6 +110,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   void initState() {
     super.initState();
     _selectedBank = _normalizeBankName(widget.initialBankFilter ?? 'All Wallets');
+    _selectedYear = DateTime.now().year;
     _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(_selectedPeriod);
     _subPeriodScrollController = PageController(
       initialPage: _selectedSubPeriodIndex,
@@ -262,15 +264,18 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           'Nov',
           'Dec',
         ];
-        return List.generate(now.month, (i) {
-          return (label: allMonths[i], shortLabel: shortMonths[i]);
+        final maxMonth = (_selectedYear == now.year) ? now.month : 12;
+        final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
+        return List.generate(maxMonth, (i) {
+          return (label: '${allMonths[i]}$yearSuffix', shortLabel: '${shortMonths[i]}$yearSuffix');
         });
       case PeriodFilter.quarter:
+        final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
         return [
-          (label: 'Q1 (Jan - Mar)', shortLabel: 'Q1'),
-          (label: 'Q2 (Apr - Jun)', shortLabel: 'Q2'),
-          (label: 'Q3 (Jul - Sep)', shortLabel: 'Q3'),
-          (label: 'Q4 (Oct - Dec)', shortLabel: 'Q4'),
+          (label: 'Q1 (Jan - Mar)$yearSuffix', shortLabel: 'Q1$yearSuffix'),
+          (label: 'Q2 (Apr - Jun)$yearSuffix', shortLabel: 'Q2$yearSuffix'),
+          (label: 'Q3 (Jul - Sep)$yearSuffix', shortLabel: 'Q3$yearSuffix'),
+          (label: 'Q4 (Oct - Dec)$yearSuffix', shortLabel: 'Q4$yearSuffix'),
         ];
       case PeriodFilter.year:
         return [
@@ -352,13 +357,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           'November',
           'December',
         ];
-        return allMonths.sublist(0, now.month);
+        final maxMonth = (_selectedYear == now.year) ? now.month : 12;
+        final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
+        return List.generate(maxMonth, (i) => '${allMonths[i]}$yearSuffix');
       case PeriodFilter.quarter:
+        final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
         return [
-          'Q1 (Jan-Mar)',
-          'Q2 (Apr-Jun)',
-          'Q3 (Jul-Sep)',
-          'Q4 (Oct-Dec)'
+          'Q1 (Jan-Mar)$yearSuffix',
+          'Q2 (Apr-Jun)$yearSuffix',
+          'Q3 (Jul-Sep)$yearSuffix',
+          'Q4 (Oct-Dec)$yearSuffix'
         ];
       case PeriodFilter.year:
         return [
@@ -377,7 +385,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       case PeriodFilter.week:
         return 4; // 'This Week'
       case PeriodFilter.month:
-        return (now.month - 1).clamp(0, now.month - 1);
+        final maxMonth = (_selectedYear == now.year) ? now.month : 12;
+        return (maxMonth - 1).clamp(0, maxMonth - 1);
       case PeriodFilter.quarter:
         return ((now.month - 1) ~/ 3).clamp(0, 3);
       case PeriodFilter.year:
@@ -405,7 +414,18 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     _changeFilter(() {
       _selectedPeriod = period;
       _selectedHeatmapDay = null;
-      _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(period);
+      if (period == PeriodFilter.year) {
+        final now = DateTime.now();
+        final yearDiff = now.year - _selectedYear;
+        if (yearDiff >= 0 && yearDiff <= 2) {
+          _selectedSubPeriodIndex = 2 - yearDiff;
+        } else {
+          _selectedSubPeriodIndex = 2;
+          _selectedYear = now.year;
+        }
+      } else {
+        _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(period);
+      }
       if (_subPeriodScrollController.hasClients) {
         _subPeriodScrollController.jumpToPage(_selectedSubPeriodIndex);
       }
@@ -422,102 +442,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       } else {
         _selectedSubPeriodIndex = index;
       }
+      if (_selectedPeriod == PeriodFilter.year) {
+        final now = DateTime.now();
+        _selectedYear = now.year - (2 - _selectedSubPeriodIndex);
+      }
       _selectedHeatmapDay = null;
     });
   }
 
   // ─── Color Mapping for Categories & Defined/Custom Reasons ───────────────────
   Color _getReasonColor(String category) {
-    final cat = category.trim().toLowerCase();
-
-    // 0. Uncategorized & other fallback color
-    if (cat == 'uncategorized' || cat == 'other' || cat == 'other cash' || cat.isEmpty) {
-      return const Color(0xFF64748B); // Slate Gray
-    }
-
-    // 1. Explicit distinct color mapping for defined system reasons
-    if (cat == 'food' || cat.contains('restaurant') || cat.contains('dining')) {
-      return const Color(0xFFFF9800); // Warm Orange
-    }
-    if (cat == 'salary' || cat.contains('wage') || cat.contains('payroll')) {
-      return const Color(0xFF10B981); // Bright Emerald Green
-    }
-    if (cat == 'transport' || cat.contains('taxi') || cat.contains('ride') || cat.contains('bus')) {
-      return const Color(0xFF3B82F6); // Sky Blue
-    }
-    if (cat == 'rent' || cat.contains('home') || cat.contains('house')) {
-      return const Color(0xFF6366F1); // Indigo
-    }
-    if (cat == 'shopping' || cat.contains('clothes') || cat.contains('apparel')) {
-      return const Color(0xFFEC4899); // Coral Pink
-    }
-    if (cat == 'utilities' || cat.contains('utility') || cat.contains('bill') || cat.contains('electricity')) {
-      return const Color(0xFFF59E0B); // Amber Yellow
-    }
-    if (cat == 'internet' || cat.contains('wifi') || cat.contains('broadband')) {
-      return const Color(0xFF06B6D4); // Cyan
-    }
-    if (cat == 'fuel' || cat.contains('gas') || cat.contains('petrol')) {
-      return const Color(0xFFEF4444); // Red / Fuel
-    }
-    if (cat == 'medical' || cat.contains('health') || cat.contains('pharmacy') || cat.contains('hospital')) {
-      return const Color(0xFF14B8A6); // Teal
-    }
-    if (cat == 'gift' || cat.contains('donation') || cat.contains('charity')) {
-      return const Color(0xFFA855F7); // Purple
-    }
-    if (cat == 'loan' || cat.contains('credit') || cat.contains('debt')) {
-      return const Color(0xFF84CC16); // Lime Green
-    }
-    if (cat == 'entertainment' || cat.contains('entertain') || cat.contains('movie') || cat.contains('fun')) {
-      return const Color(0xFF8B5CF6); // Soft Violet
-    }
-    if (cat == 'education' || cat.contains('school') || cat.contains('tuition')) {
-      return const Color(0xFF2563EB); // Royal Blue
-    }
-    if (cat == 'investment' || cat.contains('stock') || cat.contains('savings')) {
-      return const Color(0xFF059669); // Dark Emerald
-    }
-    if (cat == 'airtime' || cat.contains('recharge') || cat.contains('mobile')) {
-      return const Color(0xFF0284C7); // Electric Light Blue
-    }
-    if (cat == 'cash' || cat.contains('atm') || cat.contains('withdrawal')) {
-      return const Color(0xFFD97706); // Bronze Amber
-    }
-    if (cat == 'bounce') {
-      return const Color(0xFFDC2626); // Crimson
-    }
-    if (cat.contains('cbe') || cat.contains('bank')) {
-      return const Color(0xFF6B4C9A); // CBE Deep Purple
-    }
-    if (cat.contains('telebirr')) {
-      return AppColors.telebirrGreen; // Telebirr Green
-    }
-    if (cat.contains('ahadu')) {
-      return const Color(0xFFE91E63); // Ahadu Rose
-    }
-
-    // 2. Deterministic vibrant color for any undefined/custom reasons
-    const fallbackPalette = [
-      Color(0xFF3B82F6), // Blue
-      Color(0xFF10B981), // Emerald
-      Color(0xFFF59E0B), // Amber
-      Color(0xFFEF4444), // Red
-      Color(0xFF8B5CF6), // Purple
-      Color(0xFFEC4899), // Pink
-      Color(0xFF06B6D4), // Cyan
-      Color(0xFF84CC16), // Lime
-      Color(0xFFA855F7), // Violet
-      Color(0xFFF97316), // Orange
-      Color(0xFF14B8A6), // Teal
-      Color(0xFF6366F1), // Indigo
-      Color(0xFFEAB308), // Yellow
-      Color(0xFFD946EF), // Fuchsia
-      Color(0xFF0284C7), // Light Blue
-      Color(0xFF059669), // Dark Emerald
-    ];
-    final hash = cat.codeUnits.fold<int>(0, (prev, elem) => prev + elem);
-    return fallbackPalette[hash.abs() % fallbackPalette.length];
+    return AppColors.getCategoryReasonColor(category);
   }
 
   String _resolveTxCategoryName(AppTransaction tx, TransactionsViewModel txVM) {
@@ -569,7 +504,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
 
-    final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
+    final raw = (ctx.reasonName ?? '').trim();
     if (raw.isNotEmpty) {
       final matchedReason = txVM.reasons
           .where((r) => r.name.toLowerCase() == raw.toLowerCase())
@@ -599,18 +534,25 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     List<({String name, double income, double expense, double net})> bankBreakdown,
     List<AppTransaction> filteredBankTxs,
     List<CashTransaction> filteredCashTxs,
+    List<AppTransaction> heatmapBankTxs,
+    List<CashTransaction> heatmapCashTxs,
   }) _getFilteredAnalyticsData(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
     final now = DateTime.now();
-    final year = now.year;
 
     // Filter range calculation
     List<AppTransaction> filteredBankTxs = [];
     List<CashTransaction> filteredCashTxs = [];
+    List<AppTransaction> heatmapBankTxs = [];
+    List<CashTransaction> heatmapCashTxs = [];
 
     final isCashOnly = _selectedBank == 'Cash Wallet';
     final isAll = _selectedBank == 'All Wallets' ||
         _selectedBank == 'All Banks' ||
         _selectedBank == 'All';
+
+    final targetYear = (_selectedPeriod == PeriodFilter.year)
+        ? (now.year - (2 - _selectedSubPeriodIndex))
+        : _selectedYear;
 
     if (!isCashOnly) {
       for (var tx in txVM.transactions) {
@@ -625,15 +567,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             reasonStr == 'cash') {
           continue;
         }
-        if (_matchesFilter(tx.date, now, year) && _matchesBank(tx, _selectedBank)) {
-          filteredBankTxs.add(tx);
+        if (_matchesBank(tx, _selectedBank)) {
+          if (tx.date.year == targetYear) {
+            heatmapBankTxs.add(tx);
+          }
+          if (_matchesFilter(tx.date, now)) {
+            filteredBankTxs.add(tx);
+          }
         }
       }
     }
 
     if (isAll || isCashOnly) {
       for (var tx in cashVM.cashTransactions) {
-        if (_matchesFilter(tx.date, now, year)) {
+        if (tx.date.year == targetYear) {
+          heatmapCashTxs.add(tx);
+        }
+        if (_matchesFilter(tx.date, now)) {
           filteredCashTxs.add(tx);
         }
       }
@@ -656,11 +606,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        final categoryLabel = _resolveCashTxCategoryName(tx, txVM);
-
         if (tx.type == 'expense') {
+          final categoryLabel = _resolveCashTxCategoryName(tx, txVM);
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
-        } else if (tx.type == 'addition') {
+        } else if (tx.type == 'addition' && tx.reasonName != null && tx.reasonName!.isNotEmpty) {
+          final categoryLabel = _resolveCashTxCategoryName(tx, txVM);
           categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
         }
       }
@@ -683,15 +633,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        final parentCat = _resolveCashTxCategoryName(tx, txVM);
-        if (parentCat.toLowerCase() == categoryName) {
-          String subName = (tx.reasonName ?? tx.description ?? 'General').trim();
-          if (subName.isEmpty || subName.toLowerCase() == categoryName) {
-            subName = 'General';
-          }
-          if (tx.type == 'expense') {
+        if (tx.type == 'expense') {
+          final parentCat = _resolveCashTxCategoryName(tx, txVM);
+          if (parentCat.toLowerCase() == categoryName) {
+            String subName = (tx.reasonName ?? 'General').trim();
+            if (subName.isEmpty || subName.toLowerCase() == categoryName) {
+              subName = 'General';
+            }
             categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
-          } else if (tx.type == 'addition') {
+          }
+        } else if (tx.type == 'addition' && tx.reasonName != null && tx.reasonName!.isNotEmpty) {
+          final parentCat = _resolveCashTxCategoryName(tx, txVM);
+          if (parentCat.toLowerCase() == categoryName) {
+            String subName = tx.reasonName!.trim();
+            if (subName.isEmpty || subName.toLowerCase() == categoryName) {
+              subName = 'General';
+            }
             categoryIncome[subName] = (categoryIncome[subName] ?? 0) + tx.amount;
           }
         }
@@ -824,10 +781,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       bankBreakdown: bankBreakdown,
       filteredBankTxs: filteredBankTxs,
       filteredCashTxs: filteredCashTxs,
+      heatmapBankTxs: heatmapBankTxs,
+      heatmapCashTxs: heatmapCashTxs,
     );
   }
 
-  bool _matchesFilter(DateTime date, DateTime now, int year) {
+  bool _matchesFilter(DateTime date, DateTime now) {
     if (_selectedHeatmapDay != null) {
       return date.year == _selectedHeatmapDay!.year &&
           date.month == _selectedHeatmapDay!.month &&
@@ -853,14 +812,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         return !date.isBefore(targetMonday) && !date.isAfter(targetSunday);
 
       case PeriodFilter.month:
-        return date.month == (subIndex + 1) && date.year == year;
+        return date.month == (subIndex + 1) && date.year == _selectedYear;
 
       case PeriodFilter.quarter:
         final txQuarter = ((date.month - 1) ~/ 3);
-        return txQuarter == subIndex && date.year == year;
+        return txQuarter == subIndex && date.year == _selectedYear;
 
       case PeriodFilter.year:
-        final targetYear = year - ((subItems.length - 1) - subIndex);
+        final targetYear = now.year - ((subItems.length - 1) - subIndex);
         return date.year == targetYear;
     }
   }
@@ -1010,7 +969,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   dynamic _getCachedFilteredAnalyticsData(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
-    final key = '${txVM.transactions.length}_${cashVM.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_$_selectedBank';
+    final key = '${txVM.transactions.length}_${cashVM.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedYear}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_$_selectedBank';
     if (_cachedAnalyticsData != null && _lastAnalyticsCacheKey == key) {
       return _cachedAnalyticsData;
     }
@@ -1148,8 +1107,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         DailyNetHeatmapWidget(
-                          bankTransactions: data.filteredBankTxs,
-                          cashTransactions: data.filteredCashTxs,
+                          bankTransactions: data.heatmapBankTxs,
+                          cashTransactions: data.heatmapCashTxs,
                           periodType:
                               HeatmapPeriodType.values[_selectedPeriod.index],
                           selectedDate: _getSynchronizedTargetDate(),
@@ -1158,7 +1117,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                           selectedYear: _selectedPeriod == PeriodFilter.year
                               ? (DateTime.now().year -
                                   (2 - _selectedSubPeriodIndex))
-                              : DateTime.now().year,
+                              : _selectedYear,
                           selectedDay: _selectedHeatmapDay,
                           onDaySelected: (day) {
                             _changeFilter(() {
@@ -1186,6 +1145,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                           },
                           onMonthSelected: (monthIndex) {
                             _changeFilter(() {
+                              final now = DateTime.now();
+                              if (_selectedPeriod == PeriodFilter.year) {
+                                _selectedYear = now.year - (2 - _selectedSubPeriodIndex);
+                              }
                               _selectedPeriod = PeriodFilter.month;
                               _selectedSubPeriodIndex = monthIndex;
                               _selectedHeatmapDay = null;
@@ -1216,21 +1179,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   ),
                   const SizedBox(height: 14),
 
-                  // ── 4. Unified White Net Breakdown & Distribution Card ──────────────
+                  // ── 4. Unified White Net Breakdown & Distribution Card (with Integrated Category Analysis) ──────────────
                   _buildUnifiedCategoryBreakdownCard(
                     data.categories,
                     data.chartTotal,
                     data.netPnl,
                     settingsVM.isBalanceVisible,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── 6. Redesigned Category Analysis Card ──────────────────
-                  _buildReasonBreakdownSection(
                     data.filteredBankTxs,
                     data.filteredCashTxs,
                     txVM,
-                    settingsVM.isBalanceVisible,
                   ),
                   const SizedBox(height: 14),
 
@@ -1266,6 +1223,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             _selectedBank != 'All Banks' &&
             _selectedBank != 'All') ||
         _selectedPeriod != PeriodFilter.month ||
+        _selectedYear != DateTime.now().year ||
         _selectedAnalysisType != 'All' ||
         _selectedSubPeriodIndex != _getDefaultSubPeriodIndex(_selectedPeriod);
 
@@ -1293,7 +1251,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 onChanged: (PeriodFilter? val) {
                   if (val != null) _onPeriodChanged(val);
                 },
-                isDefault: _selectedPeriod == PeriodFilter.month,
+                isDefault: _selectedPeriod == PeriodFilter.month && _selectedYear == DateTime.now().year,
               ),
               const SizedBox(width: 8),
 
@@ -1348,6 +1306,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     _changeFilter(() {
                       _selectedBank = 'All Wallets';
                       _selectedPeriod = PeriodFilter.month;
+                      _selectedYear = DateTime.now().year;
                       _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(PeriodFilter.month);
                       _selectedAnalysisType = 'All';
                       _selectedHeatmapDay = null;
@@ -1459,9 +1418,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             borderRadius: AppRadius.cardRadius,
             gradient: const LinearGradient(
               colors: [
-                Color(0xFF0C3025), // Deep emerald glow top-right
-                Color(0xFF071F18), // Rich forest dark mid
-                Color(0xFF0D151D), // Dark slate-charcoal bottom-left
+                AppColors.analysisCardGradientStart,
+                AppColors.analysisCardGradientMid,
+                AppColors.analysisCardGradientEnd,
               ],
               stops: [0.0, 0.45, 1.0],
               begin: Alignment.topRight,
@@ -1502,7 +1461,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        const Color(0xFF0E382C).withValues(alpha: 0.35),
+                        AppColors.analysisAmbientGlow.withValues(alpha: 0.35),
                         Colors.transparent,
                       ],
                     ),
@@ -1611,12 +1570,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 4. Unified White Net Breakdown & Distribution Card ────────────────────
+  // ── 4. Unified White Net Breakdown & Distribution Card (with Integrated Category Analysis) ───
   Widget _buildUnifiedCategoryBreakdownCard(
     List<CategoryArcItem> targetCategories,
     double targetTotal,
     double netPnl,
     bool isBalanceVisible,
+    List<AppTransaction> filteredBankTxs,
+    List<CashTransaction> filteredCashTxs,
+    TransactionsViewModel txVM,
   ) {
     return AnimatedBuilder(
       animation: _morphAnim,
@@ -1692,7 +1654,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 // ── 1. Top Interactive Drag / Expand Handle ──
                 Center(
                   child: InteractiveDragHandle(
-                    color: const Color(0xFFCBD5E1),
+                    color: AppColors.slateLight,
                     width: 36,
                     height: 4,
                     padding: const EdgeInsets.only(top: 4, bottom: 12),
@@ -1716,7 +1678,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     child: const Text(
                       'No transactions recorded for this period',
                       style: TextStyle(
-                        color: Color(0xFF64748B),
+                        color: AppColors.slateMuted,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1799,7 +1761,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                     ? 'Show Less'
                                     : '+${targetCategories.length - 6} more categories',
                                 style: const TextStyle(
-                                  color: Color(0xFF64748B),
+                                  color: AppColors.slateMuted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1809,7 +1771,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 _isNetBreakdownExpanded
                                     ? Icons.keyboard_arrow_up_rounded
                                     : Icons.keyboard_arrow_down_rounded,
-                                color: const Color(0xFF64748B),
+                                color: AppColors.slateMuted,
                                 size: 16,
                               ),
                             ],
@@ -1827,7 +1789,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9), // Soft Slate 100
+                    color: AppColors.slateSurface, // Soft Slate 100
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
@@ -1867,7 +1829,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 ] else ...[
                                   const Icon(
                                     Icons.auto_awesome_rounded,
-                                    color: Color(0xFF0F172A),
+                                    color: AppColors.buttonPrimaryText,
                                     size: 11,
                                   ),
                                   const SizedBox(width: 5),
@@ -1879,7 +1841,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                           ? _drilledCategory!.name.toUpperCase()
                                           : '${_getAnalysisTypeLabel(_selectedAnalysisType).toUpperCase()} DISTRIBUTION'),
                                   style: const TextStyle(
-                                    color: Color(0xFF0F172A),
+                                    color: AppColors.buttonPrimaryText,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.6,
@@ -1968,12 +1930,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: const BoxDecoration(
-                                      color: Color(0xFFE2E8F0),
+                                      color: AppColors.tabBackgroundLight,
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
                                       Icons.close_rounded,
-                                      color: Color(0xFF475569),
+                                      color: AppColors.slateDarkText,
                                       size: 13,
                                     ),
                                   ),
@@ -2064,7 +2026,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 newTotal: targetTotal,
                                 progress: progress,
                                 selectedIndex: _selectedArcIndex,
-                                trackColor: const Color(0xFFE2E8F0),
+                                trackColor: AppColors.tabBackgroundLight,
                               ),
                             ),
                           );
@@ -2076,7 +2038,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       Text(
                         narrativeText,
                         style: const TextStyle(
-                          color: Color(0xFF475569),
+                          color: AppColors.slateDarkText,
                           fontSize: 11.5,
                           height: 1.4,
                           fontWeight: FontWeight.w400,
@@ -2084,6 +2046,22 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       ),
                     ],
                   ),
+                ),
+
+                const SizedBox(height: 14),
+                Divider(
+                  color: AppColors.tabBackgroundLight,
+                  height: 1,
+                  thickness: 1,
+                ),
+                const SizedBox(height: 12),
+
+                // ── 4. Integrated Collapsible Category Analysis Section ──
+                _buildWhiteCategoryAnalysisSection(
+                  filteredBankTxs,
+                  filteredCashTxs,
+                  txVM,
+                  isBalanceVisible,
                 ),
               ],
             ),
@@ -2157,7 +2135,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       style: TextStyle(
                         color: isSelected
                             ? item.color
-                            : const Color(0xFF0F172A),
+                            : AppColors.buttonPrimaryText,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         letterSpacing: -0.2,
@@ -2173,7 +2151,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               Text(
                 item.label,
                 style: const TextStyle(
-                  color: Color(0xFF64748B),
+                  color: AppColors.slateMuted,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -2187,7 +2165,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  // ── 6. Redesigned Reason Analysis Section ──────────────────────────────────
   String _getPeriodSubtitle() {
     final subItems = _getSubPeriodItems();
     final int subIndex =
@@ -2198,7 +2175,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return '';
   }
 
-  Widget _buildReasonBreakdownSection(
+  // ── 6. Integrated White Category Analysis Section ─────────────────────────
+  Widget _buildWhiteCategoryAnalysisSection(
     List<AppTransaction> filteredBankTxs,
     List<CashTransaction> filteredCashTxs,
     TransactionsViewModel txVM,
@@ -2381,40 +2359,26 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     }
 
     if (categoryMap.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Category Analysis',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.1,
-              ),
-            ),
-            SizedBox(height: 14),
-            Center(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCategoryAnalysisHeader(0),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: const Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.symmetric(vertical: 14),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.analytics_outlined,
-                        color: AppColors.textDisabled, size: 16),
+                        color: AppColors.slateMuted, size: 16),
                     SizedBox(width: 8),
                     Flexible(
                       child: Text(
                         'No transactions recorded for this period',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: AppColors.slateMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -2426,8 +2390,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 ),
               ),
             ),
-          ],
-        ),
+            crossFadeState: _isCategoryAnalysisExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 220),
+          ),
+        ],
       );
     }
 
@@ -2458,7 +2426,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         } else if (_selectedAnalysisType == 'Expenses') {
           sTotal = sExp;
         } else {
-          // 'All' mode: calculate net value (summing transactions and taking net difference)
+          // 'All' mode: calculate net value
           sTotal = (sExp - sInc).abs();
         }
 
@@ -2496,7 +2464,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       } else if (_selectedAnalysisType == 'Expenses') {
         catTotal = catExp;
       } else {
-        // 'All' mode: calculate net value for category
+        // 'All' mode: calculate net value
         catTotal = (catExp - catInc).abs();
       }
 
@@ -2519,248 +2487,268 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final fmt = NumberFormat('#,##0.00');
     final periodSubtitle = _getPeriodSubtitle();
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadius.cardRadius,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header Row: Title, Badge, and Toggle Button ──
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              setState(() {
-                _isCategoryAnalysisExpanded = !_isCategoryAnalysisExpanded;
-              });
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Category Analysis',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    AppBadge.neutral(
-                      text: '${categoryList.length}',
-                      size: AppBadgeSize.micro,
-                    ),
-                  ],
-                ),
-                AnimatedRotation(
-                  turns: _isCategoryAnalysisExpanded ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textSecondary,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header Row: Title, Badge, and Toggle Button ──
+        _buildCategoryAnalysisHeader(categoryList.length),
 
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: Column(
-              children: [
-                const SizedBox(height: 14),
-                Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
-                for (int i = 0; i < categoryList.length; i++) ...[
-                  Builder(
-                    builder: (context) {
-                      final cat = categoryList[i];
-                      final pct =
-                          totalSum > 0 ? cat.totalAmount / totalSum : 0.0;
-                      final color = cat.color;
-                      final hasSubcategories = cat.subcategories.isNotEmpty;
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Column(
+            children: [
+              const SizedBox(height: 10),
+              for (int i = 0; i < categoryList.length; i++) ...[
+                Builder(
+                  builder: (context) {
+                    final cat = categoryList[i];
+                    final pct =
+                        totalSum > 0 ? cat.totalAmount / totalSum : 0.0;
+                    final color = cat.color;
+                    final hasSubcategories = cat.subcategories.isNotEmpty;
 
-                      String subtitleText;
-                      if (hasSubcategories) {
-                        final subCount = cat.subcategories.length;
-                        subtitleText =
-                            '$subCount ${subCount == 1 ? 'subcategory' : 'subcategories'} • ${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
-                      } else {
-                        subtitleText =
-                            '${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
-                      }
+                    String subtitleText;
+                    if (hasSubcategories) {
+                      final subCount = cat.subcategories.length;
+                      subtitleText =
+                          '$subCount ${subCount == 1 ? 'subcategory' : 'subcategories'} • ${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
+                    } else {
+                      subtitleText =
+                          '${cat.totalTxCount} ${cat.totalTxCount == 1 ? 'transaction' : 'transactions'}';
+                    }
 
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CategoryDetailScreen(
-                                    categoryName: cat.categoryName,
-                                    categoryReason: cat.categoryReason,
-                                    categoryColor: color,
-                                    totalAmount: cat.totalAmount,
-                                    periodLabel: periodSubtitle,
-                                    directBankTransactions: cat.directBankTxs,
-                                    directCashTransactions: cat.directCashTxs,
-                                    allBankTransactions: cat.allBankTxs,
-                                    allCashTransactions: cat.allCashTxs,
-                                    subcategories: cat.subcategories,
-                                  ),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CategoryDetailScreen(
+                                  categoryName: cat.categoryName,
+                                  categoryReason: cat.categoryReason,
+                                  categoryColor: color,
+                                  totalAmount: cat.totalAmount,
+                                  periodLabel: periodSubtitle,
+                                  directBankTransactions: cat.directBankTxs,
+                                  directCashTransactions: cat.directCashTxs,
+                                  allBankTransactions: cat.allBankTxs,
+                                  allCashTransactions: cat.allCashTxs,
+                                  subcategories: cat.subcategories,
                                 ),
-                              );
-                            },
-                            child: Row(
-                              children: [
-                                // Rank badge
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.15),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '${i + 1}',
-                                      style: TextStyle(
-                                        color: color,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            children: [
+                              // Rank badge
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.14),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${i + 1}',
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              cat.categoryName,
-                                              style: const TextStyle(
-                                                color: AppColors.textSoft,
-                                                fontSize: 13.5,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              maxLines: 1,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            cat.categoryName,
+                                            style: const TextStyle(
+                                              color: AppColors.buttonPrimaryText,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: -0.2,
                                             ),
+                                            maxLines: 1,
+                                            overflow:
+                                                TextOverflow.ellipsis,
                                           ),
-                                          const SizedBox(width: 8),
-                                          isBalanceVisible
-                                              ? CurrencyTextWidget(
-                                                  amount: cat.totalAmount,
-                                                  style: TextStyle(
-                                                    color: color,
-                                                    fontSize: 13.5,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                  ),
-                                                  customFormattedStr:
-                                                      fmt.format(cat.totalAmount),
-                                                )
-                                              : Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    CurrencySymbolWidget(
-                                                      color: color,
-                                                      size: 13.5,
-                                                      fontWeight:
-                                                        FontWeight.bold,
-                                                    ),
-                                                    const SizedBox(width: 2),
-                                                    Text(
-                                                      '••••••••',
-                                                      style: TextStyle(
-                                                        color: color,
-                                                        fontSize: 13.5,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ],
+                                        ),
+                                        const SizedBox(width: 8),
+                                        isBalanceVisible
+                                            ? CurrencyTextWidget(
+                                                amount: cat.totalAmount,
+                                                style: TextStyle(
+                                                  color: color,
+                                                  fontSize: 13,
+                                                  fontWeight:
+                                                      FontWeight.bold,
                                                 ),
-                                          const SizedBox(width: 4),
-                                          const Icon(
-                                            Icons.chevron_right_rounded,
-                                            color: Colors.white38,
-                                            size: 16,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        subtitleText,
-                                        style: const TextStyle(
-                                          color: AppColors.textDisabled,
-                                          fontSize: 10.5,
+                                                customFormattedStr:
+                                                    fmt.format(cat.totalAmount),
+                                              )
+                                            : Row(
+                                                mainAxisSize:
+                                                    MainAxisSize.min,
+                                                children: [
+                                                  CurrencySymbolWidget(
+                                                    color: color,
+                                                    size: 13,
+                                                    fontWeight:
+                                                      FontWeight.bold,
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    '••••••••',
+                                                    style: TextStyle(
+                                                      color: color,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: AppColors.slateLight,
+                                          size: 16,
                                         ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      subtitleText,
+                                      style: const TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w500,
                                       ),
-                                      const SizedBox(height: 6),
-                                      CustomProgressBar(
-                                        progress: pct,
-                                        height: 8,
-                                        progressColor: color,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    CustomProgressBar(
+                                      progress: pct,
+                                      height: 6.5,
+                                      progressColor: color,
+                                      backgroundColor: AppColors.tabBackgroundLight,
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _selectedAnalysisType == 'Income'
+                                          ? '${(pct * 100).toStringAsFixed(1)}% of total received'
+                                          : _selectedAnalysisType ==
+                                                  'Expenses'
+                                              ? '${(pct * 100).toStringAsFixed(1)}% of total spent'
+                                              : '${(pct * 100).toStringAsFixed(1)}% of net total',
+                                      style: const TextStyle(
+                                        color: AppColors.slateMuted,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w500,
                                       ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        _selectedAnalysisType == 'Income'
-                                            ? '${(pct * 100).toStringAsFixed(1)}% of total received'
-                                            : _selectedAnalysisType ==
-                                                    'Expenses'
-                                                ? '${(pct * 100).toStringAsFixed(1)}% of total spent'
-                                                : '${(pct * 100).toStringAsFixed(1)}% of net total',
-                                        style: const TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    );
+                  },
+                ),
+                if (i < categoryList.length - 1)
+                  Divider(
+                    color: AppColors.tabBackgroundLight,
+                    height: 12,
+                    thickness: 1,
                   ),
-                  if (i < categoryList.length - 1)
-                    Divider(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      height: 1,
+              ],
+            ],
+          ),
+          crossFadeState: _isCategoryAnalysisExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 220),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryAnalysisHeader(int count) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _isCategoryAnalysisExpanded = !_isCategoryAnalysisExpanded;
+        });
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Category Analysis',
+                  style: TextStyle(
+                    color: AppColors.buttonPrimaryText,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.slateSurface,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      color: AppColors.slateDarkText,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
                     ),
-                ],
+                  ),
+                ),
               ],
             ),
-            crossFadeState: _isCategoryAnalysisExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 250),
-          ),
-        ],
+            AnimatedRotation(
+              turns: _isCategoryAnalysisExpanded ? 0.5 : 0.0,
+              duration: const Duration(milliseconds: 220),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: AppColors.slateSurface,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.buttonPrimaryText,
+                  size: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

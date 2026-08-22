@@ -183,18 +183,28 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 dbPath.path, null, SQLiteDatabase.OPEN_READWRITE
             )
 
-            // Resolve reasonId from DB if not provided
+            // Resolve reasonId, categoryId, subcategoryId from DB
             var resolvedReasonId = reasonId
-            if (resolvedReasonId == null) {
-                val cursorReason = db.rawQuery(
-                    "SELECT id FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1",
-                    arrayOf(reasonName)
-                )
-                if (cursorReason.moveToFirst()) {
-                    resolvedReasonId = cursorReason.getInt(0)
-                }
-                cursorReason.close()
+            var categoryId: Int? = null
+            var subcategoryId: Int? = null
+
+            val cursorReason = if (resolvedReasonId != null) {
+                db.rawQuery("SELECT id, name, parentId FROM reasons WHERE id = ? LIMIT 1", arrayOf(resolvedReasonId.toString()))
+            } else {
+                db.rawQuery("SELECT id, name, parentId FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1", arrayOf(reasonName))
             }
+            if (cursorReason.moveToFirst()) {
+                resolvedReasonId = cursorReason.getInt(0)
+                val parentId = if (cursorReason.isNull(2)) null else cursorReason.getInt(2)
+                if (parentId != null) {
+                    categoryId = parentId
+                    subcategoryId = resolvedReasonId
+                } else {
+                    categoryId = resolvedReasonId
+                    subcategoryId = null
+                }
+            }
+            cursorReason.close()
 
             val values = ContentValues().apply {
                 put("reason", reasonName)
@@ -202,6 +212,12 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     put("reasonId", resolvedReasonId)
                 } else {
                     putNull("reasonId")
+                }
+                if (categoryId != null) {
+                    put("categoryId", categoryId)
+                }
+                if (subcategoryId != null) {
+                    put("subcategoryId", subcategoryId)
                 }
             }
 
@@ -223,20 +239,23 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 cursor.close()
             }
 
-            // Strategy 2: Direct ID fallback
+            // Strategy 2: Direct ID or bankReference fallback
             if (!found) {
                 val cursor = db.rawQuery(
-                    "SELECT id FROM transactions WHERE id = ? LIMIT 1",
-                    arrayOf(txId)
+                    "SELECT id FROM transactions WHERE id = ? OR bankReference = ? LIMIT 1",
+                    arrayOf(txId, txId)
                 )
                 if (cursor.moveToFirst()) {
-                    db.update("transactions", values, "id = ?", arrayOf(txId))
+                    val targetId = cursor.getString(0)
+                    cursor.close()
+                    db.update("transactions", values, "id = ?", arrayOf(targetId))
                     found = true
+                } else {
+                    cursor.close()
                 }
-                cursor.close()
             }
 
-            // Also update the notifications table
+            // Also update the notifications table (both by direct ID and by matching body)
             try {
                 val colCheck = db.rawQuery(
                     "SELECT COUNT(*) FROM pragma_table_info('notifications') WHERE name='reason'",
@@ -246,10 +265,28 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 colCheck.close()
 
                 if (hasReasonCol) {
-                    db.execSQL(
-                        "UPDATE notifications SET reason = ? WHERE id = ?",
-                        arrayOf(reasonName, txId)
-                    )
+                    if (txId.isNotBlank()) {
+                        db.execSQL(
+                            "UPDATE notifications SET reason = ? WHERE id = ?",
+                            arrayOf(reasonName, txId)
+                        )
+                    }
+                    if (smsBody.isNotBlank()) {
+                        val normalizedBody = smsBody.replace(Regex("\\s+"), " ").trim()
+                        val cursorNotifs = db.rawQuery("SELECT id, body FROM notifications", null)
+                        while (cursorNotifs.moveToNext()) {
+                            val nId = cursorNotifs.getString(0)
+                            val nBody = cursorNotifs.getString(1) ?: ""
+                            if (nBody.replace(Regex("\\s+"), " ").trim() == normalizedBody) {
+                                db.execSQL(
+                                    "UPDATE notifications SET reason = ? WHERE id = ?",
+                                    arrayOf(reasonName, nId)
+                                )
+                                break
+                            }
+                        }
+                        cursorNotifs.close()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update notification reason", e)

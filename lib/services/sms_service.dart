@@ -8,11 +8,15 @@ class RawSmsData {
   final String sender;
   final String body;
   final DateTime date;
+  final int simSlot;
+  final String? accountIdentifier;
 
   const RawSmsData({
     required this.sender,
     required this.body,
     required this.date,
+    this.simSlot = 0,
+    this.accountIdentifier,
   });
 }
 
@@ -69,10 +73,14 @@ class SmsService {
               : (dateVal is double
                   ? DateTime.fromMillisecondsSinceEpoch(dateVal.toInt())
                   : DateTime.now());
+          final int simSlot = (map['simSlot'] as int?) ?? (map['slot'] as int?) ?? 0;
+          final String? accountId = map['accountIdentifier'] as String?;
           return RawSmsData(
             sender: map['sender'] as String? ?? '',
             body: map['body'] as String? ?? '',
             date: dt,
+            simSlot: simSlot,
+            accountIdentifier: accountId,
           );
         }).toList();
       }

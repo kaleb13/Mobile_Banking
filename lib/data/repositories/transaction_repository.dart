@@ -26,6 +26,7 @@ abstract class TransactionRepository {
   Future<void> checkpointWal();
 
   // ── Transaction Reason Updates ──
+  Future<int> reconcilePendingNotificationReasons();
   Future<int> updateTransactionReason(
       String id, String reason, int? reasonId);
   Future<int> updateTransactionReasonByRawMessage(
@@ -60,6 +61,7 @@ abstract class TransactionRepository {
   Future<List<AppReasonLink>> getLinksForReason(int reasonId);
   Future<int> insertReasonLink(AppReasonLink link);
   Future<int> deleteReasonLink(int id);
+  Future<void> deleteAllUserReasons();
   Future<AppReason?> findAutoReason(
       String senderName, String transactionType);
 
@@ -137,6 +139,10 @@ class TransactionRepositoryImpl implements TransactionRepository {
   Future<int> getTransactionCount() => _db.getTransactionCount();
 
   // ── Transaction Reason Updates ────────────────────────────────────────────
+
+  @override
+  Future<int> reconcilePendingNotificationReasons() =>
+      _db.reconcilePendingNotificationReasons();
 
   @override
   Future<int> updateTransactionReason(
@@ -228,6 +234,9 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Future<int> deleteReasonLink(int id) => _db.deleteReasonLink(id);
+
+  @override
+  Future<void> deleteAllUserReasons() => _db.deleteAllUserReasons();
 
   @override
   Future<AppReason?> findAutoReason(

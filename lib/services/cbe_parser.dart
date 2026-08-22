@@ -29,12 +29,60 @@ class CbeParser {
       return 0.0;
     }
 
-    if (lowerMsg.contains('transfer')) {
+    if (lowerMsg.contains('credited')) {
+      type = 'income';
+
+      // Old format: "credited with ETB 30025.00"
+      // New format: "credited by QELEM MEDA TECHNOLOGIES PLC with ETB 30025.00"
+      amount = extractAmount(
+          RegExp(r'credited\s+with\s+ETB\s*([0-9,.]+)', caseSensitive: false));
+      if (amount <= 0) {
+        amount = extractAmount(
+            RegExp(r'credited\s+by\s+.+?\s+with\s+ETB\s*([0-9,.]+)',
+                caseSensitive: false));
+      }
+
+      // Sender pattern 1 (old): "from Kaleab Afesha," or "from Kaleab Afesha on"
+      final fromMatch =
+          RegExp(r'from\s+(.*?)(?=\s*,|\s+on|\.\s+)').firstMatch(message);
+      if (fromMatch != null) {
+        senderOrRecipient = fromMatch.group(1)?.trim() ?? '';
+      }
+
+      // Sender pattern 2 (new): "credited by QELEM MEDA TECHNOLOGIES PLC with ETB"
+      if (senderOrRecipient.isEmpty) {
+        final creditedByMatch =
+            RegExp(r'credited\s+by\s+(.*?)\s+with\s+ETB', caseSensitive: false)
+                .firstMatch(message);
+        if (creditedByMatch != null) {
+          senderOrRecipient = creditedByMatch.group(1)?.trim() ?? '';
+        }
+      }
+    } else if (lowerMsg.contains('received')) {
+      // "You have received ETB 5,000.00 from account 1****4239 (Name) to your account ..."
+      type = 'income';
+      amount = extractAmount(
+          RegExp(r'received\s+ETB\s*([0-9,.]+)', caseSensitive: false));
+
+      // Sender: "from account 1****4239 (Nathnael Tesfaye T/mariam)"
+      final fromMatchParens =
+          RegExp(r'from\s+account\s+[\d*]+\s+\(([^)]+)\)', caseSensitive: false)
+              .firstMatch(message);
+      if (fromMatchParens != null) {
+        senderOrRecipient = fromMatchParens.group(1)?.trim() ?? '';
+      }
+    } else if (lowerMsg.contains('transfer')) {
+      // Check transfer BEFORE generic debited because transfer messages often
+      // contain "Your account has been debited with a S.charge of ETB..."
       type = 'expense';
       amount = extractAmount(
           RegExp(r'transferr?ed\s+ETB\s*([0-9,.]+)', caseSensitive: false));
+      if (amount <= 0) {
+        amount = extractAmount(
+            RegExp(r'transfer\s+of\s+ETB\s*([0-9,.]+)', caseSensitive: false));
+      }
 
-      // Pattern 1: "to <Name> on DD/MM/YYYY" (older format)
+      // Pattern 1: "to <Name> on DD/MM/YYYY" (older / standard format)
       final toMatchWithDate =
           RegExp(r'to\s+(.*?)\s+on\s+\d{2}/\d{2}').firstMatch(message);
       if (toMatchWithDate != null) {
@@ -88,48 +136,6 @@ class CbeParser {
       if (amount <= 0) {
         amount = extractAmount(
             RegExp(r'debited\s+with\s+ETB\s*([0-9,.]+)', caseSensitive: false));
-      }
-    } else if (lowerMsg.contains('credited')) {
-      type = 'income';
-
-      // Old format: "credited with ETB 30025.00"
-      // New format: "credited by QELEM MEDA TECHNOLOGIES PLC with ETB 30025.00"
-      amount = extractAmount(
-          RegExp(r'credited\s+with\s+ETB\s*([0-9,.]+)', caseSensitive: false));
-      if (amount <= 0) {
-        amount = extractAmount(
-            RegExp(r'credited\s+by\s+.+?\s+with\s+ETB\s*([0-9,.]+)',
-                caseSensitive: false));
-      }
-
-      // Sender pattern 1 (old): "from Kaleab Afesha," or "from Kaleab Afesha on"
-      final fromMatch =
-          RegExp(r'from\s+(.*?)(?=\s*,|\s+on|\.\s+)').firstMatch(message);
-      if (fromMatch != null) {
-        senderOrRecipient = fromMatch.group(1)?.trim() ?? '';
-      }
-
-      // Sender pattern 2 (new): "credited by QELEM MEDA TECHNOLOGIES PLC with ETB"
-      if (senderOrRecipient.isEmpty) {
-        final creditedByMatch =
-            RegExp(r'credited\s+by\s+(.*?)\s+with\s+ETB', caseSensitive: false)
-                .firstMatch(message);
-        if (creditedByMatch != null) {
-          senderOrRecipient = creditedByMatch.group(1)?.trim() ?? '';
-        }
-      }
-    } else if (lowerMsg.contains('received')) {
-      // "You have received ETB 5,000.00 from account 1****4239 (Name) to your account ..."
-      type = 'income';
-      amount = extractAmount(
-          RegExp(r'received\s+ETB\s*([0-9,.]+)', caseSensitive: false));
-
-      // Sender: "from account 1****4239 (Nathnael Tesfaye T/mariam)"
-      final fromMatchParens =
-          RegExp(r'from\s+account\s+[\d*]+\s+\(([^)]+)\)', caseSensitive: false)
-              .firstMatch(message);
-      if (fromMatchParens != null) {
-        senderOrRecipient = fromMatchParens.group(1)?.trim() ?? '';
       }
     } else if (lowerMsg.contains('debit transaction')) {
       // "A debit transaction of ETB 5000.0. has occurred on your account ..."

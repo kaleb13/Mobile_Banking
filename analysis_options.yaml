@@ -1,1 +1,9 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "scratch/**"
+    - "bin/**"
+    - "test_parse.dart"
+  errors:
+    avoid_print: ignore

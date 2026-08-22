@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_banking_app/services/sms_service.dart';
 import 'package:mobile_banking_app/services/sms_batch_parser.dart';
-import 'package:mobile_banking_app/models/sender.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

@@ -16,16 +16,7 @@ import '../../presentation/viewmodels/settings_view_model.dart';
 import 'saving_goals_screen.dart';
 import 'settings_screen.dart';
 
-Color _levelGlowColor(int level) {
-  switch (level) {
-    case 1: return const Color(0xFF8B9DFF); // LV1 Indigo / Blue
-    case 2: return const Color(0xFF38BDF8); // LV2 Silver Cyan / Sky Blue
-    case 3: return const Color(0xFFAC58FE); // LV3 Royal Purple / Violet
-    case 4: return const Color(0xFFF87171); // LV4 Red / Coral
-    case 5: return const Color(0xFFFBBF24); // LV5 Gold / Amber
-    default: return const Color(0xFF8B9DFF);
-  }
-}
+Color _levelGlowColor(int level) => AppColors.getLevelGlow(level);
 
 class ProfileHubScreen extends StatelessWidget {
   const ProfileHubScreen({super.key});

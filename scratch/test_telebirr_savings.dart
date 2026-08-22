@@ -1,5 +1,5 @@
 import 'dart:io';
-import '../lib/services/telebirr_parser.dart';
+import 'package:mobile_banking_app/services/telebirr_parser.dart';
 
 void main() {
   final message = '''Dear Kaleb

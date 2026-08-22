@@ -49,16 +49,36 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
+  void _navigateToTab(int toIndex, SettingsViewModel settingsVM) {
+    if (!mounted || !_pageController.hasClients) return;
+    final fromIndex = settingsVM.currentScreenIndex;
+    if (toIndex == fromIndex) return;
+
+    final diff = (toIndex - fromIndex).abs();
+
+    if (diff == 1) {
+      // Adjacent navigation (e.g. Home <-> Wallet): smooth slide with flying cards
+      settingsVM.setScreenIndex(toIndex);
+      _pageController.animateToPage(
+        toIndex,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      // Non-adjacent navigation (e.g. Home -> Loans, Wallet -> Profile):
+      // Direct jump without rendering or scrolling through middle pages
+      settingsVM.setScreenIndex(toIndex);
+      _pageController.jumpToPage(toIndex);
+      settingsVM.setPageOffset(toIndex.toDouble());
+    }
+  }
+
   void _onTabNavigationRequested() {
     if (!mounted || !_pageController.hasClients) return;
     final settingsVM = context.read<SettingsViewModel>();
     final targetIndex = settingsVM.tabNavigationNotifier.value;
     if (targetIndex != null) {
-      _pageController.animateToPage(
-        targetIndex,
-        duration: const Duration(milliseconds: 550),
-        curve: Curves.easeInOutCubic,
-      );
+      _navigateToTab(targetIndex, settingsVM);
     }
   }
 
@@ -70,13 +90,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _onNavTap(int index, SettingsViewModel settingsVM) {
-    if (index == settingsVM.currentScreenIndex) return;
-    settingsVM.setScreenIndex(index);
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeInOutCubic,
-    );
+    _navigateToTab(index, settingsVM);
   }
 
   void _onPageChanged(int index, SettingsViewModel settingsVM) {
@@ -93,12 +107,7 @@ class _MainShellState extends State<MainShell> {
     final currentIndex = settingsVM.currentScreenIndex;
 
     if (currentIndex != 0) {
-      settingsVM.setScreenIndex(0);
-      _pageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutCubic,
-      );
+      _navigateToTab(0, settingsVM);
       return false;
     }
 

@@ -8,9 +8,9 @@ class AppColors {
   static const Color gold       = brandGreen; // Accent color (mapped to primary brand green)
 
   // ── Backgrounds ───────────────────────────────────────────────────────────
-  static const Color background = Color(0xFF050C16); // Main scaffold background (#050C16)
-  static const Color bgMid      = background; // Secondary background / gradient mid (#050C16)
-  static const Color bgDeep     = background; // Deepest background stop (#050C16)
+  static const Color background = Color(0xFF060B12); // Main scaffold background (#060B12)
+  static const Color bgMid      = background; // Secondary background / gradient mid (#060B12)
+  static const Color bgDeep     = background; // Deepest background stop (#060B12)
   static const Color backgroundLight = Color(0xFFF8FAFC); // Light theme scaffold background
   static const Color bgMidLight      = Color(0xFFF1F5F9); // Light theme mid gradient
   static const Color bgDeepLight     = Color(0xFFE2E8F0); // Light theme deep gradient
@@ -21,14 +21,14 @@ class AppColors {
   static const Color drawerCard     = Color(0x0AFFFFFF); // 4% subtle white translucent glass surface over surfaceElevated for modal & drawer cards/inputs
   static const Color modalCard      = drawerCard; // Alias for drawerCard
   static const Color overlay        = surfaceElevated; // Replaced legacy #2A2A34 with #141D28
-  static const Color bottomNavDark  = Color(0xFF08101C); // Deep navy-slate (between background #050C16 and surface #111821)
+  static const Color bottomNavDark  = Color(0xFF08101C); // Deep navy-slate (between background #060B12 and surface #111821)
   static const Color bottomNavBg    = Color(0xD908101C); // 85% translucent frosted deep dark glass (#08101C @ 85%)
   static const Color bottomNavBgLight = Color(0xCCFFFFFF); // 80% translucent frosted white glass
   static const Color surfaceLight   = Color(0xFFFFFFFF); // Light theme card surface
   static const Color cardTileLight  = Color(0xFFF1F5F9); // Light theme elevated tile
   static const Color glassSurface   = Color(0x59111821); // 35% dark surface glass
   static const Color glassSurfaceSubtle = Color(0x1A111821); // 10% dark surface glass
-  static const Color glassSurfaceModal  = Color(0xE0111821); // 88% dark modal surface glass
+  static const Color glassSurfaceModal  = surfaceElevated; // Solid elevated modal surface tone (#141D28)
   static const double glassBlurSigma    = 20.0; // Centralized glass blur radius
   static const Color destructiveSurface = Color(0x24E11D48); // 14% destructive soft surface
   static const Color tabBackground      = Color(0xFF09101A); // Deep recessed navy track for capsule tabs
@@ -202,6 +202,7 @@ class AppColors {
   static const Color slateMuted         = Color(0xFF64748B);
   static const Color slateLight         = Color(0xFFCBD5E1);
   static const Color slateSurface       = Color(0xFFF1F5F9);
+  static const Color slateDarkText      = Color(0xFF475569);
   static const Color whiterGlow         = Color(0xFFF8FAFC);
   static const Color emeraldDeep        = Color(0xFF00875A);
   static const Color emeraldBright      = Color(0xFF00A86B);
@@ -213,6 +214,12 @@ class AppColors {
   static const Color skyBlue            = Color(0xFF0284C7);
   static const Color onboardingDark     = Color(0xFF071410);
   static const Color onboardingDeep     = Color(0xFF060D0A);
+
+  // Analysis Screen Card Gradient & Glow
+  static const Color analysisCardGradientStart = Color(0xFF0C3025);
+  static const Color analysisCardGradientMid   = Color(0xFF071F18);
+  static const Color analysisCardGradientEnd   = Color(0xFF0D151D);
+  static const Color analysisAmbientGlow       = Color(0xFF0E382C);
 
   // ── Additional Semantic & Dynamic UI Palette ──────────────────────────────
   static const Color destructiveRed            = Color(0xFFFF5252);
@@ -249,6 +256,123 @@ class AppColors {
 
   static const Color buttonSoftDestructiveBg = Color(0x24E11D48); // Soft red background (14% red)
   static const Color buttonGlassBg           = Color(0x1AFFFFFF); // Translucent glass action background
+
+  static const List<Color> unifiedBankBehindGradient = [
+    savingProgressGreenMid, // Color(0xFF047857)
+    chartDarkEmerald,       // Color(0xFF059669)
+    chartBrightEmerald,     // Color(0xFF10B981)
+  ];
+
+  static const List<Color> categoryFallbackPalette = [
+    chartSkyBlue,
+    chartBrightEmerald,
+    chartAmberYellow,
+    error,
+    chartSoftViolet,
+    chartCoralPink,
+    chartCyan,
+    chartLimeGreen,
+    chartPurpleVibrant,
+    chartOrange,
+    chartTeal,
+    chartIndigo,
+    chartYellow,
+    chartFuchsia,
+    skyBlue,
+    chartDarkEmerald,
+  ];
+
+  static Color getLevelGlow(int level) {
+    switch (level) {
+      case 1:
+        return levelGlow1;
+      case 2:
+        return levelGlow2;
+      case 3:
+        return levelGlow3;
+      case 4:
+        return levelGlow4;
+      case 5:
+        return levelGlow5;
+      default:
+        return levelGlow1;
+    }
+  }
+
+  static Color getCategoryReasonColor(String category) {
+    final cat = category.trim().toLowerCase();
+
+    // 0. Uncategorized & other fallback color
+    if (cat == 'uncategorized' || cat == 'other' || cat == 'other cash' || cat.isEmpty) {
+      return slateMuted; // #64748B
+    }
+
+    // 1. Explicit distinct color mapping for defined system reasons
+    if (cat == 'food' || cat.contains('restaurant') || cat.contains('dining')) {
+      return chartWarmOrange;
+    }
+    if (cat == 'salary' || cat.contains('wage') || cat.contains('payroll')) {
+      return chartBrightEmerald;
+    }
+    if (cat == 'transport' || cat.contains('taxi') || cat.contains('ride') || cat.contains('bus')) {
+      return chartSkyBlue;
+    }
+    if (cat == 'rent' || cat.contains('home') || cat.contains('house')) {
+      return chartIndigo;
+    }
+    if (cat == 'shopping' || cat.contains('clothes') || cat.contains('apparel')) {
+      return chartCoralPink;
+    }
+    if (cat == 'utilities' || cat.contains('utility') || cat.contains('bill') || cat.contains('electricity')) {
+      return chartAmberYellow;
+    }
+    if (cat == 'internet' || cat.contains('wifi') || cat.contains('broadband')) {
+      return chartCyan;
+    }
+    if (cat == 'fuel' || cat.contains('gas') || cat.contains('petrol')) {
+      return error;
+    }
+    if (cat == 'medical' || cat.contains('health') || cat.contains('pharmacy') || cat.contains('hospital')) {
+      return chartTeal;
+    }
+    if (cat == 'gift' || cat.contains('donation') || cat.contains('charity')) {
+      return chartPurpleVibrant;
+    }
+    if (cat == 'loan' || cat.contains('credit') || cat.contains('debt')) {
+      return chartLimeGreen;
+    }
+    if (cat == 'entertainment' || cat.contains('entertain') || cat.contains('movie') || cat.contains('fun')) {
+      return chartSoftViolet;
+    }
+    if (cat == 'education' || cat.contains('school') || cat.contains('tuition')) {
+      return chartRoyalBlue;
+    }
+    if (cat == 'investment' || cat.contains('stock') || cat.contains('savings')) {
+      return chartDarkEmerald;
+    }
+    if (cat == 'airtime' || cat.contains('recharge') || cat.contains('mobile')) {
+      return skyBlue;
+    }
+    if (cat == 'cash' || cat.contains('atm') || cat.contains('withdrawal')) {
+      return chartBronzeAmber;
+    }
+    if (cat == 'bounce') {
+      return chartCrimson;
+    }
+    if (cat.contains('cbe') || cat.contains('bank')) {
+      return cbePurple;
+    }
+    if (cat.contains('telebirr')) {
+      return telebirrGreen;
+    }
+    if (cat.contains('ahadu')) {
+      return cbeBirrMagenta;
+    }
+
+    // 2. Deterministic vibrant color for any undefined/custom reasons
+    final hash = cat.codeUnits.fold<int>(0, (prev, elem) => prev + elem);
+    return categoryFallbackPalette[hash.abs() % categoryFallbackPalette.length];
+  }
 
   // ── Gradients ─────────────────────────────────────────────────────────────
   static const LinearGradient bgGradient = LinearGradient(
