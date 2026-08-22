@@ -21,11 +21,12 @@ dependencies:
   flutter_local_notifications: ^20.1.0
   flutter_svg: any
   fl_chart: ^1.1.1
-  file_picker: any
+  file_picker: ^8.1.7
   flutter_slidable: ^4.0.3
   url_launcher: ^6.3.2
   local_auth: any
   crypto: any
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:

@@ -120,6 +120,13 @@ class LoanRecord {
         contractNumber: clearContractNumber ? null : (contractNumber ?? this.contractNumber),
       );
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LoanRecord && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// Represents a single repayment event against a loan.
@@ -159,4 +166,12 @@ class LoanPayment {
         linkedTransactionId: m['linkedTransactionId'] as String?,
         note: m['note'] as String?,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LoanPayment && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

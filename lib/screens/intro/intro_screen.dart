@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/notifications_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_toast.dart';
@@ -10,7 +10,7 @@ class IntroScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final notifVM = Provider.of<NotificationsViewModel>(context, listen: false);
 
     return Scaffold(
       backgroundColor: AppColors.bgDeep,
@@ -47,8 +47,8 @@ class IntroScreen extends StatelessWidget {
                 text: 'Grant SMS Permission',
                 height: 52,
                 onPressed: () async {
-                  await provider.requestPermission();
-                  if (!provider.hasPermission && context.mounted) {
+                  await notifVM.requestPermission();
+                  if (!notifVM.hasPermission && context.mounted) {
                     AppToast.error(
                       context,
                       message: 'Permission denied',

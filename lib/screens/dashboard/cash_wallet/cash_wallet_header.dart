@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../../providers/finance_provider.dart';
+import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../../presentation/viewmodels/settings_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_back_button.dart';
 import '../../../widgets/app_button.dart';
@@ -17,14 +18,12 @@ import '../bank_detail/bank_metadata.dart';
 // Dynamic Telegram-Style Collapsing Header Delegate
 // ─────────────────────────────────────────────────────────────────────────────
 class CashWalletHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final FinanceProvider provider;
   final VoidCallback onAddCash;
   final VoidCallback onDeduct;
   final VoidCallback onTemplates;
   final double topSafeArea;
 
   CashWalletHeaderDelegate({
-    required this.provider,
     required this.onAddCash,
     required this.onDeduct,
     required this.onTemplates,
@@ -50,7 +49,6 @@ class CashWalletHeaderDelegate extends SliverPersistentHeaderDelegate {
         lerpDouble(28.0, 0.0, collapseRatio)!;
 
     return InteractiveCashWalletCard(
-      provider: provider,
       topSafeArea: topSafeArea,
       collapseRatio: collapseRatio,
       contentOpacity: contentOpacity,
@@ -70,7 +68,6 @@ class CashWalletHeaderDelegate extends SliverPersistentHeaderDelegate {
 // Interactive Stacked Sliding Cash Wallet Card Widget
 // ─────────────────────────────────────────────────────────────────────────────
 class InteractiveCashWalletCard extends StatefulWidget {
-  final FinanceProvider provider;
   final double topSafeArea;
   final double collapseRatio;
   final double contentOpacity;
@@ -82,7 +79,6 @@ class InteractiveCashWalletCard extends StatefulWidget {
 
   const InteractiveCashWalletCard({
     super.key,
-    required this.provider,
     required this.topSafeArea,
     required this.collapseRatio,
     required this.contentOpacity,
@@ -169,7 +165,8 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<FinanceProvider>();
+    final cashVM = context.watch<CashWalletViewModel>();
+    final settingsVM = context.watch<SettingsViewModel>();
     final fmt = NumberFormat('#,##0.00');
     final cardColors = BankCardWidget.getCardGradient('Cash Wallet');
 
@@ -303,14 +300,14 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                               FittedBox(
                                 fit: BoxFit.scaleDown,
                                 alignment: Alignment.center,
-                                child: provider.isBalanceVisible
+                                child: settingsVM.isBalanceVisible
                                     ? Row(
                                         mainAxisSize: MainAxisSize.min,
                                         crossAxisAlignment:
                                             CrossAxisAlignment.center,
                                         children: [
                                           Text(
-                                            fmt.format(provider.cashBalance),
+                                            fmt.format(cashVM.cashBalance),
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 34,
@@ -336,7 +333,7 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                                             padding: EdgeInsets.zero,
                                             constraints:
                                                 const BoxConstraints(),
-                                            onPressed: () => provider
+                                            onPressed: () => settingsVM
                                                 .toggleBalanceVisibility(),
                                           ),
                                         ],
@@ -368,7 +365,7 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                                             padding: EdgeInsets.zero,
                                             constraints:
                                                 const BoxConstraints(),
-                                            onPressed: () => provider
+                                            onPressed: () => settingsVM
                                                 .toggleBalanceVisibility(),
                                           ),
                                         ],

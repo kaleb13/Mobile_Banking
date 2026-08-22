@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/sender.dart';
-import '../providers/finance_provider.dart';
+import '../presentation/viewmodels/transactions_view_model.dart';
+import '../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_badges.dart';
 import '../widgets/bank_card_widget.dart';
@@ -108,9 +109,9 @@ class _BankCardActionModalState extends State<BankCardActionModal>
     super.dispose();
   }
 
-  AppSender? _findSender(FinanceProvider provider) {
+  AppSender? _findSender(TransactionsViewModel txVM) {
     try {
-      return provider.senders.firstWhere(
+      return txVM.senders.firstWhere(
         (s) => s.senderName.toUpperCase() == widget.senderName.toUpperCase(),
       );
     } catch (_) {
@@ -120,11 +121,12 @@ class _BankCardActionModalState extends State<BankCardActionModal>
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final bool currentPaused = provider.isTrackingPaused(widget.senderName);
-    final double liveBalance = provider.balanceForSender(widget.senderName);
-    final int liveTxCount = provider.txCountForSender(widget.senderName);
-    final sender = _findSender(provider);
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final cashVM = Provider.of<CashWalletViewModel>(context);
+    final bool currentPaused = txVM.isTrackingPaused(widget.senderName);
+    final double liveBalance = txVM.balanceForSender(widget.senderName, cashBalance: cashVM.cashBalance);
+    final int liveTxCount = txVM.txCountForSender(widget.senderName, cashTxCount: cashVM.cashTransactions.length);
+    final sender = _findSender(txVM);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -235,7 +237,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                               nav.pop();
 
                               if (wasPaused) {
-                                await provider.resumeTracking(name);
+                                await txVM.resumeTracking(name);
                                 if (context.mounted) {
                                   AppToast.success(
                                     context,
@@ -249,7 +251,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                                   );
                                 }
                               } else {
-                                await provider.pauseTracking(name);
+                                await txVM.pauseTracking(name);
                                 if (context.mounted) {
                                   AppToast.warning(
                                     context,

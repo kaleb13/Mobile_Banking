@@ -11,7 +11,8 @@ import '../../widgets/app_badges.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_header.dart';
 import '../../theme/app_theme.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/analytics_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import 'saving_goals_screen.dart';
 import 'settings_screen.dart';
 
@@ -81,20 +82,20 @@ class ProfileHubScreen extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     // ── Hero Section: Dynamic Level Badge & Progress Card ───────────────
-                    Consumer<FinanceProvider>(
-                      builder: (context, provider, _) {
-                        final level = provider.userLevel;
-                        final levelName = provider.userLevelName;
-                        final levelDesc = provider.userLevelDescription;
+                    Consumer2<AnalyticsViewModel, SettingsViewModel>(
+                      builder: (context, analyticsVM, settingsVM, _) {
+                        final level = analyticsVM.userLevel;
+                        final levelName = analyticsVM.userLevelName;
+                        final levelDesc = analyticsVM.userLevelDescription;
                         final glowColor = _levelGlowColor(level);
                         final badgePath = 'assets/images/LV$level.svg';
 
-                        final nextLvName = provider.nextLevelName;
-                        final remaining = provider.remainingToNextLevel;
-                        final progress = provider.nextLevelProgress;
-                        final targetBal = provider.nextLevelTargetBalance;
+                        final nextLvName = analyticsVM.nextLevelName;
+                        final remaining = analyticsVM.remainingToNextLevel;
+                        final progress = analyticsVM.nextLevelProgress;
+                        final targetBal = analyticsVM.nextLevelTargetBalance;
                         final fmt = NumberFormat('#,##0.00');
-                        final isVisible = provider.isBalanceVisible;
+                        final isVisible = settingsVM.isBalanceVisible;
 
                         return Column(
                           children: [
@@ -200,7 +201,7 @@ class ProfileHubScreen extends StatelessWidget {
                                       children: [
                                         Text(
                                           isVisible
-                                              ? '${fmt.format(provider.totalBalance)} ETB'
+                                              ? '${fmt.format(analyticsVM.totalBalance)} ETB'
                                               : '•••••••• ETB',
                                           style: const TextStyle(
                                             color: Colors.white,
@@ -393,13 +394,13 @@ class ProfileHubScreen extends StatelessWidget {
   void _showLevelsInfoDialog(BuildContext context) {
     AppDrawer.show(
       context: context,
-      builder: (ctx) => Consumer<FinanceProvider>(
-        builder: (context, provider, _) {
-          final currentLv = provider.userLevel;
-          final currentLvName = provider.userLevelName;
-          final nextLvName = provider.nextLevelName;
-          final remaining = provider.remainingToNextLevel;
-          final progress = provider.nextLevelProgress;
+      builder: (ctx) => Consumer<AnalyticsViewModel>(
+        builder: (context, analyticsVM, _) {
+          final currentLv = analyticsVM.userLevel;
+          final currentLvName = analyticsVM.userLevelName;
+          final nextLvName = analyticsVM.nextLevelName;
+          final remaining = analyticsVM.remainingToNextLevel;
+          final progress = analyticsVM.nextLevelProgress;
           final fmt = NumberFormat('#,##0.00');
 
           const levels = [

@@ -1,7 +1,7 @@
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import '../../../models/sender.dart';
-import '../../../providers/finance_provider.dart';
+
 import 'interactive_bank_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9,7 +9,7 @@ import 'interactive_bank_card.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class BankDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
   final AppSender sender;
-  final FinanceProvider provider;
+
   final double topSafeArea;
   final double currentBalance;
   final double monthChange;
@@ -24,7 +24,7 @@ class BankDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   BankDetailHeaderDelegate({
     required this.sender,
-    required this.provider,
+
     required this.topSafeArea,
     required this.currentBalance,
     required this.monthChange,

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../models/expense_definition.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
@@ -78,9 +79,9 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Consumer<FinanceProvider>(
-                  builder: (context, provider, child) {
-                    final defs = provider.expenseDefinitions;
+                child: Consumer2<CashWalletViewModel, TransactionsViewModel>(
+                  builder: (context, cashVM, txVM, child) {
+                    final defs = cashVM.expenseDefinitions;
 
                     if (defs.isEmpty) {
                       return SingleChildScrollView(
@@ -179,7 +180,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                                     fontSize: 12)),
                                             const SizedBox(width: 8),
                                             Text(
-                                              provider.reasons
+                                              txVM.reasons
                                                       .where((r) =>
                                                           r.id == def.reasonId)
                                                       .firstOrNull
@@ -241,7 +242,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                           child: AppSwitch(
                                             value: def.isActive,
                                             onChanged: (val) {
-                                              provider.updateExpenseDefinition(
+                                              cashVM.updateExpenseDefinition(
                                                   def.copyWith(isActive: val));
                                             },
                                           ),
@@ -282,7 +283,7 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                                               cancelText: 'Cancel',
                                               isDestructive: true,
                                               onConfirm: () {
-                                                provider.deleteExpenseDefinition(def.id!);
+                                                cashVM.deleteExpenseDefinition(def.id!);
                                               },
                                             );
                                           },

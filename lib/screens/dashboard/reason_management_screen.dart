@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/reason.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
@@ -36,7 +36,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<FinanceProvider>().loadReasons();
+      context.read<TransactionsViewModel>().loadReasons();
     });
   }
 
@@ -46,7 +46,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     return _specialReasonDescriptions.containsKey(nameLower);
   }
 
-  void _showAddCategoryDialog(BuildContext context, FinanceProvider provider, {AppReason? parentCategory, AppReason? existing}) {
+  void _showAddCategoryDialog(BuildContext context, TransactionsViewModel txVM, {AppReason? parentCategory, AppReason? existing}) {
     final ctrl = TextEditingController(text: existing?.name ?? '');
     final isSubcategory = parentCategory != null || (existing != null && existing.isSubcategory);
 
@@ -67,11 +67,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               if (name.isEmpty) return;
 
               if (existing != null) {
-                await provider.updateCategory(existing.id!, name);
+                await txVM.updateCategory(existing.id!, name);
               } else if (parentCategory != null) {
-                await provider.addSubcategory(parentCategory.id!, name);
+                await txVM.addSubcategory(parentCategory.id!, name);
               } else {
-                await provider.addTopLevelCategory(name);
+                await txVM.addTopLevelCategory(name);
               }
 
               if (context.mounted) {
@@ -103,7 +103,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     );
   }
 
-  void _confirmDeleteCategory(BuildContext context, FinanceProvider provider, AppReason reason) {
+  void _confirmDeleteCategory(BuildContext context, TransactionsViewModel txVM, AppReason reason) {
     AppConfirmDialog.show(
       context: context,
       title: reason.isSubcategory ? 'Delete Subcategory?' : 'Delete Category?',
@@ -116,7 +116,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       cancelText: 'Cancel',
       isDestructive: true,
       onConfirm: () async {
-        await provider.deleteCategory(reason.id!);
+        await txVM.deleteCategory(reason.id!);
       },
     );
   }
@@ -132,7 +132,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     return nameLower == 'airtime' || nameLower == 'package';
   }
 
-  void _showCategoryOptionsModal(BuildContext context, FinanceProvider provider, AppReason reason) {
+  void _showCategoryOptionsModal(BuildContext context, TransactionsViewModel txVM, AppReason reason) {
     final isTopProtected = _isProtectedTopCategory(reason);
     final isSubProtected = _isProtectedSubcategory(reason);
 
@@ -184,7 +184,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
                     onTap: () {
                       Navigator.pop(sheetCtx);
-                      _showAddCategoryDialog(context, provider, parentCategory: reason);
+                      _showAddCategoryDialog(context, txVM, parentCategory: reason);
                     },
                   ),
                 ),
@@ -201,7 +201,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
                     onTap: () {
                       Navigator.pop(sheetCtx);
-                      _showAddCategoryDialog(context, provider, existing: reason);
+                      _showAddCategoryDialog(context, txVM, existing: reason);
                     },
                   ),
                 ),
@@ -218,7 +218,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
                       onTap: () {
                         Navigator.pop(sheetCtx);
-                        _showAddCategoryDialog(context, provider, parentCategory: reason);
+                        _showAddCategoryDialog(context, txVM, parentCategory: reason);
                       },
                     ),
                   ),
@@ -234,7 +234,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
                     onTap: () {
                       Navigator.pop(sheetCtx);
-                      _confirmDeleteCategory(context, provider, reason);
+                      _confirmDeleteCategory(context, txVM, reason);
                     },
                   ),
                 ),
@@ -248,16 +248,16 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final txVM = Provider.of<TransactionsViewModel>(context);
 
     final specialReasonsMap = <String, AppReason>{};
-    for (var r in provider.reasons.where(_isSpecial)) {
+    for (var r in txVM.reasons.where(_isSpecial)) {
       specialReasonsMap.putIfAbsent(r.name.trim().toLowerCase(), () => r);
     }
     final specialReasons = specialReasonsMap.values.toList();
 
     final topCategoriesMap = <String, AppReason>{};
-    for (var r in provider.topLevelCategories) {
+    for (var r in txVM.topLevelCategories) {
       if (!_isSpecial(r)) {
         topCategoriesMap.putIfAbsent(r.name.trim().toLowerCase(), () => r);
       }
@@ -280,7 +280,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           height: 48,
           elevation: 6.0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          onPressed: () => _showAddCategoryDialog(context, provider),
+          onPressed: () => _showAddCategoryDialog(context, txVM),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: SafeArea(
@@ -329,7 +329,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     child: Text('No categories created yet.', style: TextStyle(color: AppColors.textSoft, fontSize: 13)),
                   ),
                 ),
-              ...topCategories.map((cat) => _buildCategoryCard(context, provider, cat)),
+              ...topCategories.map((cat) => _buildCategoryCard(context, txVM, cat)),
             ],
           ),
         ),
@@ -396,8 +396,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     );
   }
 
-  Widget _buildCategoryCard(BuildContext context, FinanceProvider provider, AppReason category) {
-    final subcategories = provider.subcategoriesFor(category.id!);
+  Widget _buildCategoryCard(BuildContext context, TransactionsViewModel txVM, AppReason category) {
+    final subcategories = txVM.subcategoriesFor(category.id!);
     final isExpanded = _expandedCategoryId == category.id;
 
     return Container(
@@ -446,7 +446,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 });
               },
               onLongPress: () {
-                _showCategoryOptionsModal(context, provider, category);
+                _showCategoryOptionsModal(context, txVM, category);
               },
             ),
             if (isExpanded)
@@ -469,7 +469,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                           borderRadius: BorderRadius.circular(10),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(10),
-                            onLongPress: () => _showCategoryOptionsModal(context, provider, sub),
+                            onLongPress: () => _showCategoryOptionsModal(context, txVM, sub),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               child: Row(
@@ -502,7 +502,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                         height: 34,
                         fontSize: 12,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        onPressed: () => _showAddCategoryDialog(context, provider, parentCategory: category),
+                        onPressed: () => _showAddCategoryDialog(context, txVM, parentCategory: category),
                       ),
                     ),
                   ],

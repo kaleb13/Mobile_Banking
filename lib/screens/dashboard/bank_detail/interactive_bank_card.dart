@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../models/sender.dart';
-import '../../../providers/finance_provider.dart';
+import '../../../presentation/viewmodels/settings_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_back_button.dart';
 import '../../../widgets/app_button.dart';
@@ -128,7 +128,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<FinanceProvider>();
+    final settingsVM = context.watch<SettingsViewModel>();
     final fmt = NumberFormat('#,##0.00');
     final senderName = widget.sender.senderName;
     final cardColors = BankCardWidget.getCardGradient(senderName);
@@ -321,7 +321,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
                                       alignment: Alignment.centerLeft,
-                                      child: provider.isBalanceVisible
+                                      child: settingsVM.isBalanceVisible
                                           ? Row(
                                               mainAxisSize: MainAxisSize.min,
                                               crossAxisAlignment:
@@ -354,7 +354,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                                   padding: EdgeInsets.zero,
                                                   constraints:
                                                       const BoxConstraints(),
-                                                  onPressed: () => provider
+                                                  onPressed: () => settingsVM
                                                       .toggleBalanceVisibility(),
                                                 ),
                                               ],
@@ -385,7 +385,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                                   padding: EdgeInsets.zero,
                                                   constraints:
                                                       const BoxConstraints(),
-                                                  onPressed: () => provider
+                                                  onPressed: () => settingsVM
                                                       .toggleBalanceVisibility(),
                                                 ),
                                               ],

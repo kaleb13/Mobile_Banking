@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import 'backup_restore_screen.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
 import '../../widgets/app_header.dart';
@@ -16,9 +17,7 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_date_picker_drawer.dart';
 import '../../widgets/app_modal_dialog.dart';
-import '../../widgets/app_list_tile.dart';
 import '../../widgets/currency_symbol_widget.dart';
-import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/bank_card_widget.dart';
@@ -122,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         showDivider: true,
                       ),
-                      Consumer<FinanceProvider>(
+                      Consumer<SettingsViewModel>(
                           builder: (context, provider, _) {
                         final anchor = provider.customMonthAnchorDate;
                         final subtitle = anchor == null
@@ -169,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // ── Section: Data ──────────────────────────────────
                     _sectionLabel('Data & Storage'),
                     _buildCardBase([
-                      Consumer<FinanceProvider>(
+                      Consumer<SettingsViewModel>(
                         builder: (context, provider, _) {
                           return _settingsTile(
                             context,
@@ -243,7 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // ── Section: Appearance ────────────────────────────
                     _sectionLabel('Appearance'),
                     _buildCardBase([
-                      Consumer<FinanceProvider>(
+                      Consumer<SettingsViewModel>(
                         builder: (context, provider, _) {
                           final currency = provider.currentCurrency;
                           return _settingsTile(
@@ -456,7 +455,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showCurrencyPickerSheet(BuildContext context, FinanceProvider provider) {
+  void _showCurrencyPickerSheet(BuildContext context, SettingsViewModel provider) {
     AppDrawer.show(
       context: context,
       builder: (sheetCtx) {
@@ -539,7 +538,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showScanWindowChooser(BuildContext context, FinanceProvider provider) {
+  void _showScanWindowChooser(BuildContext context, SettingsViewModel provider) {
     AppDrawer.show(
       context: context,
       builder: (sheetCtx) {
@@ -577,20 +576,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Navigator.pop(sheetCtx);
                         HapticFeedback.lightImpact();
 
+                        final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+
                         _showRescanProgressDialog(context, option.title);
 
-                        await provider.setScanWindowOption(option, rescanImmediately: true);
+                        try {
+                          await provider.setScanWindowOption(option, rescanImmediately: true);
 
-                        if (context.mounted && Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop(); // Dismiss progress dialog
-                        }
-
-                        if (context.mounted) {
-                          AppToast.success(
-                            context,
-                            message: 'Scan Range Updated',
-                            subtitle: 'Active window: ${option.title}',
+                          final count = await txVM.scanSms(
+                            scanWindowOption: option,
+                            onProgress: (status) {
+                              provider.updateScanProgress(status);
+                            },
                           );
+
+                          // Keep the modal visible for a brief moment so user sees 100% and scanned banks breakdown
+                          await Future.delayed(const Duration(milliseconds: 700));
+
+                          if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+                            Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
+                          }
+
+                          if (context.mounted) {
+                            AppToast.success(
+                              context,
+                              message: 'Scan Range Updated',
+                              subtitle: '$count transactions imported for ${option.title}',
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+                            Navigator.of(context, rootNavigator: true).pop();
+                          }
+                          if (context.mounted) {
+                            AppToast.error(
+                              context,
+                              message: 'Scan Failed',
+                              subtitle: e.toString(),
+                            );
+                          }
                         }
                       },
                       child: Padding(
@@ -736,7 +760,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: AppColors.glassSurfaceModal,
                       borderRadius: AppRadius.dialogRadius,
                     ),
-                    child: Consumer<FinanceProvider>(
+                    child: Consumer<SettingsViewModel>(
                       builder: (context, provider, _) {
                         final scanProgress = provider.scanProgress;
                         final pct = scanProgress.progress > 0

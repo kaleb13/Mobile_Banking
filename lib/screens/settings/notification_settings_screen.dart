@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
@@ -49,13 +49,13 @@ class NotificationSettingsScreen extends StatelessWidget {
             child: AppBackButton(),
           ),
         ),
-        body: Consumer<FinanceProvider>(
-          builder: (context, provider, _) {
-            final isSmsListening = provider.isSmsListeningEnabled;
-            final isPushEnabled = provider.isPushNotificationsEnabled;
-            final isDailyReport = provider.isDailyReportEnabled;
-            final isWeeklyReport = provider.isWeeklyReportEnabled;
-            final isMonthlyReport = provider.isMonthlyReportEnabled;
+        body: Consumer<SettingsViewModel>(
+          builder: (context, settings, _) {
+            final isSmsListening = settings.isSmsListeningEnabled;
+            final isPushEnabled = settings.isPushNotificationsEnabled;
+            final isDailyReport = settings.isDailyReportEnabled;
+            final isWeeklyReport = settings.isWeeklyReportEnabled;
+            final isMonthlyReport = settings.isMonthlyReportEnabled;
 
             return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
@@ -81,7 +81,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                           ? 'Capturing bank SMS & auto-refreshing in real time'
                           : 'Real-time SMS detection & notifications turned off',
                       value: isSmsListening,
-                      onChanged: (val) => provider.setSmsListeningEnabled(val),
+                      onChanged: (val) => settings.setSmsListeningEnabled(val),
                       showDivider: false,
                     ),
                   ]),
@@ -106,20 +106,20 @@ class NotificationSettingsScreen extends StatelessWidget {
                     _quickButtonSlotTile(
                       context: context,
                       slotNumber: 1,
-                      reasonName: provider.notifQuickButton1,
-                      onChanged: (newReason) => provider.setNotifQuickButton1(newReason),
+                      reasonName: settings.notifQuickButton1,
+                      onChanged: (newReason) => settings.setNotifQuickButton1(newReason),
                       showDivider: true,
                     ),
                     _quickButtonSlotTile(
                       context: context,
                       slotNumber: 2,
-                      reasonName: provider.notifQuickButton2,
-                      onChanged: (newReason) => provider.setNotifQuickButton2(newReason),
+                      reasonName: settings.notifQuickButton2,
+                      onChanged: (newReason) => settings.setNotifQuickButton2(newReason),
                       showDivider: false,
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-                      child: _buildBannerPreview(provider),
+                      child: _buildBannerPreview(settings),
                     ),
                   ]),
 
@@ -142,7 +142,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                           ? 'Push notifications and scheduled reports are active'
                           : 'Off by default. Enable to receive push reports',
                       value: isPushEnabled,
-                      onChanged: (val) => provider.setPushNotificationsEnabled(val),
+                      onChanged: (val) => settings.setPushNotificationsEnabled(val),
                       showDivider: isPushEnabled,
                     ),
 
@@ -176,7 +176,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                         title: 'Daily Spending Summary',
                         subtitle: 'Evening push update of expenses & balance',
                         value: isDailyReport,
-                        onChanged: (val) => provider.setDailyReportEnabled(val),
+                        onChanged: (val) => settings.setDailyReportEnabled(val),
                         showDivider: true,
                       ),
                       _toggleTile(
@@ -185,7 +185,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                         title: 'Weekly Financial Report',
                         subtitle: 'End-of-week breakdown of income vs expenses',
                         value: isWeeklyReport,
-                        onChanged: (val) => provider.setWeeklyReportEnabled(val),
+                        onChanged: (val) => settings.setWeeklyReportEnabled(val),
                         showDivider: true,
                       ),
                       _toggleTile(
@@ -194,7 +194,7 @@ class NotificationSettingsScreen extends StatelessWidget {
                         title: 'Monthly Spending Analysis',
                         subtitle: 'Monthly categorization, budget & trend analysis',
                         value: isMonthlyReport,
-                        onChanged: (val) => provider.setMonthlyReportEnabled(val),
+                        onChanged: (val) => settings.setMonthlyReportEnabled(val),
                         showDivider: false,
                       ),
                     ],
@@ -349,7 +349,7 @@ class NotificationSettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBannerPreview(FinanceProvider provider) {
+  Widget _buildBannerPreview(SettingsViewModel settings) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -384,14 +384,14 @@ class NotificationSettingsScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: _buildActionPill(
-                  provider.notifQuickButton1,
+                  settings.notifQuickButton1,
                   isPrimary: false,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _buildActionPill(
-                  provider.notifQuickButton2,
+                  settings.notifQuickButton2,
                   isPrimary: false,
                 ),
               ),

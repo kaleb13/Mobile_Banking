@@ -671,7 +671,7 @@ class _CapsuleBorderCountdownPainter extends CustomPainter {
     );
 
     // 1. Draw subtle background perimeter track
-    if (trackColor.opacity > 0) {
+    if (trackColor.a > 0) {
       final trackPaint = Paint()
         ..color = trackColor
         ..style = PaintingStyle.stroke

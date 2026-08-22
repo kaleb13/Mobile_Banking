@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
+import '../../widgets/interactive_balance_chart.dart';
 import 'manual_transaction_sheet.dart';
 import '../../models/sender.dart';
 import '../../models/transaction.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
@@ -16,7 +17,6 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_reset_filter_button.dart';
-import '../../widgets/app_capsule_tab_bar.dart';
 import 'bank_detail/bank_detail_header.dart';
 import 'transaction_detail_screen.dart';
 import 'analysis_screen.dart';
@@ -40,7 +40,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _dateRangeFilter = 'All Time'; // All Time, 7D, 30D, 90D, 1Y
   final TextEditingController _searchController = TextEditingController();
   bool _isChartVisible = false;
-  double? _touchedX;
 
   @override
   void dispose() {
@@ -82,17 +81,18 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
     final topSafeArea = MediaQuery.paddingOf(context).top;
 
     // Get latest sender info from provider to reflect linked status
-    final currentSender = provider.senders.firstWhere(
+    final currentSender = txVM.senders.firstWhere(
       (s) => s.id == widget.sender.id,
       orElse: () => widget.sender,
     );
 
     final sNameUp = widget.sender.senderName.toUpperCase();
-    final allTxForSender = provider.transactions.where((tx) {
+    final allTxForSender = txVM.transactions.where((tx) {
       final tNameUp = tx.name.toUpperCase();
       final tSenderUp = tx.sender.toUpperCase();
       if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
@@ -227,7 +227,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 pinned: true,
                 delegate: BankDetailHeaderDelegate(
                   sender: currentSender,
-                  provider: provider,
                   topSafeArea: topSafeArea,
                   currentBalance: currentBalance,
                   monthChange: monthChange,
@@ -239,7 +238,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       context: context,
                       isScrollControlled: true,
                       builder: (context) => ManualTransactionSheet(
-                        provider: provider,
+                        txVM: txVM,
                         initialSender: widget.sender,
                       ),
                     );
@@ -255,7 +254,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     );
                   },
                   onShowPnlInfo: () => _showPNLInfo(context),
-                  onCredentials: () => _showRefreshChooser(context, provider),
+                  onCredentials: () => _showRefreshChooser(context, txVM),
                   onToggleChart: () => setState(() => _isChartVisible = !_isChartVisible),
                 ),
               ),
@@ -266,14 +265,20 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   children: [
                     const SizedBox(height: 12),
                     if (widget.sender.senderName.toUpperCase() == 'TELEBIRR' &&
-                        provider.telebirrSavingBalance > 0)
+                        txVM.telebirrSavingBalance > 0)
                       _buildTelebirrSavingSummaryCard(
-                        provider.telebirrSavingBalance,
+                        txVM.telebirrSavingBalance,
                       ),
                     if (_isChartVisible) ...[
-                      const SizedBox(height: 16),
-                      _buildChartSection(allTxForSender),
-                      _buildChartFilters(),
+                      const SizedBox(height: 8),
+                      InteractiveBalanceChart(
+                        transactions: allTxForSender,
+                        initialFilter: _chartFilter,
+                        isBalanceVisible: settingsVM.isBalanceVisible,
+                        chartHeight: 140,
+                        onFilterChanged: (val) =>
+                            setState(() => _chartFilter = val),
+                      ),
                     ],
                     const SizedBox(height: 16),
                     _buildActivityFilterSection(
@@ -301,7 +306,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   /// Summary card for Telebirr Savings (Sanduq) when savings balance exists
   Widget _buildTelebirrSavingSummaryCard(double savingBalance) {
     final fmt = NumberFormat('#,##0.00');
-    final provider = context.watch<FinanceProvider>();
+    final settingsVM = context.watch<SettingsViewModel>();
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
@@ -350,7 +355,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 ],
               ),
             ),
-            provider.isBalanceVisible
+            settingsVM.isBalanceVisible
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -383,7 +388,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   /// Lets the user pick how far back to re-scan SMS, then refreshes.
-  void _showRefreshChooser(BuildContext context, FinanceProvider provider) {
+  void _showRefreshChooser(BuildContext context, TransactionsViewModel txVM) {
     Future<void> runRefresh(int days) async {
       AppToast.info(
         context,
@@ -391,7 +396,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         subtitle: 'Refreshing transactions from the last $days days…',
         duration: const Duration(seconds: 2),
       );
-      await provider.refreshData(lastDays: days);
+      await txVM.refreshData(lastDays: days);
       if (!context.mounted) return;
       AppToast.success(
         context,
@@ -485,159 +490,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildChartSection(List<AppTransaction> transactions) {
-    if (transactions.isEmpty) return const SizedBox(height: 100);
-
-    // Filter data based on selection
-    DateTime cutoff = DateTime.now().subtract(const Duration(days: 30));
-    if (_chartFilter == '1D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 1));
-    }
-    if (_chartFilter == '7D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 7));
-    }
-    if (_chartFilter == '180D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 180));
-    }
-    if (_chartFilter == '360D') {
-      cutoff = DateTime.now().subtract(const Duration(days: 360));
-    }
-
-    final filtered =
-        transactions.where((t) => t.date.isAfter(cutoff)).toList();
-    if (filtered.isEmpty) {
-      return const SizedBox(
-        height: 180,
-        child: Center(
-          child: Text(
-            "No data for this time frame",
-            style: TextStyle(color: AppColors.textSoft, fontSize: 13),
-          ),
-        ),
-      );
-    }
-
-    // Sort ascending for chart
-    filtered.sort((a, b) => a.date.compareTo(b.date));
-
-    // Compute cumulative balance trend points
-    List<FlSpot> spots = [];
-    double runningBalance = 0;
-    for (int i = 0; i < filtered.length; i++) {
-      final t = filtered[i];
-      if (t.totalBalance > 0) {
-        runningBalance = t.totalBalance;
-      } else {
-        if (t.type == 'income') {
-          runningBalance += t.amount;
-        } else {
-          runningBalance -= t.amount;
-        }
-      }
-      spots.add(FlSpot(i.toDouble(), runningBalance));
-    }
-
-    if (spots.length == 1) {
-      spots = [FlSpot(0, spots[0].y), FlSpot(1, spots[0].y)];
-    }
-
-    double minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
-    double maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    if (minY == maxY) {
-      minY = minY * 0.9;
-      maxY = maxY * 1.1;
-    }
-    final rangeY = (maxY - minY).abs();
-    minY -= rangeY * 0.1;
-    maxY += rangeY * 0.1;
-
-    return Container(
-      height: 180,
-      margin: EdgeInsets.zero,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      color: Colors.transparent,
-      child: LineChart(
-        LineChartData(
-          minY: minY,
-          maxY: maxY,
-          gridData: const FlGridData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipItems: (touchedSpots) {
-                final provider = Provider.of<FinanceProvider>(context, listen: false);
-                return touchedSpots.map((spot) {
-                  return LineTooltipItem(
-                    provider.isBalanceVisible
-                        ? NumberFormat("#,##0").format(spot.y)
-                        : '••••••••',
-                    const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  );
-                }).toList();
-              },
-            ),
-            touchCallback: (event, response) {
-              if (event is FlTapUpEvent || event is FlPanUpdateEvent) {
-                if (response?.lineBarSpots != null &&
-                    response!.lineBarSpots!.isNotEmpty) {
-                  setState(() {
-                    _touchedX = response.lineBarSpots!.first.x;
-                  });
-                }
-              } else if (event is FlPanEndEvent || event is FlTapCancelEvent) {
-                setState(() {
-                  _touchedX = null;
-                });
-              }
-            },
-          ),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              curveSmoothness: 0.35,
-              color: AppColors.positive,
-              barWidth: 2.5,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.positive.withValues(alpha: 0.25),
-                    AppColors.positive.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChartFilters() {
-    final filters = ['1D', '7D', '30D', '180D', '360D'];
-    return Center(
-      child: AppTertiaryTabBar(
-        tabs: filters,
-        selectedTab: _chartFilter,
-        onTabChanged: (val) {
-          setState(() {
-            _chartFilter = val;
-          });
-        },
-      ),
     );
   }
 
@@ -1000,9 +852,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   ],
                 ),
               ),
-              Consumer<FinanceProvider>(
-                builder: (context, provider, child) {
-                  final isVisible = provider.isBalanceVisible;
+              Consumer<SettingsViewModel>(
+                builder: (context, settingsVM, child) {
+                  final isVisible = settingsVM.isBalanceVisible;
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [

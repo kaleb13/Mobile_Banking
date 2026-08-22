@@ -238,7 +238,6 @@ class _AppTextFieldState extends State<AppTextField> {
         defaultPrefixColor = AppColors.positive;
         break;
       case AppTextFieldVariant.dark:
-      default:
         defaultBg = AppColors.drawerCard;
         defaultTextColor = AppColors.textPrimary;
         defaultHintColor = AppColors.textSecondary.withValues(alpha: 0.55);

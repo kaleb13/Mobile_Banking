@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/sender.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 import '../dashboard/sender_detail_screen.dart';
@@ -20,8 +22,10 @@ class _WalletsScreenState extends State<WalletsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final senders = provider.senders;
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final cashVM = Provider.of<CashWalletViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final senders = txVM.senders;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -83,7 +87,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
 
               // ── Wallet Cards List ─────────────────────────────────────────
               senders.isEmpty
-                  ? SliverFillRemaining(
+                  ? const SliverFillRemaining(
                       hasScrollBody: false,
                       child: AppEmptyState(
                         icon: Icons.account_balance_wallet_outlined,
@@ -96,23 +100,23 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
-                            final activeSenders = provider.activeSenders;
-                            final pausedSenders = provider.pausedSenders;
+                            final activeSenders = txVM.activeSenders;
+                            final pausedSenders = txVM.pausedSenders;
                             final int activeCount = activeSenders.length;
 
                             // 1. Active Bank Cards
                             if (index < activeCount) {
                               final sender = activeSenders[index];
                               final double balance =
-                                  provider.balanceForSender(sender.senderName);
+                                  txVM.balanceForSender(sender.senderName, cashBalance: cashVM.cashBalance);
                               final int txCount =
-                                  provider.txCountForSender(sender.senderName);
+                                  txVM.txCountForSender(sender.senderName, cashTxCount: cashVM.cashTransactions.length);
 
                               return _WalletCard(
                                 senderName: sender.senderName,
                                 balance: balance,
                                 txCount: txCount,
-                                isBalanceVisible: provider.isBalanceVisible,
+                                isBalanceVisible: settingsVM.isBalanceVisible,
                                 isPaused: false,
                                 onTap: () => Navigator.push(
                                   context,
@@ -126,7 +130,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
 
                             // 2. Cash Wallet (Directly below active bank cards)
                             if (index == activeCount) {
-                              return _buildCashWalletRow(context, provider);
+                              return _buildCashWalletRow(context, txVM, cashVM, settingsVM);
                             }
 
                             // 3. Paused Tracking Section Card (Fits screen width and contains paused cards inside)
@@ -134,16 +138,17 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                 pausedSenders.isNotEmpty) {
                               return _buildPausedSection(
                                 context,
-                                provider,
+                                txVM,
+                                cashVM,
                                 pausedSenders,
                               );
                             }
 
                             return const SizedBox.shrink();
                           },
-                          childCount: provider.activeSenders.length +
+                          childCount: txVM.activeSenders.length +
                               1 +
-                              (provider.pausedSenders.isNotEmpty ? 1 : 0),
+                              (txVM.pausedSenders.isNotEmpty ? 1 : 0),
                         ),
                       ),
                     ),
@@ -156,7 +161,8 @@ class _WalletsScreenState extends State<WalletsScreen> {
 
   Widget _buildPausedSection(
     BuildContext context,
-    FinanceProvider provider,
+    TransactionsViewModel txVM,
+    CashWalletViewModel cashVM,
     List<AppSender> pausedSenders,
   ) {
     return Container(
@@ -225,9 +231,9 @@ class _WalletsScreenState extends State<WalletsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: pausedSenders.map((sender) {
                         final double balance =
-                            provider.balanceForSender(sender.senderName);
+                            txVM.balanceForSender(sender.senderName, cashBalance: cashVM.cashBalance);
                         final int txCount =
-                            provider.txCountForSender(sender.senderName);
+                            txVM.txCountForSender(sender.senderName, cashTxCount: cashVM.cashTransactions.length);
 
                         return _WalletCard(
                           senderName: sender.senderName,
@@ -247,12 +253,17 @@ class _WalletsScreenState extends State<WalletsScreen> {
     );
   }
 
-  Widget _buildCashWalletRow(BuildContext context, FinanceProvider provider) {
+  Widget _buildCashWalletRow(
+    BuildContext context,
+    TransactionsViewModel txVM,
+    CashWalletViewModel cashVM,
+    SettingsViewModel settingsVM,
+  ) {
     return _WalletCard(
       senderName: 'Cash Wallet',
-      balance: provider.balanceForSender('Cash Wallet'),
-      txCount: provider.txCountForSender('Cash Wallet'),
-      isBalanceVisible: provider.isBalanceVisible,
+      balance: txVM.balanceForSender('Cash Wallet', cashBalance: cashVM.cashBalance),
+      txCount: txVM.txCountForSender('Cash Wallet', cashTxCount: cashVM.cashTransactions.length),
+      isBalanceVisible: settingsVM.isBalanceVisible,
       isPaused: false, // Cash Wallet is never paused
       onTap: () {
         Navigator.push(
@@ -289,8 +300,8 @@ class _WalletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final pageOffset = provider.pageOffset;
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final pageOffset = settingsVM.pageOffset;
 
     // During any flight/transition between Home and Wallet (pageOffset < 0.98),
     // main_shell's overlay handles 100% of the flying cards with ZERO ghost cards underneath.

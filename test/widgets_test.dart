@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:mobile_banking_app/widgets/app_switch.dart';
 import 'package:mobile_banking_app/widgets/custom_progress_bar.dart';
 import 'package:mobile_banking_app/widgets/confirmation_dialog.dart';
 import 'package:mobile_banking_app/widgets/app_capsule_tab_bar.dart';
 import 'package:mobile_banking_app/widgets/app_back_button.dart';
 import 'package:mobile_banking_app/widgets/app_menu_button.dart';
+import 'package:mobile_banking_app/widgets/app_money_text.dart';
+import 'package:mobile_banking_app/presentation/viewmodels/settings_view_model.dart';
+import 'package:mobile_banking_app/data/repositories/settings_repository.dart';
+import 'package:mobile_banking_app/models/app_currency.dart';
+import 'package:mobile_banking_app/models/scan_window_option.dart';
+import 'package:mobile_banking_app/theme/app_theme.dart';
 
 void main() {
   group('AppSwitch Widget Tests', () {
@@ -339,6 +346,144 @@ void main() {
       expect(selectedValue, equals('delete'));
     });
   });
+
+  group('AppMoneyText Widget Synchronized Tests', () {
+    testWidgets('renders masked dots when isBalanceVisible is false and amounts when true', (WidgetTester tester) async {
+      final fakeRepo = FakeSettingsRepository();
+      final settingsVM = SettingsViewModel(repository: fakeRepo);
+      await settingsVM.init();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<SettingsViewModel>.value(
+          value: settingsVM,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  AppMoneyText(
+                    amount: 1540.50,
+                    prefix: '+',
+                    decimalDigits: 2,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Default is visible -> +1,540.50
+      expect(find.text('+1,540.50'), findsOneWidget);
+      expect(find.text('+••••••'), findsNothing);
+
+      // Toggle privacy off
+      await settingsVM.toggleBalanceVisibility();
+      await tester.pumpAndSettle();
+
+      // Now masked synchronously across the UI
+      expect(find.text('+••••••'), findsOneWidget);
+      expect(find.text('+1,540.50'), findsNothing);
+
+      // Toggle privacy back on
+      await settingsVM.toggleBalanceVisibility();
+      await tester.pumpAndSettle();
+
+      expect(find.text('+1,540.50'), findsOneWidget);
+    });
+  });
+}
+
+class FakeSettingsRepository implements SettingsRepository {
+  bool isBalanceVisible = true;
+
+  @override
+  Future<bool> getIsBalanceVisible() async => isBalanceVisible;
+
+  @override
+  Future<void> setIsBalanceVisible(bool value) async => isBalanceVisible = value;
+
+  @override
+  Future<AppThemeMode> getThemeMode() async => AppThemeMode.dark;
+
+  @override
+  Future<void> setThemeMode(AppThemeMode mode) async {}
+
+  @override
+  Future<AppCurrency> getCurrency() async => const AppCurrency(
+        code: 'birr',
+        symbol: 'Br',
+        shortLabel: 'Birr',
+        name: 'Ethiopian Birr',
+      );
+
+  @override
+  Future<void> setCurrency(String code) async {}
+
+  @override
+  Future<bool> getSmsListeningEnabled() async => true;
+
+  @override
+  Future<void> setSmsListeningEnabled(bool value) async {}
+
+  @override
+  Future<bool> getPushNotificationsEnabled() async => false;
+
+  @override
+  Future<void> setPushNotificationsEnabled(bool value) async {}
+
+  @override
+  Future<bool> getReportDailyEnabled() async => false;
+
+  @override
+  Future<void> setReportDailyEnabled(bool value) async {}
+
+  @override
+  Future<bool> getReportWeeklyEnabled() async => false;
+
+  @override
+  Future<void> setReportWeeklyEnabled(bool value) async {}
+
+  @override
+  Future<bool> getReportMonthlyEnabled() async => false;
+
+  @override
+  Future<void> setReportMonthlyEnabled(bool value) async {}
+
+  @override
+  Future<String> getNotifQuickButton1() async => '';
+
+  @override
+  Future<void> setNotifQuickButton1(String value) async {}
+
+  @override
+  Future<String> getNotifQuickButton2() async => '';
+
+  @override
+  Future<void> setNotifQuickButton2(String value) async {}
+
+  @override
+  Future<DateTime?> getCustomMonthAnchorDate() async => null;
+
+  @override
+  Future<void> setCustomMonthAnchorDate(DateTime? date) async {}
+
+  @override
+  Future<String?> getUserName() async => null;
+
+  @override
+  Future<void> setUserName(String name) async {}
+
+  @override
+  Future<bool> getIsOnboardingComplete() async => true;
+
+  @override
+  Future<void> setOnboardingComplete(bool complete) async {}
+
+  @override
+  Future<ScanWindowOption> getScanWindow() async => ScanWindowOption.thirtyDays;
+
+  @override
+  Future<void> setScanWindow(ScanWindowOption option) async {}
 }
 
 

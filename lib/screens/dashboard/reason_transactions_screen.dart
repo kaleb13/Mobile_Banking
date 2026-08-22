@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badges.dart';
@@ -108,10 +110,12 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final cashVM = Provider.of<CashWalletViewModel>(context);
     final displayTitle = widget.title ?? widget.reason?.name ?? 'Transactions';
     final fmt = NumberFormat('#,##0.00');
-    final isBalanceVisible = provider.isBalanceVisible;
+    final isBalanceVisible = settingsVM.isBalanceVisible;
 
     // Collect base source transactions
     List<AppTransaction> rawBankTransactions;
@@ -127,20 +131,20 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
         widget.reason!.name.toLowerCase().trim()
       };
       if (widget.reason!.id != null) {
-        final subs = provider.subcategoriesFor(widget.reason!.id!);
+        final subs = txVM.subcategoriesFor(widget.reason!.id!);
         for (final sub in subs) {
           targetReasonNames.add(sub.name.toLowerCase().trim());
         }
       }
 
-      rawBankTransactions = provider.transactions.where((tx) {
+      rawBankTransactions = txVM.transactions.where((tx) {
         final rName =
             (tx.resolvedReason ?? tx.reason ?? '').toLowerCase().trim();
         if (rName.isEmpty) return false;
         return targetReasonNames.contains(rName);
       }).toList();
 
-      rawCashTransactions = provider.cashTransactions.where((ctx) {
+      rawCashTransactions = cashVM.cashTransactions.where((ctx) {
         final rName =
             (ctx.reasonName ?? ctx.description ?? '').toLowerCase().trim();
         if (rName.isEmpty) return false;

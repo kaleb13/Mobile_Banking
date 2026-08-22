@@ -50,6 +50,7 @@ class CashTransaction {
   }
 
   CashTransaction copyWith({
+    int? id,
     String? type,
     double? amount,
     DateTime? date,
@@ -60,7 +61,7 @@ class CashTransaction {
     String? linkedTransactionId,
   }) {
     return CashTransaction(
-      id: id,
+      id: id ?? this.id,
       type: type ?? this.type,
       amount: amount ?? this.amount,
       date: date ?? this.date,
@@ -71,4 +72,12 @@ class CashTransaction {
       linkedTransactionId: linkedTransactionId ?? this.linkedTransactionId,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CashTransaction && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

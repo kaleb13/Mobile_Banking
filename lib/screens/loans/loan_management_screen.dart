@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/loan_record.dart';
 import '../../models/loan_repayment_request.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/loans_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 import '../dashboard/bank_detail/bank_behind_info_panel.dart';
@@ -31,17 +33,17 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
   @override
   void initState() {
     super.initState();
-    final initialTab = context.read<FinanceProvider>().activeLoanTabIndex.clamp(0, 2);
+    final initialTab = context.read<LoansViewModel>().activeLoanTabIndex.clamp(0, 2);
     _tabCtrl = TabController(length: 3, vsync: this, initialIndex: initialTab);
     _tabCtrl.addListener(_onTabChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<FinanceProvider>().loadLoans();
+      context.read<LoansViewModel>().loadLoans();
     });
   }
 
   void _onTabChanged() {
     if (_tabCtrl.indexIsChanging) return;
-    context.read<FinanceProvider>().setLoanTabIndex(_tabCtrl.index);
+    context.read<LoansViewModel>().setLoanTabIndex(_tabCtrl.index);
   }
 
   @override
@@ -53,19 +55,20 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final loansVM = Provider.of<LoansViewModel>(context);
     final topSafeArea = MediaQuery.paddingOf(context).top;
-    final targetTab = provider.activeLoanTabIndex.clamp(0, 2);
+    final targetTab = loansVM.activeLoanTabIndex.clamp(0, 2);
     if (_tabCtrl.index != targetTab && !_tabCtrl.indexIsChanging) {
       _tabCtrl.animateTo(targetTab);
     }
-    final lentLoans = provider.loanRecords
+    final lentLoans = loansVM.loanRecords
         .where((l) => l.loanType == 'lent' && !l.isPaid)
         .toList();
-    final borrowedLoans = provider.loanRecords
+    final borrowedLoans = loansVM.loanRecords
         .where((l) => l.loanType == 'borrowed' && !l.isPaid)
         .toList();
-    final paidLoans = provider.paidLoans;
+    final paidLoans = loansVM.paidLoans;
 
     // Summary figures
     final totalLent =
@@ -73,7 +76,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
     final totalBorrowed =
         borrowedLoans.fold<double>(0, (s, l) => s + l.remainingAmount);
 
-    final bool hasPending = provider.pendingRepaymentRequests.isNotEmpty;
+    final bool hasPending = loansVM.pendingRepaymentRequests.isNotEmpty;
     final double cardRestingHeight = topSafeArea + (hasPending ? 218.0 : 172.0);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -143,7 +146,8 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                   borrowedCount: borrowedLoans.length,
                   settledCount: paidLoans.length,
                   tabController: _tabCtrl,
-                  provider: provider,
+                  settingsVM: settingsVM,
+                  loansVM: loansVM,
                 ),
               ),
             ],
@@ -164,7 +168,8 @@ class _InteractiveLoanCard extends StatefulWidget {
   final int borrowedCount;
   final int settledCount;
   final TabController tabController;
-  final FinanceProvider provider;
+  final SettingsViewModel settingsVM;
+  final LoansViewModel loansVM;
 
   const _InteractiveLoanCard({
     required this.totalLent,
@@ -173,7 +178,8 @@ class _InteractiveLoanCard extends StatefulWidget {
     required this.borrowedCount,
     required this.settledCount,
     required this.tabController,
-    required this.provider,
+    required this.settingsVM,
+    required this.loansVM,
   });
 
   @override
@@ -318,8 +324,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                 AppBottomSheet.show(
                                   context: context,
                                   isScrollControlled: true,
-                                  builder: (_) => AddLoanSheet(
-                                      provider: widget.provider),
+                                  builder: (_) => const AddLoanSheet(),
                                 );
                               },
                             ),
@@ -371,7 +376,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  widget.provider.isBalanceVisible
+                                                  widget.settingsVM.isBalanceVisible
                                                       ? fmt.format(widget.totalLent)
                                                       : '••••••',
                                                   style: const TextStyle(
@@ -386,7 +391,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                                           .ellipsis,
                                                 ),
                                               ),
-                                              if (widget.provider.isBalanceVisible) ...[
+                                              if (widget.settingsVM.isBalanceVisible) ...[
                                                 const SizedBox(width: 3),
                                                 const CurrencySymbolWidget(
                                                   color: Colors.white,
@@ -444,7 +449,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  widget.provider.isBalanceVisible
+                                                  widget.settingsVM.isBalanceVisible
                                                       ? fmt.format(widget.totalBorrowed)
                                                       : '••••••',
                                                   style: const TextStyle(
@@ -459,7 +464,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                                           .ellipsis,
                                                 ),
                                               ),
-                                              if (widget.provider.isBalanceVisible) ...[
+                                              if (widget.settingsVM.isBalanceVisible) ...[
                                                 const SizedBox(width: 3),
                                                 const CurrencySymbolWidget(
                                                   color: Colors.white,
@@ -478,14 +483,13 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                           ),
 
                           // Pending approvals banner inside card
-                          if (widget.provider.pendingRepaymentRequests
+                          if (widget.loansVM.pendingRepaymentRequests
                               .isNotEmpty) ...[
                             const SizedBox(height: 12),
                             _PendingApprovalsBanner(
                               requests: widget
-                                  .provider.pendingRepaymentRequests,
-                              loans: widget.provider.loanRecords,
-                              provider: widget.provider,
+                                  .loansVM.pendingRepaymentRequests,
+                              loans: widget.loansVM.loanRecords,
                             ),
                           ],
 
@@ -603,8 +607,8 @@ class _LoanCard extends StatelessWidget {
       {required this.loan, required this.accentColor, this.showPaid = false});
 
   Widget _buildAmount(BuildContext context, double amount, {bool isRightAligned = false}) {
-    final provider = context.watch<FinanceProvider>();
-    if (!provider.isBalanceVisible) {
+    final settingsVM = context.watch<SettingsViewModel>();
+    if (!settingsVM.isBalanceVisible) {
       return Text(
         '••••••••',
         textAlign: isRightAligned ? TextAlign.right : TextAlign.left,
@@ -650,13 +654,13 @@ class _LoanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.read<FinanceProvider>();
+    final loansVM = context.read<LoansViewModel>();
     final pct = loan.progressPercent;
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      onTap: () => _openDetail(context, provider),
+      onTap: () => _openDetail(context),
       child: SizedBox(
         width: double.infinity,
         child: Column(
@@ -787,12 +791,12 @@ class _LoanCard extends StatelessWidget {
                       text: 'View Details',
                       icon: Icons.receipt_long_outlined,
                       height: 42,
-                      onPressed: () => _openDetail(context, provider),
+                      onPressed: () => _openDetail(context),
                     ),
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
-                    onTap: () => _confirmDelete(context, provider),
+                    onTap: () => _confirmDelete(context, loansVM),
                     child: Container(
                       width: 42,
                       height: 42,
@@ -818,12 +822,12 @@ class _LoanCard extends StatelessWidget {
                       text: 'Record Payment',
                       icon: Icons.account_balance_wallet_outlined,
                       height: 42,
-                      onPressed: () => _showPaymentSheet(context, provider, loan),
+                      onPressed: () => _showPaymentSheet(context, loan),
                     ),
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
-                    onTap: () => _confirmDelete(context, provider),
+                    onTap: () => _confirmDelete(context, loansVM),
                     child: Container(
                       width: 42,
                       height: 42,
@@ -847,7 +851,7 @@ class _LoanCard extends StatelessWidget {
     );
   }
 
-  void _openDetail(BuildContext context, FinanceProvider provider) {
+  void _openDetail(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -856,16 +860,15 @@ class _LoanCard extends StatelessWidget {
     );
   }
 
-  void _showPaymentSheet(
-      BuildContext context, FinanceProvider provider, LoanRecord loan) {
+  void _showPaymentSheet(BuildContext context, LoanRecord loan) {
     AppBottomSheet.show(
       context: context,
       isScrollControlled: true,
-      builder: (_) => RecordPaymentSheet(loan: loan, provider: provider),
+      builder: (_) => RecordPaymentSheet(loan: loan),
     );
   }
 
-  void _confirmDelete(BuildContext context, FinanceProvider provider) {
+  void _confirmDelete(BuildContext context, LoansViewModel loansVM) {
     AppConfirmDialog.show(
       context: context,
       title: 'Delete Loan?',
@@ -874,7 +877,7 @@ class _LoanCard extends StatelessWidget {
       confirmText: 'Delete',
       isDestructive: true,
       onConfirm: () async {
-        await provider.deleteLoan(loan.id!);
+        await loansVM.deleteLoan(loan.id!);
       },
     );
   }
@@ -892,8 +895,6 @@ class LoanDetailScreen extends StatefulWidget {
 }
 
 class _LoanDetailScreenState extends State<LoanDetailScreen> {
-  bool _isMenuOpen = false;
-
   Widget _buildBackground() {
     return Positioned.fill(
       child: Container(
@@ -911,131 +912,13 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
   }
 
-  Widget _buildProgressStat(String label, String value, Color valueColor) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            color: valueColor,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textSoft,
-            fontSize: 10.5,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(
-    IconData icon,
-    String label,
-    String value, {
-    Widget? customWidget,
-    String? tooltipText,
-  }) {
-    final effectiveTooltip = tooltipText ?? (value.isNotEmpty ? value : null);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Left side: Icon + Label
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Icon(icon, color: AppColors.textSecondary, size: 15),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          // Clear separation gap between left label and right value
-          const SizedBox(width: 16),
-          // Right side: Info value stretching to the right, truncated if long
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: customWidget ??
-                  (effectiveTooltip != null
-                      ? Tooltip(
-                          message: effectiveTooltip,
-                          triggerMode: TooltipTriggerMode.longPress,
-                          preferBelow: false,
-                          showDuration: const Duration(seconds: 3),
-                          waitDuration: const Duration(milliseconds: 300),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(8),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          textStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          child: Text(
-                            value,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.end,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        )
-                      : Text(
-                          value,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.end,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        )),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCompactHeroCard(
     BuildContext context,
     LoanRecord current,
     Color accentColor,
     NumberFormat fmt,
-    FinanceProvider provider,
+    SettingsViewModel settingsVM,
+    LoansViewModel loansVM,
     bool isLent,
   ) {
     return AppCard(
@@ -1086,7 +969,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (provider.isBalanceVisible) ...[
+                if (settingsVM.isBalanceVisible) ...[
                   Text(
                     NumberFormat('#,##0').format(current.principalAmount),
                     style: const TextStyle(
@@ -1137,17 +1020,17 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               children: [
                 _buildProgressStat(
                   'Principal',
-                  provider.isBalanceVisible ? '${fmt.format(current.principalAmount)} ETB' : '••••••••',
+                  settingsVM.isBalanceVisible ? '${fmt.format(current.principalAmount)} ETB' : '••••••••',
                   Colors.white,
                 ),
                 _buildProgressStat(
                   'Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)',
-                  provider.isBalanceVisible ? '${fmt.format(current.paidAmount)} ETB' : '••••••••',
+                  settingsVM.isBalanceVisible ? '${fmt.format(current.paidAmount)} ETB' : '••••••••',
                   AppColors.positive,
                 ),
                 _buildProgressStat(
                   'Remaining',
-                  provider.isBalanceVisible
+                  settingsVM.isBalanceVisible
                       ? '${fmt.format(current.remainingAmount)} ETB'
                       : '••••••••',
                   current.remainingAmount > 0 ? accentColor : AppColors.textSoft,
@@ -1175,7 +1058,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                           isScrollControlled: true,
                           builder: (_) => RecordPaymentSheet(
                             loan: current,
-                            provider: provider,
                           ),
                         );
                       },
@@ -1200,7 +1082,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                           title: 'Extend Due Date',
                         );
                         if (picked != null && current.id != null) {
-                          await provider.updateLoanDueDate(current.id!, picked);
+                          await loansVM.updateLoanDueDate(current.id!, picked);
                         }
                       },
                     ),
@@ -1215,102 +1097,78 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
   }
 
   Widget _buildLoanInfoCard(BuildContext context, LoanRecord current, bool isLent) {
-    return AppCard(
-      margin: const EdgeInsets.only(bottom: 8),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          // Header row
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: (isLent ? AppColors.positive : AppColors.warning).withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Icon(
-                    isLent ? Icons.handshake_outlined : Icons.account_balance_wallet_outlined,
-                    color: isLent ? AppColors.positive : AppColors.warning,
-                    size: 18,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      current.personName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      isLent ? 'Borrower • Money Lent Out' : 'Lender • Debt Borrowed',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-          const SizedBox(height: 12),
-
-          _buildInfoRow(
-            Icons.person_outline_rounded,
-            isLent ? 'Borrower' : 'Lender',
-            current.personName,
-          ),
-          _buildInfoRow(
-            Icons.calendar_today_outlined,
-            'Date Created',
-            DateFormat('MMMM dd, yyyy').format(current.loanDate),
-          ),
-          _buildInfoRow(
-            Icons.event_available_outlined,
-            'Due Date',
-            DateFormat('MMMM dd, yyyy').format(current.dueDate),
-            customWidget: current.isOverdue
-                ? AppBadge.destructive(
-                    text: 'Overdue (${current.daysOverdue}d)',
-                    size: AppBadgeSize.small,
-                  )
-                : null,
-          ),
-          _buildInfoRow(
-            Icons.radar_rounded,
-            'Watched Channels',
-            current.trackedSenderName ?? 'All Bank Channels',
-          ),
-          if (current.note != null && current.note!.isNotEmpty)
-            _buildInfoRow(
-              Icons.notes_rounded,
-              'Note',
-              current.note!,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'LOAN OVERVIEW',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
             ),
+          ),
+          const SizedBox(height: 14),
+          _buildInfoRow('Type', isLent ? 'Money Lent Out' : 'Debt Borrowed', isLent ? AppColors.positive : AppColors.warning),
+          _buildInfoDivider(),
+          _buildInfoRow('Counterparty', current.personName, Colors.white),
+          _buildInfoDivider(),
+          _buildInfoRow('Creation Date', DateFormat('MMM d, yyyy').format(current.loanDate), Colors.white),
+          _buildInfoDivider(),
+          _buildInfoRow('Due Date', DateFormat('MMM d, yyyy').format(current.dueDate), current.isOverdue ? AppColors.negative : Colors.white),
+          if (current.trackedSenderName != null && current.trackedSenderName!.isNotEmpty) ...[
+            _buildInfoDivider(),
+            _buildInfoRow('Monitored Banks', current.trackedSenderName!, Colors.white70),
+          ],
+          if (current.note != null && current.note!.isNotEmpty) ...[
+            _buildInfoDivider(),
+            _buildInfoRow('Note', current.note!, Colors.white70),
+          ],
         ],
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, Color valueColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: valueColor, fontSize: 13, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoDivider() {
+    return Divider(color: Colors.white.withValues(alpha: 0.05), height: 12);
+  }
+
+  Widget _buildProgressStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 3),
+        Text(value, style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
 
   Widget _buildPaymentHistorySection(
       BuildContext context,
@@ -1318,7 +1176,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       List<LoanPayment> payments,
       Color accentColor,
       NumberFormat fmt,
-      FinanceProvider provider) {
+      LoansViewModel loansVM) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -1449,7 +1307,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                           cancelText: 'Cancel',
                           isDestructive: true,
                           onConfirm: () async {
-                            await provider.deleteLoanPaymentRecord(payment.id!, current.id!);
+                            await loansVM.deleteLoanPaymentRecord(payment.id!, current.id!);
                           },
                         );
                       },
@@ -1469,10 +1327,10 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       List<LoanPayment> payments,
       Color accentColor,
       NumberFormat fmt,
-      FinanceProvider provider) {
+      TransactionsViewModel txVM) {
     // 1. Originating transaction
     final originTx = current.linkedTransactionId != null
-        ? provider.transactions
+        ? txVM.transactions
             .where((t) => t.id == current.linkedTransactionId)
             .cast<dynamic>()
             .firstOrNull
@@ -1483,7 +1341,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
         .where((p) => p.linkedTransactionId != null)
         .map((p) => (
               payment: p,
-              tx: provider.transactions
+              tx: txVM.transactions
                   .where((t) => t.id == p.linkedTransactionId)
                   .cast<dynamic>()
                   .firstOrNull,
@@ -1549,10 +1407,12 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<FinanceProvider>();
-    final current = provider.loanRecords
+    final loansVM = context.watch<LoansViewModel>();
+    final settingsVM = context.watch<SettingsViewModel>();
+    final txVM = context.watch<TransactionsViewModel>();
+    final current = loansVM.loanRecords
         .firstWhere((l) => l.id == widget.loan.id, orElse: () => widget.loan);
-    final payments = provider.paymentsForLoan(current.id!);
+    final payments = loansVM.paymentsForLoan(current.id!);
     final fmt = NumberFormat('#,##0.00');
     final isLent = current.loanType == 'lent';
     final accentColor = isLent ? AppColors.positive : AppColors.warning;
@@ -1615,7 +1475,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     title: 'Extend Due Date',
                   );
                   if (picked != null && current.id != null) {
-                    await provider.updateLoanDueDate(current.id!, picked);
+                    await loansVM.updateLoanDueDate(current.id!, picked);
                   }
                 } else if (value == 'delete') {
                   final shouldDelete = await AppConfirmDialog.show(
@@ -1633,7 +1493,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   if (shouldDelete == true &&
                       current.id != null &&
                       context.mounted) {
-                    await provider.deleteLoan(current.id!);
+                    await loansVM.deleteLoan(current.id!);
                     if (context.mounted) {
                       Navigator.pop(context);
                       AppToast.info(context, message: 'Loan record deleted');
@@ -1658,7 +1518,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     child: Column(
                       children: [
                         // ── 1. Compact Hero Card (Amount, Progress, Stats, & Actions) ──
-                        _buildCompactHeroCard(context, current, accentColor, fmt, provider, isLent),
+                        _buildCompactHeroCard(context, current, accentColor, fmt, settingsVM, loansVM, isLent),
                         const SizedBox(height: 14),
 
                         // ── 2. Core Loan Info Card ─────────────────────────
@@ -1676,12 +1536,12 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── 3. Payment History Section ─────────────────────
-                    _buildPaymentHistorySection(context, current, payments, accentColor, fmt, provider),
+                    _buildPaymentHistorySection(context, current, payments, accentColor, fmt, loansVM),
 
                     const SizedBox(height: 8),
 
                     // ── 4. Linked Messages Section ─────────────────────
-                    _buildLinkedMessagesSection(context, current, payments, accentColor, fmt, provider),
+                    _buildLinkedMessagesSection(context, current, payments, accentColor, fmt, txVM),
                   ],
                 ),
               ),
@@ -1837,7 +1697,6 @@ class _LinkedMessageCardState extends State<_LinkedMessageCard> {
 // Add Loan Bottom Sheet
 // ─────────────────────────────────────────────────────────────────────────────
 class AddLoanSheet extends StatefulWidget {
-  final FinanceProvider provider;
   final String? linkedTransactionId;
   final double? prefilledAmount;
   final String? prefilledName;
@@ -1846,7 +1705,6 @@ class AddLoanSheet extends StatefulWidget {
 
   const AddLoanSheet({
     super.key,
-    required this.provider,
     this.linkedTransactionId,
     this.prefilledAmount,
     this.prefilledName,
@@ -1863,16 +1721,14 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
   final _nameCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
-  late Set<String> _selectedBanks;
+  Set<String> _selectedBanks = {};
   DateTime _dueDate = DateTime.now().add(const Duration(days: 30));
   bool _saving = false;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    // Default select all available bank channels
-    _selectedBanks = Set<String>.from(widget.provider.bankSenderNames);
-
     if (widget.prefilledAmount != null) {
       _amountCtrl.text = widget.prefilledAmount!.toStringAsFixed(2);
     }
@@ -1881,6 +1737,16 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
     }
     if (widget.prefilledType != null) {
       _loanType = widget.prefilledType!;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+      _selectedBanks = Set<String>.from(txVM.bankSenderNames);
     }
   }
 
@@ -1940,7 +1806,8 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
       tracked = null;
     }
 
-    await widget.provider.createLoan(
+    final loansVM = Provider.of<LoansViewModel>(context, listen: false);
+    await loansVM.createLoan(
       loanType: _loanType,
       personName: name,
       trackedSenderName: tracked,
@@ -1970,8 +1837,9 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final allPersonNames = widget.provider.allTrackedPersonNames;
-    final bankNames = widget.provider.bankSenderNames;
+    final txVM = context.watch<TransactionsViewModel>();
+    final allPersonNames = txVM.allTrackedPersonNames;
+    final bankNames = txVM.bankSenderNames;
 
     return AppDrawer(
       heightFactor: 0.88,
@@ -2081,7 +1949,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
           // ── Amount Field ────────────────────────────────────────
           const Text(
             'Principal Amount',
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -2524,9 +2392,8 @@ class _SheetField extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class RecordPaymentSheet extends StatefulWidget {
   final LoanRecord loan;
-  final FinanceProvider provider;
   const RecordPaymentSheet(
-      {super.key, required this.loan, required this.provider});
+      {super.key, required this.loan});
 
   @override
   State<RecordPaymentSheet> createState() => _RecordPaymentSheetState();
@@ -2557,7 +2424,7 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
     if (amount == null || amount <= 0) return;
 
     setState(() => _saving = true);
-    await widget.provider.recordLoanPayment(
+    await context.read<LoansViewModel>().recordLoanPayment(
       loanId: widget.loan.id!,
       amount: amount,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
@@ -2620,12 +2487,10 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
 class _PendingApprovalsBanner extends StatefulWidget {
   final List<LoanRepaymentRequest> requests;
   final List<LoanRecord> loans;
-  final FinanceProvider provider;
 
   const _PendingApprovalsBanner({
     required this.requests,
     required this.loans,
-    required this.provider,
   });
 
   @override
@@ -2808,7 +2673,8 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                   fontSize: 12,
                                   iconSize: 14,
                                   onPressed: () async {
-                                    await widget.provider
+                                    await context
+                                        .read<LoansViewModel>()
                                         .approveLoanRepaymentRequest(req);
                                     if (context.mounted) {
                                       AppToast.success(
@@ -2829,7 +2695,8 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                   fontSize: 12,
                                   iconSize: 14,
                                   onPressed: () async {
-                                    await widget.provider
+                                    await context
+                                        .read<LoansViewModel>()
                                         .rejectLoanRepaymentRequest(req);
                                     if (context.mounted) {
                                       AppToast.info(

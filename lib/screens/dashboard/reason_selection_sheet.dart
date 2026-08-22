@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'reason_transactions_screen.dart';
 import 'package:provider/provider.dart';
 import '../../models/reason.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
@@ -83,7 +83,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     return _selectedReason!.name.trim().toLowerCase() == r.name.trim().toLowerCase();
   }
 
-  void _showAddCategoryDialog(BuildContext context, FinanceProvider provider,
+  void _showAddCategoryDialog(BuildContext context, TransactionsViewModel txVM,
       {AppReason? parentCategory}) {
     final ctrl = TextEditingController();
     final isSubcategory = parentCategory != null;
@@ -106,9 +106,9 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
               AppReason newReason;
               if (parentCategory != null) {
                 newReason =
-                    await provider.addSubcategory(parentCategory.id!, name);
+                    await txVM.addSubcategory(parentCategory.id!, name);
               } else {
-                newReason = await provider.addTopLevelCategory(name);
+                newReason = await txVM.addTopLevelCategory(name);
               }
 
               if (mounted) {
@@ -156,13 +156,13 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final txVM = Provider.of<TransactionsViewModel>(context);
     final query = _searchQuery.trim().toLowerCase();
     final bool isIncome = widget.transactionType?.toLowerCase() == 'income' ||
         widget.transactionType?.toLowerCase() == 'addition';
 
     final specialReasonsMap = <String, AppReason>{};
-    for (var r in provider.reasons.where(_isSpecial)) {
+    for (var r in txVM.reasons.where(_isSpecial)) {
       final nameKey = r.name.trim().toLowerCase();
       // For cash spending/deductions: ONLY 'Loan' is permitted from special reasons.
       if (widget.isCashSpending && nameKey != 'loan') {
@@ -179,11 +179,11 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     final specialReasons = specialReasonsMap.values.toList();
 
     final topCategoriesMap = <String, AppReason>{};
-    for (var r in provider.topLevelCategories) {
+    for (var r in txVM.topLevelCategories) {
       if (_isSpecial(r)) continue;
       final nameKey = r.name.trim().toLowerCase();
       final matchesName = nameKey.contains(query);
-      final matchesSub = provider.subcategoriesFor(r.id!).any((sub) => sub.name.toLowerCase().contains(query));
+      final matchesSub = txVM.subcategoriesFor(r.id!).any((sub) => sub.name.toLowerCase().contains(query));
       if (matchesName || matchesSub) {
         topCategoriesMap.putIfAbsent(nameKey, () => r);
       }
@@ -279,7 +279,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                       _buildSectionHeader('CATEGORIES & SUBCATEGORIES', Icons.category_outlined),
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => _showAddCategoryDialog(context, provider),
+                        onTap: () => _showAddCategoryDialog(context, txVM),
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           child: Row(
@@ -312,7 +312,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                         ),
                       ),
                     ),
-                  ...topCategories.map((cat) => _buildCompactCategoryAccordion(cat, provider)),
+                  ...topCategories.map((cat) => _buildCompactCategoryAccordion(cat, txVM)),
                 ],
               ),
             ),
@@ -452,8 +452,8 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     return Icons.category_outlined;
   }
 
-  Widget _buildCompactCategoryAccordion(AppReason category, FinanceProvider provider) {
-    final subcategories = provider.subcategoriesFor(category.id!);
+  Widget _buildCompactCategoryAccordion(AppReason category, TransactionsViewModel txVM) {
+    final subcategories = txVM.subcategoriesFor(category.id!);
     final isExpanded = _expandedCategoryId == category.id || _searchQuery.isNotEmpty;
     final isCategorySelected = _isSelected(category);
 
@@ -629,7 +629,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                         height: 34,
                         fontSize: 12,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        onPressed: () => _showAddCategoryDialog(context, provider, parentCategory: category),
+                        onPressed: () => _showAddCategoryDialog(context, txVM, parentCategory: category),
                       ),
                     ),
                 ],

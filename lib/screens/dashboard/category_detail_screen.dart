@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badges.dart';
@@ -138,9 +138,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
     final fmt = NumberFormat('#,##0.00');
-    final isBalanceVisible = provider.isBalanceVisible;
+    final isBalanceVisible = settingsVM.isBalanceVisible;
 
     // ── 1. Calculate Category Outflow, Inflow, and Net Totals ─────────────────
     double totalOutflow = 0.0;
@@ -919,10 +919,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
     final fmt = NumberFormat('#,##0');
     final String countLabel = netAmount != null && netAmount > 0
-        ? (provider.isBalanceVisible
+        ? (settingsVM.isBalanceVisible
             ? '$count • ${fmt.format(netAmount)} ETB'
             : '$count')
         : '$count';

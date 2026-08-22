@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/cash_transaction.dart';
-import '../../../providers/finance_provider.dart';
+import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_drawer.dart';
@@ -8,7 +8,7 @@ import '../../../widgets/app_text_field.dart';
 import '../../../widgets/app_toast.dart';
 
 /// Shows the manual cash addition drawer.
-void showAddCashModal(BuildContext context, FinanceProvider provider) {
+void showAddCashModal(BuildContext context, CashWalletViewModel viewModel) {
   final amountController = TextEditingController();
   final noteController = TextEditingController();
 
@@ -31,7 +31,7 @@ void showAddCashModal(BuildContext context, FinanceProvider provider) {
             final amtStr = amountController.text.trim();
             final amt = double.tryParse(amtStr);
             if (amt != null && amt > 0) {
-              provider.addCashTransaction(
+              viewModel.addCashTransaction(
                 CashTransaction(
                   type: 'addition',
                   amount: amt,

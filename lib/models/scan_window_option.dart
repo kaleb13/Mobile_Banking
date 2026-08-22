@@ -23,6 +23,14 @@ enum ScanWindowOption {
     }
   }
 
+  /// Calculates the cutoff anchor date based on lookback days.
+  DateTime get anchorDate {
+    final now = DateTime.now();
+    if (days == -1) return DateTime(2000, 1, 1);
+    if (days == 0) return DateTime(now.year, now.month, now.day);
+    return now.subtract(Duration(days: days));
+  }
+
   /// Human-readable title
   String get title {
     switch (this) {

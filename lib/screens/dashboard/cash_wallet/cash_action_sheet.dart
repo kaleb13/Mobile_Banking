@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../providers/finance_provider.dart';
+import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_confirm_dialog.dart';
 import '../../../widgets/app_drawer.dart';
@@ -11,7 +11,7 @@ import '../../../widgets/app_text_field.dart';
 /// (Edit Amount and Delete Transaction).
 void showCashTransactionActions(
   BuildContext context,
-  FinanceProvider provider,
+  CashWalletViewModel viewModel,
   int id,
   double amount,
   String title,
@@ -39,7 +39,7 @@ void showCashTransactionActions(
               sublabel: 'Change the recorded amount',
               onTap: () {
                 Navigator.pop(context);
-                _showEditAmountDialog(context, provider, id, amount);
+                _showEditAmountDialog(context, viewModel, id, amount);
               },
             ),
             const SizedBox(height: 10),
@@ -52,7 +52,7 @@ void showCashTransactionActions(
               sublabel: 'Permanently remove this entry',
               onTap: () {
                 Navigator.pop(context);
-                _confirmDelete(context, provider, id, title);
+                _confirmDelete(context, viewModel, id, title);
               },
             ),
           ],
@@ -69,56 +69,59 @@ Widget _actionTile({
   required String sublabel,
   required VoidCallback onTap,
 }) {
-  return InkWell(
-    onTap: onTap,
-    borderRadius: AppRadius.cardRadius,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.drawerCard,
-        borderRadius: AppRadius.cardRadius,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.cardRadiusSm,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceElevated,
+          borderRadius: AppRadius.cardRadiusSm,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
             ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  sublabel,
-                  style: const TextStyle(
-                    color: AppColors.textSoft,
-                    fontSize: 12,
+                  const SizedBox(height: 2),
+                  Text(
+                    sublabel,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Icon(
-            Icons.chevron_right,
-            color: AppColors.textSoft,
-            size: 18,
-          ),
-        ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textSoft,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -126,7 +129,7 @@ Widget _actionTile({
 
 void _showEditAmountDialog(
   BuildContext context,
-  FinanceProvider provider,
+  CashWalletViewModel viewModel,
   int id,
   double oldAmount,
 ) {
@@ -142,7 +145,7 @@ void _showEditAmountDialog(
       onConfirm: () {
         final amt = double.tryParse(controller.text.trim());
         if (amt != null && amt > 0) {
-          provider.updateCashTransactionAmount(id, amt);
+          viewModel.updateCashTransactionAmount(id, amt);
           Navigator.pop(c);
         }
       },
@@ -166,7 +169,7 @@ void _showEditAmountDialog(
 
 void _confirmDelete(
   BuildContext context,
-  FinanceProvider provider,
+  CashWalletViewModel viewModel,
   int id,
   String title,
 ) {
@@ -180,7 +183,7 @@ void _confirmDelete(
     cancelText: 'Cancel',
     isDestructive: true,
     onConfirm: () {
-      provider.deleteCashTransaction(id);
+      viewModel.deleteCashTransaction(id);
     },
   );
 }

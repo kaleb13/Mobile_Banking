@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/expense_definition.dart';
 import '../../models/reason.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_dropdown.dart';
-import '../../widgets/app_switch.dart';
 import '../../widgets/app_toast.dart';
 import '../dashboard/reason_selection_sheet.dart';
 
@@ -75,12 +76,12 @@ class _AddEditExpenseDefinitionScreenState
 
     if (def?.reasonId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final provider = Provider.of<FinanceProvider>(context, listen: false);
-        final reason =
-            provider.reasons.where((r) => r.id == def!.reasonId).firstOrNull;
-        if (reason != null && mounted) {
+        final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+        final existingReason =
+            txVM.reasons.where((r) => r.id == def!.reasonId).firstOrNull;
+        if (existingReason != null && mounted) {
           setState(() {
-            _selectedReason = reason;
+            _selectedReason = existingReason;
           });
         }
       });
@@ -175,11 +176,11 @@ class _AddEditExpenseDefinitionScreenState
       reasonId: _selectedReason?.id,
     );
 
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final cashVM = Provider.of<CashWalletViewModel>(context, listen: false);
     if (widget.expenseDefinition == null) {
-      provider.addExpenseDefinition(newDef);
+      cashVM.addExpenseDefinition(newDef);
     } else {
-      provider.updateExpenseDefinition(newDef);
+      cashVM.updateExpenseDefinition(newDef);
     }
 
     Navigator.pop(context);
@@ -188,7 +189,7 @@ class _AddEditExpenseDefinitionScreenState
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.expenseDefinition != null;
-    final currency = Provider.of<FinanceProvider>(context, listen: false).currentCurrency.shortLabel;
+    final currency = Provider.of<SettingsViewModel>(context, listen: false).currentCurrency.shortLabel;
 
     return AppDrawer(
       heightFactor: 0.88,

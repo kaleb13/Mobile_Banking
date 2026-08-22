@@ -5,7 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/analytics_view_model.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../models/scan_progress_status.dart';
 import '../../theme/app_theme.dart';
 import '../../models/scan_window_option.dart';
 import '../../widgets/app_back_button.dart';
@@ -124,15 +128,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (_bgInitStarted) return;
     _bgInitStarted = true;
     _scanProgressController.forward();
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
-    // Apply selected scan window option before initialization
-    provider.setScanWindowOption(_selectedScanOption).then((_) {
-      provider.startBackgroundInit().then((_) {
-        if (mounted) {
-          _triggerBalanceCountUp(provider.totalBalance);
+    final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+    final analyticsVM = Provider.of<AnalyticsViewModel>(context, listen: false);
+
+    settingsVM.setScanWindowOption(_selectedScanOption);
+    txVM.scanSms(
+      scanWindowOption: _selectedScanOption,
+      onProgress: (status) {
+        settingsVM.updateScanProgress(status);
+        if (status.isComplete && mounted) {
+          _triggerBalanceCountUp(analyticsVM.totalBalance);
         }
-      });
-    });
+      },
+    );
   }
 
   void _triggerBalanceCountUp(double finalBalance) {
@@ -880,24 +889,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- PAGE 4: LEVEL CALCULATION & DISCOVERY ANIMATION ---
   Widget _buildLevelRevealPageBody() {
-    return Consumer<FinanceProvider>(
-      builder: (context, provider, _) {
-        final bool isCalculating = provider.isLoading || (!provider.scanProgress.isComplete && provider.transactions.isEmpty);
+    return Consumer4<SettingsViewModel, TransactionsViewModel, AnalyticsViewModel, CashWalletViewModel>(
+      builder: (context, settingsVM, txVM, analyticsVM, cashVM, _) {
+        final bool isCalculating = txVM.isLoading || (!settingsVM.scanProgress.isComplete && txVM.transactions.isEmpty);
 
         if (isCalculating) {
-          return _buildMinimalistCalculatingView(provider);
+          return _buildMinimalistCalculatingView(settingsVM.scanProgress);
         }
 
         // Trigger balance count-up animation if not yet started
         if (!_hasStartedCounting) {
-          _triggerBalanceCountUp(provider.totalBalance);
+          _triggerBalanceCountUp(analyticsVM.totalBalance);
         }
 
-        final level = provider.userLevel;
-        final levelName = provider.userLevelName;
-        final levelDesc = provider.userLevelDescription;
-        final balancesMap = provider.latestBalancesMap;
-        final cashBalance = provider.cashBalance;
+        final level = analyticsVM.userLevel;
+        final levelName = analyticsVM.userLevelName;
+        final levelDesc = analyticsVM.userLevelDescription;
+        final balancesMap = analyticsVM.latestBalancesMap;
+        final cashBalance = cashVM.balance;
         final glowColor = _levelGlowColor(level);
         final badgePath = 'assets/images/LV$level.svg';
 
@@ -1036,8 +1045,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  Widget _buildMinimalistCalculatingView(FinanceProvider provider) {
-    final scanProgress = provider.scanProgress;
+  Widget _buildMinimalistCalculatingView(ScanProgressStatus scanProgress) {
     final double pct = scanProgress.progress > 0
         ? scanProgress.progress.clamp(0.05, 1.0)
         : _scanProgressAnim.value.clamp(0.05, 1.0);
@@ -1192,10 +1200,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // --- FIXED BOTTOM SECTION ---
   Widget _buildFixedBottomSection() {
-    return Consumer<FinanceProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<SettingsViewModel, TransactionsViewModel>(
+      builder: (context, settingsVM, txVM, _) {
         final bool isCalculatingPage4 =
-            _currentPage == 4 && (provider.isLoading || (!provider.scanProgress.isComplete && provider.transactions.isEmpty));
+            _currentPage == 4 && (txVM.isLoading || (!settingsVM.scanProgress.isComplete && txVM.transactions.isEmpty));
 
         return SafeArea(
           top: false,
@@ -1229,8 +1237,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         _handleSmsPermissionAndProceed();
                       } else if (_currentPage == 4) {
                         HapticFeedback.mediumImpact();
-                        final p = Provider.of<FinanceProvider>(context, listen: false);
-                        p.completeOnboarding();
+                        settingsVM.completeOnboarding();
                       }
                     },
                   ),

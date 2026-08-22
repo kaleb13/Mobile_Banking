@@ -62,6 +62,14 @@ class AppReason {
       color: color ?? this.color,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppReason && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class AppReasonLink {
@@ -94,6 +102,14 @@ class AppReasonLink {
       linkType: map['linkType'] as String,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppReasonLink && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// Scope options when creating an auto-link rule for a counterparty.

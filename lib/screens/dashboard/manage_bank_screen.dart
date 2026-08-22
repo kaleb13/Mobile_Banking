@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/sender.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
@@ -41,7 +41,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
 
   Future<void> _handleSave() async {
     setState(() => _isSaving = true);
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
 
     final updated = AppSender(
       id: widget.sender.id,
@@ -52,7 +52,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
       pin: _pinController.text.trim(),
     );
 
-    await provider.updateSender(updated);
+    await txVM.updateSender(updated);
     setState(() => _isSaving = false);
 
     if (mounted) {
@@ -97,7 +97,7 @@ class _ManageBankScreenState extends State<ManageBankScreen> {
       pin: null,
     );
 
-    await Provider.of<FinanceProvider>(context, listen: false)
+    await Provider.of<TransactionsViewModel>(context, listen: false)
         .updateSender(updated);
 
     if (mounted) {

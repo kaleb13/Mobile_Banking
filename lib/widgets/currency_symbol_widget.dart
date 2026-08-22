@@ -3,7 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/app_currency.dart';
-import '../providers/finance_provider.dart';
+import '../presentation/viewmodels/settings_view_model.dart';
 
 class CurrencySymbolWidget extends StatelessWidget {
   final AppCurrency? currency;
@@ -22,7 +22,7 @@ class CurrencySymbolWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeCurrency = currency ??
-        Provider.of<FinanceProvider>(context, listen: true).currentCurrency;
+        Provider.of<SettingsViewModel>(context, listen: true).currentCurrency;
     final iconColor = color ?? IconTheme.of(context).color ?? Colors.white;
 
     if (activeCurrency.isSvg) {
@@ -74,7 +74,7 @@ class CurrencyTextWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeCurrency = currency ??
-        Provider.of<FinanceProvider>(context, listen: true).currentCurrency;
+        Provider.of<SettingsViewModel>(context, listen: true).currentCurrency;
     final textStyle = style ?? Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
     final effectiveColor = color ?? textStyle.color ?? Colors.white;
     final effectiveStyle = textStyle.copyWith(color: effectiveColor);

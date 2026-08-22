@@ -40,4 +40,24 @@ class TransactionAttachment {
       createdAt: map['createdAt'] as String,
     );
   }
+
+  TransactionAttachment copyWith({
+    String? id,
+    String? transactionId,
+    String? filePath,
+    String? fileType,
+    String? fileName,
+    int? fileSize,
+    String? createdAt,
+  }) {
+    return TransactionAttachment(
+      id: id ?? this.id,
+      transactionId: transactionId ?? this.transactionId,
+      filePath: filePath ?? this.filePath,
+      fileType: fileType ?? this.fileType,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }

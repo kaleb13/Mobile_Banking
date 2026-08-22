@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
@@ -39,7 +39,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
   Future<void> _handleSmartRefresh() async {
     setState(() => _isProcessing = true);
     try {
-      await context.read<FinanceProvider>().smartRefresh();
+      await context.read<TransactionsViewModel>().smartRefresh();
       if (mounted) {
         AppToast.success(context, message: 'Smart Refresh complete');
       }
@@ -51,7 +51,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
   Future<void> _handleFullReset() async {
     setState(() => _isProcessing = true);
     try {
-      await context.read<FinanceProvider>().fullReset();
+      await context.read<TransactionsViewModel>().fullReset();
       if (mounted) {
         AppToast.success(context, message: 'Full reset complete');
       }

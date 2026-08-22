@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/transaction.dart';
-import '../providers/finance_provider.dart';
+import '../presentation/viewmodels/settings_view_model.dart';
+import '../presentation/viewmodels/transactions_view_model.dart';
 import '../screens/dashboard/all_transactions_screen.dart';
 import '../screens/dashboard/transaction_detail_screen.dart';
 import '../theme/app_theme.dart';
@@ -39,12 +40,13 @@ class CounterpartyInsightSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<FinanceProvider>();
-    final isBalanceVisible = provider.isBalanceVisible;
+    final settingsVM = context.watch<SettingsViewModel>();
+    final txVM = context.watch<TransactionsViewModel>();
+    final isBalanceVisible = settingsVM.isBalanceVisible;
     final fmt = NumberFormat('#,##0.00');
 
     // Filter transactions exclusively for this counterparty/person
-    final personTxs = provider.transactions.where((tx) {
+    final personTxs = txVM.transactions.where((tx) {
       final s = tx.sender.trim().toLowerCase();
       final target = personName.trim().toLowerCase();
       return s == target || (target.isNotEmpty && s.contains(target));

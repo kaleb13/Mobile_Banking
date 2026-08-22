@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../settings/expense_definitions_screen.dart';
@@ -22,7 +24,9 @@ class CashWalletDetailScreen extends StatefulWidget {
 class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    final cashVM = Provider.of<CashWalletViewModel>(context);
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
     final topSafeArea = MediaQuery.paddingOf(context).top;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -56,13 +60,15 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
               SliverPersistentHeader(
                 pinned: true,
                 delegate: CashWalletHeaderDelegate(
-                  provider: provider,
                   topSafeArea: topSafeArea,
-                  onAddCash: () => showAddCashModal(context, provider),
-                  onDeduct: () => showCashDeductModal(context, provider),
+                  onAddCash: () => showAddCashModal(context, cashVM),
+                  onDeduct: () => showCashDeductModal(context,
+                      cashViewModel: cashVM,
+                      transactionsViewModel: txVM,
+                      settingsViewModel: settingsVM),
                   onTemplates: () {
                     Navigator.push(
-                      context,
+                       context,
                       MaterialPageRoute(
                         builder: (_) => const ExpenseDefinitionsScreen(),
                       ),
@@ -74,7 +80,8 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
               // ── Activity History List ──
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(0, 16, 0, 40),
-                sliver: _buildTransactionSliver(context, provider),
+                sliver: _buildTransactionSliver(
+                    context, cashVM, txVM, settingsVM),
               ),
             ],
           ),
@@ -84,12 +91,15 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
   }
 
   Widget _buildTransactionSliver(
-      BuildContext context, FinanceProvider provider) {
+      BuildContext context,
+      CashWalletViewModel cashVM,
+      TransactionsViewModel txVM,
+      SettingsViewModel settingsVM) {
     // Create a unified list of dynamic transaction maps
     final List<Map<String, dynamic>> allTxs = [];
     final fmtShort = NumberFormat('#,##0');
 
-    for (var tx in provider.transactions) {
+    for (var tx in txVM.transactions) {
       final isCash = (tx.reason?.toLowerCase() == 'cash' ||
           tx.customReasonText?.toLowerCase() == 'cash' ||
           tx.resolvedReason?.toLowerCase() == 'cash');
@@ -107,7 +117,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
       }
     }
 
-    for (var ctx in provider.cashTransactions) {
+    for (var ctx in cashVM.cashTransactions) {
       String sub = ctx.description ?? '';
       if (ctx.reasonName != null && ctx.reasonName!.isNotEmpty) {
         sub = ctx.reasonName!;
@@ -187,7 +197,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 ? () {
                     showCashTransactionActions(
                       context,
-                      provider,
+                      cashVM,
                       tx['id'],
                       tx['amount'],
                       tx['title'] as String,
@@ -259,7 +269,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerRight,
-                    child: provider.isBalanceVisible
+                    child: settingsVM.isBalanceVisible
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

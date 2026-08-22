@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
@@ -13,6 +13,7 @@ import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_reset_filter_button.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
+import '../../widgets/app_money_text.dart';
 import 'transaction_detail_screen.dart';
 import 'dart:math';
 
@@ -75,8 +76,8 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final allTransactions = provider.transactions;
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final allTransactions = txVM.transactions;
     final allSenders = ['All Senders'];
     allSenders
         .addAll(allTransactions.map((t) => t.sender).toSet().toList()..sort());
@@ -124,7 +125,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
               Expanded(
                 child: !_hasActiveFilters && filteredTransactions.isEmpty
                     ? _buildInitialState()
-                    : _buildSearchResults(filteredTransactions, provider),
+                    : _buildSearchResults(filteredTransactions),
               ),
             ],
           ),
@@ -368,7 +369,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   }
 
   Widget _buildSearchResults(
-      List<AppTransaction> transactions, FinanceProvider provider) {
+      List<AppTransaction> transactions) {
     if (transactions.isEmpty) {
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(
@@ -424,10 +425,6 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   Widget _buildWhiteTransactionItem(
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
-    final String amountStr = provider.isBalanceVisible
-        ? NumberFormat('#,##0.1').format(tx.amount)
-        : '••••••••';
     final String label = isIncome ? 'Deposit' : 'Transferred';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
@@ -506,15 +503,15 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '${isIncome ? '+' : '-'}$amountStr',
+                AppMoneyText(
+                  amount: tx.amount,
+                  prefix: isIncome ? '+' : '-',
+                  decimalDigits: 2,
                   style: const TextStyle(
                     color: AppColors.darkCharcoal,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
@@ -39,8 +40,9 @@ class FreezeAccountBottomSheet extends StatefulWidget {
 class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final txs = provider.transactions;
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final txs = txVM.transactions;
 
     final String activeSenderName = widget.initialSenderName;
     final senderTxs = txs
@@ -53,7 +55,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
       balance = withBal.first.totalBalance;
     }
 
-    final bool isPaused = provider.isTrackingPaused(activeSenderName);
+    final bool isPaused = txVM.isTrackingPaused(activeSenderName);
 
     return AppDrawer(
       headerCard: AppDrawerHeaderCard(
@@ -81,7 +83,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
           Navigator.pop(context);
 
           if (wasPaused) {
-            await provider.resumeTracking(name);
+            await txVM.resumeTracking(name);
             if (context.mounted) {
               AppToast.success(
                 context,
@@ -95,7 +97,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
               );
             }
           } else {
-            await provider.pauseTracking(name);
+            await txVM.pauseTracking(name);
             if (context.mounted) {
               AppToast.warning(
                 context,
@@ -120,7 +122,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
             senderName: activeSenderName,
             balance: balance,
             txCount: senderTxs.length,
-            isBalanceVisible: provider.isBalanceVisible,
+            isBalanceVisible: settingsVM.isBalanceVisible,
             isPaused: isPaused,
           ),
           const SizedBox(height: 14),

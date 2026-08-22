@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/reason.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_badges.dart';
@@ -50,11 +50,11 @@ class LinkReasonDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
     final lowerName = contactName.toLowerCase().trim();
     final expectedType = linkType == 'sender' ? 'income' : 'expense';
 
-    final matchingCount = provider.transactions.where((t) {
+    final matchingCount = txVM.transactions.where((t) {
       final matchesName = t.sender.toLowerCase().trim() == lowerName;
       final matchesType = t.type.toLowerCase() == expectedType;
       return matchesName && matchesType;
@@ -101,7 +101,7 @@ class LinkReasonDrawer extends StatelessWidget {
             badgeVariant: AppBadgeVariant.success,
             onTap: () async {
               Navigator.pop(context);
-              await provider.addReasonLink(
+              await txVM.addReasonLinkScoped(
                 reasonId: reasonId,
                 linkedName: contactName,
                 linkType: linkType,
@@ -130,7 +130,7 @@ class LinkReasonDrawer extends StatelessWidget {
             badgeVariant: AppBadgeVariant.info,
             onTap: () async {
               Navigator.pop(context);
-              await provider.addReasonLink(
+              await txVM.addReasonLinkScoped(
                 reasonId: reasonId,
                 linkedName: contactName,
                 linkType: linkType,
@@ -277,10 +277,10 @@ class UnlinkReasonDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
     final lowerName = contactName.toLowerCase().trim();
 
-    final matchingCount = provider.transactions.where((t) {
+    final matchingCount = txVM.transactions.where((t) {
       final matchesName = t.sender.toLowerCase().trim() == lowerName;
       final matchesReason = t.reasonId == link.reasonId ||
           (t.resolvedReason?.toLowerCase() == reasonName.toLowerCase());
@@ -343,7 +343,7 @@ class UnlinkReasonDrawer extends StatelessWidget {
 
               if (confirm == true && context.mounted) {
                 Navigator.pop(context);
-                await provider.unlinkReason(
+                await txVM.unlinkReason(
                   linkId: link.id!,
                   linkedName: contactName,
                   linkType: link.linkType,
@@ -375,7 +375,7 @@ class UnlinkReasonDrawer extends StatelessWidget {
               badgeVariant: AppBadgeVariant.warning,
               onTap: () async {
                 Navigator.pop(context);
-                await provider.unlinkReason(
+                await txVM.unlinkReason(
                   linkId: link.id!,
                   linkedName: contactName,
                   linkType: link.linkType,
@@ -406,7 +406,7 @@ class UnlinkReasonDrawer extends StatelessWidget {
             badgeVariant: AppBadgeVariant.neutral,
             onTap: () async {
               Navigator.pop(context);
-              await provider.unlinkReason(
+              await txVM.unlinkReason(
                 linkId: link.id!,
                 linkedName: contactName,
                 linkType: link.linkType,

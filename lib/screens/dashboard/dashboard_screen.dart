@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:mobile_banking_app/providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/analytics_view_model.dart';
+import '../../presentation/viewmodels/loans_view_model.dart';
 import '../../theme/app_theme.dart';
 import 'dart:math';
 import 'transaction_detail_screen.dart';
@@ -16,18 +19,16 @@ import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_reset_filter_button.dart';
-import '../../widgets/app_capsule_tab_bar.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../../domain/usecases/analytics/get_balance_history_usecase.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import '../../widgets/animated_balance_text.dart';
+import '../../widgets/interactive_balance_chart.dart';
+import '../../widgets/app_money_text.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -58,7 +59,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final int _bannerLoopFactor = 10000;
   bool _isOverallChartVisible = false;
   String _chartFilter = '30D';
-  double? _touchedX;
   final GlobalKey _topSectionKey = GlobalKey();
   double? _measuredTopSectionHeight;
   double _lastDynamicRestSize = 0.55;
@@ -77,7 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _onTopScroll() {
     if (!mounted) return;
-    Provider.of<FinanceProvider>(context, listen: false)
+    Provider.of<SettingsViewModel>(context, listen: false)
         .setHomeTopScrollOffset(_topScrollController.hasClients ? _topScrollController.offset : 0.0);
   }
 
@@ -85,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted || !_sheetController.isAttached) return;
     final screenHeight = MediaQuery.of(context).size.height;
     final sheetTopY = screenHeight * (1.0 - _sheetController.size);
-    Provider.of<FinanceProvider>(context, listen: false).setHomeSheetTopY(sheetTopY);
+    Provider.of<SettingsViewModel>(context, listen: false).setHomeSheetTopY(sheetTopY);
   }
 
   void _startAutoScroll() {
@@ -153,12 +153,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-              Consumer<FinanceProvider>(
-                builder: (context, financeProvider, child) {
-                  return _buildMainDashboardLayout(context);
+              _buildMainDashboardLayout(context),
+              Consumer2<TransactionsViewModel, LoansViewModel>(
+                builder: (context, txVM, loansVM, _) {
+                  return _buildDraggableTransactionsSheet(context, txVM, loansVM);
                 },
               ),
-              _buildDraggableTransactionsSheet(context),
             ],
           ),
         ),
@@ -264,22 +264,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildMainDashboardLayout(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
-    final currentOverdueCount = provider.overdueLoanCount;
-    if (_lastOverdueCount != currentOverdueCount) {
-      _lastOverdueCount = currentOverdueCount;
-      _updateTopSectionHeight(forceAnimate: true);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final RenderBox? box =
+          _topSectionKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize && _measuredTopSectionHeight != box.size.height) {
+        _updateTopSectionHeight(forceAnimate: true);
+      }
+    });
 
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) {
         if (notification.metrics.axis == Axis.vertical) {
-          provider.setHomeTopScrollOffset(notification.metrics.pixels);
+          context.read<SettingsViewModel>().setHomeTopScrollOffset(notification.metrics.pixels);
         }
         return false;
       },
       child: HoldToRefresh(
-        onRefresh: () => provider.refreshData(lastDays: 7),
+        onRefresh: () => context.read<TransactionsViewModel>().refreshData(lastDays: 7),
         child: SingleChildScrollView(
           controller: _topScrollController,
           physics: const AlwaysScrollableScrollPhysics(
@@ -293,8 +295,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   key: _topSectionKey,
                   children: [
-                    if (provider.overdueLoans.isNotEmpty)
-                      _buildOverdueLoanBanner(context),
+                    Consumer<LoansViewModel>(
+                      builder: (context, lVM, _) {
+                        final currentOverdueCount = lVM.overdueLoans.length;
+                        if (_lastOverdueCount != currentOverdueCount) {
+                          _lastOverdueCount = currentOverdueCount;
+                          _updateTopSectionHeight(forceAnimate: true);
+                        }
+                        if (lVM.overdueLoans.isNotEmpty) {
+                          return _buildOverdueLoanBanner(context, lVM);
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
                     const SizedBox(height: 8),
                     _buildHeader(context),
                     const SizedBox(height: 10),
@@ -314,18 +327,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildOverdueLoanBanner(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final overdueCount = provider.overdueLoanCount;
-    final firstOverdue = provider.overdueLoans.first;
-    final totalRemaining = provider.overdueLoans
+  Widget _buildOverdueLoanBanner(BuildContext context, LoansViewModel loansVM) {
+    final overdueCount = loansVM.overdueLoans.length;
+    final firstOverdue = loansVM.overdueLoans.first;
+    final totalRemaining = loansVM.overdueLoans
         .fold<double>(0, (sum, loan) => sum + loan.remainingAmount);
 
     return GestureDetector(
       onTap: () {
         final targetTab = firstOverdue.loanType == 'borrowed' ? 1 : 0;
-        provider.setLoanTabIndex(targetTab);
-        provider.animateToTab(3);
+        loansVM.setLoanTabIndex(targetTab);
+        context.read<SettingsViewModel>().tabNavigationNotifier.value = 3;
       },
       child: Container(
         width: double.infinity,
@@ -341,22 +353,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                overdueCount == 1
-                    ? (provider.isBalanceVisible
-                        ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
-                        : 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ••••••••)')
-                    : (provider.isBalanceVisible
-                        ? '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB'
-                        : '$overdueCount LOANS ARE OVERDUE — Total: ••••••••'),
-                style: const TextStyle(
-                  color: AppColors.negative,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Consumer<SettingsViewModel>(
+                builder: (context, settingsVM, _) {
+                  return Text(
+                    overdueCount == 1
+                        ? (settingsVM.isBalanceVisible
+                            ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
+                            : 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ••••••••)')
+                        : (settingsVM.isBalanceVisible
+                            ? '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB'
+                            : '$overdueCount LOANS ARE OVERDUE — Total: ••••••••'),
+                    style: const TextStyle(
+                      color: AppColors.negative,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                },
               ),
             ),
             const Icon(Icons.chevron_right,
@@ -378,19 +394,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
   Widget _buildBalanceCard(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+    return Consumer2<AnalyticsViewModel, SettingsViewModel>(
+      builder: (context, analyticsVM, settingsVM, _) {
+        final netVal = _isShowingTodayOnly ? analyticsVM.netForSelectedDate : analyticsVM.netOverall;
+        final pctVal = _isShowingTodayOnly ? analyticsVM.incomePercentageChange : analyticsVM.percentageChangeOverall;
+        final bool isPositive = netVal >= 0;
 
-    final netVal = _isShowingTodayOnly ? provider.netForSelectedDate : provider.netOverall;
-    final pctVal = _isShowingTodayOnly ? provider.incomePercentageChange : provider.percentageChangeOverall;
-    final bool isPositive = netVal >= 0;
-
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
+        return SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 12.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
             // Left Column: Total Balance & PNL
             Expanded(
               child: Column(
@@ -401,7 +417,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   GestureDetector(
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      provider.toggleBalanceVisibility();
+                      settingsVM.toggleBalanceVisibility();
                     },
                     behavior: HitTestBehavior.opaque,
                     child: Row(
@@ -417,7 +433,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(width: 6),
                         Icon(
-                          provider.isBalanceVisible
+                          settingsVM.isBalanceVisible
                               ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                           size: 15,
@@ -432,7 +448,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   GestureDetector(
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      provider.toggleBalanceVisibility();
+                      settingsVM.toggleBalanceVisibility();
                     },
                     behavior: HitTestBehavior.opaque,
                     child: FittedBox(
@@ -448,8 +464,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           const SizedBox(width: 8),
                           AnimatedBalanceText(
-                            value: provider.totalBalance,
-                            isMasked: !provider.isBalanceVisible,
+                            value: analyticsVM.totalBalance,
+                            isMasked: !settingsVM.isBalanceVisible,
                             integerStyle: const TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 38,
@@ -504,7 +520,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         GestureDetector(
                           onTap: () {
                             HapticFeedback.selectionClick();
@@ -518,9 +534,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           },
                           behavior: HitTestBehavior.opaque,
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                provider.isBalanceVisible
+                                settingsVM.isBalanceVisible
                                     ? '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}'
                                     : '••••••',
                                 style: TextStyle(
@@ -571,28 +588,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-            // Right Column: Stacked Cards Deck
-            _buildStackedCardsDeck(context, provider),
-          ],
-        ),
-      ),
+                // Right Column: Stacked Cards Deck
+                _buildStackedCardsDeck(context),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildStackedCardsDeck(BuildContext context, FinanceProvider provider) {
-    final senders = provider.senders;
-    final t = provider.pageOffset.clamp(0.0, 1.0);
+  Widget _buildStackedCardsDeck(BuildContext context) {
+    return Consumer2<TransactionsViewModel, SettingsViewModel>(
+      builder: (context, txVM, settingsVM, _) {
+        final senders = txVM.senders;
+        final t = settingsVM.pageOffset.clamp(0.0, 1.0);
 
-    // If swiping page transition is active (t > 0.02), let MainShell flying overlay handle it
-    if (senders.isEmpty || t > 0.02) {
-      return GestureDetector(
-        onTap: () => provider.animateToTab(1),
-        behavior: HitTestBehavior.opaque,
-        child: const SizedBox(width: 108, height: 188),
-      );
-    }
+        // If swiping page transition is active (t > 0.02), let MainShell flying overlay handle it
+        if (senders.isEmpty || t > 0.02) {
+          return GestureDetector(
+            onTap: () => settingsVM.tabNavigationNotifier.value = 1,
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox(width: 108, height: 188),
+          );
+        }
 
     // Render native stacked cards in-tree on Home Page for 100% synchronous scroll/pull
     const double baseLeftOffset = -42.0;
@@ -600,7 +621,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const double homeW = 104.0;
     const double homeH = 188.0;
 
-    final activeSenders = provider.activeSenders;
+    final activeSenders = txVM.activeSenders;
     final List<Widget> cardWidgets = [];
 
     for (int i = 0; i < activeSenders.length && i < 3; i++) {
@@ -610,17 +631,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final int deckIndex = i;
       final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
 
-      final double balance = provider.balanceForSender(cardName);
-      final int txCount = provider.txCountForSender(cardName);
+      final double balance = txVM.balanceForSender(cardName);
+      final int txCount = txVM.txCountForSender(cardName);
 
       final Widget card = BankCardWidget(
         senderName: cardName,
         balance: balance,
         txCount: txCount,
-        isBalanceVisible: provider.isBalanceVisible,
+        isBalanceVisible: settingsVM.isBalanceVisible,
         isPaused: false,
         animationFactor: 0.0,
-        onTap: () => provider.animateToTab(1),
+        onTap: () => settingsVM.tabNavigationNotifier.value = 1,
       );
 
       cardWidgets.add(
@@ -635,7 +656,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return GestureDetector(
-      onTap: () => provider.animateToTab(1),
+      onTap: () => settingsVM.tabNavigationNotifier.value = 1,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 108,
@@ -646,180 +667,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+      },
+    );
   }
 
   Widget _buildOverallChartSection(BuildContext context) {
     if (!_isOverallChartVisible) return const SizedBox.shrink();
-    return _buildOverallChartContent(context);
-  }
-
-  Widget _buildOverallChartContent(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
-    final DateTime now = DateTime.now();
-    final DateTime todayMidnight = DateTime(now.year, now.month, now.day);
-
-    // Use domain use case for single source-of-truth balance history simulation
-    final historyResult = const GetBalanceHistoryUseCase().execute(
-      transactions: provider.transactions,
-      cashTransactions: provider.cashTransactions,
-      filter: _chartFilter,
-      referenceDate: todayMidnight,
-    );
-    final List<FlSpot> spots = List.from(historyResult.spots);
-
-    // ── Gradient configuration ──────────────────────────────────────────────
-    // LINE  : always left→right so stops map to horizontal chart positions.
-    // FILL  : always top→bottom for that strong area-chart fade effect.
-    //         When touched we simply dim the entire fill uniformly; the clear
-    //         left/right distinction is shown by the line gradient + indicator.
-    List<double> lineStops = [0.0, 1.0];
-    List<Color> lineColors = [AppColors.positive, AppColors.positive];
-
-    // Fill: top strong → bottom fully transparent (always top→bottom)
-    List<Color> fillColors = [
-      AppColors.positive.withValues(alpha: 0.28),
-      AppColors.positive.withValues(alpha: 0.0),
-    ];
-
-    if (_touchedX != null && spots.isNotEmpty) {
-      final maxX = spots.last.x;
-      if (maxX > 0) {
-        double ratio = (_touchedX! / maxX).clamp(0.0, 1.0);
-        lineStops = [0.0, ratio, ratio, 1.0];
-        // Line: full left of indicator, nearly invisible right of it
-        lineColors = [
-          AppColors.positive,
-          AppColors.positive,
-          AppColors.positive.withValues(alpha: 0.08),
-          AppColors.positive.withValues(alpha: 0.08),
-        ];
-        // Fill: dim the whole fill uniformly when touching
-        fillColors = [
-          AppColors.positive.withValues(alpha: 0.07),
-          AppColors.positive.withValues(alpha: 0.0),
-        ];
-      }
-    }
-
-    return Column(
-      children: [
-        const SizedBox(height: 12),
-        Container(
-          height: 120,
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: LineChart(
-            LineChartData(
-              gridData: const FlGridData(show: false),
-              titlesData: const FlTitlesData(show: false),
-              borderData: FlBorderData(show: false),
-              lineTouchData: LineTouchData(
-                touchCallback:
-                    (FlTouchEvent event, LineTouchResponse? touchResponse) {
-                  setState(() {
-                    if (!event.isInterestedForInteractions ||
-                        touchResponse == null ||
-                        touchResponse.lineBarSpots == null ||
-                        touchResponse.lineBarSpots!.isEmpty) {
-                      _touchedX = null;
-                      return;
-                    }
-                    final newX = touchResponse.lineBarSpots!.first.x;
-                    if (_touchedX != newX) {
-                      HapticFeedback.selectionClick();
-                      _touchedX = newX;
-                    }
-                  });
-                },
-                getTouchedSpotIndicator:
-                    (LineChartBarData barData, List<int> spotIndexes) {
-                  return spotIndexes.map((index) {
-                    return TouchedSpotIndicatorData(
-                      FlLine(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        strokeWidth: 1,
-                        dashArray: [4, 4],
-                      ),
-                      FlDotData(
-                        show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                          radius: 3,
-                          color: AppColors.gold,
-                          strokeWidth: 0,
-                          strokeColor: Colors.transparent,
-                        ),
-                      ),
-                    );
-                  }).toList();
-                },
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (_) => Colors.transparent,
-                  tooltipPadding: EdgeInsets.zero,
-                  tooltipMargin: 8,
-                  getTooltipItems: (touchedSpots) {
-                    return touchedSpots.map((s) {
-                      return LineTooltipItem(
-                        '',
-                        const TextStyle(),
-                        children: [
-                          if (provider.isBalanceVisible)
-                            TextSpan(
-                              text: 'ETB ',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.6),
-                                fontSize: 9,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          TextSpan(
-                            text: provider.isBalanceVisible
-                                ? NumberFormat('#,##0').format(s.y)
-                                : '••••••••',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList();
-                  },
-                ),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  gradient: LinearGradient(
-                    colors: lineColors,
-                    stops: lineStops,
-                  ),
-                  barWidth: 1.8,
-                  isStrokeCapRound: true,
-                  dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: fillColors,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Chart Filters
-        AppTertiaryTabBar(
-          tabs: const ['1D', '7D', '30D', '180D', '360D'],
-          selectedTab: _chartFilter,
-          onTabChanged: (val) => setState(() => _chartFilter = val),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        ),
-      ],
+    return Consumer3<TransactionsViewModel, CashWalletViewModel, SettingsViewModel>(
+      builder: (context, txVM, cashVM, settingsVM, _) {
+        return InteractiveBalanceChart(
+          transactions: txVM.transactions,
+          cashTransactions: cashVM.cashTransactions,
+          initialFilter: _chartFilter,
+          isBalanceVisible: settingsVM.isBalanceVisible,
+          accentColor: AppColors.positive,
+          chartHeight: 120,
+          onFilterChanged: (val) => setState(() => _chartFilter = val),
+        );
+      },
     );
   }
 
@@ -828,11 +693,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
   Widget _buildBannerCarousel(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final mostExpenseToday = provider.mostExpenseToday;
-    final mostExpenseMonth = provider.mostExpenseThisMonth;
-    final mostAffected = provider.mostAffectedAccount;
-    final lessAffected = provider.lessAffectedAccount;
+    return Consumer<AnalyticsViewModel>(
+      builder: (context, analyticsVM, _) {
+        final mostExpenseToday = analyticsVM.mostExpenseToday;
+        final mostExpenseMonth = analyticsVM.mostExpenseThisMonth;
+        final mostAffected = analyticsVM.mostAffectedAccount;
+        final lessAffected = analyticsVM.lessAffectedAccount;
 
     final bannerItems = [
       {
@@ -1001,6 +867,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ],
     );
+      },
+    );
   }
 
   Widget _buildWhiteFilterDropdown({
@@ -1018,21 +886,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildDraggableTransactionsSheet(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
+  Widget _buildDraggableTransactionsSheet(
+      BuildContext context, TransactionsViewModel txVM, LoansViewModel loansVM) {
 
-    final allSenders = ['All Senders', ...provider.uniqueSenders];
+    final allSenders = ['All Senders', ...txVM.uniqueSenders];
     if (!allSenders.contains(_senderFilter)) {
       _senderFilter = 'All Senders';
     }
 
-    final allBanks = ['All Banks', ...provider.uniqueBanks];
+    final allBanks = ['All Banks', ...txVM.uniqueBanks];
     if (!allBanks.contains(_bankFilter)) {
       _bankFilter = 'All Banks';
     }
 
     final transactionsList = const FilterTransactionsUseCase().execute(
-      transactions: provider.transactions,
+      transactions: txVM.transactions,
       params: FilterTransactionsParams(
         bankFilter: _bankFilter,
         senderFilter: _senderFilter,
@@ -1053,7 +921,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final textScale = mediaQuery.textScaler.scale(1.0);
 
     final double estimatedTopContent =
-        (provider.overdueLoans.isNotEmpty ? 54.0 : 0.0) +
+        (loansVM.overdueLoans.isNotEmpty ? 54.0 : 0.0) +
             (_isOverallChartVisible ? 220.0 : 0.0) +
             (345.0 * textScale.clamp(1.0, 1.4));
 
@@ -1416,10 +1284,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildWhiteTransactionItem(
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
-    final String amountStr = provider.isBalanceVisible
-        ? NumberFormat('#,##0.1').format(tx.amount)
-        : '••••••••';
     final String label = isIncome ? 'Deposit' : 'Transferred';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
@@ -1494,15 +1358,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              '${isIncome ? '+' : '-'}$amountStr',
+            AppMoneyText(
+              amount: tx.amount,
+              prefix: isIncome ? '+' : '-',
+              decimalDigits: 2,
               style: const TextStyle(
                 color: AppColors.darkCharcoal,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

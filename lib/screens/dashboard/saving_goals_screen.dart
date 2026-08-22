@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../models/saving_goal.dart';
 import '../../models/goal_feasibility.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/savings_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/analytics_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
@@ -71,9 +73,9 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
 
                 // ── Goals List ───────────────────────────────────────────────
                 Expanded(
-                  child: Consumer<FinanceProvider>(
-                    builder: (context, provider, child) {
-                      final goals = provider.savingGoals;
+                  child: Consumer3<SavingsViewModel, SettingsViewModel, AnalyticsViewModel>(
+                    builder: (context, savingsVM, settingsVM, analyticsVM, child) {
+                      final goals = savingsVM.savingGoals;
 
                       if (goals.isEmpty) {
                         return SingleChildScrollView(
@@ -167,7 +169,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                         itemCount: sortedGoals.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, index) =>
-                            _buildGoalCard(context, sortedGoals[index], provider),
+                            _buildGoalCard(context, sortedGoals[index], savingsVM, settingsVM, analyticsVM),
                       );
                     },
                   ),
@@ -184,8 +186,16 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   // GOAL CARD (Minimalist, Clean AppCard without Gradients)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildGoalCard(
-      BuildContext context, SavingGoal goal, FinanceProvider provider) {
-    final feasibility = provider.goalFeasibility(goal);
+      BuildContext context,
+      SavingGoal goal,
+      SavingsViewModel savingsVM,
+      SettingsViewModel settingsVM,
+      AnalyticsViewModel analyticsVM) {
+    final feasibility = savingsVM.goalFeasibility(
+      goal,
+      liveBalances: analyticsVM.latestBalancesMap,
+      totalBalance: analyticsVM.totalBalance,
+    );
     final fraction = goal.targetAmount > 0
         ? (goal.savedAmount / goal.targetAmount).clamp(0.0, 1.0)
         : 0.0;
@@ -228,7 +238,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     Row(
                       children: [
                         Text(
-                          provider.isBalanceVisible
+                          settingsVM.isBalanceVisible
                               ? 'Target: ${currencyFmt.format(goal.targetAmount)}'
                               : 'Target: ••••••••',
                           style: const TextStyle(
@@ -237,7 +247,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (provider.isBalanceVisible) ...[
+                        if (settingsVM.isBalanceVisible) ...[
                           const SizedBox(width: 3),
                           const CurrencySymbolWidget(
                             size: 11,
@@ -307,7 +317,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     ),
                   ),
                   Text(
-                    provider.isBalanceVisible
+                    settingsVM.isBalanceVisible
                         ? currencyFmt.format(goal.savedAmount)
                         : '••••••••',
                     style: const TextStyle(
@@ -316,7 +326,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (provider.isBalanceVisible) ...[
+                  if (settingsVM.isBalanceVisible) ...[
                     const SizedBox(width: 2),
                     const CurrencySymbolWidget(
                       size: 10,
@@ -336,7 +346,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     ),
                   ),
                   Text(
-                    provider.isBalanceVisible
+                    settingsVM.isBalanceVisible
                         ? currencyFmt.format((goal.targetAmount - goal.savedAmount).clamp(0, double.infinity))
                         : '••••••••',
                     style: const TextStyle(
@@ -345,7 +355,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (provider.isBalanceVisible) ...[
+                  if (settingsVM.isBalanceVisible) ...[
                     const SizedBox(width: 2),
                     const CurrencySymbolWidget(
                       size: 10,
@@ -382,7 +392,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
     }
 
     return GestureDetector(
-      onTap: () => _showGoalOptionsSheet(context, goal, provider),
+      onTap: () => _showGoalOptionsSheet(context, goal, savingsVM),
       child: cardWidget,
     );
   }
@@ -516,7 +526,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   // CARD OPTIONS MENU (Tap on Card)
   // ─────────────────────────────────────────────────────────────────────────
   void _showGoalOptionsSheet(
-      BuildContext context, SavingGoal goal, FinanceProvider provider) {
+      BuildContext context, SavingGoal goal, SavingsViewModel savingsVM) {
     AppDrawer.show(
       context: context,
       builder: (ctx) => AppDrawer(
@@ -568,7 +578,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                 final updated = goal.copyWith(
                   status: goal.status == 'on_hold' ? 'active' : 'on_hold',
                 );
-                provider.updateSavingGoal(updated);
+                savingsVM.updateSavingGoal(updated);
               },
             ),
 
@@ -581,7 +591,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
               isDestructive: true,
               onTap: () {
                 Navigator.pop(ctx);
-                _confirmDeleteGoal(context, goal, provider);
+                _confirmDeleteGoal(context, goal, savingsVM);
               },
             ),
           ],
@@ -656,7 +666,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   }
 
   void _confirmDeleteGoal(
-      BuildContext context, SavingGoal goal, FinanceProvider provider) {
+      BuildContext context, SavingGoal goal, SavingsViewModel savingsVM) {
     AppConfirmDialog.show(
       context: context,
       title: 'Delete Saving Goal',
@@ -668,7 +678,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
       cancelText: 'Cancel',
       isDestructive: true,
       onConfirm: () {
-        provider.deleteSavingGoal(goal.id);
+        savingsVM.deleteSavingGoal(goal.id);
       },
     );
   }
@@ -725,8 +735,6 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
   ];
   int _selectedIconIndex = 7;
 
-  String _selectedThemeId = 'green';
-
   @override
   void initState() {
     super.initState();
@@ -778,7 +786,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         accountAllocations: allocMap,
         colorTheme: 'green',
       );
-      context.read<FinanceProvider>().updateSavingGoal(updated);
+      context.read<SavingsViewModel>().updateSavingGoal(updated);
     } else {
       final newGoal = SavingGoal(
         id: 'goal_${DateTime.now().millisecondsSinceEpoch}',
@@ -790,7 +798,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
         accountAllocations: allocMap,
         colorTheme: 'green',
       );
-      context.read<FinanceProvider>().addSavingGoal(newGoal);
+      context.read<SavingsViewModel>().addSavingGoal(newGoal);
     }
     Navigator.pop(context);
   }
@@ -858,7 +866,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
           _buildField(
             controller: _targetCtrl,
             label:
-                'Target Amount (${Provider.of<FinanceProvider>(context, listen: false).currentCurrency.shortLabel})',
+                'Target Amount (${Provider.of<SettingsViewModel>(context, listen: false).currentCurrency.shortLabel})',
             hint: 'e.g. 200,000',
             keyboardType: TextInputType.number,
           ),
@@ -866,7 +874,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
           _buildField(
             controller: _savedCtrl,
             label:
-                'Already Saved (${Provider.of<FinanceProvider>(context, listen: false).currentCurrency.shortLabel})',
+                'Already Saved (${Provider.of<SettingsViewModel>(context, listen: false).currentCurrency.shortLabel})',
             hint: '0',
             keyboardType: TextInputType.number,
           ),
@@ -904,7 +912,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
               );
             },
           ),
-          Consumer<FinanceProvider>(
+          Consumer<AnalyticsViewModel>(
             builder: (context, prov, _) {
               final accountNames = prov.allAccountNames;
               final balances = prov.latestBalancesMap;

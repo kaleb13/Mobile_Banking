@@ -42,4 +42,12 @@ class AppSender {
       pin: map['pin'],
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSender && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

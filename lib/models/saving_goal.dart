@@ -148,4 +148,12 @@ class SavingGoal {
   String toJson() => json.encode(toMap());
 
   factory SavingGoal.fromJson(String source) => SavingGoal.fromMap(json.decode(source));
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SavingGoal && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

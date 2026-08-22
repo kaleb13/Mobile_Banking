@@ -466,7 +466,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                     if (lower.contains("credited") || lower.contains("received") || lower.contains("deposit")) {
                         val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
                         if (amount <= 0) return null
-                        val refMatch = Regex("(?i)(?:reference\\s+number|ref(?:erence)?\\s*(?:no\\.?)?|ref\\.?)?\\s*:?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        var refMatch = Regex("(?i)(?:reference\\s+number|ref(?:erence)?\\s*(?:no\\.?)?|ref\\.?)\\s*:?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        if (refMatch == null) {
+                            refMatch = Regex("(?i)digitalreceipt\\?es=([A-Za-z0-9/\\-_]+)").find(singleLine)
+                        }
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 
                         return NativeParsedSms(
@@ -486,9 +489,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                     if (lower.contains("debited") || lower.contains("debit") || lower.contains("transfer") || lower.contains("withdrawn") || lower.contains("paid")) {
                         val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
                         if (amount <= 0) return null
-                        var refMatch = Regex("(?i)(?:reference\\s+number|ref(?:erence)?\\s*(?:no\\.?)?|ref\\.?)?\\s*:?\\s*([A-Za-z0-9]+)").find(singleLine)
+                        var refMatch = Regex("(?i)(?:reference\\s+number|ref(?:erence)?\\s*(?:no\\.?)?|ref\\.?)\\s*:?\\s*([A-Za-z0-9]+)").find(singleLine)
                         if (refMatch == null) {
-                            refMatch = Regex("(?i)digitalreceipt\\?es=([A-Za-z0-9]+)").find(singleLine)
+                            refMatch = Regex("(?i)digitalreceipt\\?es=([A-Za-z0-9/\\-_]+)").find(singleLine)
                         }
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 

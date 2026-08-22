@@ -1,0 +1,339 @@
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import '../../../models/app_notification.dart';
+import '../../../theme/app_theme.dart';
+import '../../../widgets/app_back_button.dart';
+import '../../../widgets/app_button.dart';
+
+class NotificationOptionsSheet extends StatelessWidget {
+  final AppNotification notification;
+  final VoidCallback onClose;
+  final VoidCallback onManualInsert;
+  final VoidCallback onIgnore;
+
+  const NotificationOptionsSheet({
+    super.key,
+    required this.notification,
+    required this.onClose,
+    required this.onManualInsert,
+    required this.onIgnore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSystem = notification.sender.startsWith('Loan') ||
+        notification.sender.startsWith('System');
+
+    return ClipRRect(
+      borderRadius: AppRadius.cardRadius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface.withValues(alpha: 0.94),
+            borderRadius: AppRadius.cardRadius,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Message Options',
+                        style: AppTypography.heading2.copyWith(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    AppBackButton.dark(onPressed: onClose),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (!isSystem) ...[
+                _buildModalItem(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: 'Insert Transaction Manually',
+                  iconColor: AppColors.positive,
+                  onTap: onManualInsert,
+                ),
+              ],
+              _buildModalItem(
+                icon: Icons.block_rounded,
+                label: 'Ignore Message (Never show again)',
+                iconColor: AppColors.textSecondary,
+                onTap: onIgnore,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModalItem({
+    required IconData icon,
+    required String label,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      splashColor: AppColors.buttonSecondary,
+      highlightColor: AppColors.buttonSecondary,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class NotificationConfirmationDialog extends StatelessWidget {
+  final String title;
+  final String description;
+  final String confirmLabel;
+  final bool isDestructive;
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  const NotificationConfirmationDialog({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.confirmLabel,
+    this.isDestructive = false,
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          GestureDetector(
+            onTap: onCancel,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.35),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: ClipRRect(
+                borderRadius: AppRadius.cardRadius,
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withValues(alpha: 0.88),
+                      borderRadius: AppRadius.cardRadius,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          textAlign: TextAlign.left,
+                          style: AppTypography.heading2.copyWith(
+                            color: AppColors.textPrimary,
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          description,
+                          textAlign: TextAlign.left,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AppButton.secondary(
+                                text: 'Cancel',
+                                height: 42,
+                                onPressed: onCancel,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: isDestructive
+                                  ? AppButton.destructive(
+                                      text: confirmLabel,
+                                      height: 42,
+                                      onPressed: onConfirm,
+                                    )
+                                  : AppButton.primary(
+                                      text: confirmLabel,
+                                      height: 42,
+                                      onPressed: onConfirm,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SendToDeveloperSheet extends StatelessWidget {
+  final int count;
+  final String bankFilter;
+  final VoidCallback onClose;
+  final VoidCallback onConfirmSend;
+  final bool isExporting;
+
+  const SendToDeveloperSheet({
+    super.key,
+    required this.count,
+    required this.bankFilter,
+    required this.onClose,
+    required this.onConfirmSend,
+    this.isExporting = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: AppRadius.cardRadius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+          decoration: BoxDecoration(
+            color: AppColors.surface.withValues(alpha: 0.96),
+            borderRadius: AppRadius.cardRadius,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.skyBlue.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.telegram_rounded,
+                      color: AppColors.skyBlue,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Send to Developer',
+                      style: AppTypography.heading2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  AppBackButton.dark(onPressed: onClose),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Help improve Shibre banking parser by sharing unrecognized messages with developer @zkaleb.',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.shield_outlined,
+                      color: AppColors.positive,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Zero personal data or credentials collected. Only raw SMS patterns will be exported ($count messages${bankFilter != 'All' ? ' for $bankFilter' : ''}).',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              AppButton.primary(
+                text: isExporting ? 'Preparing File...' : 'Export & Send via Telegram',
+                icon: Icons.send_rounded,
+                isLoading: isExporting,
+                onPressed: isExporting ? null : onConfirmSend,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -143,7 +143,7 @@ class AhaduParser {
       refId = refMatch.group(1)?.trim();
     } else {
       final urlRefMatch = RegExp(
-              r'digitalreceipt\?es=([A-Za-z0-9]+)', caseSensitive: false)
+              r'digitalreceipt\?es=([A-Za-z0-9/\-_]+)', caseSensitive: false)
           .firstMatch(message);
       if (urlRefMatch != null) {
         refId = urlRefMatch.group(1)?.trim();

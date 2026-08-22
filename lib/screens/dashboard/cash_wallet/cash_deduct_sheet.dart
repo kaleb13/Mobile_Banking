@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../models/cash_transaction.dart';
 import '../../../models/expense_definition.dart';
 import '../../../models/reason.dart';
 import '../../../models/transaction.dart';
 import '../../../models/transaction_attachment.dart';
-import '../../../providers/finance_provider.dart';
+import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../../presentation/viewmodels/transactions_view_model.dart';
+import '../../../presentation/viewmodels/settings_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_badges.dart';
 import '../../../widgets/app_bottom_sheet.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/app_note_card.dart';
-import '../../../widgets/app_switch.dart';
 import '../../../widgets/app_text_field.dart';
 import '../../../widgets/app_toast.dart';
 import '../reason_selection_sheet.dart';
@@ -20,7 +22,15 @@ import '../reason_selection_sheet.dart';
 /// Shows the unified cash expense deduction drawer with amount validation,
 /// template selection, reason selection, optional note/receipt attachments,
 /// and bank withdrawal linking.
-void showCashDeductModal(BuildContext context, FinanceProvider provider) {
+void showCashDeductModal(
+  BuildContext context, {
+  CashWalletViewModel? cashViewModel,
+  TransactionsViewModel? transactionsViewModel,
+  SettingsViewModel? settingsViewModel,
+}) {
+  final cashVM = cashViewModel ?? context.read<CashWalletViewModel>();
+  final txVM = transactionsViewModel ?? context.read<TransactionsViewModel>();
+  final settingsVM = settingsViewModel ?? context.read<SettingsViewModel>();
   final amountController = TextEditingController();
   final noteController = TextEditingController();
   final pendingAttachments = <TransactionAttachment>[];
@@ -39,16 +49,16 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
           String? limitError;
           if (enteredAmt != null && enteredAmt > 0) {
             if (selectedWithdrawal != null) {
-              final rem = provider.getCashWithdrawalRemainingAmount(
+              final rem = cashVM.getCashWithdrawalRemainingAmount(
                   selectedWithdrawal!.id!, selectedWithdrawal!.amount);
               if (enteredAmt > rem) {
                 limitError =
                     'Exceeds remaining withdrawal balance of ${fmtShort.format(rem)} ETB';
               }
-            } else if (provider.cashBalance > 0 &&
-                enteredAmt > provider.cashBalance) {
+            } else if (cashVM.cashBalance > 0 &&
+                enteredAmt > cashVM.cashBalance) {
               limitError =
-                  'Exceeds available cash balance of ${fmtShort.format(provider.cashBalance)} ETB';
+                  'Exceeds available cash balance of ${fmtShort.format(cashVM.cashBalance)} ETB';
             }
           }
           final bool isExceeded = limitError != null;
@@ -71,7 +81,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
               iconColor: AppColors.positive,
               title: 'Deduct Cash Expense',
               subtitle:
-                  'Available: ${fmtShort.format(provider.cashBalance)} ETB',
+                  'Available: ${fmtShort.format(cashVM.cashBalance)} ETB',
             ),
             bottomAction: AppButton.primary(
               text: buttonText,
@@ -86,7 +96,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                       }
 
                       if (selectedWithdrawal != null) {
-                        final rem = provider.getCashWithdrawalRemainingAmount(
+                        final rem = cashVM.getCashWithdrawalRemainingAmount(
                             selectedWithdrawal!.id!,
                             selectedWithdrawal!.amount);
                         if (amt > rem) return;
@@ -104,7 +114,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                         linkedTransactionId: selectedWithdrawal?.id,
                       );
 
-                      await provider.addCashTransaction(tx);
+                      await cashVM.addCashTransaction(tx);
 
                       // If "Save as Template" is on, and no template selected, create it
                       if (isRecurring && selectedTemplate == null) {
@@ -117,7 +127,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                           isRecurring: false,
                           reasonId: selectedReason?.id,
                         );
-                        await provider.addExpenseDefinition(newDef);
+                        await cashVM.addExpenseDefinition(newDef);
                       }
 
                       if (!context.mounted) return;
@@ -140,7 +150,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
               padding: const EdgeInsets.only(bottom: 16),
               children: [
                 // Template Quick Selector
-                if (provider.expenseDefinitions.isNotEmpty) ...[
+                if (cashVM.expenseDefinitions.isNotEmpty) ...[
                   const Text(
                     'Saved Templates',
                     style: TextStyle(color: AppColors.textSoft, fontSize: 13),
@@ -150,9 +160,9 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                     height: 44,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: provider.expenseDefinitions.length,
+                      itemCount: cashVM.expenseDefinitions.length,
                       itemBuilder: (context, index) {
-                        final def = provider.expenseDefinitions[index];
+                        final def = cashVM.expenseDefinitions[index];
                         final isSelected = selectedTemplate?.id == def.id;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8.0),
@@ -167,9 +177,9 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                                       def.defaultAmount.toStringAsFixed(0);
                                   if (def.reasonId != null) {
                                     selectedReason =
-                                        provider.reasons.firstWhere(
+                                        txVM.reasons.firstWhere(
                                       (r) => r.id == def.reasonId,
-                                      orElse: () => provider.reasons.first,
+                                      orElse: () => txVM.reasons.first,
                                     );
                                   }
                                 } else {
@@ -209,7 +219,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                   ),
                   hint: '0.00',
                   hintColor: Colors.white.withValues(alpha: 0.1),
-                  prefixText: provider.currentCurrency.shortLabel + ' ',
+                  prefixText: '${settingsVM.currentCurrency.shortLabel} ',
                   onChanged: (_) => setModalState(() {}),
                 ),
                 if (isExceeded) ...[
@@ -320,7 +330,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                 const SizedBox(height: 16),
 
                 // Bank Cash Withdrawal Linkage Selector
-                if (provider.activeBankCashWithdrawals.isNotEmpty) ...[
+                if (txVM.activeBankCashWithdrawals.isNotEmpty) ...[
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.04),
@@ -348,8 +358,8 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                             ),
                           ),
                         ),
-                        ...provider.activeBankCashWithdrawals.map((w) {
-                          final rem = provider
+                        ...txVM.activeBankCashWithdrawals.map((w) {
+                          final rem = cashVM
                               .getCashWithdrawalRemainingAmount(
                                   w.id!, w.amount);
                           return PopupMenuItem<AppTransaction?>(
@@ -400,8 +410,8 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                                         : 'Source Bank Withdrawal (Optional)',
                                     style: TextStyle(
                                       color: selectedWithdrawal != null
-                                          ? Colors.white
-                                          : AppColors.textSoft,
+                                           ? Colors.white
+                                           : AppColors.textSoft,
                                       fontSize: 13,
                                       fontWeight: selectedWithdrawal != null
                                           ? FontWeight.bold
@@ -410,7 +420,7 @@ void showCashDeductModal(BuildContext context, FinanceProvider provider) {
                                   ),
                                   if (selectedWithdrawal != null)
                                     Text(
-                                      '${fmtShort.format(provider.getCashWithdrawalRemainingAmount(selectedWithdrawal!.id!, selectedWithdrawal!.amount))} ETB remaining',
+                                      '${fmtShort.format(cashVM.getCashWithdrawalRemainingAmount(selectedWithdrawal!.id!, selectedWithdrawal!.amount))} ETB remaining',
                                       style: const TextStyle(
                                         color: AppColors.positive,
                                         fontSize: 10,

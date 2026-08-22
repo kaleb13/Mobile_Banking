@@ -9,7 +9,10 @@ import '../../models/reason.dart';
 import '../../models/loan_record.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/transaction_attachment.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/loans_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/link_extractor.dart';
 import '../../widgets/app_back_button.dart';
@@ -46,7 +49,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   bool _isPersonalNoteExpanded = false;
   bool _isRawMessageExpanded = false;
   bool _isReceiptLinkExpanded = false;
-  bool _isMenuOpen = false;
 
   @override
   void initState() {
@@ -65,14 +67,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Future<void> _showReasonPicker(
-      BuildContext context, FinanceProvider provider) async {
-    final currentTx = provider.transactions
+      BuildContext context, TransactionsViewModel txVM, LoansViewModel loansVM) async {
+    final currentTx = txVM.transactions
         .where((t) => t.id == widget.transaction.id)
         .firstOrNull ?? widget.transaction;
 
     AppReason? initial = _selectedReason;
     if (initial == null && currentTx.resolvedReason != null) {
-      initial = provider.reasons
+      initial = txVM.reasons
           .where((r) =>
               r.name.toLowerCase() ==
               currentTx.resolvedReason!.toLowerCase())
@@ -102,18 +104,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     });
 
     // Save the reason to the DB first.
-    await _save(provider);
+    await _save(txVM);
 
     if (!mounted || !context.mounted) return;
 
-    final latestTx = provider.transactions
+    final latestTx = txVM.transactions
         .where((t) => t.id == widget.transaction.id)
         .firstOrNull ?? widget.transaction;
 
     final chosenName = chosen!.name.trim().toLowerCase();
 
     if (chosenName == 'loan' || chosenName.contains('loan')) {
-      final existingLoan = provider.loanRecords
+      final existingLoan = loansVM.loanRecords
           .where((l) => l.linkedTransactionId == latestTx.id)
           .firstOrNull;
       if (mounted && context.mounted) {
@@ -134,7 +136,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           await AppDrawer.show(
             context: context,
             builder: (_) => AddLoanSheet(
-              provider: provider,
               linkedTransactionId: latestTx.id,
               prefilledAmount: latestTx.amount,
               prefilledName: existingLoan?.personName ?? latestTx.sender,
@@ -151,14 +152,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         context: context,
         builder: (_) => InternalTransferPickerSheet(
           sourceTransaction: latestTx,
-          provider: provider,
         ),
       );
     }
   }
 
-  Future<void> _save(FinanceProvider provider) async {
-    final currentTx = provider.transactions
+  Future<void> _save(TransactionsViewModel txVM) async {
+    final currentTx = txVM.transactions
         .where((t) => t.id == widget.transaction.id)
         .firstOrNull ?? widget.transaction;
     if (currentTx.id == null) return;
@@ -169,8 +169,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (_selectedReason != null) {
       final isSub = _selectedReason!.isSubcategory;
       final isTop = _selectedReason!.isTopLevelCategory;
-      await provider.updateTransactionReason(
+      await txVM.updateTransactionReason(
         currentTx.id!,
+        reason: _selectedReason!.name,
         reasonId: _selectedReason!.id,
         categoryId: isSub ? _selectedReason!.parentId : (isTop ? _selectedReason!.id : null),
         subcategoryId: isSub ? _selectedReason!.id : null,
@@ -178,7 +179,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       );
       changesMade = true;
     } else if (noteText != (currentTx.note ?? '')) {
-      await provider.updateTransactionNote(
+      await txVM.updateTransactionNote(
         currentTx.id!,
         noteText.isNotEmpty ? noteText : null,
       );
@@ -186,12 +187,79 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
 
     if (mounted && context.mounted && changesMade) {
-      AppToast.success(context, message: 'Details saved');
+      if (_selectedReason != null) {
+        final reasonName = _selectedReason!.name.trim();
+        final rLower = reasonName.toLowerCase();
+        final isIncome = currentTx.type == 'income';
+
+        String toastSubtitle;
+        String toastDetails;
+        Map<String, String> toastMetadata;
+
+        if (rLower == 'loan' || rLower.contains('loan')) {
+          toastSubtitle = 'Assigned to Loan & Debt Tracker';
+          toastDetails =
+              'This transaction is tagged as a loan. You can track repayments, due dates, and person balances by creating a loan record directly from the banner card or in the Loan Manager.';
+          toastMetadata = {
+            'Reason': reasonName,
+            'Direction': isIncome ? 'Borrowed' : 'Lent',
+            'Status': 'Ready for Tracking',
+          };
+        } else if (rLower == 'cash') {
+          toastSubtitle = 'Categorized as Cash Withdrawal';
+          toastDetails =
+              'This withdrawal is recorded in your Cash Wallet. You can now log individual daily expenses and micro-purchases against this cash withdrawal from the breakdown card.';
+          toastMetadata = {
+            'Reason': 'Cash',
+            'Wallet': 'Cash Ledger',
+            'Action': 'Log Deductions',
+          };
+        } else if (rLower == 'internal transfer' || rLower.contains('transfer')) {
+          toastSubtitle = 'Categorized as Internal Transfer';
+          toastDetails =
+              'This transaction represents moving funds between your own accounts or wallets. It is excluded from total expense/income calculations to prevent double-counting. You can link it to the corresponding opposite transaction.';
+          toastMetadata = {
+            'Reason': 'Transfer',
+            'Impact': 'Neutral (No PnL change)',
+          };
+        } else if (rLower == 'bounce' || rLower.contains('reversal')) {
+          toastSubtitle = 'Categorized as Transaction Reversal';
+          toastDetails =
+              'This transaction is recorded as a bounce, failed transaction, or bank refund. It offsets previous failed transfers and prevents distorted spending metrics.';
+          toastMetadata = {
+            'Reason': 'Bounce',
+            'Type': 'Bank Reversal / Offset',
+          };
+        } else {
+          toastSubtitle = 'Assigned to $reasonName';
+          toastDetails =
+              'This transaction has been categorized under $reasonName. You can optionally link this reason to ${currentTx.sender} so future messages are automatically classified.';
+          toastMetadata = {
+            'Reason': reasonName,
+            'Flow': isIncome ? 'Income' : 'Expense',
+          };
+        }
+
+        AppToast.success(
+          context,
+          message: 'Details Saved',
+          subtitle: toastSubtitle,
+          details: toastDetails,
+          metadata: toastMetadata,
+        );
+      } else {
+        AppToast.success(
+          context,
+          message: 'Details Saved',
+          subtitle: 'Personal note updated',
+          details: 'Your private notes and references for this transaction have been safely stored.',
+        );
+      }
     }
   }
 
   Future<void> _confirmDeleteTransaction(
-      BuildContext context, FinanceProvider provider) async {
+      BuildContext context, TransactionsViewModel txVM) async {
     if (widget.transaction.id == null) return;
     final shouldDelete = await AppConfirmDialog.show(
       context: context,
@@ -207,7 +275,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
 
     if (shouldDelete == true && context.mounted) {
-      await provider.deleteTransaction(widget.transaction.id!);
+      await txVM.deleteTransaction(widget.transaction.id!);
       if (context.mounted) {
         AppToast.info(context, message: 'Transaction deleted');
         Navigator.of(context).pop();
@@ -225,8 +293,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final currentTx = provider.transactions
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final cashVM = Provider.of<CashWalletViewModel>(context);
+    final loansVM = Provider.of<LoansViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+
+    final currentTx = txVM.transactions
         .where((t) => t.id == widget.transaction.id)
         .firstOrNull ?? widget.transaction;
 
@@ -244,7 +316,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     // Find linked loan if any
     LoanRecord? linkedLoan;
     try {
-      linkedLoan = provider.loanRecords.firstWhere(
+      linkedLoan = loansVM.loanRecords.firstWhere(
         (l) => l.linkedTransactionId == currentTx.id,
       );
     } catch (_) {
@@ -254,7 +326,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final bool isCashWithDeductions = (currentTx.reason?.toLowerCase() == 'cash' ||
             currentTx.customReasonText?.toLowerCase() == 'cash' ||
             currentTx.resolvedReason?.toLowerCase() == 'cash') &&
-        provider.spendingsForTransaction(currentTx.id ?? '').isNotEmpty;
+        cashVM.spendingsForTransaction(currentTx.id ?? '').isNotEmpty;
 
     // True if this transaction is auto-locked (Telebirr credit/repayment)
     final bool isAutoLocked = currentTx.isReasonLocked;
@@ -263,7 +335,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     AppReasonLink? activeLink;
     if (activeReasonId != null) {
-      final links = provider.linksForReason(activeReasonId);
+      final links = txVM.linksForReason(activeReasonId);
       final idx = links.indexWhere((l) =>
           l.linkedName.toLowerCase() ==
           currentTx.sender.toLowerCase());
@@ -330,8 +402,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                   icon: Icon(
                     currentTx.isBookmarked
-                        ? Icons.bookmark_rounded
-                        : Icons.bookmark_outline_rounded,
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_outline_rounded,
                     color: currentTx.isBookmarked ? AppColors.gold : Colors.white,
                     size: 19,
                   ),
@@ -339,7 +411,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       ? 'Remove Bookmark'
                       : 'Bookmark Transaction',
                   onPressed: () async {
-                    await provider.toggleTransactionBookmark(currentTx.id!);
+                    await txVM.toggleTransactionBookmark(currentTx.id!);
                     if (context.mounted) {
                       final isNowBookmarked = !currentTx.isBookmarked;
                       if (isNowBookmarked) {
@@ -363,7 +435,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ],
               onSelected: (value) {
                 if (value == 'delete') {
-                  _confirmDeleteTransaction(context, provider);
+                  _confirmDeleteTransaction(context, txVM);
                 }
               },
             ),
@@ -408,68 +480,96 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                         const SizedBox(height: 18),
                         // Currency + Amount with premium split decimals & active currency symbol
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              sign,
-                              style: TextStyle(
-                                color: amountColor,
-                                fontSize: 44,
-                                fontWeight: FontWeight.w300,
+                        if (settingsVM.isBalanceVisible)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                sign,
+                                style: TextStyle(
+                                  color: amountColor,
+                                  fontSize: 44,
+                                  fontWeight: FontWeight.w300,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              NumberFormat('#,##0')
-                                  .format(widget.transaction.amount),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 44,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -1,
+                              const SizedBox(width: 4),
+                              Text(
+                                NumberFormat('#,##0')
+                                    .format(currentTx.amount),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 44,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -1,
+                                ),
                               ),
-                            ),
-                            Text(
-                              '.${(widget.transaction.amount % 1).toStringAsFixed(2).split('.')[1]}',
-                              style: const TextStyle(
+                              Text(
+                                '.${(currentTx.amount % 1).toStringAsFixed(2).split('.')[1]}',
+                                style: const TextStyle(
+                                  color: AppColors.textSoft,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const CurrencySymbolWidget(
+                                size: 22,
                                 color: AppColors.textSoft,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w400,
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            const CurrencySymbolWidget(
-                              size: 22,
-                              color: AppColors.textSoft,
-                            ),
-                          ],
-                        ),
+                            ],
+                          )
+                        else
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                sign,
+                                style: TextStyle(
+                                  color: amountColor,
+                                  fontSize: 44,
+                                  fontWeight: FontWeight.w300,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                '••••••••',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                            ],
+                          ),
                         const SizedBox(height: 18),
 
                         // ── 1. LOAN TRACKING / INTERNAL TRANSFER CARD (TOP MOST) ──
                         if (linkedLoan != null) ...[
-                          _buildLoanTrackingCard(context, linkedLoan, provider),
+                          _buildLoanTrackingCard(context, linkedLoan, loansVM, settingsVM),
                           const SizedBox(height: 14),
                         ] else if (currentTx.linkedTransactionId != null) ...[
-                          _buildInternalTransferCard(context, provider, currentTx),
+                          _buildInternalTransferCard(context, txVM, currentTx),
                           const SizedBox(height: 14),
                         ] else if (!isAutoLocked && (activeReasonName == 'loan' || activeReasonName.contains('loan'))) ...[
-                          _buildCreateLoanPromptCard(context, provider, currentTx),
+                          _buildCreateLoanPromptCard(context, currentTx),
                           const SizedBox(height: 14),
                         ] else if (!isAutoLocked && (activeReasonName == 'internal transfer' || activeReasonName.contains('internal transfer') || activeReasonName == 'transfer')) ...[
-                          _buildLinkInternalTransferPromptCard(context, provider, currentTx),
+                          _buildLinkInternalTransferPromptCard(context, currentTx),
                           const SizedBox(height: 14),
                         ] else if ((currentLabel?.toLowerCase() == 'cash' || currentTx.reason?.toLowerCase() == 'cash') && currentTx.type == 'expense') ...[
-                          _buildCashSpendingBreakdownCard(context, provider),
+                          _buildCashSpendingBreakdownCard(context, cashVM, settingsVM, txVM),
                           const SizedBox(height: 14),
                         ],
 
                         // ── 2. ASSIGNED REASON CARD ─────────────────────────────────────────────
                         _buildAssignedReasonCard(
                           context,
-                          provider,
+                          txVM,
+                          cashVM,
+                          loansVM,
                           currentLabel,
                           activeReasonId,
                           isSpecialReason,
@@ -483,7 +583,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         const SizedBox(height: 14),
 
                         // ── 3. TRANSACTION DETAIL INFO CARD (ALWAYS EXPANDED) ───────────────────
-                        _buildTransactionInfoCard(context, provider, bankInfo, isIncome),
+                        _buildTransactionInfoCard(context, bankInfo, isIncome),
                       ],
                     ),
                   ),
@@ -495,7 +595,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Collapsible Personal Note Section ──────────────────
-                    _buildCollapsiblePersonalNoteCard(context, provider),
+                    _buildCollapsiblePersonalNoteCard(context, txVM),
 
                     const SizedBox(height: 14),
 
@@ -614,7 +714,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
   Widget _buildTransactionInfoCard(
     BuildContext context,
-    FinanceProvider provider,
     ({Widget icon, String name, String shortName, String subtitle, Color bgColor}) bankInfo,
     bool isIncome,
   ) {
@@ -722,11 +821,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  Widget _buildCashSpendingBreakdownCard(BuildContext context, FinanceProvider provider) {
+  Widget _buildCashSpendingBreakdownCard(
+      BuildContext context,
+      CashWalletViewModel cashVM,
+      SettingsViewModel settingsVM,
+      TransactionsViewModel txVM) {
     if (widget.transaction.id == null) return const SizedBox.shrink();
-    final spendings = provider.spendingsForTransaction(widget.transaction.id!);
-    final totalSpent = provider.getCashWithdrawalSpentAmount(widget.transaction.id!);
-    final remaining = provider.getCashWithdrawalRemainingAmount(widget.transaction.id!, widget.transaction.amount);
+    final spendings = cashVM.spendingsForTransaction(widget.transaction.id!);
+    final totalSpent = cashVM.getCashWithdrawalSpentAmount(widget.transaction.id!);
+    final remaining = cashVM.getCashWithdrawalRemainingAmount(widget.transaction.id!, widget.transaction.amount);
     final double progress = (totalSpent / widget.transaction.amount).clamp(0.0, 1.0);
     final fmtShort = NumberFormat('#,##0.00');
 
@@ -853,7 +956,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           isDestructive: true,
                           onConfirm: () async {
                             if (s.id != null) {
-                              await provider.deleteCashTransaction(s.id!);
+                              await cashVM.deleteCashTransaction(s.id!);
                             }
                           },
                         );
@@ -872,7 +975,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               icon: Icons.add_circle_outline_rounded,
               text: 'Deduct Cash Expense',
               onPressed: () {
-                _showDeductCashFromWithdrawalModal(context, provider, widget.transaction);
+                _showDeductCashFromWithdrawalModal(context, cashVM, settingsVM, txVM, widget.transaction);
               },
             )
           else
@@ -891,7 +994,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  void _showDeductCashFromWithdrawalModal(BuildContext context, FinanceProvider provider, AppTransaction bankTx) {
+  void _showDeductCashFromWithdrawalModal(
+      BuildContext context,
+      CashWalletViewModel cashVM,
+      SettingsViewModel settingsVM,
+      TransactionsViewModel txVM,
+      AppTransaction bankTx) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     final pendingAttachments = <TransactionAttachment>[];
@@ -902,7 +1010,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setModalState) {
-          final remaining = provider.getCashWithdrawalRemainingAmount(bankTx.id!, bankTx.amount);
+          final remaining = cashVM.getCashWithdrawalRemainingAmount(bankTx.id!, bankTx.amount);
           final enteredAmt = double.tryParse(amountController.text.trim());
           final bool isExceeded = enteredAmt != null && enteredAmt > remaining;
           final bool isValid = enteredAmt != null && enteredAmt > 0 && !isExceeded && selectedReason != null;
@@ -942,7 +1050,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         linkedTransactionId: bankTx.id,
                       );
 
-                      await provider.addCashTransaction(cashTx);
+                      await cashVM.addCashTransaction(cashTx);
                       if (context.mounted) Navigator.pop(ctx);
                     },
             ),
@@ -963,7 +1071,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ),
                   hint: '0.00',
                   hintColor: Colors.white.withValues(alpha: 0.15),
-                  prefixText: provider.currentCurrency.shortLabel + ' ',
+                  prefixText: '${settingsVM.currentCurrency.shortLabel} ',
                   onChanged: (_) => setModalState(() {}),
                 ),
                 if (isExceeded) ...[
@@ -971,7 +1079,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   Center(
                     child: AppBadge.destructive(
                       text:
-                          'Exceeds remaining limit of ${fmtShort.format(remaining)} ${provider.currentCurrency.shortLabel}',
+                          'Exceeds remaining limit of ${fmtShort.format(remaining)} ${settingsVM.currentCurrency.shortLabel}',
                       icon: Icons.error_outline_rounded,
                       size: AppBadgeSize.medium,
                     ),
@@ -1177,7 +1285,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return row;
   }
 
-  IconData _getReasonCategoryIcon(String? label) {
+  IconData _getReasonCategoryIcon(String? label, [TransactionsViewModel? txVM]) {
     if (label == null || label.trim().isEmpty || label.trim().toLowerCase() == 'uncategorized') {
       return Icons.help_outline_rounded; // Question mark icon when no reason is assigned
     }
@@ -1190,17 +1298,31 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         name.contains('dinner') ||
         name.contains('snack') ||
         name.contains('bakery') ||
-        name.contains('restaurant')) {
+        name.contains('restaurant') ||
+        name.contains('cafe') ||
+        name.contains('coffee') ||
+        name.contains('dining') ||
+        name.contains('grocer') ||
+        name.contains('supermarket')) {
       return Icons.restaurant_rounded;
     }
-    if (name.contains('goods') || name.contains('shopping') || name.contains('supermarket')) {
+    if (name.contains('goods') ||
+        name.contains('shopping') ||
+        name.contains('cloth') ||
+        name.contains('store') ||
+        name.contains('market') ||
+        name.contains('electronics')) {
       return Icons.shopping_bag_outlined;
     }
     if (name.contains('transport') ||
         name.contains('fuel') ||
+        name.contains('gas') ||
         name.contains('ride') ||
         name.contains('taxi') ||
-        name.contains('bus')) {
+        name.contains('bus') ||
+        name.contains('flight') ||
+        name.contains('travel') ||
+        name.contains('car')) {
       return Icons.directions_bus_rounded;
     }
     if (name.contains('mobile') ||
@@ -1208,41 +1330,103 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         name.contains('internet') ||
         name.contains('wifi') ||
         name.contains('data') ||
+        name.contains('telecom') ||
         name.contains('phone')) {
       return Icons.phone_android_rounded;
     }
-    if (name.contains('housing') || name.contains('rent')) {
+    if (name.contains('housing') ||
+        name.contains('rent') ||
+        name.contains('home') ||
+        name.contains('apartment') ||
+        name.contains('house')) {
       return Icons.home_rounded;
     }
     if (name.contains('medical') ||
         name.contains('health') ||
         name.contains('pharmacy') ||
-        name.contains('hospital')) {
+        name.contains('hospital') ||
+        name.contains('clinic') ||
+        name.contains('doctor') ||
+        name.contains('medicine') ||
+        name.contains('gym') ||
+        name.contains('fitness')) {
       return Icons.local_hospital_outlined;
     }
-    if (name.contains('education') || name.contains('school')) {
+    if (name.contains('education') ||
+        name.contains('school') ||
+        name.contains('college') ||
+        name.contains('university') ||
+        name.contains('tuition') ||
+        name.contains('course') ||
+        name.contains('book')) {
       return Icons.school_outlined;
     }
-    if (name.contains('entertainment') || name.contains('movie')) {
+    if (name.contains('entertainment') ||
+        name.contains('movie') ||
+        name.contains('cinema') ||
+        name.contains('music') ||
+        name.contains('game') ||
+        name.contains('gaming')) {
       return Icons.movie_outlined;
     }
-    if (name.contains('utility') || name.contains('utilities') || name.contains('bill') || name.contains('electricity') || name.contains('water')) {
+    if (name.contains('utility') ||
+        name.contains('utilities') ||
+        name.contains('bill') ||
+        name.contains('electricity') ||
+        name.contains('water') ||
+        name.contains('power') ||
+        name.contains('dstv') ||
+        name.contains('tv')) {
       return Icons.bolt_rounded;
     }
-    if (name.contains('salary') || name.contains('payroll') || name.contains('income')) {
+    if (name.contains('salary') ||
+        name.contains('payroll') ||
+        name.contains('income') ||
+        name.contains('wage') ||
+        name.contains('freelance') ||
+        name.contains('bonus')) {
       return Icons.account_balance_wallet_outlined;
     }
-    if (name.contains('loan') || name.contains('lend') || name.contains('borrow')) {
+    if (name.contains('investment') ||
+        name.contains('saving') ||
+        name.contains('stock') ||
+        name.contains('crypto') ||
+        name.contains('shares') ||
+        name.contains('interest')) {
+      return Icons.trending_up_rounded;
+    }
+    if (name.contains('loan') ||
+        name.contains('lend') ||
+        name.contains('borrow') ||
+        name.contains('debt') ||
+        name.contains('credit')) {
       return Icons.handshake_outlined;
     }
-    if (name.contains('bounce') || name.contains('reversal')) {
+    if (name.contains('bounce') ||
+        name.contains('reversal') ||
+        name.contains('refund') ||
+        name.contains('return')) {
       return Icons.replay_rounded;
     }
-    if (name.contains('internal transfer') || name.contains('transfer')) {
+    if (name.contains('internal transfer') ||
+        name.contains('transfer') ||
+        name.contains('swap')) {
       return Icons.swap_horiz_rounded;
     }
-    if (name.contains('cash')) {
+    if (name.contains('cash') ||
+        name.contains('atm') ||
+        name.contains('withdraw')) {
       return Icons.payments_outlined;
+    }
+
+    if (txVM != null) {
+      final reasonObj = txVM.reasons.where((r) => r.name.toLowerCase() == name).firstOrNull;
+      if (reasonObj != null && reasonObj.isSubcategory && reasonObj.parentId != null) {
+        final parent = txVM.reasons.where((r) => r.id == reasonObj.parentId).firstOrNull;
+        if (parent != null && parent.name.toLowerCase() != name) {
+          return _getReasonCategoryIcon(parent.name, null);
+        }
+      }
     }
 
     return Icons.category_outlined;
@@ -1250,7 +1434,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Widget _buildAssignedReasonCard(
     BuildContext context,
-    FinanceProvider provider,
+    TransactionsViewModel txVM,
+    CashWalletViewModel cashVM,
+    LoansViewModel loansVM,
     String? currentLabel,
     int? activeReasonId,
     bool isSpecialReason,
@@ -1293,7 +1479,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     return;
                   }
                   if (isCashLocked) {
-                    final spendings = provider.spendingsForTransaction(widget.transaction.id ?? '');
+                    final spendings = cashVM.spendingsForTransaction(widget.transaction.id ?? '');
                     AppConfirmDialog.show(
                       context: context,
                       title: 'Reason Locked',
@@ -1305,18 +1491,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       onConfirm: () async {
                         for (final s in spendings) {
                           if (s.id != null) {
-                            await provider.deleteCashTransaction(s.id!);
+                            await cashVM.deleteCashTransaction(s.id!);
                           }
                         }
                         if (context.mounted) {
-                          _showReasonPicker(context, provider);
+                          _showReasonPicker(context, txVM, loansVM);
                         }
                       },
                     );
                     return;
                   }
                 }
-              : () => _showReasonPicker(context, provider),
+              : () => _showReasonPicker(context, txVM, loansVM),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
@@ -1335,7 +1521,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     child: Icon(
                       isReasonBlocked
                           ? Icons.lock_rounded
-                          : _getReasonCategoryIcon(currentLabel),
+                          : _getReasonCategoryIcon(currentLabel, txVM),
                       color: isReasonBlocked
                           ? AppColors.warning
                           : Colors.white,
@@ -1436,7 +1622,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  Widget _buildCollapsiblePersonalNoteCard(BuildContext context, FinanceProvider provider) {
+  Widget _buildCollapsiblePersonalNoteCard(BuildContext context, TransactionsViewModel txVM) {
     return AppNoteCard(
       controller: _noteController,
       title: 'PERSONAL NOTE',
@@ -1446,9 +1632,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       initialExpanded: _isPersonalNoteExpanded,
       accentColor: AppColors.positive,
       onChanged: (_) => setState(() {}),
-      onEditingComplete: () => _save(provider),
+      onEditingComplete: () => _save(txVM),
       onAttachMedia: (filePath, fileType, fileName) async {
-        await provider.addAttachment(
+        await txVM.addAttachment(
           widget.transaction.id!,
           filePath,
           fileType,
@@ -1456,7 +1642,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         );
       },
       onDeleteAttachment: (att) {
-        provider.deleteAttachment(widget.transaction.id!, att.id);
+        txVM.deleteAttachment(widget.transaction.id!, att.id);
       },
     );
   }
@@ -1795,14 +1981,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildLoanTrackingCard(
-      BuildContext context, LoanRecord loan, FinanceProvider provider) {
+      BuildContext context, LoanRecord loan, LoansViewModel loansVM, SettingsViewModel settingsVM) {
     final isLent = loan.loanType == 'lent';
     final accentColor =
         isLent ? AppColors.positive : AppColors.warning;
     final fmt = NumberFormat('#,##0.00');
 
     return GestureDetector(
-      onLongPress: () => _showLoanOptionsSheet(context, loan, provider),
+      onLongPress: () => _showLoanOptionsSheet(context, loan, loansVM, settingsVM),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 0),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -1840,6 +2026,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         isLent
                             ? 'Lent to ${loan.personName}'
                             : 'Borrowed from ${loan.personName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -1868,7 +2056,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   fontSize: 10,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   onPressed: () {
-                    provider.setScreenIndex(3);
+                    settingsVM.setScreenIndex(3);
                     Navigator.popUntil(context, (route) => route.isFirst);
                   },
                 ),
@@ -1905,7 +2093,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   void _showLoanOptionsSheet(
-      BuildContext context, LoanRecord loan, FinanceProvider provider) {
+      BuildContext context, LoanRecord loan, LoansViewModel loansVM, SettingsViewModel settingsVM) {
     AppDrawer.show(
       context: context,
       builder: (ctx) => AppDrawer(
@@ -1932,7 +2120,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   style: TextStyle(color: AppColors.textSoft, fontSize: 12)),
               onTap: () {
                 Navigator.pop(ctx);
-                provider.setScreenIndex(3);
+                settingsVM.setScreenIndex(3);
                 Navigator.popUntil(context, (route) => route.isFirst);
               },
             ),
@@ -1966,7 +2154,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   onConfirm: () {},
                 );
                 if (confirm == true && mounted) {
-                  await provider.deleteLoan(loan.id!);
+                  await loansVM.deleteLoan(loan.id!);
                   if (mounted && context.mounted) {
                     AppToast.info(
                       context,
@@ -1984,7 +2172,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCreateLoanPromptCard(
-      BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
+      BuildContext context, AppTransaction currentTx) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -2040,7 +2228,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               await AppDrawer.show(
                 context: context,
                 builder: (_) => AddLoanSheet(
-                  provider: provider,
                   linkedTransactionId: currentTx.id,
                   prefilledAmount: currentTx.amount,
                   prefilledName: currentTx.sender,
@@ -2057,7 +2244,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildLinkInternalTransferPromptCard(
-      BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
+      BuildContext context, AppTransaction currentTx) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -2114,7 +2301,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 context: context,
                 builder: (_) => InternalTransferPickerSheet(
                   sourceTransaction: currentTx,
-                  provider: provider,
                 ),
               );
             },
@@ -2125,10 +2311,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildInternalTransferCard(
-      BuildContext context, FinanceProvider provider, AppTransaction currentTx) {
+      BuildContext context, TransactionsViewModel txVM, AppTransaction currentTx) {
     AppTransaction? linkedTx;
     try {
-      linkedTx = provider.transactions
+      linkedTx = txVM.transactions
           .firstWhere((t) => t.id == currentTx.linkedTransactionId);
     } catch (_) {}
 
@@ -2170,6 +2356,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       linkedTx != null
                           ? 'Linked to ${linkedTx.sender}'
                           : 'Linked to another transaction',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.positive,
                         fontSize: 11,
@@ -2201,7 +2389,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     onConfirm: () {},
                   );
                   if (shouldUnlink == true && context.mounted) {
-                    await provider.unlinkInternalTransfer(currentTx.id!);
+                    await txVM.unlinkInternalTransfer(currentTx.id!);
                     if (context.mounted) {
                       AppToast.info(context, message: 'Internal transfer unlinked');
                     }

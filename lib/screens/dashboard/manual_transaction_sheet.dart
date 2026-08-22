@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/app_notification.dart';
 import '../../models/transaction.dart';
 import '../../models/reason.dart';
 import '../../models/sender.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/notifications_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
@@ -16,14 +18,16 @@ import 'reason_selection_sheet.dart';
 
 class ManualTransactionSheet extends StatefulWidget {
   final AppNotification? notification;
-  final FinanceProvider provider;
+  final TransactionsViewModel? txVM;
+  final NotificationsViewModel? notifVM;
   final AppSender? initialSender;
   final VoidCallback? onClose;
 
   const ManualTransactionSheet({
     super.key,
     this.notification,
-    required this.provider,
+    this.txVM,
+    this.notifVM,
     this.initialSender,
     this.onClose,
   });
@@ -60,9 +64,20 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
       if (amountMatch != null) {
         _amountController.text = amountMatch.group(1)?.replaceAll(',', '') ?? '';
       }
+    }
 
-      if (widget.provider.senders.isNotEmpty && _selectedSender == null) {
-        _selectedSender = widget.provider.senders.firstWhere(
+    _amountController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_selectedSender == null) {
+      final txVM = widget.txVM ?? Provider.of<TransactionsViewModel>(context, listen: false);
+      if (widget.notification != null && txVM.senders.isNotEmpty) {
+        _selectedSender = txVM.senders.firstWhere(
           (s) =>
               s.senderName
                   .toLowerCase()
@@ -70,18 +85,12 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
               widget.notification!.sender
                   .toLowerCase()
                   .contains(s.senderName.toLowerCase()),
-          orElse: () => widget.provider.senders.first,
+          orElse: () => txVM.senders.first,
         );
+      } else if (txVM.senders.isNotEmpty) {
+        _selectedSender = txVM.senders.first;
       }
     }
-
-    if (_selectedSender == null && widget.provider.senders.isNotEmpty) {
-      _selectedSender = widget.provider.senders.first;
-    }
-
-    _amountController.addListener(() {
-      setState(() {});
-    });
   }
 
   @override
@@ -124,8 +133,11 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
 
     setState(() => _isSaving = true);
 
+    final txVM = widget.txVM ?? Provider.of<TransactionsViewModel>(context, listen: false);
+    final notifVM = widget.notifVM ?? Provider.of<NotificationsViewModel>(context, listen: false);
+
     final double currentBankBalance =
-        widget.provider.getLatestBalanceForBank(_selectedSender!.senderName);
+        txVM.getLatestBalanceForBank(_selectedSender!.senderName);
     final double calculatedPostBalance = _type == 'income'
         ? (currentBankBalance + amount)
         : (currentBankBalance - amount);
@@ -146,9 +158,9 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
       totalBalance: calculatedPostBalance > 0 ? calculatedPostBalance : 0.0,
     );
 
-    await widget.provider.addTransaction(tx);
+    await txVM.addTransaction(tx);
     if (widget.notification != null) {
-      await widget.provider.deleteNotification(widget.notification!.id);
+      await notifVM.deleteNotification(widget.notification!.id);
     }
 
     if (mounted) {

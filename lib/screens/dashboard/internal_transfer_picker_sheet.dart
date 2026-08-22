@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_badges.dart';
@@ -9,16 +10,17 @@ import '../../widgets/app_toast.dart';
 
 class InternalTransferPickerSheet extends StatelessWidget {
   final AppTransaction sourceTransaction;
-  final FinanceProvider provider;
+  final TransactionsViewModel? txVM;
 
   const InternalTransferPickerSheet({
     super.key,
     required this.sourceTransaction,
-    required this.provider,
+    this.txVM,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveVM = txVM ?? Provider.of<TransactionsViewModel>(context);
     // Determine the opposite type
     final targetType =
         sourceTransaction.type == 'income' ? 'expense' : 'income';
@@ -27,7 +29,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
     final cutoffDate = sourceTransaction.date.subtract(const Duration(days: 3));
     final futureDate = sourceTransaction.date.add(const Duration(days: 3));
 
-    final candidates = provider.transactions.where((tx) {
+    final candidates = effectiveVM.transactions.where((tx) {
       if (tx.id == sourceTransaction.id) return false;
       if (tx.type != targetType) return false;
       if (tx.linkedTransactionId != null) return false;
@@ -72,7 +74,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     onTap: () async {
-                      await provider.linkAsInternalTransfer(
+                      await effectiveVM.linkAsInternalTransfer(
                           sourceTransaction.id!, tx.id!);
                       if (context.mounted) {
                         Navigator.pop(context); // close sheet

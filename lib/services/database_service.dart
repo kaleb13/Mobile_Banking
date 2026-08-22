@@ -37,6 +37,15 @@ class DatabaseService {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(date)');
   }
 
+  /// Safely flushes the SQLite WAL journal and truncates the .db-wal file
+  /// back to 0 bytes on disk, reclaiming temporary journal space after large batch writes.
+  Future<void> checkpointWal() async {
+    try {
+      final db = await instance.database;
+      await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE);');
+    } catch (_) {}
+  }
+
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
@@ -685,6 +694,10 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       insertedCount = results.where((r) => r is int && r > 0).length;
     });
 
+    if (insertedCount > 0) {
+      await checkpointWal();
+    }
+
     return insertedCount;
   }
 
@@ -918,6 +931,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       }
       await batch.commit(noResult: true);
     });
+    await checkpointWal();
   }
 
   Future<List<AppNotification>> getNotifications() async {

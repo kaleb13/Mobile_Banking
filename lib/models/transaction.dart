@@ -92,20 +92,36 @@ class AppTransaction {
   /// True if this transaction's raw message body contains any web links.
   bool get hasLinks => extractedLinks.isNotEmpty;
 
-  /// True when this transaction was auto-created with a locked system reason (Savings/Sanduq, Airtime, Package, Internal Transfer, Loan).
+  /// True when this transaction was auto-created with an immutable system reason from SMS
+  /// (strictly Telebirr Airtime, Telebirr Package, or Telebirr Sanduq/Savings).
   bool get isReasonLocked {
-    if (!isAutoDetected) return false;
     final lower = rawMessage.toLowerCase();
-    final rLower = (reason ?? customReasonText)?.toLowerCase().trim();
-    return lower.contains('saving account') ||
+    final isTelebirr = name.toLowerCase().contains('telebirr') ||
+        sender.toLowerCase().contains('127') ||
+        sender.toLowerCase().contains('telebirr');
+    if (!isTelebirr) return false;
+
+    // 1. Airtime recharge outflow
+    if (lower.contains('airtime') &&
+        (lower.contains('recharged') || lower.contains('bought'))) {
+      return true;
+    }
+    // 2. Package subscription outflow
+    if (lower.contains('package') &&
+        (lower.contains('paid') ||
+            lower.contains('bought') ||
+            lower.contains('package subscription') ||
+            lower.contains('monthly voice'))) {
+      return true;
+    }
+    // 3. Sanduq / Savings account transfer
+    if (lower.contains('saving account') ||
         lower.contains('saving balance') ||
-        lower.contains('sanduq') ||
-        lower.contains('shamo') ||
-        lower.contains('reserved') ||
-        rLower == 'airtime' ||
-        rLower == 'package' ||
-        rLower == 'internal transfer' ||
-        rLower == 'loan';
+        lower.contains('sanduq')) {
+      return true;
+    }
+
+    return false;
   }
 
   Map<String, dynamic> toMap() {
@@ -212,4 +228,12 @@ class AppTransaction {
       isBookmarked: isBookmarked ?? this.isBookmarked,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppTransaction && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

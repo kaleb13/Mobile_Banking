@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/analytics_view_model.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
@@ -173,23 +176,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return tNameUp.contains(bUp) || tSenderUp.contains(bUp);
   }
 
-  List<String> _getAvailableBanks(FinanceProvider provider) {
+  List<String> _getAvailableBanks(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
     final List<String> result = ['All Wallets'];
     final Set<String> seen = {'All Wallets'};
 
-    for (final s in provider.senders) {
+    for (final s in txVM.senders) {
       final name = _normalizeBankName(s.senderName);
       if (name.isNotEmpty && seen.add(name)) {
         result.add(name);
       }
     }
-    for (final tx in provider.transactions) {
+    for (final tx in txVM.transactions) {
       final name = _normalizeBankName(tx.name.isNotEmpty ? tx.name : tx.sender);
       if (name.isNotEmpty && seen.add(name)) {
         result.add(name);
       }
     }
-    if (provider.cashTransactions.isNotEmpty && seen.add('Cash Wallet')) {
+    if (cashVM.cashTransactions.isNotEmpty && seen.add('Cash Wallet')) {
       result.add('Cash Wallet');
     }
     return result;
@@ -383,8 +386,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   void _changeFilter(VoidCallback updateState) {
-    final provider = Provider.of<FinanceProvider>(context, listen: false);
-    final currentData = _getFilteredAnalyticsData(provider);
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+    final cashVM = Provider.of<CashWalletViewModel>(context, listen: false);
+    final currentData = _getFilteredAnalyticsData(txVM, cashVM);
     _previousCategories = List.from(currentData.categories);
     _previousTotal = currentData.chartTotal;
 
@@ -516,17 +520,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return fallbackPalette[hash.abs() % fallbackPalette.length];
   }
 
-  String _resolveTxCategoryName(AppTransaction tx, FinanceProvider provider) {
+  String _resolveTxCategoryName(AppTransaction tx, TransactionsViewModel txVM) {
     if (tx.categoryId != null) {
-      final cat = provider.reasons.where((r) => r.id == tx.categoryId).firstOrNull;
+      final cat = txVM.reasons.where((r) => r.id == tx.categoryId).firstOrNull;
       if (cat != null) return cat.name;
     }
 
     if (tx.reasonId != null) {
-      final r = provider.reasons.where((r) => r.id == tx.reasonId).firstOrNull;
+      final r = txVM.reasons.where((r) => r.id == tx.reasonId).firstOrNull;
       if (r != null) {
         if (r.isSubcategory && r.parentId != null) {
-          final p = provider.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
+          final p = txVM.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
           if (p != null) return p.name;
         }
         return r.name;
@@ -535,12 +539,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     final raw = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
     if (raw.isNotEmpty) {
-      final matchedReason = provider.reasons
+      final matchedReason = txVM.reasons
           .where((r) => r.name.toLowerCase() == raw.toLowerCase())
           .firstOrNull;
       if (matchedReason != null) {
         if (matchedReason.isSubcategory && matchedReason.parentId != null) {
-          final p = provider.reasons
+          final p = txVM.reasons
               .where((pr) => pr.id == matchedReason.parentId)
               .firstOrNull;
           if (p != null) return p.name;
@@ -553,12 +557,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return 'Uncategorized';
   }
 
-  String _resolveCashTxCategoryName(CashTransaction ctx, FinanceProvider provider) {
+  String _resolveCashTxCategoryName(CashTransaction ctx, TransactionsViewModel txVM) {
     if (ctx.reasonId != null) {
-      final r = provider.reasons.where((res) => res.id == ctx.reasonId).firstOrNull;
+      final r = txVM.reasons.where((res) => res.id == ctx.reasonId).firstOrNull;
       if (r != null) {
         if (r.isSubcategory && r.parentId != null) {
-          final p = provider.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
+          final p = txVM.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
           if (p != null) return p.name;
         }
         return r.name;
@@ -567,12 +571,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
     if (raw.isNotEmpty) {
-      final matchedReason = provider.reasons
+      final matchedReason = txVM.reasons
           .where((r) => r.name.toLowerCase() == raw.toLowerCase())
           .firstOrNull;
       if (matchedReason != null) {
         if (matchedReason.isSubcategory && matchedReason.parentId != null) {
-          final p = provider.reasons
+          final p = txVM.reasons
               .where((pr) => pr.id == matchedReason.parentId)
               .firstOrNull;
           if (p != null) return p.name;
@@ -595,7 +599,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     List<({String name, double income, double expense, double net})> bankBreakdown,
     List<AppTransaction> filteredBankTxs,
     List<CashTransaction> filteredCashTxs,
-  }) _getFilteredAnalyticsData(FinanceProvider provider) {
+  }) _getFilteredAnalyticsData(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
     final now = DateTime.now();
     final year = now.year;
 
@@ -609,7 +613,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         _selectedBank == 'All';
 
     if (!isCashOnly) {
-      for (var tx in provider.transactions) {
+      for (var tx in txVM.transactions) {
         final reasonStr = (tx.reason ??
                 tx.customReasonText ??
                 tx.resolvedReason ??
@@ -628,7 +632,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     }
 
     if (isAll || isCashOnly) {
-      for (var tx in provider.cashTransactions) {
+      for (var tx in cashVM.cashTransactions) {
         if (_matchesFilter(tx.date, now, year)) {
           filteredCashTxs.add(tx);
         }
@@ -642,7 +646,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (_drilledCategory == null) {
       // Level 1: Top-Level Categories ONLY (Uncategorized always included)
       for (var tx in filteredBankTxs) {
-        final categoryLabel = _resolveTxCategoryName(tx, provider);
+        final categoryLabel = _resolveTxCategoryName(tx, txVM);
 
         if (tx.type == 'expense') {
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
@@ -652,7 +656,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        final categoryLabel = _resolveCashTxCategoryName(tx, provider);
+        final categoryLabel = _resolveCashTxCategoryName(tx, txVM);
 
         if (tx.type == 'expense') {
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
@@ -664,7 +668,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       // Level 2: Subcategories inside _drilledCategory
       final categoryName = _drilledCategory!.name.toLowerCase();
       for (var tx in filteredBankTxs) {
-        final parentCat = _resolveTxCategoryName(tx, provider);
+        final parentCat = _resolveTxCategoryName(tx, txVM);
         if (parentCat.toLowerCase() == categoryName) {
           String subName = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'General').trim();
           if (subName.isEmpty || subName.toLowerCase() == categoryName) {
@@ -679,7 +683,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        final parentCat = _resolveCashTxCategoryName(tx, provider);
+        final parentCat = _resolveCashTxCategoryName(tx, txVM);
         if (parentCat.toLowerCase() == categoryName) {
           String subName = (tx.reasonName ?? tx.description ?? 'General').trim();
           if (subName.isEmpty || subName.toLowerCase() == categoryName) {
@@ -1005,20 +1009,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return '${trimmed.substring(0, 14)}..';
   }
 
-  dynamic _getCachedFilteredAnalyticsData(FinanceProvider provider) {
-    final key = '${provider.transactions.length}_${provider.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_$_selectedBank';
+  dynamic _getCachedFilteredAnalyticsData(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
+    final key = '${txVM.transactions.length}_${cashVM.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_$_selectedBank';
     if (_cachedAnalyticsData != null && _lastAnalyticsCacheKey == key) {
       return _cachedAnalyticsData;
     }
-    _cachedAnalyticsData = _getFilteredAnalyticsData(provider);
+    _cachedAnalyticsData = _getFilteredAnalyticsData(txVM, cashVM);
     _lastAnalyticsCacheKey = key;
     return _cachedAnalyticsData;
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final data = _getCachedFilteredAnalyticsData(provider);
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final cashVM = Provider.of<CashWalletViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final analyticsVM = Provider.of<AnalyticsViewModel>(context);
+    final data = _getCachedFilteredAnalyticsData(txVM, cashVM);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -1115,7 +1122,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               ),
 
                               // Expandable dropdown filter pills
-                              _buildDropdownFiltersSection(provider),
+                              _buildDropdownFiltersSection(txVM, cashVM),
                               const SizedBox(height: 12),
 
                               // Reacting Sub-Period Filter Selector
@@ -1188,8 +1195,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               }
                             });
                           },
-                          isBalanceVisible: provider.isBalanceVisible,
-                          userLevel: provider.userLevel,
+                          isBalanceVisible: settingsVM.isBalanceVisible,
+                          userLevel: analyticsVM.userLevel,
                         ),
                         if (_selectedHeatmapDay != null) ...[
                           const SizedBox(height: 12),
@@ -1205,8 +1212,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     data.totalIncome,
                     data.totalExpense,
                     data.netPnl,
-                    provider.isBalanceVisible,
-                    provider,
+                    settingsVM.isBalanceVisible,
                   ),
                   const SizedBox(height: 14),
 
@@ -1215,7 +1221,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     data.categories,
                     data.chartTotal,
                     data.netPnl,
-                    provider.isBalanceVisible,
+                    settingsVM.isBalanceVisible,
                   ),
                   const SizedBox(height: 14),
 
@@ -1223,14 +1229,16 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   _buildReasonBreakdownSection(
                     data.filteredBankTxs,
                     data.filteredCashTxs,
-                    provider,
+                    txVM,
+                    settingsVM.isBalanceVisible,
                   ),
                   const SizedBox(height: 14),
 
                   // ── 7. Person & Counterparty Analytics Section ────────────
                   _buildCounterpartyAnalyticsSection(
                     data.filteredBankTxs,
-                    provider,
+                    txVM,
+                    settingsVM,
                   ),
                   const SizedBox(height: 14),
 
@@ -1239,7 +1247,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     data.bankBreakdown,
                     data.filteredBankTxs,
                     data.filteredCashTxs,
-                    provider.isBalanceVisible,
+                    settingsVM.isBalanceVisible,
                   ),
                   const SizedBox(height: 80),
                 ],
@@ -1252,8 +1260,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   // ── 1. Expandable Standardized Dropdown Filters Section ────────────────────
-  Widget _buildDropdownFiltersSection(FinanceProvider provider) {
-    final availableBanks = _getAvailableBanks(provider);
+  Widget _buildDropdownFiltersSection(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
+    final availableBanks = _getAvailableBanks(txVM, cashVM);
     final hasActiveFilters = (_selectedBank != 'All Wallets' &&
             _selectedBank != 'All Banks' &&
             _selectedBank != 'All') ||
@@ -1418,7 +1426,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     double totalExpense,
     double netPnl,
     bool isBalanceVisible,
-    FinanceProvider provider,
   ) {
     final fmt = NumberFormat('#,##0.00');
     final isPositiveNet = netPnl >= 0;
@@ -1615,9 +1622,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       animation: _morphAnim,
       builder: (context, child) {
         final progress = _morphAnim.value;
-        final currentTotal =
-            _previousTotal + (targetTotal - _previousTotal) * progress;
-
         final isCategorySelected = _selectedArcIndex != null &&
             _selectedArcIndex! < targetCategories.length;
         final selectedItem =
@@ -1893,8 +1897,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 if (_drilledCategory == null)
                                   Builder(
                                     builder: (ctx) {
-                                      final provider =
-                                          Provider.of<FinanceProvider>(ctx,
+                                      final txVM =
+                                          Provider.of<TransactionsViewModel>(ctx,
                                               listen: false);
                                       final labelLower =
                                           selectedItem.label.toLowerCase();
@@ -1905,14 +1909,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                         'cash',
                                         'uncategorized'
                                       ].contains(labelLower) ||
-                                          provider.specialReasons.any((r) =>
+                                          txVM.specialReasons.any((r) =>
                                               r.name.toLowerCase() ==
                                               labelLower);
                                       if (isSpecial) {
                                         return const SizedBox.shrink();
                                       }
 
-                                      final foundReason = provider
+                                      final foundReason = txVM
                                           .topLevelCategories
                                           .firstWhere(
                                         (r) =>
@@ -1922,7 +1926,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                       );
                                       final hasSubcategories =
                                           foundReason.id != null &&
-                                              provider
+                                              txVM
                                                   .subcategoriesFor(
                                                       foundReason.id!)
                                                   .isNotEmpty;
@@ -2197,7 +2201,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   Widget _buildReasonBreakdownSection(
     List<AppTransaction> filteredBankTxs,
     List<CashTransaction> filteredCashTxs,
-    FinanceProvider provider,
+    TransactionsViewModel txVM,
+    bool isBalanceVisible,
   ) {
     // ── Group transactions by Top-Level Category ──────────────────────────────
     final Map<String, _CategoryDataAccumulator> categoryMap = {};
@@ -2209,7 +2214,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       AppReason? subReason;
 
       if (tx.categoryId != null) {
-        final cat = provider.reasons
+        final cat = txVM.reasons
             .where((r) => r.id == tx.categoryId)
             .firstOrNull;
         if (cat != null) {
@@ -2219,12 +2224,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       if (categoryName == null && tx.reasonId != null) {
-        final r = provider.reasons
+        final r = txVM.reasons
             .where((r) => r.id == tx.reasonId)
             .firstOrNull;
         if (r != null) {
           if (r.isSubcategory && r.parentId != null) {
-            final p = provider.reasons
+            final p = txVM.reasons
                 .where((pr) => pr.id == r.parentId)
                 .firstOrNull;
             if (p != null) {
@@ -2244,12 +2249,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final raw =
             (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
         if (raw.isNotEmpty) {
-          final matchedReason = provider.reasons
+          final matchedReason = txVM.reasons
               .where((r) => r.name.toLowerCase() == raw.toLowerCase())
               .firstOrNull;
           if (matchedReason != null) {
             if (matchedReason.isSubcategory && matchedReason.parentId != null) {
-              final p = provider.reasons
+              final p = txVM.reasons
                   .where((pr) => pr.id == matchedReason.parentId)
                   .firstOrNull;
               if (p != null) {
@@ -2309,12 +2314,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       String? subName;
       AppReason? subReason;
 
-      final matchedReason = provider.reasons
+      final matchedReason = txVM.reasons
           .where((r) => r.name.toLowerCase() == raw.toLowerCase())
           .firstOrNull;
       if (matchedReason != null) {
         if (matchedReason.isSubcategory && matchedReason.parentId != null) {
-          final p = provider.reasons
+          final p = txVM.reasons
               .where((pr) => pr.id == matchedReason.parentId)
               .firstOrNull;
           if (p != null) {
@@ -2662,7 +2667,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          provider.isBalanceVisible
+                                          isBalanceVisible
                                               ? CurrencyTextWidget(
                                                   amount: cat.totalAmount,
                                                   style: TextStyle(
@@ -3146,7 +3151,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   // ── 8. Person & Counterparty Analytics Section (One Big Unified Card) ─────
   Widget _buildCounterpartyAnalyticsSection(
     List<AppTransaction> transactions,
-    FinanceProvider provider,
+    TransactionsViewModel txVM,
+    SettingsViewModel settingsVM,
   ) {
     final bankNamesUpper = {
       'CBE',
@@ -3163,7 +3169,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       'CASH',
       'MANUAL ENTRY',
       'UNKNOWN',
-      ...provider.senders.map((s) => s.senderName.trim().toUpperCase()),
+      ...txVM.senders.map((s) => s.senderName.trim().toUpperCase()),
     };
 
     // Group by counterparty / sender
@@ -3214,7 +3220,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       orElse: () => list.first,
     );
 
-    final isBalanceVisible = provider.isBalanceVisible;
+    final isBalanceVisible = settingsVM.isBalanceVisible;
     final fmt = NumberFormat('#,##0.00');
 
     return Container(
@@ -3480,9 +3486,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               return c.name.toLowerCase().contains(query.trim().toLowerCase());
             }).toList();
 
-            final provider = Provider.of<FinanceProvider>(context, listen: false);
+            final settingsVM = Provider.of<SettingsViewModel>(context);
             final fmt = NumberFormat('#,##0.00');
-            final isBalanceVisible = provider.isBalanceVisible;
+            final isBalanceVisible = settingsVM.isBalanceVisible;
 
             return AppDrawer(
               heightFactor: 0.78,

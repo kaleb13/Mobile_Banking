@@ -191,7 +191,7 @@ https://verifayda.ahadubank.com/
       expect(tx!.amount, equals(670.00));
       expect(tx.type, equals('expense'));
       expect(tx.totalBalance, equals(17332.54));
-      expect(tx.id, equals('ahadu_ref_1008700007948'));
+      expect(tx.id, equals('ahadu_ref_1008700007948/05-AUG-26/5509'));
       expect(tx.date.year, equals(2026));
       expect(tx.date.month, equals(8));
       expect(tx.date.day, equals(5));

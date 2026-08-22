@@ -7,7 +7,9 @@ import '../dashboard/analysis_screen.dart';
 import '../dashboard/profile_hub_screen.dart';
 import '../wallets/wallets_screen.dart';
 import '../loans/loan_management_screen.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/loans_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_toast.dart';
@@ -34,8 +36,8 @@ class _MainShellState extends State<MainShell> {
     _pageController.addListener(_onPageScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        final provider = context.read<FinanceProvider>();
-        provider.tabNavigationNotifier.addListener(_onTabNavigationRequested);
+        final settingsVM = context.read<SettingsViewModel>();
+        settingsVM.tabNavigationNotifier.addListener(_onTabNavigationRequested);
       }
     });
   }
@@ -43,14 +45,14 @@ class _MainShellState extends State<MainShell> {
   void _onPageScroll() {
     if (mounted && _pageController.hasClients) {
       final offset = _pageController.page ?? 0.0;
-      context.read<FinanceProvider>().setPageOffset(offset);
+      context.read<SettingsViewModel>().setPageOffset(offset);
     }
   }
 
   void _onTabNavigationRequested() {
     if (!mounted || !_pageController.hasClients) return;
-    final provider = context.read<FinanceProvider>();
-    final targetIndex = provider.tabNavigationNotifier.value;
+    final settingsVM = context.read<SettingsViewModel>();
+    final targetIndex = settingsVM.tabNavigationNotifier.value;
     if (targetIndex != null) {
       _pageController.animateToPage(
         targetIndex,
@@ -67,9 +69,9 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
-  void _onNavTap(int index, FinanceProvider provider) {
-    if (index == provider.currentScreenIndex) return;
-    provider.setScreenIndex(index);
+  void _onNavTap(int index, SettingsViewModel settingsVM) {
+    if (index == settingsVM.currentScreenIndex) return;
+    settingsVM.setScreenIndex(index);
     _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 600),
@@ -77,21 +79,21 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  void _onPageChanged(int index, FinanceProvider provider) {
+  void _onPageChanged(int index, SettingsViewModel settingsVM) {
     if (mounted && index < _pageCount) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          provider.setScreenIndex(index);
+          settingsVM.setScreenIndex(index);
         }
       });
     }
   }
 
-  Future<bool> _onWillPop(FinanceProvider provider) async {
-    final currentIndex = provider.currentScreenIndex;
+  Future<bool> _onWillPop(SettingsViewModel settingsVM) async {
+    final currentIndex = settingsVM.currentScreenIndex;
 
     if (currentIndex != 0) {
-      provider.setScreenIndex(0);
+      settingsVM.setScreenIndex(0);
       _pageController.animateToPage(
         0,
         duration: const Duration(milliseconds: 500),
@@ -126,16 +128,16 @@ class _MainShellState extends State<MainShell> {
         systemNavigationBarIconBrightness:
             context.isLightMode ? Brightness.dark : Brightness.light,
       ),
-      child: Consumer<FinanceProvider>(
-        builder: (context, provider, child) {
+      child: Consumer3<SettingsViewModel, TransactionsViewModel, LoansViewModel>(
+        builder: (context, settingsVM, txVM, loansVM, child) {
           final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-          final currentIndex = provider.currentScreenIndex;
+          final currentIndex = settingsVM.currentScreenIndex;
 
           return PopScope(
             canPop: false,
             onPopInvokedWithResult: (didPop, _) async {
               if (didPop) return;
-              final shouldExit = await _onWillPop(provider);
+              final shouldExit = await _onWillPop(settingsVM);
               if (shouldExit && context.mounted) {
                 SystemNavigator.pop();
               }
@@ -149,7 +151,7 @@ class _MainShellState extends State<MainShell> {
                   PageView(
                     controller: _pageController,
                     physics: const ClampingScrollPhysics(),
-                    onPageChanged: (index) => _onPageChanged(index, provider),
+                    onPageChanged: (index) => _onPageChanged(index, settingsVM),
                     children: const [
                       // Order: Home | Wallet | Analysis | Loans | Profile Hub
                       DashboardScreen(),
@@ -159,15 +161,15 @@ class _MainShellState extends State<MainShell> {
                       ProfileHubScreen(),
                     ],
                   ),
-                  _buildFlyingCardsOverlay(context, provider),
+                  _buildFlyingCardsOverlay(context, settingsVM, txVM, loansVM),
                 ],
               ),
-              bottomNavigationBar: (provider.isMenuOpen || isKeyboardOpen)
+              bottomNavigationBar: (settingsVM.isMenuOpen || isKeyboardOpen)
                   ? const SizedBox.shrink()
                   : CustomBottomNavBar(
                       currentIndex: currentIndex,
                       pageController: _pageController,
-                      onTap: (index) => _onNavTap(index, provider),
+                      onTap: (index) => _onNavTap(index, settingsVM),
                     ),
             ),
           );
@@ -176,26 +178,31 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildFlyingCardsOverlay(BuildContext context, FinanceProvider provider) {
-    final t = provider.pageOffset.clamp(0.0, 1.0);
+  Widget _buildFlyingCardsOverlay(
+    BuildContext context,
+    SettingsViewModel settingsVM,
+    TransactionsViewModel txVM,
+    LoansViewModel loansVM,
+  ) {
+    final t = settingsVM.pageOffset.clamp(0.0, 1.0);
 
-    // Hide when resting on Home (t <= 0.02) or resting on/beyond Wallet Page (t >= 0.98 || provider.pageOffset >= 0.98)
-    if (t <= 0.02 || t >= 0.98 || provider.pageOffset >= 0.98) return const SizedBox.shrink();
+    // Hide when resting on Home (t <= 0.02) or resting on/beyond Wallet Page (t >= 0.98 || settingsVM.pageOffset >= 0.98)
+    if (t <= 0.02 || t >= 0.98 || settingsVM.pageOffset >= 0.98) return const SizedBox.shrink();
 
-    final senders = provider.senders;
+    final senders = txVM.senders;
     if (senders.isEmpty) return const SizedBox.shrink();
 
     final screenWidth = MediaQuery.of(context).size.width;
     final topPadding = MediaQuery.of(context).padding.top;
-    final overdueOffset = provider.overdueLoans.isNotEmpty ? 44.0 : 0.0;
-    final topScrollOffset = provider.homeTopScrollOffset.clamp(0.0, double.infinity);
+    final overdueOffset = loansVM.overdueLoans.isNotEmpty ? 44.0 : 0.0;
+    final topScrollOffset = settingsVM.homeTopScrollOffset.clamp(0.0, double.infinity);
     final deckTop = topPadding + 68.0 + overdueOffset - topScrollOffset;
 
     // Dynamic ordered card list: active bank senders + Cash Wallet + paused bank senders
-    final orderedNames = provider.orderedWalletNames;
+    final orderedNames = txVM.orderedWalletNames;
     final int totalCards = orderedNames.length;
-    final int activeCount = provider.activeSenders.length;
-    final bool hasPaused = provider.pausedSenders.isNotEmpty;
+    final int activeCount = txVM.activeSenders.length;
+    final bool hasPaused = txVM.pausedSenders.isNotEmpty;
 
     // Home deck (t=0.0) left-offset pattern matching DashboardScreen
     const double baseLeftOffset = -42.0;
@@ -207,7 +214,7 @@ class _MainShellState extends State<MainShell> {
       final String cardName = orderedNames[i];
       final bool isCashWallet = cardName == 'Cash Wallet';
       final bool isPaused =
-          isCashWallet ? false : provider.isTrackingPaused(cardName);
+          isCashWallet ? false : txVM.isTrackingPaused(cardName);
       // Only the first 3 active bank senders are visible on the Home page deck
       final bool isVisibleOnHome = !isPaused && !isCashWallet && i < 3;
 
@@ -248,14 +255,14 @@ class _MainShellState extends State<MainShell> {
       if (cardOpacity < 0.001) continue;
 
       // ── Build card widget ─────────────────────────────────────────
-      final double balance = provider.balanceForSender(cardName);
-      final int txCount = provider.txCountForSender(cardName);
+      final double balance = txVM.balanceForSender(cardName);
+      final int txCount = txVM.txCountForSender(cardName);
 
       final Widget card = BankCardWidget(
         senderName: cardName,
         balance: balance,
         txCount: txCount,
-        isBalanceVisible: provider.isBalanceVisible,
+        isBalanceVisible: settingsVM.isBalanceVisible,
         isPaused: isPaused,
         animationFactor: t,
       );
@@ -272,7 +279,7 @@ class _MainShellState extends State<MainShell> {
               behavior: HitTestBehavior.opaque,
               onTap: () {
                 if (t <= 0.05) {
-                  provider.animateToTab(1);
+                  settingsVM.animateToTab(1);
                 }
               },
               child: card,

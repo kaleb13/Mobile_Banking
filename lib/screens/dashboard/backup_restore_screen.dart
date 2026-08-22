@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../services/backup_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
@@ -115,7 +115,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
         });
         // Trigger provider reload so UI reflects imported data
         if (mounted) {
-          await Provider.of<FinanceProvider>(context, listen: false)
+          await Provider.of<TransactionsViewModel>(context, listen: false)
               .refreshData();
         }
       }

@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/finance_provider.dart';
+import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_badges.dart';
@@ -57,20 +58,21 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<FinanceProvider>(context);
-    final allTransactions = provider.transactions;
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+    final allTransactions = txVM.transactions;
 
     // Unique sender / bank names for the dropdown
     final Set<String> senderNamesSet = {
       'All',
-      ...provider.senders.map((s) => s.senderName),
+      ...txVM.senders.map((s) => s.senderName),
     };
     if (_selectedSender != 'All') {
       senderNamesSet.add(_selectedSender);
     }
     final senderNames = senderNamesSet.toList();
 
-    final isBank = provider.senders.any(
+    final isBank = txVM.senders.any(
       (s) => s.senderName.trim().toUpperCase() == _selectedSender.trim().toUpperCase(),
     );
 
@@ -105,7 +107,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
               filteredTransactions.length,
             ),
             Expanded(
-              child: _buildTransactionList(filteredTransactions, provider),
+              child: _buildTransactionList(filteredTransactions, settingsVM),
             ),
           ],
         ),
@@ -377,7 +379,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   // ── Standard Cardless Transaction List ─────────────────────────────────────
   Widget _buildTransactionList(
     List<AppTransaction> transactions,
-    FinanceProvider provider,
+    SettingsViewModel settingsVM,
   ) {
     if (transactions.isEmpty) {
       return SingleChildScrollView(
@@ -410,7 +412,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       ),
       itemBuilder: (context, index) {
         final tx = transactions[index];
-        return _buildTransactionRowItem(context, tx, provider);
+        return _buildTransactionRowItem(context, tx, settingsVM);
       },
     );
   }
@@ -418,7 +420,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildTransactionRowItem(
     BuildContext context,
     AppTransaction tx,
-    FinanceProvider provider,
+    SettingsViewModel settingsVM,
   ) {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Deposit' : 'Transferred';
@@ -494,7 +496,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildAmountText(tx, provider),
+                  _buildAmountText(tx, settingsVM),
                   const SizedBox(height: 4),
                   Text(
                     DateFormat('MMM d, HH:mm').format(tx.date),
@@ -598,8 +600,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildAmountText(AppTransaction tx, FinanceProvider provider) {
-    if (!provider.isBalanceVisible) {
+  Widget _buildAmountText(AppTransaction tx, SettingsViewModel settingsVM) {
+    if (!settingsVM.isBalanceVisible) {
       return const Text(
         '••••••••',
         style: TextStyle(
