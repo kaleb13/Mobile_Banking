@@ -37,10 +37,11 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _senderFilter = 'All Senders';
   bool _isBookmarkedOnly = false;
   String _sortBy = 'Date: Newest';
-  String _dateRangeFilter = '30D'; // Default to 30D for instant loading
+  String _dateRangeFilter = 'All Time'; // Default to All Time so multi-SIM history is visible
   int _displayLimit = 30; // Progressive virtualized page limit
   final TextEditingController _searchController = TextEditingController();
   bool _isChartVisible = false;
+  int _selectedAccountIndex = 0;
 
   @override
   void dispose() {
@@ -92,17 +93,33 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       orElse: () => widget.sender,
     );
 
+    // Multi-Account / Dual-SIM items detection via ViewModel
+    final accountItems = txVM.getBankDetailAccounts(widget.sender.senderName);
+
+    if (_selectedAccountIndex >= accountItems.length && accountItems.isNotEmpty) {
+      _selectedAccountIndex = 0;
+    }
+
     final sNameUp = widget.sender.senderName.toUpperCase();
-    final allTxForSender = txVM.transactions.where((tx) {
+    final allTxForSender = txVM.allTransactionsUnfiltered.where((tx) {
       final tNameUp = tx.name.toUpperCase();
       final tSenderUp = tx.sender.toUpperCase();
-      if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
-        return tNameUp == 'BOA' ||
-            tSenderUp == 'BOA' ||
-            tNameUp.contains('ABYSSINIA') ||
-            tSenderUp.contains('ABYSSINIA');
+      final matchesBank = (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA'))
+          ? (tNameUp == 'BOA' ||
+              tSenderUp == 'BOA' ||
+              tNameUp.contains('ABYSSINIA') ||
+              tSenderUp.contains('ABYSSINIA'))
+          : (tNameUp == sNameUp || tSenderUp == sNameUp);
+
+      if (!matchesBank) return false;
+
+      if (accountItems.isNotEmpty && _selectedAccountIndex > 0) {
+        final targetSlot = accountItems[_selectedAccountIndex].simSlot;
+        if (targetSlot != null && tx.simSlot != targetSlot) {
+          return false;
+        }
       }
-      return tNameUp == sNameUp || tSenderUp == sNameUp;
+      return true;
     }).toList();
 
     final uniqueSenders = allTxForSender
@@ -170,8 +187,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     }
 
     // Calculate Balance & Trends
-    final double currentBalance =
-        txVM.balanceForSender(widget.sender.senderName);
+    final double currentBalance = (accountItems.isNotEmpty && _selectedAccountIndex > 0)
+        ? accountItems[_selectedAccountIndex].balance
+        : txVM.balanceForSender(widget.sender.senderName);
 
     // Trend calculation
     double monthChange = 0;
@@ -234,6 +252,19 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   monthPercent: monthPercent,
                   txCount: allTxForSender.length,
                   isChartVisible: _isChartVisible,
+                  accounts: accountItems,
+                  selectedAccountIndex: _selectedAccountIndex,
+                  onAccountChanged: (idx) =>
+                      setState(() => _selectedAccountIndex = idx),
+                  onToggleAccountPause: (idx) async {
+                    if (idx > 0 && idx < accountItems.length) {
+                      final slot = accountItems[idx].simSlot;
+                      if (slot != null) {
+                        await txVM.toggleAccountPause(
+                            widget.sender.senderName, slot);
+                      }
+                    }
+                  },
                   onAddTransaction: () {
                     AppBottomSheet.show(
                       context: context,
@@ -575,7 +606,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                       _isBookmarkedOnly = false;
                       _typeFilter = 'All';
                       _senderFilter = 'All Senders';
-                      _dateRangeFilter = '30D';
+                      _dateRangeFilter = 'All Time';
                       _sortBy = 'Date: Newest';
                       _searchQuery = '';
                       _displayLimit = 30;
@@ -888,6 +919,14 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         if (tx.isBookmarked) ...[
                           const SizedBox(width: 5),
                           const BookmarkBadge(),
+                        ],
+                        if (Provider.of<TransactionsViewModel>(context,
+                                    listen: false)
+                                .accountsForBank(tx.name)
+                                .length >
+                            1) ...[
+                          const SizedBox(width: 5),
+                          SimBadge(simSlot: tx.simSlot),
                         ],
                       ],
                     ),

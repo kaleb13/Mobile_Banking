@@ -550,7 +550,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         if (linkedLoan != null) ...[
                           _buildLoanTrackingCard(context, linkedLoan, loansVM, settingsVM),
                           const SizedBox(height: 14),
-                        ] else if (currentTx.linkedTransactionId != null) ...[
+                        ] else if (currentTx.linkedTransactionId != null || (isAutoLocked && (activeReasonName == 'internal transfer' || activeReasonName == 'transfer'))) ...[
                           _buildInternalTransferCard(context, txVM, currentTx),
                           const SizedBox(height: 14),
                         ] else if (!isAutoLocked && (activeReasonName == 'loan' || activeReasonName.contains('loan'))) ...[
@@ -2313,14 +2313,30 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Widget _buildInternalTransferCard(
       BuildContext context, TransactionsViewModel txVM, AppTransaction currentTx) {
     AppTransaction? linkedTx;
-    try {
+    if (currentTx.linkedTransactionId != null) {
       linkedTx = txVM.transactions
-          .firstWhere((t) => t.id == currentTx.linkedTransactionId);
-    } catch (_) {}
+          .where((t) => t.id == currentTx.linkedTransactionId)
+          .firstOrNull;
+    }
+    if (linkedTx == null && currentTx.bankReference != null && currentTx.bankReference!.isNotEmpty) {
+      linkedTx = txVM.transactions
+          .where((t) =>
+              t.bankReference == currentTx.bankReference &&
+              t.amount == currentTx.amount &&
+              t.id != currentTx.id &&
+              t.type != currentTx.type)
+          .firstOrNull;
+    }
+
+    final bool isDualSim = currentTx.simSlot != null || (linkedTx != null && linkedTx.simSlot != null);
+    final String title = isDualSim ? 'Dual-SIM Internal Transfer' : 'Linked Internal Transfer';
+    final String subtitle = isDualSim
+        ? 'Transferred between SIM 1 & SIM 2'
+        : 'Auto-paired matching transaction';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.cardRadius,
@@ -2328,95 +2344,203 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header Row (Title, Icon & Locked Badge - No Unlink Button) ──
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.positive.withValues(alpha: 0.12),
+                  color: AppColors.brandGreen.withValues(alpha: 0.14),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.sync_alt,
-                    color: AppColors.positive, size: 18),
+                child: const Center(
+                  child: Icon(
+                    Icons.sync_alt_rounded,
+                    color: AppColors.brandGreen,
+                    size: 19,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Internal Transfer',
-                      style: TextStyle(
+                    Text(
+                      title,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
+                        letterSpacing: -0.2,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      linkedTx != null
-                          ? 'Linked to ${linkedTx.sender}'
-                          : 'Linked to another transaction',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      subtitle,
                       style: const TextStyle(
-                        color: AppColors.positive,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
                 ),
               ),
-              AppButton.softDestructive(
-                text: 'Unlink',
-                icon: Icons.link_off_rounded,
-                fullWidth: false,
-                height: 28,
-                fontSize: 10.5,
-                iconSize: 12,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                onPressed: () async {
-                  final shouldUnlink = await AppConfirmDialog.show(
-                    context: context,
-                    title: 'Unlink Transfer?',
-                    icon: Icons.link_off_rounded,
-                    iconColor: AppColors.negative,
-                    message:
-                        'Are you sure you want to unlink this internal transfer?',
-                    confirmText: 'Unlink',
-                    cancelText: 'Cancel',
-                    isDestructive: true,
-                    onConfirm: () {},
-                  );
-                  if (shouldUnlink == true && context.mounted) {
-                    await txVM.unlinkInternalTransfer(currentTx.id!);
-                    if (context.mounted) {
-                      AppToast.info(context, message: 'Internal transfer unlinked');
-                    }
-                  }
-                },
+              const AppBadge.warning(
+                text: 'Locked',
+                icon: Icons.lock_rounded,
+                size: AppBadgeSize.small,
               ),
             ],
           ),
+          const SizedBox(height: 14),
+
+          // ── Linked Transaction Preview Tile ──
           if (linkedTx != null) ...[
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Opposite Amount:',
-                  style: TextStyle(color: AppColors.textSoft, fontSize: 11),
+            Material(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TransactionDetailScreen(transaction: linkedTx!),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                AppBadge(
+                                  text: '${linkedTx.name}${linkedTx.simSlot != null ? ' • SIM ${(linkedTx.simSlot ?? 0) + 1}' : ''}',
+                                  size: AppBadgeSize.small,
+                                  customBgColor: (linkedTx.simSlot ?? 0) == 0
+                                      ? AppColors.sim1BadgeBg
+                                      : AppColors.sim2BadgeBg,
+                                  customTextColor: Colors.white,
+                                ),
+                                const SizedBox(width: 6),
+                                if (linkedTx.type == 'income')
+                                  const AppBadge.success(
+                                    text: 'Inflow (+)',
+                                    size: AppBadgeSize.small,
+                                  )
+                                else
+                                  const AppBadge.destructive(
+                                    text: 'Outflow (-)',
+                                    size: AppBadgeSize.small,
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              linkedTx.sender.isNotEmpty
+                                  ? (linkedTx.type == 'income'
+                                      ? 'From: ${linkedTx.sender}'
+                                      : 'To: ${linkedTx.sender}')
+                                  : 'Ref: ${linkedTx.bankReference ?? linkedTx.id}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              DateFormat('dd MMM yyyy • hh:mm a').format(linkedTx.date),
+                              style: const TextStyle(
+                                color: AppColors.textDisabled,
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${linkedTx.type == 'income' ? '+' : '-'}${NumberFormat('#,##0.00').format(linkedTx.amount)} ETB',
+                            style: TextStyle(
+                              color: linkedTx.type == 'income'
+                                  ? AppColors.positive
+                                  : AppColors.negative,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'View',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(width: 2),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.textSecondary,
+                                size: 15,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  '${NumberFormat('#,##0.00').format(linkedTx.amount)} ETB (${linkedTx.type == 'income' ? '+' : '-'})',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold),
-                ),
-              ],
+              ),
             ),
-          ]
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.link_rounded,
+                    color: AppColors.textSecondary,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Linked reference: ${currentTx.bankReference ?? currentTx.linkedTransactionId}',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

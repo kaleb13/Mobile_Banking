@@ -12,6 +12,9 @@ enum SmsPatternType {
   /// Internal transfer to Telebirr Sanduq / Savings account (Locked system reason)
   telebirrSanduq,
 
+  /// Internal transfer between user accounts / SIMs (Locked system reason)
+  internalTransfer,
+
   /// Unrecognized non-financial or malformed message
   unrecognized;
 
@@ -19,7 +22,8 @@ enum SmsPatternType {
   bool get isLocked =>
       this == SmsPatternType.telebirrAirtime ||
       this == SmsPatternType.telebirrPackage ||
-      this == SmsPatternType.telebirrSanduq;
+      this == SmsPatternType.telebirrSanduq ||
+      this == SmsPatternType.internalTransfer;
 }
 
 /// Pure Data Transfer Object (DTO) containing ONLY objective facts extracted from raw SMS text.
@@ -77,6 +81,7 @@ class ParsedSmsResult {
       case SmsPatternType.telebirrPackage:
         return 'Package';
       case SmsPatternType.telebirrSanduq:
+      case SmsPatternType.internalTransfer:
         return 'Internal Transfer';
       default:
         return null;

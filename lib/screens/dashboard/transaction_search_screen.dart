@@ -464,6 +464,14 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                         ),
                       ),
                       const SizedBox(width: 5),
+                      if (Provider.of<TransactionsViewModel>(context, listen: false)
+                              .accountsForBank(tx.name)
+                              .length >
+                          1)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4.0),
+                          child: SimBadge(simSlot: tx.simSlot),
+                        ),
                       if (tx.isBookmarked)
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),

@@ -39,6 +39,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
         private const val REASON_UPDATE_PENDING_KEY = "flutter.reason_update_pending"
         private const val TAG = "QuickEditActivity"
 
+        const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_TX_ID = "extra_tx_id"
         const val EXTRA_SMS_BODY = "extra_sms_body"
         const val EXTRA_BANK_NAME = "extra_bank_name"
@@ -56,6 +57,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        val notifId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
         val txId = intent.getStringExtra(EXTRA_TX_ID) ?: ""
         val smsBody = intent.getStringExtra(EXTRA_SMS_BODY) ?: ""
         val bankName = intent.getStringExtra(EXTRA_BANK_NAME) ?: ""
@@ -92,6 +94,10 @@ class TransactionQuickEditActivity : FlutterActivity() {
                         if (saved) {
                             setReasonUpdatePending()
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                            // Dismiss the Android status bar notification banner on save
+                            if (notifId != -1) {
+                                notificationManager?.cancel(notifId)
+                            }
                             if (txId.isNotBlank()) {
                                 notificationManager?.cancel(txId.hashCode())
                             }

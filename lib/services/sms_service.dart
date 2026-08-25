@@ -4,6 +4,29 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'bank_senders.dart';
 
+class SimCardInfo {
+  final int subscriptionId;
+  final int simSlot; // 0 = SIM 1, 1 = SIM 2
+  final String displayName;
+  final String carrierName;
+
+  const SimCardInfo({
+    required this.subscriptionId,
+    required this.simSlot,
+    required this.displayName,
+    required this.carrierName,
+  });
+
+  factory SimCardInfo.fromMap(Map<dynamic, dynamic> map) {
+    return SimCardInfo(
+      subscriptionId: (map['subscriptionId'] as int?) ?? 0,
+      simSlot: (map['simSlot'] as int?) ?? 0,
+      displayName: (map['displayName'] as String?) ?? 'SIM ${(map['simSlot'] as int? ?? 0) + 1}',
+      carrierName: (map['carrierName'] as String?) ?? '',
+    );
+  }
+}
+
 class RawSmsData {
   final String sender;
   final String body;
@@ -25,10 +48,34 @@ class SmsService {
   static const MethodChannel _smsScannerChannel =
       MethodChannel('com.shibre/sms_scanner');
 
+  /// Queries active hardware SIM subscriptions on the device (Android SubscriptionManager).
+  Future<List<SimCardInfo>> getSimCards() async {
+    bool hasPermission = await requestPermission();
+    if (!hasPermission) return [];
+
+    try {
+      final List<dynamic>? res =
+          await _smsScannerChannel.invokeMethod('getSimCards');
+      if (res != null) {
+        return res
+            .map((m) => SimCardInfo.fromMap(m as Map<dynamic, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   Future<bool> requestPermission() async {
     var smsPermission = await Permission.sms.status;
     if (!smsPermission.isGranted) {
       await Permission.sms.request();
+    }
+
+    // Request phone state permission for dual-SIM slot resolution
+    // (SubscriptionManager.getActiveSubscriptionInfoList requires READ_PHONE_STATE)
+    var phonePermission = await Permission.phone.status;
+    if (!phonePermission.isGranted) {
+      await Permission.phone.request();
     }
 
     // Also explicitly request notification permission for Android 13+

@@ -117,6 +117,9 @@ class SmsBatchParser {
     return await Isolate.run(() => _parseInternal(params));
   }
 
+  /// Synchronous batch parsing logic.
+  static BatchParseResult parseSync(BatchParseParams params) => _parseInternal(params);
+
   /// Synchronous internal batch parsing logic run entirely inside the isolate.
   static BatchParseResult _parseInternal(BatchParseParams params) {
     final List<AppTransaction> parsedTransactions = [];
@@ -197,8 +200,8 @@ class SmsBatchParser {
 
       if (parsed != null) {
         // Compute running balance if totalBalance is 0
-        final bankKey = parsed.bankName;
-        final currentBal = runningBalances[bankKey] ?? 0.0;
+        final bankKey = '${parsed.bankName}:${msg.simSlot}';
+        final currentBal = runningBalances[bankKey] ?? runningBalances[parsed.bankName] ?? 0.0;
         double effectiveBal = parsed.totalBalance;
         if (effectiveBal == 0) {
           final newBal = parsed.type == 'income'
@@ -239,6 +242,8 @@ class SmsBatchParser {
           parsed,
           reasonId: resolvedReasonId,
           reason: resolvedReasonName,
+          simSlot: msg.simSlot,
+          accountIdentifier: msg.accountIdentifier,
         ).copyWith(totalBalance: effectiveBal);
 
         final txId = tx.id ?? '${tx.name}_${tx.date.millisecondsSinceEpoch}_${tx.amount}';
@@ -261,6 +266,47 @@ class SmsBatchParser {
       }
     }
 
+    // ── High-speed Auto-Pairing & Locking for Dual-SIM Internal Transfers ──
+    int? internalTransferReasonId;
+    try {
+      final itRule = params.autoReasonRules.firstWhere(
+        (r) => r.name.toLowerCase().trim() == 'internal transfer',
+      );
+      internalTransferReasonId = itRule.id;
+    } catch (_) {}
+
+    final Map<String, List<int>> refIndex = {};
+    for (int i = 0; i < parsedTransactions.length; i++) {
+      final tx = parsedTransactions[i];
+      final ref = tx.bankReference?.trim().toUpperCase();
+      if (ref != null && ref.isNotEmpty && ref.length >= 4) {
+        final key = '${tx.name.toUpperCase()}_${ref}_${tx.amount.toStringAsFixed(2)}';
+        refIndex.putIfAbsent(key, () => []).add(i);
+      }
+    }
+
+    for (final indices in refIndex.values) {
+      if (indices.length >= 2) {
+        final expIdx = indices.where((i) => parsedTransactions[i].type == 'expense').firstOrNull;
+        final incIdx = indices.where((i) => parsedTransactions[i].type == 'income').firstOrNull;
+        if (expIdx != null && incIdx != null && expIdx != incIdx) {
+          final expTx = parsedTransactions[expIdx];
+          final incTx = parsedTransactions[incIdx];
+
+          parsedTransactions[expIdx] = expTx.copyWith(
+            reason: 'Internal Transfer',
+            reasonId: internalTransferReasonId,
+            linkedTransactionId: incTx.id,
+          );
+          parsedTransactions[incIdx] = incTx.copyWith(
+            reason: 'Internal Transfer',
+            reasonId: internalTransferReasonId,
+            linkedTransactionId: expTx.id,
+          );
+        }
+      }
+    }
+
     return BatchParseResult(
       transactions: parsedTransactions,
       unrecognizedNotifications: unrecognizedNotifications,
@@ -276,27 +322,15 @@ class SmsBatchParser {
     final lower = body.toLowerCase();
     String? type;
 
-    if (sender.depositKeywords.isNotEmpty) {
-      final kws = sender.depositKeywords.map((k) => k.trim().toLowerCase());
-      if (kws.any((k) => k.isNotEmpty && lower.contains(k))) {
-        type = 'income';
-      }
-    }
-
-    if (type == null && sender.expenseKeywords.isNotEmpty) {
-      final kws = sender.expenseKeywords.map((k) => k.trim().toLowerCase());
-      if (kws.any((k) => k.isNotEmpty && lower.contains(k))) {
-        type = 'expense';
-      }
-    }
-
-    if (type == null) {
-      // Default keyword heuristics
-      if (lower.contains('received') || lower.contains('credited') || lower.contains('deposit')) {
-        type = 'income';
-      } else if (lower.contains('sent') || lower.contains('debited') || lower.contains('paid') || lower.contains('transferred')) {
-        type = 'expense';
-      }
+    if (lower.contains('received') ||
+        lower.contains('credited') ||
+        lower.contains('deposit')) {
+      type = 'income';
+    } else if (lower.contains('sent') ||
+        lower.contains('debited') ||
+        lower.contains('paid') ||
+        lower.contains('transferred')) {
+      type = 'expense';
     }
 
     if (type == null) return null;

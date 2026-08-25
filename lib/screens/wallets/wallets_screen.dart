@@ -111,6 +111,8 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                   txVM.balanceForSender(sender.senderName, cashBalance: cashVM.cashBalance);
                               final int txCount =
                                   txVM.txCountForSender(sender.senderName, cashTxCount: cashVM.cashTransactions.length);
+                              final int accountCount =
+                                  txVM.accountsForBank(sender.senderName).length;
 
                               return _WalletCard(
                                 senderName: sender.senderName,
@@ -118,6 +120,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                 txCount: txCount,
                                 isBalanceVisible: settingsVM.isBalanceVisible,
                                 isPaused: false,
+                                accountCount: accountCount,
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -186,32 +189,53 @@ class _WalletsScreenState extends State<WalletsScreen> {
             },
             behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  AppBadge.warning(
-                    text: 'PAUSED TRACKING (${pausedSenders.length})',
-                    icon: Icons.pause_circle_rounded,
-                    size: AppBadgeSize.small,
-                  ),
-                  const Spacer(),
-                  Text(
-                    _isPausedSectionExpanded ? 'Hide' : 'Show',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.60),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: const Icon(
+                      Icons.pause_circle_outline_rounded,
+                      color: AppColors.textSecondary,
+                      size: 18,
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Paused Tracking (${pausedSenders.length})',
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Tap to show or hide paused wallets',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   AnimatedRotation(
                     turns: _isPausedSectionExpanded ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 240),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white.withValues(alpha: 0.65),
-                      size: 18,
+                      color: AppColors.textSecondary,
+                      size: 20,
                     ),
                   ),
                 ],
@@ -234,6 +258,8 @@ class _WalletsScreenState extends State<WalletsScreen> {
                             txVM.balanceForSender(sender.senderName, cashBalance: cashVM.cashBalance);
                         final int txCount =
                             txVM.txCountForSender(sender.senderName, cashTxCount: cashVM.cashTransactions.length);
+                        final int accountCount =
+                            txVM.accountsForBank(sender.senderName).length;
 
                         return _WalletCard(
                           senderName: sender.senderName,
@@ -241,6 +267,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                           txCount: txCount,
                           isBalanceVisible: false,
                           isPaused: true,
+                          accountCount: accountCount,
                           onTap: () {},
                         );
                       }).toList(),
@@ -265,6 +292,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
       txCount: txVM.txCountForSender('Cash Wallet', cashTxCount: cashVM.cashTransactions.length),
       isBalanceVisible: settingsVM.isBalanceVisible,
       isPaused: false, // Cash Wallet is never paused
+      accountCount: 1,
       onTap: () {
         Navigator.push(
           context,
@@ -287,6 +315,7 @@ class _WalletCard extends StatelessWidget {
   final int txCount;
   final bool isBalanceVisible;
   final bool isPaused;
+  final int accountCount;
   final VoidCallback onTap;
 
   const _WalletCard({
@@ -295,6 +324,7 @@ class _WalletCard extends StatelessWidget {
     required this.txCount,
     required this.isBalanceVisible,
     required this.isPaused,
+    this.accountCount = 1,
     required this.onTap,
   });
 
@@ -325,6 +355,7 @@ class _WalletCard extends StatelessWidget {
       txCount: txCount,
       isBalanceVisible: isBalanceVisible,
       isPaused: isPaused,
+      accountCount: accountCount,
       onTap: onTap,
       animationFactor: 1.0,
     );

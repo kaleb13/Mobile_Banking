@@ -247,3 +247,28 @@ class BookmarkBadge extends StatelessWidget {
   }
 }
 
+/// Standard Solid Pill Badge for Multi-SIM indicators (SIM 1: Deep Teal, SIM 2: Royal Violet)
+class SimBadge extends StatelessWidget {
+  final int simSlot;
+  final AppBadgeSize size;
+  const SimBadge({
+    super.key,
+    required this.simSlot,
+    this.size = AppBadgeSize.micro,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bgColor =
+        simSlot == 0 ? AppColors.sim1BadgeBg : AppColors.sim2BadgeBg;
+    return AppBadge(
+      text: 'SIM ${simSlot + 1}',
+      size: size,
+      customBgColor: bgColor,
+      customTextColor: Colors.white,
+    );
+  }
+}
+
+
+

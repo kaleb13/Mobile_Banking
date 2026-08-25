@@ -70,6 +70,8 @@ class AppColors {
   static const Color badgeDestructiveBg = Color(0xFFE11D48); // Solid Crimson Red (#E11D48)
   static const Color badgeNeutralBg     = Color(0xFF2A3441); // Solid Slate Surface (#2A3441)
   static const Color badgeInfoBg        = Color(0xFF2563EB); // Solid Royal Blue (#2563EB)
+  static const Color sim1BadgeBg        = Color(0xFF0F766E); // Solid Deep Teal / Emerald (#0F766E) for SIM 1
+  static const Color sim2BadgeBg        = Color(0xFF7C3AED); // Solid Royal Violet / Purple (#7C3AED) for SIM 2
 
   // ── Tier Level Glows ──────────────────────────────────────────────────────
   static const Color levelGlow1 = Color(0xFF8B9DFF);

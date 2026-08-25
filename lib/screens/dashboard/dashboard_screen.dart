@@ -1328,6 +1328,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           padding: EdgeInsets.only(left: 4.0),
                           child: BookmarkBadge(),
                         ),
+                      if (Provider.of<TransactionsViewModel>(context, listen: false)
+                              .accountsForBank(tx.name)
+                              .length >
+                          1)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4.0),
+                          child: SimBadge(simSlot: tx.simSlot),
+                        ),
                       if (tx.isAutoDetected && isLatest)
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),

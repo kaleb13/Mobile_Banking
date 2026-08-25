@@ -7,12 +7,14 @@ import '../../data/repositories/transaction_repository.dart';
 import '../../models/transaction.dart';
 import '../../models/sender.dart';
 import '../../models/reason.dart';
+import '../../models/bank_account_item.dart';
 import '../../models/transaction_attachment.dart';
 import '../../models/scan_window_option.dart';
 import '../../models/scan_progress_status.dart';
 import '../../services/telebirr_parser.dart';
 import '../../services/sms_service.dart';
 import '../../services/sms_batch_parser.dart';
+import '../../services/database_service.dart';
 import '../../models/app_notification.dart';
 
 /// TransactionsViewModel — owns all transaction, sender, and reason state.
@@ -35,6 +37,9 @@ class TransactionsViewModel extends ChangeNotifier {
   List<AppReason> _reasons = [];
   List<AppReasonLink> _reasonLinks = [];
   Set<String> _pausedBanks = {};
+  List<SimCardInfo> _simCards = [];
+
+  List<SimCardInfo> get simCards => _simCards;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -45,13 +50,20 @@ class TransactionsViewModel extends ChangeNotifier {
 
   // ── Transactions Access ───────────────────────────────────────────────────
 
-  /// Filtered list excluding paused banks — what the UI sees.
-  List<AppTransaction> get transactions => _pausedBanks.isEmpty
-      ? _transactions
-      : _transactions
-          .where((tx) => !_pausedBanks
-              .any((b) => b.toUpperCase() == tx.name.toUpperCase()))
-          .toList();
+  /// Filtered list excluding paused banks and paused accounts — what the UI sees.
+  List<AppTransaction> get transactions {
+    if (_pausedBanks.isEmpty) return _transactions;
+    return _transactions.where((tx) {
+      if (_pausedBanks.any((b) => b.toUpperCase() == tx.name.toUpperCase())) {
+        return false;
+      }
+      final acctKey = '${tx.name.toUpperCase()}:${tx.simSlot}';
+      if (_pausedBanks.contains(acctKey)) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
 
   /// Raw unfiltered list — used internally for loan lookups etc.
   List<AppTransaction> get allTransactionsUnfiltered => _transactions;
@@ -106,6 +118,67 @@ class TransactionsViewModel extends ChangeNotifier {
     }).toList();
   }
 
+  /// Returns all distinct accounts / SIM slots detected for a bank.
+  /// If a bank has no transactions, returns `[0]`.
+  List<int> accountsForBank(String bankName) {
+    final txs = transactionsForSender(bankName);
+    if (txs.isEmpty) return [0];
+    final slots = txs.map((t) => t.simSlot).toSet().toList()..sort();
+    return slots.isEmpty ? [0] : slots;
+  }
+
+  /// Returns the latest balance for a specific SIM slot / account of a bank.
+  double balanceForAccount(String bankName, int simSlot) {
+    final txs = transactionsForSender(bankName).where((t) => t.simSlot == simSlot);
+    final withBal = txs.where((t) => t.totalBalance > 0);
+    if (withBal.isNotEmpty) {
+      return withBal.first.totalBalance;
+    }
+    return 0.0;
+  }
+
+  /// Returns transactions for a specific SIM slot / account of a bank.
+  List<AppTransaction> transactionsForSenderAndAccount(String bankName, int simSlot) {
+    return transactionsForSender(bankName).where((t) => t.simSlot == simSlot).toList();
+  }
+
+  /// Returns UI-ready account items for the bank detail screen when multiple SIM accounts exist.
+  List<BankAccountItem> getBankDetailAccounts(String bankName) {
+    final rawAccounts = accountsForBank(bankName);
+    if (rawAccounts.length <= 1) return const [];
+
+    final List<BankAccountItem> items = [];
+    final double combinedBal = balanceForSender(bankName);
+    items.add(
+      BankAccountItem(
+        simSlot: null,
+        label: 'All (${rawAccounts.length} SIMs)',
+        balance: combinedBal,
+        txCount: transactionsForSender(bankName).length,
+        isPaused: isTrackingPaused(bankName),
+      ),
+    );
+    for (final slot in rawAccounts) {
+      final double slotBal = balanceForAccount(bankName, slot);
+      final slotTxs = transactionsForSenderAndAccount(bankName, slot);
+      final bool isPaused = isAccountPaused(bankName, slot);
+      final simInfo = _simCards.where((s) => s.simSlot == slot).firstOrNull;
+      final String label = (simInfo != null && simInfo.displayName.isNotEmpty)
+          ? 'SIM ${slot + 1} (${simInfo.displayName})'
+          : 'SIM ${slot + 1}';
+      items.add(
+        BankAccountItem(
+          simSlot: slot,
+          label: label,
+          balance: slotBal,
+          txCount: slotTxs.length,
+          isPaused: isPaused,
+        ),
+      );
+    }
+    return items;
+  }
+
   // ── Reasons Access ────────────────────────────────────────────────────────
 
   UnmodifiableListView<AppReason> get reasons =>
@@ -127,6 +200,34 @@ class TransactionsViewModel extends ChangeNotifier {
   bool isTrackingPaused(String bankName) =>
       _pausedBanks.any((b) => b.toUpperCase() == bankName.toUpperCase());
 
+  bool isAccountPaused(String bankName, int simSlot) {
+    if (isTrackingPaused(bankName)) return true;
+    final key = '${bankName.toUpperCase()}:$simSlot';
+    return _pausedBanks.contains(key);
+  }
+
+  Future<void> pauseAccountTracking(String bankName, int simSlot) async {
+    final key = '${bankName.toUpperCase()}:$simSlot';
+    _pausedBanks = {..._pausedBanks, key};
+    await _repository.setPausedBanks(_pausedBanks);
+    notifyListeners();
+  }
+
+  Future<void> resumeAccountTracking(String bankName, int simSlot) async {
+    final key = '${bankName.toUpperCase()}:$simSlot';
+    _pausedBanks = _pausedBanks.where((b) => b.toUpperCase() != key).toSet();
+    await _repository.setPausedBanks(_pausedBanks);
+    notifyListeners();
+  }
+
+  Future<void> toggleAccountPause(String bankName, int simSlot) async {
+    if (isAccountPaused(bankName, simSlot)) {
+      await resumeAccountTracking(bankName, simSlot);
+    } else {
+      await pauseAccountTracking(bankName, simSlot);
+    }
+  }
+
   List<AppSender> get activeSenders =>
       _senders.where((s) => !isTrackingPaused(s.senderName)).toList();
 
@@ -141,16 +242,31 @@ class TransactionsViewModel extends ChangeNotifier {
     ];
   }
 
+  /// Calculates total balance for a sender.
+  /// For multi-account banks, sums up the latest balance of each active account.
   double balanceForSender(String senderName, {double cashBalance = 0.0}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
       return cashBalance;
     }
-    final txs = transactionsForSender(senderName);
-    final withBal = txs.where((t) => t.totalBalance > 0);
-    if (withBal.isNotEmpty) {
-      return withBal.first.totalBalance;
+    if (isTrackingPaused(senderName)) return 0.0;
+
+    final accounts = accountsForBank(senderName);
+    if (accounts.length <= 1) {
+      final txs = transactionsForSender(senderName);
+      final withBal = txs.where((t) => t.totalBalance > 0);
+      if (withBal.isNotEmpty) {
+        return withBal.first.totalBalance;
+      }
+      return 0.0;
     }
-    return 0.0;
+
+    double sum = 0.0;
+    for (final slot in accounts) {
+      if (!isAccountPaused(senderName, slot)) {
+        sum += balanceForAccount(senderName, slot);
+      }
+    }
+    return sum;
   }
 
   double getLatestBalanceForBank(String bankName) => balanceForSender(bankName);
@@ -314,6 +430,10 @@ class TransactionsViewModel extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
+      try {
+        await DatabaseService.instance.reconcileInternalTransfers();
+      } catch (_) {}
+
       final results = await Future.wait([
         _repository.getTransactions(),
         _repository.getSenders(),
@@ -326,6 +446,10 @@ class TransactionsViewModel extends ChangeNotifier {
       _reasons = results[2] as List<AppReason>;
       _reasonLinks = results[3] as List<AppReasonLink>;
       _pausedBanks = results[4] as Set<String>;
+
+      try {
+        _simCards = await SmsService().getSimCards();
+      } catch (_) {}
 
       // Auto-backfill in-memory and DB reasons for any records where reason or reasonId is set
       for (int i = 0; i < _transactions.length; i++) {
@@ -453,10 +577,10 @@ class TransactionsViewModel extends ChangeNotifier {
         initialBalances[s.senderName] = balanceForSender(s.senderName);
       }
 
-      onProgress?.call(const ScanProgressStatus(
-        progress: 0.55,
-        stage: 'Parsing transactions in background worker…',
-      ));
+      // ── Diagnostic: Raw message SIM distribution ──
+      final sim0Raw = rawMessages.where((m) => m.simSlot == 0).length;
+      final sim1Raw = rawMessages.where((m) => m.simSlot == 1).length;
+      debugPrint('[ShibreSIM-Dart] Raw messages: total=${rawMessages.length} SIM1(slot0)=$sim0Raw SIM2(slot1)=$sim1Raw');
 
       final parseResult = await SmsBatchParser.parseInIsolate(BatchParseParams(
         rawMessages: rawMessages,
@@ -465,6 +589,21 @@ class TransactionsViewModel extends ChangeNotifier {
         autoReasonRules: autoRules,
         initialBankBalances: initialBalances,
       ));
+
+      // ── Diagnostic: Parsed transaction SIM distribution ──
+      final sim0Parsed = parseResult.transactions.where((t) => t.simSlot == 0).length;
+      final sim1Parsed = parseResult.transactions.where((t) => t.simSlot == 1).length;
+      debugPrint('[ShibreSIM-Dart] Parsed transactions: total=${parseResult.transactions.length} SIM1(slot0)=$sim0Parsed SIM2(slot1)=$sim1Parsed');
+
+      // Per-bank SIM breakdown
+      final Map<String, Map<int, int>> bankSimCounts = {};
+      for (final tx in parseResult.transactions) {
+        bankSimCounts.putIfAbsent(tx.name, () => {});
+        bankSimCounts[tx.name]![tx.simSlot] = (bankSimCounts[tx.name]![tx.simSlot] ?? 0) + 1;
+      }
+      for (final entry in bankSimCounts.entries) {
+        debugPrint('[ShibreSIM-Dart] ${entry.key}: ${entry.value}');
+      }
 
       final Map<String, int> bankCounts = {};
       final Map<String, double> bankLatestBalances = {};
@@ -859,8 +998,6 @@ class TransactionsViewModel extends ChangeNotifier {
     _senders.add(AppSender(
       id: id.toString(),
       senderName: sender.senderName,
-      accountNumber: sender.accountNumber,
-      pin: sender.pin,
     ));
     notifyListeners();
   }

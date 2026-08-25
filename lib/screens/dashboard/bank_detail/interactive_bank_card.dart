@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../models/sender.dart';
+import '../../../models/bank_account_item.dart';
 import '../../../presentation/viewmodels/settings_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_back_button.dart';
@@ -27,6 +28,10 @@ class InteractiveBankCard extends StatefulWidget {
   final double monthPercent;
   final int txCount;
   final bool isChartVisible;
+  final List<BankAccountItem> accounts;
+  final int selectedAccountIndex;
+  final ValueChanged<int>? onAccountChanged;
+  final ValueChanged<int>? onToggleAccountPause;
   final VoidCallback onAddTransaction;
   final VoidCallback onAnalytics;
   final VoidCallback onShowPnlInfo;
@@ -46,6 +51,10 @@ class InteractiveBankCard extends StatefulWidget {
     required this.monthPercent,
     required this.txCount,
     required this.isChartVisible,
+    this.accounts = const [],
+    this.selectedAccountIndex = 0,
+    this.onAccountChanged,
+    this.onToggleAccountPause,
     required this.onAddTransaction,
     required this.onAnalytics,
     required this.onShowPnlInfo,
@@ -311,6 +320,84 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                   ),
                                 ],
                               ),
+                              if (widget.accounts.length > 1) ...[
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Row(
+                                    children: List.generate(widget.accounts.length, (idx) {
+                                      final acct = widget.accounts[idx];
+                                      final isSelected = idx == widget.selectedAccountIndex;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 6),
+                                        child: GestureDetector(
+                                          onTap: () => widget.onAccountChanged?.call(idx),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? (isDarkTextTheme
+                                                      ? AppColors.darkCharcoal
+                                                      : Colors.white)
+                                                  : (isDarkTextTheme
+                                                      ? AppColors.darkCharcoal
+                                                          .withValues(alpha: 0.14)
+                                                      : Colors.white
+                                                          .withValues(alpha: 0.20)),
+                                              borderRadius:
+                                                  BorderRadius.circular(100),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  acct.simSlot == null
+                                                      ? Icons.account_balance_wallet_outlined
+                                                      : Icons.sim_card_outlined,
+                                                  size: 11,
+                                                  color: isSelected
+                                                      ? (isDarkTextTheme
+                                                          ? Colors.white
+                                                          : AppColors.darkCharcoal)
+                                                      : textColorPrimary,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  acct.label,
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.w700
+                                                        : FontWeight.w500,
+                                                    color: isSelected
+                                                        ? (isDarkTextTheme
+                                                            ? Colors.white
+                                                            : AppColors.darkCharcoal)
+                                                        : textColorPrimary,
+                                                  ),
+                                                ),
+                                                if (acct.isPaused) ...[
+                                                  const SizedBox(width: 4),
+                                                  Container(
+                                                    width: 5,
+                                                    height: 5,
+                                                    decoration: const BoxDecoration(
+                                                      color: AppColors.negative,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 10),
 
                               // Balance & 30D PNL Row

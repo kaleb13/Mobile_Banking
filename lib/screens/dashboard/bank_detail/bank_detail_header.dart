@@ -1,6 +1,7 @@
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import '../../../models/sender.dart';
+import '../../../models/bank_account_item.dart';
 
 import 'interactive_bank_card.dart';
 
@@ -16,6 +17,10 @@ class BankDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
   final double monthPercent;
   final int txCount;
   final bool isChartVisible;
+  final List<BankAccountItem> accounts;
+  final int selectedAccountIndex;
+  final ValueChanged<int>? onAccountChanged;
+  final ValueChanged<int>? onToggleAccountPause;
   final VoidCallback onAddTransaction;
   final VoidCallback onAnalytics;
   final VoidCallback onShowPnlInfo;
@@ -24,13 +29,16 @@ class BankDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   BankDetailHeaderDelegate({
     required this.sender,
-
     required this.topSafeArea,
     required this.currentBalance,
     required this.monthChange,
     required this.monthPercent,
     required this.txCount,
     required this.isChartVisible,
+    this.accounts = const [],
+    this.selectedAccountIndex = 0,
+    this.onAccountChanged,
+    this.onToggleAccountPause,
     required this.onAddTransaction,
     required this.onAnalytics,
     required this.onShowPnlInfo,
@@ -42,7 +50,7 @@ class BankDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get minExtent => topSafeArea + 58.0;
 
   @override
-  double get maxExtent => topSafeArea + 238.0;
+  double get maxExtent => topSafeArea + (accounts.length > 1 ? 266.0 : 238.0);
 
   @override
   Widget build(
@@ -68,6 +76,10 @@ class BankDetailHeaderDelegate extends SliverPersistentHeaderDelegate {
       monthPercent: monthPercent,
       txCount: txCount,
       isChartVisible: isChartVisible,
+      accounts: accounts,
+      selectedAccountIndex: selectedAccountIndex,
+      onAccountChanged: onAccountChanged,
+      onToggleAccountPause: onToggleAccountPause,
       onAddTransaction: onAddTransaction,
       onAnalytics: onAnalytics,
       onShowPnlInfo: onShowPnlInfo,

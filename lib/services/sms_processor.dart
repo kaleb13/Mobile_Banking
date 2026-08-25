@@ -156,10 +156,13 @@ Future<void> processSmsRaw({
 
     if (matchedSender != null) {
       final lowerMsg = body.toLowerCase();
-      bool hasDeposit = matchedSender.depositKeywords
-          .any((kw) => lowerMsg.contains(kw.toLowerCase()));
-      bool hasExpense = matchedSender.expenseKeywords
-          .any((kw) => lowerMsg.contains(kw.toLowerCase()));
+      bool hasDeposit = lowerMsg.contains('received') ||
+          lowerMsg.contains('credited') ||
+          lowerMsg.contains('deposit');
+      bool hasExpense = lowerMsg.contains('sent') ||
+          lowerMsg.contains('debited') ||
+          lowerMsg.contains('paid') ||
+          lowerMsg.contains('transferred');
 
       final amountMatch = RegExp(r'[0-9.,]+').firstMatch(body);
       double amount = 0;
@@ -226,15 +229,51 @@ Future<void> processSmsRaw({
       }
     }
 
+    String? linkedTxId;
+
+    // Check if this incoming transaction matches an existing counterpart (Dual-SIM Internal Transfer)
+    final refCode = parsedResult.id;
+    if (refCode.isNotEmpty && refCode.length >= 4) {
+      final existingMatches = await DatabaseService.instance.getTransactionsByBankReference(refCode);
+      final counterpart = existingMatches.where(
+        (t) => t.amount == parsedResult!.amount && t.type != parsedResult!.type,
+      ).firstOrNull;
+
+      if (counterpart != null) {
+        final itReason = reasons.cast<dynamic>().where(
+          (r) => (r.name as String).toLowerCase() == 'internal transfer',
+        ).firstOrNull;
+        resolvedReasonName = 'Internal Transfer';
+        resolvedReasonId = itReason?.id as int?;
+        linkedTxId = counterpart.id;
+      }
+    }
+
     final tx = AppTransaction.fromParsedResult(
       parsedResult,
       reason: resolvedReasonName,
       reasonId: resolvedReasonId,
+      linkedTransactionId: linkedTxId,
       customReasonText: null,
       note: null,
     );
 
     final insertResult = await DatabaseService.instance.insertTransaction(tx);
+
+    // If counterpart existed, update its linkedTransactionId to this newly inserted tx
+    if (linkedTxId != null && tx.id != null) {
+      final existingMatches = await DatabaseService.instance.getTransactionsByBankReference(refCode);
+      final counterpart = existingMatches.where((t) => t.id == linkedTxId).firstOrNull;
+      if (counterpart != null) {
+        await DatabaseService.instance.updateTransaction(
+          counterpart.copyWith(
+            reason: 'Internal Transfer',
+            reasonId: resolvedReasonId,
+            linkedTransactionId: tx.id,
+          ),
+        );
+      }
+    }
 
     // INSERT OR IGNORE returns 0 if the transaction already existed.
     // If we have a reason to attach, UPDATE the existing row's reason.

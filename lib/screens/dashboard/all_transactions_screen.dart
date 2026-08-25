@@ -514,6 +514,15 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             padding: EdgeInsets.only(left: 6.0),
                             child: BookmarkBadge(),
                           ),
+                        if (Provider.of<TransactionsViewModel>(context,
+                                    listen: false)
+                                .accountsForBank(tx.name)
+                                .length >
+                            1)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6.0),
+                            child: SimBadge(simSlot: tx.simSlot),
+                          ),
                         if (tx.reasonId == null &&
                             (tx.customReasonText == null ||
                                 tx.customReasonText!.isEmpty) &&

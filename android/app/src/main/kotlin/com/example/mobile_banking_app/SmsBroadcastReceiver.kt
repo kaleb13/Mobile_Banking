@@ -832,8 +832,75 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             recentSignatures[dedupeKey] = now
         }
 
-        // 3. Resolve attached reason: locked patterns first, otherwise check reason_links in SQLite
-        val resolvedReason = resolveReasonFromDb(
+        // Extract SIM slot & account identifier
+        val subId = intent.getIntExtra(android.telephony.SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX, 
+            intent.getIntExtra("subscription",
+            intent.getIntExtra("subscription_id",
+            intent.getIntExtra("sub_id", -1))))
+
+        val explicitSlot = intent.getIntExtra("android.telephony.extra.SLOT_INDEX",
+            intent.getIntExtra("slot",
+            intent.getIntExtra("slot_id",
+            intent.getIntExtra("sim_slot",
+            intent.getIntExtra("simSlot",
+            intent.getIntExtra("phone",
+            intent.getIntExtra("phone_id", -1)))))))
+
+        val subManager = try {
+            context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
+        } catch (_: Throwable) { null }
+
+        val simSlot = when {
+            subId >= 0 -> {
+                val directSlot = try { subManager?.getActiveSubscriptionInfo(subId)?.simSlotIndex } catch (_: Throwable) { null }
+                if (directSlot != null) {
+                    directSlot
+                } else {
+                    val allSubs = try { subManager?.activeSubscriptionInfoList } catch (_: Throwable) { null }
+                    val matchedInfo = allSubs?.firstOrNull { it.subscriptionId == subId }
+                    matchedInfo?.simSlotIndex ?: if (explicitSlot in 0..1) explicitSlot else (if (subId in 0..1) subId else 0)
+                }
+            }
+            explicitSlot in 0..1 -> explicitSlot
+            else -> 0
+        }
+
+        var accountIdentifier: String? = null
+        val acctMatch = Regex("(?i)(?:account\\s*(?:no\\.?)?\\s*|acc(?:ount)?\\s*)([0-9*]{4,20})").find(body)
+        if (acctMatch != null) {
+            val rawAcct = acctMatch.groupValues[1]
+            if (rawAcct.length >= 4) {
+                accountIdentifier = rawAcct.takeLast(4)
+            }
+        }
+
+        // 3. Resolve attached reason: check internal transfer counterpart first, then locked patterns, then reason_links
+        var counterpartId: String? = null
+        var internalTransferResolved: ResolvedReason? = null
+        if (!parsed.txReference.isNullOrBlank() && parsed.txReference.length >= 4) {
+            val oppositeType = if (parsed.isDebit) "income" else "expense"
+            try {
+                val dbPath = File(context.getDatabasePath(DB_NAME).path)
+                if (dbPath.exists()) {
+                    val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
+                    val cursorMatch = db.rawQuery(
+                        "SELECT id FROM transactions WHERE (bankReference = ? OR id LIKE ?) AND amount = ? AND type = ? LIMIT 1",
+                        arrayOf(parsed.txReference, "${parsed.txReference}_%", parsed.amount.toString(), oppositeType)
+                    )
+                    if (cursorMatch.moveToFirst()) {
+                        counterpartId = cursorMatch.getString(0)
+                    }
+                    cursorMatch.close()
+                    db.close()
+
+                    if (counterpartId != null) {
+                        internalTransferResolved = resolveReasonFromDb(context, "Internal Transfer", parsed.counterparty, body)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        val resolvedReason = internalTransferResolved ?: resolveReasonFromDb(
             context,
             if (parsed.isLocked) parsed.lockedReasonName else null,
             parsed.counterparty,
@@ -841,9 +908,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         )
 
         // 4. Save directly into transactions table in SQLite (never into notifications for parsed SMS)
-        insertTransactionIntoDb(context, txId, parsed, body, timestampMs, resolvedReason)
+        insertTransactionIntoDb(context, txId, parsed, body, timestampMs, resolvedReason, simSlot, accountIdentifier, counterpartId)
 
-        // 5. Show Android status bar notification
+        // 5. Show Android status bar notification (0 action buttons for locked reasons and Internal Transfers)
         showNotification(context, txId, parsed, resolvedReason?.name, body)
 
         try {
@@ -953,7 +1020,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         parsed: NativeParsedSms,
         body: String,
         timestampMs: Long,
-        resolvedReason: ResolvedReason?
+        resolvedReason: ResolvedReason?,
+        simSlot: Int = 0,
+        accountIdentifier: String? = null,
+        counterpartId: String? = null
     ): Boolean {
         return try {
             val dbPath = File(context.getDatabasePath(DB_NAME).path)
@@ -968,16 +1038,17 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             val dateIso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US)
                 .format(java.util.Date(timestampMs))
 
-            val idToUse = parsed.txReference ?: txId
+            val rawId = parsed.txReference ?: txId
             val txType = if (parsed.isDebit) "expense" else "income"
+            val idToUse = if (rawId.contains("_slot")) rawId else "${rawId}_slot${simSlot}_$txType"
 
             val sql = """
                 INSERT OR IGNORE INTO transactions (
                     id, name, amount, type, date, sender, category, rawMessage,
                     isAutoDetected, totalBalance, reason, reasonId, categoryId,
                     subcategoryId, customReasonText, note, linkedTransactionId,
-                    bankReference, isBookmarked
-                ) VALUES (?, ?, ?, ?, ?, ?, 'Auto', ?, 1, 0.0, ?, ?, ?, ?, NULL, NULL, NULL, ?, 0)
+                    bankReference, isBookmarked, simSlot, accountIdentifier
+                ) VALUES (?, ?, ?, ?, ?, ?, 'Auto', ?, 1, 0.0, ?, ?, ?, ?, NULL, NULL, ?, ?, 0, ?, ?)
             """.trimIndent()
 
             val statement = db.compileStatement(sql)
@@ -1013,14 +1084,44 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 statement.bindNull(11)
             }
 
-            if (parsed.txReference != null) {
-                statement.bindString(12, parsed.txReference)
+            if (counterpartId != null) {
+                statement.bindString(12, counterpartId)
             } else {
                 statement.bindNull(12)
             }
 
+            if (parsed.txReference != null) {
+                statement.bindString(13, parsed.txReference)
+            } else {
+                statement.bindNull(13)
+            }
+
+            statement.bindLong(14, simSlot.toLong())
+            if (accountIdentifier != null) {
+                statement.bindString(15, accountIdentifier)
+            } else {
+                statement.bindNull(15)
+            }
+
             statement.executeInsert()
             statement.close()
+
+            // If a counterpart transaction was matched, link and update it as Internal Transfer
+            if (counterpartId != null) {
+                val itId = resolvedReason?.id
+                if (itId != null) {
+                    db.execSQL(
+                        "UPDATE transactions SET reason = 'Internal Transfer', reasonId = ?, linkedTransactionId = ? WHERE id = ?",
+                        arrayOf(itId, idToUse, counterpartId)
+                    )
+                } else {
+                    db.execSQL(
+                        "UPDATE transactions SET reason = 'Internal Transfer', linkedTransactionId = ? WHERE id = ?",
+                        arrayOf(idToUse, counterpartId)
+                    )
+                }
+            }
+
             db.close()
             true
         } catch (e: Exception) {
@@ -1101,9 +1202,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
 
+        val isInternalTransfer = attachedReason?.equals("Internal Transfer", ignoreCase = true) == true
+        val isReasonLocked = parsed.isLocked || isInternalTransfer
         val realTxId = parsed.txReference ?: txId
 
-        val openIntent = if (parsed.isLocked) {
+        val openIntent = if (isReasonLocked) {
             // Locked reason: Launch main app directly (no quick categorization dialog)
             Intent(context, MainActivity::class.java).apply {
                 this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -1134,7 +1237,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             .setContentIntent(openPendingIntent)
             .setAutoCancel(true)
 
-        if (parsed.isLocked) {
+        if (isReasonLocked) {
             // Mode 1: Locked Reason -> 0 ACTION BUTTONS (Plain informative notification banner)
         } else if (!attachedReason.isNullOrBlank()) {
             // Mode 2: Attached Unlocked Reason -> 2 Action Buttons [ OK ] and [ Change Reason ]

@@ -61,15 +61,22 @@ class HoldToRefresh extends StatefulWidget {
 
 class _HoldToRefreshState extends State<HoldToRefresh>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _progressCtrl = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 6),
-  )..addListener(_onProgressTick);
+  late final AnimationController _progressCtrl;
+  late final Animation<double> _progressAnim;
 
-  late final Animation<double> _progressAnim = CurvedAnimation(
-    parent: _progressCtrl,
-    curve: const _EasedRefreshCurve(),
-  );
+  @override
+  void initState() {
+    super.initState();
+    _progressCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..addListener(_onProgressTick);
+
+    _progressAnim = CurvedAnimation(
+      parent: _progressCtrl,
+      curve: const _EasedRefreshCurve(),
+    );
+  }
 
   static const double _kSlopThreshold = 10.0;
 

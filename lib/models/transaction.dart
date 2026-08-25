@@ -26,6 +26,8 @@ class AppTransaction {
   final String? linkedTransactionId; // points to another transaction for internal transfers
   final String? bankReference; // original reference number from the bank SMS
   final bool isBookmarked;
+  final int simSlot; // 0 = SIM 1 / default, 1 = SIM 2
+  final String? accountIdentifier; // Optional account suffix or phone number
 
   AppTransaction({
     this.id,
@@ -48,6 +50,8 @@ class AppTransaction {
     this.linkedTransactionId,
     this.bankReference,
     this.isBookmarked = false,
+    this.simSlot = 0,
+    this.accountIdentifier,
   });
 
   /// Factory that enriches a pure parser DTO (ParsedSmsResult) into an AppTransaction entity.
@@ -60,9 +64,18 @@ class AppTransaction {
     String? linkedTransactionId,
     String? bankReference,
     bool isBookmarked = false,
+    int simSlot = 0,
+    String? accountIdentifier,
   }) {
+    // Generate an authoritative unique primary key combining bank ref, slot, and transaction direction
+    // so internal transfers between SIM 1 (outflow) and SIM 2 (inflow) never collide or overwrite each other.
+    final rawId = result.id;
+    final String uniqueId = (rawId != null && rawId.isNotEmpty)
+        ? (rawId.contains('_slot') ? rawId : '${rawId}_slot${simSlot}_${result.type}')
+        : '${result.bankName}_slot${simSlot}_${result.date.millisecondsSinceEpoch}_${result.amount}_${result.type}';
+
     return AppTransaction(
-      id: result.id,
+      id: uniqueId,
       name: result.bankName,
       amount: result.amount,
       type: result.type,
@@ -77,8 +90,10 @@ class AppTransaction {
       customReasonText: customReasonText,
       note: note,
       linkedTransactionId: linkedTransactionId,
-      bankReference: bankReference,
+      bankReference: bankReference ?? result.id,
       isBookmarked: isBookmarked,
+      simSlot: simSlot,
+      accountIdentifier: accountIdentifier,
     );
   }
 
@@ -93,8 +108,16 @@ class AppTransaction {
   bool get hasLinks => extractedLinks.isNotEmpty;
 
   /// True when this transaction was auto-created with an immutable system reason from SMS
-  /// (strictly Telebirr Airtime, Telebirr Package, or Telebirr Sanduq/Savings).
+  /// (Telebirr Airtime, Telebirr Package, Telebirr Sanduq/Savings, or Internal Transfer).
   bool get isReasonLocked {
+    final resReason = resolvedReason?.trim().toLowerCase();
+    final rReason = reason?.trim().toLowerCase();
+    if (resReason == 'internal transfer' ||
+        rReason == 'internal transfer' ||
+        (linkedTransactionId != null && linkedTransactionId!.isNotEmpty)) {
+      return true;
+    }
+
     final lower = rawMessage.toLowerCase();
     final isTelebirr = name.toLowerCase().contains('telebirr') ||
         sender.toLowerCase().contains('127') ||
@@ -146,6 +169,8 @@ class AppTransaction {
       'linkedTransactionId': linkedTransactionId,
       'bankReference': bankReference,
       'isBookmarked': isBookmarked ? 1 : 0,
+      'simSlot': simSlot,
+      'accountIdentifier': accountIdentifier,
     };
   }
 
@@ -174,6 +199,8 @@ class AppTransaction {
       linkedTransactionId: map['linkedTransactionId'] as String?,
       bankReference: map['bankReference'] as String?,
       isBookmarked: (map['isBookmarked'] as int? ?? 0) == 1,
+      simSlot: (map['simSlot'] as int?) ?? 0,
+      accountIdentifier: map['accountIdentifier'] as String?,
     );
   }
 
@@ -198,6 +225,9 @@ class AppTransaction {
     String? bankReference,
     bool clearBankReference = false,
     bool? isBookmarked,
+    int? simSlot,
+    String? accountIdentifier,
+    bool clearAccountIdentifier = false,
   }) {
     return AppTransaction(
       id: id,
@@ -226,6 +256,10 @@ class AppTransaction {
           ? null
           : (bankReference ?? this.bankReference),
       isBookmarked: isBookmarked ?? this.isBookmarked,
+      simSlot: simSlot ?? this.simSlot,
+      accountIdentifier: clearAccountIdentifier
+          ? null
+          : (accountIdentifier ?? this.accountIdentifier),
     );
   }
 

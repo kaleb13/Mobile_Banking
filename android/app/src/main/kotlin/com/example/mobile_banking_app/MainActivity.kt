@@ -17,6 +17,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
 import android.provider.Telephony
+import android.telephony.SubscriptionManager
 import android.text.TextUtils
 import io.flutter.plugin.common.EventChannel
 import android.net.Uri
@@ -100,6 +101,23 @@ class MainActivity : FlutterFragmentActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.shibre/sms_scanner").setMethodCallHandler { call, result ->
             when (call.method) {
+                "getSimCards" -> {
+                    val subManager = try {
+                        getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+                    } catch (_: Throwable) { null }
+                    val sims = ArrayList<Map<String, Any>>()
+                    try {
+                        subManager?.activeSubscriptionInfoList?.forEach { info ->
+                            val sim = HashMap<String, Any>()
+                            sim["subscriptionId"] = info.subscriptionId
+                            sim["simSlot"] = info.simSlotIndex
+                            sim["displayName"] = info.displayName?.toString() ?: "SIM ${info.simSlotIndex + 1}"
+                            sim["carrierName"] = info.carrierName?.toString() ?: ""
+                            sims.add(sim)
+                        }
+                    } catch (_: Throwable) {}
+                    result.success(sims)
+                }
                 "getBankSmsFast" -> {
                     val sinceTimestamp = call.argument<Long>("since")
                     val rawSenders = call.argument<List<String>>("senders") 
@@ -109,70 +127,107 @@ class MainActivity : FlutterFragmentActivity() {
 
                     Thread {
                         try {
-                            val projection = arrayOf(
-                                Telephony.Sms._ID,
-                                Telephony.Sms.ADDRESS,
-                                Telephony.Sms.BODY,
-                                Telephony.Sms.DATE
-                            )
+                            // ── 1. High-Performance Query with Date Push-Down across ALL SIMs ──
+                            val selection = if (sinceTimestamp != null && sinceTimestamp > 0) "${Telephony.Sms.DATE} >= ?" else null
+                            val selectionArgs = if (sinceTimestamp != null && sinceTimestamp > 0) arrayOf(sinceTimestamp.toString()) else null
 
-                            // ── 1. High-Performance SQL Push-Down Selection ──
-                            // Dynamically queries only the sender addresses registered in Dart
-                            val selectionParts = ArrayList<String>()
-                            val selectionArgsList = ArrayList<String>()
-
-                            if (sinceTimestamp != null && sinceTimestamp > 0) {
-                                selectionParts.add("${Telephony.Sms.DATE} >= ?")
-                                selectionArgsList.add(sinceTimestamp.toString())
-                            }
-
-                            if (targetSenders.isNotEmpty()) {
-                                val bankConditions = ArrayList<String>()
-                                for (sender in targetSenders) {
-                                    bankConditions.add("${Telephony.Sms.ADDRESS} LIKE ?")
-                                    selectionArgsList.add("%$sender%")
-                                }
-                                selectionParts.add("(" + bankConditions.joinToString(" OR ") + ")")
-                            }
-
-                            val selection = if (selectionParts.isNotEmpty()) selectionParts.joinToString(" AND ") else null
-                            val selectionArgs = if (selectionArgsList.isNotEmpty()) selectionArgsList.toTypedArray() else null
-
+                            // Use the base content://sms URI first to get all messages across all SIM cards
+                            val smsUri = Uri.parse("content://sms")
                             var cursor = try {
                                 contentResolver.query(
-                                    Telephony.Sms.Inbox.CONTENT_URI,
-                                    projection,
+                                    smsUri,
+                                    null,
                                     selection,
                                     selectionArgs,
-                                    "${Telephony.Sms.DATE} ASC"
+                                    "date ASC"
                                 )
                             } catch (_: Exception) {
                                 null
                             }
 
-                            // ── 2. Graceful Fallback (in case custom OEM blocks complex LIKE clauses) ──
+                            // Fallback to Inbox URI if root URI is restricted
                             if (cursor == null) {
-                                val fallbackSelection = if (sinceTimestamp != null && sinceTimestamp > 0) "${Telephony.Sms.DATE} >= ?" else null
-                                val fallbackArgs = if (sinceTimestamp != null && sinceTimestamp > 0) arrayOf(sinceTimestamp.toString()) else null
-                                cursor = contentResolver.query(
-                                    Telephony.Sms.Inbox.CONTENT_URI,
-                                    projection,
-                                    fallbackSelection,
-                                    fallbackArgs,
-                                    "${Telephony.Sms.DATE} ASC"
-                                )
+                                cursor = try {
+                                    contentResolver.query(
+                                        Telephony.Sms.Inbox.CONTENT_URI,
+                                        null,
+                                        selection,
+                                        selectionArgs,
+                                        "${Telephony.Sms.DATE} ASC"
+                                    )
+                                } catch (_: Exception) {
+                                    null
+                                }
                             }
+
+                            // ── 2. Build authoritative subscriptionId -> simSlot map (Google Messages / AOSP standard) ──
+                            val subManager = try {
+                                getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
+                            } catch (_: Throwable) { null }
+
+                            val subIdToSlotMap = HashMap<Int, Int>()
+                            try {
+                                subManager?.activeSubscriptionInfoList?.forEach { info ->
+                                    subIdToSlotMap[info.subscriptionId] = info.simSlotIndex
+                                }
+                            } catch (_: Throwable) {}
 
                             val messages = ArrayList<Map<String, Any>>(cursor?.count ?: 0)
                             cursor?.use {
                                 val addrIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
                                 val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
                                 val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
+                                
+                                val subIdIdx = try { it.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID) } catch (_: Throwable) { -1 }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("sub_id") } catch (_: Throwable) { -1 }
+                                }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("subscription_id") } catch (_: Throwable) { -1 }
+                                }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("subscription") } catch (_: Throwable) { -1 }
+                                }
+
+                                val phoneIdIdx = try { it.getColumnIndex("phone_id") } catch (_: Throwable) { -1 }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("phone") } catch (_: Throwable) { -1 }
+                                }
+                                val simSlotIdx = try { it.getColumnIndex("sim_slot") } catch (_: Throwable) { -1 }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("slot_id") } catch (_: Throwable) { -1 }
+                                }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("slot") } catch (_: Throwable) { -1 }
+                                }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("sim_index") } catch (_: Throwable) { -1 }
+                                }
+                                val simIdIdx = try { it.getColumnIndex("sim_id") } catch (_: Throwable) { -1 }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("simId") } catch (_: Throwable) { -1 }
+                                }.let { idx ->
+                                    if (idx >= 0) idx else try { it.getColumnIndex("sim_num") } catch (_: Throwable) { -1 }
+                                }
+
+                                android.util.Log.d("ShibreSIM", "Query columns: subIdIdx=$subIdIdx phoneIdIdx=$phoneIdIdx simSlotIdx=$simSlotIdx simIdIdx=$simIdIdx activeSubs=$subIdToSlotMap")
 
                                 while (it.moveToNext()) {
                                     val addr = if (addrIdx >= 0) it.getString(addrIdx) else null
                                     val body = if (bodyIdx >= 0) it.getString(bodyIdx) else null
                                     val date = if (dateIdx >= 0) it.getLong(dateIdx) else null
+                                    val subIdVal = if (subIdIdx >= 0) try { it.getInt(subIdIdx) } catch (_: Throwable) { -1 } else -1
+                                    val phoneIdVal = if (phoneIdIdx >= 0) try { it.getInt(phoneIdIdx) } catch (_: Throwable) { -1 } else -1
+                                    val simSlotVal = if (simSlotIdx >= 0) try { it.getInt(simSlotIdx) } catch (_: Throwable) { -1 } else -1
+                                    val simIdVal = if (simIdIdx >= 0) try { it.getInt(simIdIdx) } catch (_: Throwable) { -1 } else -1
+                                    
+                                    // Determine physical SIM slot (0 = SIM 1, 1 = SIM 2):
+                                    // 1. Authoritative lookup from SubscriptionManager via sub_id (AOSP standard)
+                                    // 2. Hardware phone_id (0 = SIM 1, 1 = SIM 2 on Qualcomm/Samsung RIL)
+                                    // 3. Hardware sim_slot (0 = SIM 1, 1 = SIM 2)
+                                    // 4. Hardware sim_id (MediaTek / older Samsung)
+                                    // 5. Direct subId if 0 or 1
+                                    val simSlot = when {
+                                        subIdVal >= 0 && subIdToSlotMap.containsKey(subIdVal) -> subIdToSlotMap[subIdVal] ?: 0
+                                        phoneIdVal in 0..1 -> phoneIdVal
+                                        simSlotVal in 0..1 -> simSlotVal
+                                        simSlotVal in 1..2 -> simSlotVal - 1
+                                        simIdVal in 0..1 -> simIdVal
+                                        subIdVal in 0..1 -> subIdVal
+                                        else -> 0
+                                    }
 
                                     if (!addr.isNullOrEmpty() && !body.isNullOrEmpty() && date != null) {
                                         val lowerAddr = addr.trim().lowercase()
@@ -180,10 +235,22 @@ class MainActivity : FlutterFragmentActivity() {
                                                 targetSenders.contains(lowerAddr) ||
                                                 targetSenders.any { k -> lowerAddr.contains(k) }
                                         if (isBank) {
-                                            val item = HashMap<String, Any>(3)
+                                            android.util.Log.d("ShibreSIM", "BANK_MSG: sender=$addr subId=$subIdVal simSlotCol=$simSlotVal -> resolvedSlot=$simSlot text=${body.replace('\n', ' ').take(50)}")
+                                            val item = HashMap<String, Any>(5)
                                             item["sender"] = addr
                                             item["body"] = body
                                             item["date"] = date
+                                            item["simSlot"] = simSlot
+
+                                            // Extract account suffix if present in SMS text
+                                            val acctMatch = Regex("(?i)(?:account\\s*(?:no\\.?)?\\s*|acc(?:ount)?\\s*)([0-9*]{4,20})").find(body)
+                                            if (acctMatch != null) {
+                                                val rawAcct = acctMatch.groupValues[1]
+                                                if (rawAcct.length >= 4) {
+                                                    item["accountIdentifier"] = rawAcct.takeLast(4)
+                                                }
+                                            }
+
                                             messages.add(item)
                                         }
                                     }

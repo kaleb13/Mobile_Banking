@@ -51,7 +51,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 26, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 27, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -61,11 +61,7 @@ class DatabaseService {
     await db.execute('''
 CREATE TABLE senders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  senderName TEXT NOT NULL,
-  depositKeywords TEXT NOT NULL,
-  expenseKeywords TEXT NOT NULL,
-  accountNumber TEXT,
-  pin TEXT
+  senderName TEXT NOT NULL
 )
 ''');
 
@@ -89,7 +85,9 @@ CREATE TABLE transactions (
   note TEXT,
   linkedTransactionId TEXT,
   bankReference TEXT,
-  isBookmarked INTEGER NOT NULL DEFAULT 0
+  isBookmarked INTEGER NOT NULL DEFAULT 0,
+  simSlot INTEGER NOT NULL DEFAULT 0,
+  accountIdentifier TEXT
 )
 ''');
 
@@ -439,6 +437,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
         await db.execute('ALTER TABLE transactions ADD COLUMN isBookmarked INTEGER NOT NULL DEFAULT 0;');
       } catch (_) {}
     }
+    if (oldVersion < 27) {
+      try {
+        await db.execute('ALTER TABLE transactions ADD COLUMN simSlot INTEGER NOT NULL DEFAULT 0;');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE transactions ADD COLUMN accountIdentifier TEXT;');
+      } catch (_) {}
+    }
   }
 
   Future<void> _upgradeToVersion23(Database db) async {
@@ -687,8 +693,40 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
             tx.id ?? DateTime.now().millisecondsSinceEpoch.toString();
         final map = tx.toMap();
         map['id'] = idToUse;
-        batch.insert('transactions', map,
-            conflictAlgorithm: ConflictAlgorithm.ignore);
+        batch.rawInsert('''
+          INSERT INTO transactions (
+            id, name, amount, type, date, sender, category, rawMessage,
+            isAutoDetected, totalBalance, reason, reasonId, categoryId,
+            subcategoryId, customReasonText, note, linkedTransactionId,
+            bankReference, isBookmarked, simSlot, accountIdentifier
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            simSlot = excluded.simSlot,
+            accountIdentifier = COALESCE(excluded.accountIdentifier, transactions.accountIdentifier),
+            totalBalance = CASE WHEN excluded.totalBalance > 0 THEN excluded.totalBalance ELSE transactions.totalBalance END
+        ''', [
+          map['id'],
+          map['name'],
+          map['amount'],
+          map['type'],
+          map['date'],
+          map['sender'],
+          map['category'] ?? 'Auto',
+          map['rawMessage'],
+          map['isAutoDetected'] ?? 1,
+          map['totalBalance'] ?? 0.0,
+          map['reason'],
+          map['reasonId'],
+          map['categoryId'],
+          map['subcategoryId'],
+          map['customReasonText'],
+          map['note'],
+          map['linkedTransactionId'],
+          map['bankReference'],
+          map['isBookmarked'] ?? 0,
+          map['simSlot'] ?? 0,
+          map['accountIdentifier'],
+        ]);
       }
       final results = await batch.commit(noResult: false);
       insertedCount = results.where((r) => r is int && r > 0).length;
@@ -916,6 +954,71 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       offset: offset,
     );
     return maps.map((map) => AppTransaction.fromMap(map)).toList();
+  }
+
+  /// Fast query for transactions matching a bank reference code.
+  Future<List<AppTransaction>> getTransactionsByBankReference(String bankReference) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'transactions',
+      where: 'bankReference = ? OR id LIKE ?',
+      whereArgs: [bankReference, '${bankReference}_%'],
+    );
+    return maps.map((map) => AppTransaction.fromMap(map)).toList();
+  }
+
+  /// Automatically pairs and locks matching Dual-SIM internal transfers in SQLite (< 5ms).
+  Future<int> reconcileInternalTransfers() async {
+    final db = await instance.database;
+    final specialReasons = await getReasons();
+    final itReason = specialReasons.cast<AppReason?>().firstWhere(
+          (r) => r?.name.toLowerCase() == 'internal transfer',
+          orElse: () => null,
+        );
+    final reasonId = itReason?.id;
+    const reasonName = 'Internal Transfer';
+
+    final rows = await db.rawQuery('''
+      SELECT t1.id AS id1, t2.id AS id2
+      FROM transactions t1
+      INNER JOIN transactions t2 ON t1.bankReference = t2.bankReference
+        AND t1.amount = t2.amount
+        AND t1.type != t2.type
+        AND t1.id != t2.id
+      WHERE t1.bankReference IS NOT NULL
+        AND length(t1.bankReference) >= 4
+        AND (t1.reason IS NULL OR t1.reason != 'Internal Transfer' OR t1.linkedTransactionId IS NULL)
+    ''');
+
+    int updatedCount = 0;
+    for (final row in rows) {
+      final id1 = row['id1'] as String?;
+      final id2 = row['id2'] as String?;
+      if (id1 != null && id2 != null) {
+        await db.update(
+          'transactions',
+          {
+            'reason': reasonName,
+            'reasonId': reasonId,
+            'linkedTransactionId': id2,
+          },
+          where: 'id = ?',
+          whereArgs: [id1],
+        );
+        await db.update(
+          'transactions',
+          {
+            'reason': reasonName,
+            'reasonId': reasonId,
+            'linkedTransactionId': id1,
+          },
+          where: 'id = ?',
+          whereArgs: [id2],
+        );
+        updatedCount++;
+      }
+    }
+    return updatedCount;
   }
 
   Future<DateTime?> getLastTransactionDate() async {

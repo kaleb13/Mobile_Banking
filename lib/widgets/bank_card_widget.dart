@@ -22,6 +22,8 @@ class BankCardWidget extends StatelessWidget {
   final double animationFactor;
   /// Whether to display the top-right three-dot menu button.
   final bool showMoreButton;
+  /// Number of distinct accounts / SIMs attached to this bank.
+  final int accountCount;
 
   const BankCardWidget({
     super.key,
@@ -33,6 +35,7 @@ class BankCardWidget extends StatelessWidget {
     this.onTap,
     this.animationFactor = 1.0,
     this.showMoreButton = true,
+    this.accountCount = 1,
   });
 
   static Widget bankLogo(String name, [double size = 34.0, Color? iconColor]) {
@@ -310,6 +313,17 @@ class BankCardWidget extends StatelessWidget {
                                   const AppBadge.warning(
                                     text: 'PAUSED',
                                     icon: Icons.pause_rounded,
+                                    size: AppBadgeSize.small,
+                                  ),
+                                ] else if (accountCount > 1) ...[
+                                  const SizedBox(width: 8),
+                                  AppBadge(
+                                    text: '$accountCount Accounts',
+                                    icon: Icons.sim_card_outlined,
+                                    customBgColor: isDarkTextTheme
+                                        ? AppColors.darkCharcoal.withValues(alpha: 0.14)
+                                        : Colors.white.withValues(alpha: 0.22),
+                                    customTextColor: textColorPrimary,
                                     size: AppBadgeSize.small,
                                   ),
                                 ],
