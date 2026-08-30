@@ -11,6 +11,7 @@ import '../../widgets/app_modal_dialog.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_drawer.dart';
+import 'category_linked_persons_drawer.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
   const CategoryManagementScreen({super.key});
@@ -107,6 +108,29 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   }
 
   void _confirmDeleteCategory(BuildContext context, TransactionsViewModel txVM, AppReason reason) {
+    // Check if any person is linked to this reason or its subcategories
+    final linked = reason.isTopLevelCategory
+        ? txVM.allLinksForCategoryTree(reason.id!)
+        : txVM.linksForReason(reason.id!);
+
+    if (linked.isNotEmpty) {
+      AppConfirmDialog.show(
+        context: context,
+        title: 'Cannot Delete Reason',
+        icon: Icons.link_rounded,
+        iconColor: AppColors.warning,
+        message:
+            'This ${reason.isSubcategory ? 'subcategory' : 'category'} has ${linked.length} person(s) currently linked to it (${linked.map((l) => '"${l.linkedName}"').take(3).join(', ')}${linked.length > 3 ? '...' : ''}).\n\nPlease unlink all persons before deleting this reason.',
+        confirmText: 'View Linked Persons',
+        cancelText: 'Close',
+        isDestructive: false,
+        onConfirm: () {
+          CategoryLinkedPersonsDrawer.show(context, reason: reason);
+        },
+      );
+      return;
+    }
+
     AppConfirmDialog.show(
       context: context,
       title: reason.isSubcategory ? 'Delete Subcategory?' : 'Delete Category?',
@@ -138,6 +162,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   void _showCategoryOptionsModal(BuildContext context, TransactionsViewModel txVM, AppReason reason) {
     final isTopProtected = _isProtectedTopCategory(reason);
     final isSubProtected = _isProtectedSubcategory(reason);
+    final linkedList = reason.isTopLevelCategory
+        ? txVM.allLinksForCategoryTree(reason.id!)
+        : txVM.linksForReason(reason.id!);
 
     AppDrawer.show(
       context: context,
@@ -151,6 +178,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              AppDrawerActionTile(
+                icon: Icons.people_outline_rounded,
+                title: 'Linked Persons (${linkedList.length})',
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  CategoryLinkedPersonsDrawer.show(context, reason: reason);
+                },
+              ),
               if (isSubProtected)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -362,6 +397,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   Widget _buildCategoryCard(BuildContext context, TransactionsViewModel txVM, AppReason category) {
     final subcategories = txVM.subcategoriesFor(category.id!);
     final isExpanded = _expandedCategoryId == category.id;
+    final linkedCount = txVM.allLinksForCategoryTree(category.id!).length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -384,9 +420,18 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                       style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                   ),
+                  if (linkedCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: AppBadge.neutral(
+                        icon: Icons.link_rounded,
+                        text: '$linkedCount',
+                        size: AppBadgeSize.small,
+                      ),
+                    ),
                   if (_isProtectedTopCategory(category))
                     const Padding(
-                      padding: EdgeInsets.only(right: 8),
+                      padding: EdgeInsets.only(right: 4),
                       child: AppBadge.info(
                         text: 'System',
                         size: AppBadgeSize.small,
@@ -395,13 +440,28 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 ],
               ),
               subtitle: Text(
-                '${subcategories.length} subcategories',
+                '${subcategories.length} subcategories${linkedCount > 0 ? ' • $linkedCount linked' : ''}',
                 style: const TextStyle(color: Colors.white38, fontSize: 11),
               ),
-              trailing: Icon(
-                isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded,
-                color: Colors.white54,
-                size: 20,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.people_outline_rounded,
+                      color: linkedCount > 0 ? Colors.white70 : Colors.white30,
+                      size: 19,
+                    ),
+                    tooltip: 'Linked Persons',
+                    onPressed: () =>
+                        CategoryLinkedPersonsDrawer.show(context, reason: category),
+                  ),
+                  Icon(
+                    isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded,
+                    color: Colors.white54,
+                    size: 20,
+                  ),
+                ],
               ),
               onTap: () {
                 setState(() {
@@ -421,6 +481,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     const SizedBox(height: 6),
                     ...subcategories.map((sub) {
                       final isSubLocked = _isProtectedSubcategory(sub);
+                      final subLinkedCount = txVM.linksForReason(sub.id!).length;
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 4),
                         decoration: BoxDecoration(
@@ -444,6 +506,15 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                                       style: const TextStyle(color: Colors.white70, fontSize: 13),
                                     ),
                                   ),
+                                  if (subLinkedCount > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: AppBadge.neutral(
+                                        icon: Icons.link_rounded,
+                                        text: '$subLinkedCount',
+                                        size: AppBadgeSize.micro,
+                                      ),
+                                    ),
                                   if (isSubLocked)
                                     const AppBadge.info(
                                       text: 'Locked',

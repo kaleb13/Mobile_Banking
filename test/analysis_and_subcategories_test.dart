@@ -17,6 +17,7 @@ import 'package:mobile_banking_app/data/repositories/cash_wallet_repository.dart
 import 'package:mobile_banking_app/screens/dashboard/analysis_screen.dart';
 import 'package:mobile_banking_app/screens/dashboard/category_detail_screen.dart';
 import 'package:mobile_banking_app/screens/dashboard/reason_transactions_screen.dart';
+import 'package:mobile_banking_app/models/transaction_split.dart';
 import 'package:mobile_banking_app/screens/dashboard/all_transactions_screen.dart';
 import 'package:mobile_banking_app/widgets/counterparty_insight_sheet.dart';
 import 'package:mobile_banking_app/widgets/daily_net_heatmap_widget.dart';
@@ -130,6 +131,7 @@ class FakeTransactionRepository implements TransactionRepository {
   List<AppReason> reasons = [];
   List<AppSender> senders = [];
   List<AppReasonLink> reasonLinks = [];
+  List<TransactionSplit> splits = [];
   Set<String> pausedBanks = {};
 
   @override
@@ -146,6 +148,26 @@ class FakeTransactionRepository implements TransactionRepository {
 
   @override
   Future<Set<String>> getPausedBanks() async => pausedBanks;
+
+  @override
+  Future<List<TransactionSplit>> getAllTransactionSplits() async => splits;
+
+  @override
+  Future<List<TransactionSplit>> getSplitsForTransaction(String transactionId) async =>
+      splits.where((s) => s.transactionId == transactionId).toList();
+
+  @override
+  Future<void> saveTransactionSplits(String transactionId, List<TransactionSplit> newSplits) async {
+    splits.removeWhere((s) => s.transactionId == transactionId);
+    splits.addAll(newSplits);
+  }
+
+  @override
+  Future<int> deleteTransactionSplits(String transactionId) async {
+    final count = splits.where((s) => s.transactionId == transactionId).length;
+    splits.removeWhere((s) => s.transactionId == transactionId);
+    return count;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

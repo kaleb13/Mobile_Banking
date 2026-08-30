@@ -35,6 +35,17 @@ class TelebirrParser {
     return null;
   }
 
+  /// Cleans counterparty string by stripping phone numbers in parentheses,
+  /// masked phones like "(2519****9104)", and trailing terminal/reference codes like "101813".
+  static String cleanCounterparty(String raw) {
+    var cleaned = raw.trim();
+    // Strip parenthesized phone numbers / identifiers e.g. "(2519****9104) 101813" or "(251912345678)"
+    cleaned = cleaned.replaceAll(RegExp(r'\s*\(.*'), '').trim();
+    // Strip trailing reference numbers / digits if any remain e.g. " 101813"
+    cleaned = cleaned.replaceAll(RegExp(r'\s+\d{4,}\b.*'), '').trim();
+    return cleaned.isEmpty ? raw.trim() : cleaned;
+  }
+
   // ── Standard Transaction Parser ────────────────────────────────────────────
 
   static ParsedSmsResult? parse(String message, DateTime fallbackDate) {
@@ -333,7 +344,7 @@ class TelebirrParser {
       amount: amount,
       type: type,
       date: txDate,
-      counterparty: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderNumber,
+      counterparty: senderOrRecipient.isNotEmpty ? cleanCounterparty(senderOrRecipient) : senderNumber,
       totalBalance: totalBalance,
       rawMessage: message,
       patternType: patternType,

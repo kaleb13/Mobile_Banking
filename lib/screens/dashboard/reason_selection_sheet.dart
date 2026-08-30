@@ -11,6 +11,7 @@ class ReasonSelectionSheet extends StatefulWidget {
   final AppReason? initialReason;
   final String? transactionType;
   final bool isCashSpending;
+  final bool isSplitSelection;
   final Function(AppReason) onReasonSelected;
 
   const ReasonSelectionSheet({
@@ -18,6 +19,7 @@ class ReasonSelectionSheet extends StatefulWidget {
     this.initialReason,
     this.transactionType,
     this.isCashSpending = false,
+    this.isSplitSelection = false,
     required this.onReasonSelected,
   });
 
@@ -27,6 +29,7 @@ class ReasonSelectionSheet extends StatefulWidget {
     AppReason? initialReason,
     String? transactionType,
     bool isCashSpending = false,
+    bool isSplitSelection = false,
     required Function(AppReason) onReasonSelected,
   }) {
     return AppBottomSheet.show(
@@ -36,6 +39,7 @@ class ReasonSelectionSheet extends StatefulWidget {
         initialReason: initialReason,
         transactionType: transactionType,
         isCashSpending: isCashSpending,
+        isSplitSelection: isSplitSelection,
         onReasonSelected: onReasonSelected,
       ),
     );
@@ -168,6 +172,14 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     final specialReasonsMap = <String, AppReason>{};
     for (var r in txVM.reasons.where(_isSpecial)) {
       final nameKey = r.name.trim().toLowerCase();
+      // For split reason allocations: exclude Internal Transfer and Pass-Through
+      if (widget.isSplitSelection &&
+          (nameKey == 'internal transfer' ||
+              nameKey == 'pass-through' ||
+              nameKey == 'pass through' ||
+              nameKey == 'bounce')) {
+        continue;
+      }
       // For cash spending/deductions: ONLY 'Loan' is permitted from special reasons.
       if (widget.isCashSpending && nameKey != 'loan') {
         continue;

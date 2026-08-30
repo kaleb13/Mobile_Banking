@@ -140,12 +140,34 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
         }
       }
 
-      rawBankTransactions = txVM.transactions.where((tx) {
-        final rName =
-            (tx.resolvedReason ?? tx.reason ?? '').toLowerCase().trim();
-        if (rName.isEmpty) return false;
-        return targetReasonNames.contains(rName);
-      }).toList();
+      rawBankTransactions = [];
+      for (final tx in txVM.transactions) {
+        final splits = txVM.getSplitsForTransaction(tx.id);
+        if (splits.isNotEmpty) {
+          for (final split in splits) {
+            final rName = (split.reasonName ?? split.customReasonText ?? '')
+                .toLowerCase()
+                .trim();
+            if (rName.isNotEmpty && targetReasonNames.contains(rName)) {
+              rawBankTransactions.add(tx.copyWith(
+                amount: split.amount,
+                reason: split.reasonName ?? split.customReasonText,
+                reasonId: split.reasonId,
+                categoryId: split.categoryId,
+                subcategoryId: split.subcategoryId,
+                customReasonText: split.customReasonText,
+                note: split.note ?? tx.note,
+              ));
+            }
+          }
+        } else {
+          final rName =
+              (tx.resolvedReason ?? tx.reason ?? '').toLowerCase().trim();
+          if (rName.isNotEmpty && targetReasonNames.contains(rName)) {
+            rawBankTransactions.add(tx);
+          }
+        }
+      }
 
       rawCashTransactions = cashVM.cashTransactions.where((ctx) {
         final rName =

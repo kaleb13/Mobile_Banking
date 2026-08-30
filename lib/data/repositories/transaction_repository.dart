@@ -1,4 +1,5 @@
 import '../../models/transaction.dart';
+import '../../models/transaction_split.dart';
 import '../../models/app_notification.dart';
 import '../../models/reason.dart';
 import '../../models/sender.dart';
@@ -24,6 +25,12 @@ abstract class TransactionRepository {
   Future<DateTime?> getLastTransactionDate();
   Future<int> getTransactionCount();
   Future<void> checkpointWal();
+
+  // ── Transaction Splits ──
+  Future<List<TransactionSplit>> getAllTransactionSplits();
+  Future<List<TransactionSplit>> getSplitsForTransaction(String transactionId);
+  Future<void> saveTransactionSplits(String transactionId, List<TransactionSplit> splits);
+  Future<int> deleteTransactionSplits(String transactionId);
 
   // ── Transaction Reason Updates ──
   Future<int> reconcilePendingNotificationReasons();
@@ -137,6 +144,25 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Future<int> getTransactionCount() => _db.getTransactionCount();
+
+  // ── Transaction Splits ────────────────────────────────────────────────────
+
+  @override
+  Future<List<TransactionSplit>> getAllTransactionSplits() =>
+      _db.getAllTransactionSplits();
+
+  @override
+  Future<List<TransactionSplit>> getSplitsForTransaction(String transactionId) =>
+      _db.getSplitsForTransaction(transactionId);
+
+  @override
+  Future<void> saveTransactionSplits(
+          String transactionId, List<TransactionSplit> splits) =>
+      _db.saveTransactionSplits(transactionId, splits);
+
+  @override
+  Future<int> deleteTransactionSplits(String transactionId) =>
+      _db.deleteTransactionSplits(transactionId);
 
   // ── Transaction Reason Updates ────────────────────────────────────────────
 

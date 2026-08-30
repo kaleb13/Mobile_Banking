@@ -30,6 +30,7 @@ class AppTextField extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
   final Widget? prefix;
   final IconData? prefixIcon;
+  final Color? prefixIconColor;
   final String? prefixText;
   final Widget? suffix;
   final IconData? suffixIcon;
@@ -70,6 +71,7 @@ class AppTextField extends StatefulWidget {
     this.inputFormatters,
     this.prefix,
     this.prefixIcon,
+    this.prefixIconColor,
     this.prefixText,
     this.suffix,
     this.suffixIcon,
@@ -112,6 +114,7 @@ class AppTextField extends StatefulWidget {
     this.inputFormatters,
     this.prefix,
     this.prefixIcon,
+    this.prefixIconColor,
     this.prefixText,
     this.suffix,
     this.suffixIcon,
@@ -153,6 +156,7 @@ class AppTextField extends StatefulWidget {
     this.inputFormatters,
     this.prefix,
     this.prefixIcon,
+    this.prefixIconColor,
     this.prefixText,
     this.suffix,
     this.suffixIcon,
@@ -200,11 +204,12 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 
   @override
-  void didUpdateWidget(AppTextField oldWidget) {
+  void didUpdateWidget(covariant AppTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
-      oldWidget.controller?.removeListener(_handleTextChange);
-      _effectiveController = widget.controller ?? TextEditingController(text: widget.initialValue);
+    if (widget.controller != null && widget.controller != _effectiveController) {
+      _effectiveController.removeListener(_handleTextChange);
+      _effectiveController = widget.controller!;
+      _hasText = _effectiveController.text.isNotEmpty;
       _effectiveController.addListener(_handleTextChange);
     }
   }
@@ -220,17 +225,17 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 
   void _handleTextChange() {
-    final hasText = _effectiveController.text.isNotEmpty;
-    if (hasText != _hasText) {
+    final hasTextNow = _effectiveController.text.isNotEmpty;
+    if (hasTextNow != _hasText) {
       setState(() {
-        _hasText = hasText;
+        _hasText = hasTextNow;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 1. Resolve Colors based on variant
+    // 1. Resolve Colors by Variant
     Color defaultBg;
     Color defaultTextColor;
     Color defaultHintColor;
@@ -238,16 +243,16 @@ class _AppTextFieldState extends State<AppTextField> {
 
     switch (widget.variant) {
       case AppTextFieldVariant.light:
-        defaultBg = Colors.black.withValues(alpha: 0.05);
-        defaultTextColor = AppColors.buttonPrimaryText; // Dark Slate #0F172A
-        defaultHintColor = AppColors.textSecondaryLight; // Slate Gray #64748B
+        defaultBg = AppColors.buttonSecondary;
+        defaultTextColor = AppColors.buttonPrimaryText;
+        defaultHintColor = AppColors.textSoft;
         defaultPrefixColor = AppColors.buttonPrimaryText;
         break;
       case AppTextFieldVariant.modal:
         defaultBg = AppColors.drawerCard;
         defaultTextColor = Colors.white;
         defaultHintColor = Colors.white38;
-        defaultPrefixColor = AppColors.positive;
+        defaultPrefixColor = Colors.white70;
         break;
       case AppTextFieldVariant.dark:
         defaultBg = AppColors.drawerCard;
@@ -260,6 +265,7 @@ class _AppTextFieldState extends State<AppTextField> {
     final effectiveBg = widget.backgroundColor ?? defaultBg;
     final effectiveTextColor = widget.textColor ?? defaultTextColor;
     final effectiveHintColor = widget.hintColor ?? defaultHintColor;
+    final effectivePrefixColor = widget.prefixIconColor ?? defaultPrefixColor;
 
     final effectiveRadius = widget.borderRadius ??
         (widget.maxLines == 1
@@ -274,7 +280,7 @@ class _AppTextFieldState extends State<AppTextField> {
         child: Icon(
           widget.prefixIcon,
           size: 20,
-          color: defaultPrefixColor,
+          color: effectivePrefixColor,
         ),
       );
     }

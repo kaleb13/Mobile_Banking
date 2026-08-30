@@ -52,7 +52,6 @@ class LinkReasonDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
-    final lowerName = contactName.toLowerCase().trim();
     final expectedType = linkType == 'sender' ? 'income' : 'expense';
 
     final matchingCount = txVM.transactions.where((t) {
@@ -277,7 +276,6 @@ class UnlinkReasonDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
-    final lowerName = contactName.toLowerCase().trim();
 
     final matchingCount = txVM.transactions.where((t) {
       final matchesName = CounterpartyMatcher.matches(t.sender, contactName);

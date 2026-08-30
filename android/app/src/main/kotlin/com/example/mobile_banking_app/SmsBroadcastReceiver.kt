@@ -329,6 +329,15 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             return clean.toDoubleOrNull() ?: 0.0
         }
 
+        private fun cleanCounterpartyName(raw: String): String {
+            var cleaned = raw.trim()
+            // Strip parenthesized phone numbers / identifiers e.g. "(2519****9104) 101813" or "(251912345678)"
+            cleaned = cleaned.replace(Regex("\\s*\\(.*"), "").trim()
+            // Strip trailing reference numbers / digits if any remain e.g. " 101813"
+            cleaned = cleaned.replace(Regex("\\s+\\d{4,}\\b.*"), "").trim()
+            return if (cleaned.isEmpty()) raw.trim() else cleaned
+        }
+
         /**
          * Pure Fact Extraction Engine (Mirrors Dart Bank Parsers)
          */
@@ -467,7 +476,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         val toMatch = Regex("(?i)to\\s+(.*?)\\s+on\\s+\\d{2}/\\d{2}").find(singleLine)
                         val rawRecipient = toMatch?.groupValues?.get(1)?.trim() ?: ""
                         val accMatch = Regex("(?i)account\\s+(?:number\\s+)?([0-9A-Za-z]+)").find(rawRecipient)
-                        val recipient = accMatch?.groupValues?.get(1)?.trim() ?: rawRecipient.ifEmpty { "Transfer" }
+                        val recipient = if (accMatch != null) accMatch.groupValues[1].trim() else cleanCounterpartyName(rawRecipient.ifEmpty { "Transfer" })
                         val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 
@@ -492,7 +501,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         if (amount <= 0) return null
 
                         val fromMatch = Regex("(?i)from\\s+(.*?)\\s+on\\s+\\d{2}/\\d{2}").find(singleLine)
-                        val senderName = fromMatch?.groupValues?.get(1)?.trim() ?: "Sender"
+                        val rawSender = fromMatch?.groupValues?.get(1)?.trim() ?: "Sender"
+                        val senderName = cleanCounterpartyName(rawSender)
                         val refMatch = Regex("(?i)transaction\\s+number\\s+(?:is\\s+)?([A-Za-z0-9]+)").find(singleLine)
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 

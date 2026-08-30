@@ -7,11 +7,15 @@ import '../../widgets/app_button.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/custom_progress_bar.dart';
+import '../../models/transaction_split.dart';
+import '../../services/database_service.dart';
 
 enum _QuickEditView {
   categories,
   internalTransfer,
   loan,
+  split,
 }
 
 /// Top-down 3/4 screen height drawer for transaction categorization.
@@ -22,6 +26,32 @@ enum _QuickEditView {
 /// 2. In-place interactive workflows for Internal Transfer linking (with dual-SMS cleanup)
 ///    and Loan record creation without launching the full application.
 /// 3. Grouped parent categories with drill-down subcategories ("Go Deeper").
+class _QuickSplitItem {
+  final TextEditingController amountController;
+  final TextEditingController noteController;
+  int? reasonId;
+  String? reasonName;
+  int? categoryId;
+  int? subcategoryId;
+
+  _QuickSplitItem({
+    double? initialAmount,
+    String? initialNote,
+  })  : amountController = TextEditingController(
+          text: initialAmount != null && initialAmount > 0
+              ? (initialAmount % 1 == 0
+                  ? initialAmount.toInt().toString()
+                  : initialAmount.toStringAsFixed(2))
+              : '',
+        ),
+        noteController = TextEditingController(text: initialNote ?? '');
+
+  void dispose() {
+    amountController.dispose();
+    noteController.dispose();
+  }
+}
+
 class QuickEditOverlay extends StatefulWidget {
   const QuickEditOverlay({super.key});
 
@@ -35,6 +65,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
 
   _QuickEditView _currentView = _QuickEditView.categories;
 
+  String _transactionId = '';
   String _bankName = '';
   String _amount = '';
   double _rawAmount = 0.0;
@@ -49,6 +80,9 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
   bool _loaded = false;
   bool _isSaving = false;
   bool _linkReasonRule = false;
+
+  // Split Sub-flow state
+  final List<_QuickSplitItem> _quickSplits = [];
 
   // Internal Transfer Sub-flow state
   List<Map<String, dynamic>> _transferCandidates = [];
@@ -109,6 +143,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
       final reasonsList = (data['reasons'] as List?)?.cast<Map>() ?? [];
 
       setState(() {
+        _transactionId = data['transactionId'] as String? ?? data['id'] as String? ?? '';
         _bankName = data['bankName'] as String? ?? '';
         _amount = data['amount'] as String? ?? '';
         _rawAmount = (data['rawAmount'] as num?)?.toDouble() ?? 0.0;
@@ -490,6 +525,8 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
         return _buildInternalTransferView();
       case _QuickEditView.loan:
         return _buildLoanView();
+      case _QuickEditView.split:
+        return _buildSplitView();
       case _QuickEditView.categories:
         return _buildMainCategoriesView();
     }
@@ -648,7 +685,21 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
+
+        // ── Split Amount Action ──
+        Center(
+          child: AppButton.secondary(
+            text: 'Split into Multiple Categories',
+            icon: Icons.call_split_rounded,
+            height: 34,
+            fontSize: 12,
+            iconSize: 15,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            onPressed: _openSplitFlow,
+          ),
+        ),
+        const SizedBox(height: 10),
 
         // ── Grouped Standard Categories List ────────────────────────────────
         const Padding(
@@ -951,6 +1002,397 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
           ],
         ],
       ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // VIEW: IN-PLACE SPLIT TRANSACTION BREAKDOWN
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _openSplitFlow() {
+    setState(() {
+      _currentView = _QuickEditView.split;
+      if (_quickSplits.isEmpty) {
+        final currentReasonName = _selectedReasonName;
+        final currentReasonId = _selectedReasonId;
+        final target = _splitTargetAmount;
+        final firstItem = _QuickSplitItem(
+          initialAmount: target > 0 ? target : null,
+        );
+        if (currentReasonName != null && currentReasonName.isNotEmpty) {
+          firstItem.reasonName = currentReasonName;
+          firstItem.reasonId = currentReasonId;
+          firstItem.categoryId = currentReasonId;
+        }
+        _quickSplits.add(firstItem);
+      }
+    });
+  }
+
+  void _addQuickSplitItem() {
+    final remaining = _splitTargetAmount - _quickSplitTotal;
+    setState(() {
+      _quickSplits.add(_QuickSplitItem(
+        initialAmount: remaining > 0 ? remaining : null,
+      ));
+    });
+  }
+
+  void _removeQuickSplitItem(int index) {
+    if (_quickSplits.length <= 1) return;
+    setState(() {
+      final removed = _quickSplits.removeAt(index);
+      removed.dispose();
+    });
+  }
+
+  double get _splitTargetAmount => _rawAmount > 0
+      ? _rawAmount
+      : double.tryParse(_amount.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+
+  double get _quickSplitTotal {
+    double sum = 0.0;
+    for (final item in _quickSplits) {
+      sum += (double.tryParse(item.amountController.text.trim()) ?? 0.0);
+    }
+    return sum;
+  }
+
+  void _showQuickCategoryPicker(_QuickSplitItem item) {
+    final filteredGroups = _categoryGroups.where((g) {
+      final lower = g.parent.name.trim().toLowerCase();
+      return lower != 'internal transfer' &&
+          lower != 'pass-through' &&
+          lower != 'pass through' &&
+          lower != 'bounce';
+    }).toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surfaceElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Category',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: filteredGroups.length,
+                  itemBuilder: (c, i) {
+                    final g = filteredGroups[i];
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(_getCategoryIcon(g.parent.name),
+                          color: AppColors.brandGreen, size: 20),
+                      title: Text(g.parent.name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        setState(() {
+                          item.reasonId = g.parent.id;
+                          item.reasonName = g.parent.name;
+                          item.categoryId = g.parent.id;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _saveQuickSplits() async {
+    if (_quickSplits.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      final List<TransactionSplit> splits = [];
+      for (final item in _quickSplits) {
+        final amt =
+            double.tryParse(item.amountController.text.trim()) ?? 0.0;
+        splits.add(TransactionSplit(
+          transactionId: _transactionId,
+          amount: amt,
+          reasonId: item.reasonId,
+          reasonName: item.reasonName,
+          categoryId: item.categoryId,
+          subcategoryId: item.subcategoryId,
+          note: item.noteController.text.trim().isNotEmpty
+              ? item.noteController.text.trim()
+              : null,
+        ));
+      }
+      if (_transactionId.isNotEmpty) {
+        await DatabaseService.instance
+            .saveTransactionSplits(_transactionId, splits);
+      }
+      await _channel.invokeMethod('dismiss');
+    } catch (e) {
+      debugPrint('QuickEditOverlay: saveQuickSplits failed: $e');
+    }
+    SystemNavigator.pop();
+  }
+
+  Widget _buildSplitView() {
+    final fmt = NumberFormat('#,##0.00');
+    final target = _splitTargetAmount;
+    final totalAllocated = _quickSplitTotal;
+    final remaining = target - totalAllocated;
+    final isBalanced = remaining.abs() < 0.01;
+    final isOver = remaining < -0.01;
+    final progress =
+        (target > 0 ? totalAllocated / target : 0.0).clamp(0.0, 1.0);
+
+    bool canSave = isBalanced &&
+        _quickSplits.isNotEmpty &&
+        !_quickSplits.any((s) {
+          final a = double.tryParse(s.amountController.text.trim());
+          return a == null ||
+              a <= 0 ||
+              (s.reasonName == null || s.reasonName!.isEmpty);
+        });
+
+    return Column(
+      key: const ValueKey('view_split'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(
+          children: [
+            AppBackButton.dark(
+              onPressed: () {
+                setState(() => _currentView = _QuickEditView.categories);
+              },
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Split Transaction',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.3,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            GestureDetector(
+              onTap: _dismiss,
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  color: Colors.white70,
+                  size: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Allocation Progress Card
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.drawerCard,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Target: ${fmt.format(target)} ETB',
+                    style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  if (isBalanced)
+                    const AppBadge.success(
+                        text: 'Balanced', size: AppBadgeSize.small)
+                  else if (isOver)
+                    AppBadge.destructive(
+                        text: 'Over by ${fmt.format(-remaining)}',
+                        size: AppBadgeSize.small)
+                  else
+                    AppBadge.warning(
+                        text: 'Remaining: ${fmt.format(remaining)}',
+                        size: AppBadgeSize.small),
+                ],
+              ),
+              const SizedBox(height: 6),
+              CustomProgressBar(
+                progress: progress,
+                height: 6,
+                progressColor: isBalanced
+                    ? AppColors.positive
+                    : (isOver ? AppColors.negative : AppColors.brandGreen),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Split items list
+        Expanded(
+          child: ListView.builder(
+            physics: const BouncingScrollPhysics(),
+            itemCount: _quickSplits.length,
+            itemBuilder: (context, idx) {
+              final item = _quickSplits[idx];
+              final hasCat =
+                  item.reasonName != null && item.reasonName!.isNotEmpty;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.drawerCard,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Split #${idx + 1}',
+                            style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold)),
+                        if (_quickSplits.length > 2)
+                          GestureDetector(
+                            onTap: () => _removeQuickSplitItem(idx),
+                            child: const Icon(Icons.close_rounded,
+                                size: 16, color: AppColors.textSoft),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: AppTextField(
+                            controller: item.amountController,
+                            hint: 'Amount',
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: GestureDetector(
+                            onTap: () => _showQuickCategoryPicker(item),
+                            child: Container(
+                              height: 48,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                      hasCat
+                                          ? Icons.label_rounded
+                                          : Icons.add_circle_outline,
+                                      size: 16,
+                                      color: hasCat
+                                          ? AppColors.positive
+                                          : Colors.white54),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      hasCat ? item.reasonName! : 'Category',
+                                      style: TextStyle(
+                                          color: hasCat
+                                              ? Colors.white
+                                              : Colors.white38,
+                                          fontSize: 12,
+                                          fontWeight: hasCat
+                                              ? FontWeight.w600
+                                              : FontWeight.normal),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down,
+                                      color: Colors.white38, size: 18),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 8),
+        Center(
+          child: AppButton.secondary(
+            text: '+ Add Split Item',
+            icon: Icons.add_rounded,
+            height: 34,
+            fontSize: 12,
+            onPressed: _addQuickSplitItem,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        AppButton.primary(
+          text: isBalanced
+              ? 'Save Splits (${_quickSplits.length} Items)'
+              : (isOver ? 'Exceeds Total' : 'Allocate Remaining'),
+          height: 48,
+          isLoading: _isSaving,
+          onPressed: canSave && !_isSaving ? _saveQuickSplits : null,
+        ),
+      ],
     );
   }
 

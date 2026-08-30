@@ -18,6 +18,7 @@ import '../../services/sms_batch_parser.dart';
 import '../../services/bank_senders.dart';
 import '../../services/database_service.dart';
 import '../../models/app_notification.dart';
+import '../../models/transaction_split.dart';
 import '../../utils/counterparty_matcher.dart';
 
 /// TransactionsViewModel — owns all transaction, sender, and reason state.
@@ -41,8 +42,11 @@ class TransactionsViewModel extends ChangeNotifier {
   List<AppReasonLink> _reasonLinks = [];
   Set<String> _pausedBanks = {};
   List<SimCardInfo> _simCards = [];
+  Map<String, List<TransactionSplit>> _transactionSplits = {};
 
   List<SimCardInfo> get simCards => _simCards;
+  Map<String, List<TransactionSplit>> get transactionSplits =>
+      Map.unmodifiable(_transactionSplits);
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -713,6 +717,7 @@ class TransactionsViewModel extends ChangeNotifier {
         _repository.getReasons(),
         _repository.getReasonLinks(),
         _repository.getPausedBanks(),
+        _repository.getAllTransactionSplits(),
       ]);
       _transactions = results[0] as List<AppTransaction>;
       _senders = results[1] as List<AppSender>;
@@ -720,6 +725,12 @@ class TransactionsViewModel extends ChangeNotifier {
       _reasons = results[2] as List<AppReason>;
       _reasonLinks = results[3] as List<AppReasonLink>;
       _pausedBanks = results[4] as Set<String>;
+      final allSplits = results[5] as List<TransactionSplit>;
+      final Map<String, List<TransactionSplit>> splitsMap = {};
+      for (final s in allSplits) {
+        splitsMap.putIfAbsent(s.transactionId, () => []).add(s);
+      }
+      _transactionSplits = splitsMap;
       _rebuildAggregateIndices();
 
       try {
@@ -1517,8 +1528,6 @@ class TransactionsViewModel extends ChangeNotifier {
     String? currentTransactionId,
     int? reasonId,
   }) async {
-    final lowerName = linkedName.toLowerCase();
-
     switch (scope) {
       case UnlinkScope.allTransactions:
         await _repository.deleteReasonLink(linkId);
@@ -1575,6 +1584,39 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<AppReason?> findAutoReason(
       String senderName, String transactionType) {
     return _repository.findAutoReason(senderName, transactionType);
+  }
+
+  /// Returns all reason links for a category and all of its subcategories.
+  List<AppReasonLink> allLinksForCategoryTree(int categoryId) {
+    final subIds = _reasons
+        .where((r) => r.parentId == categoryId && r.id != null)
+        .map((r) => r.id!)
+        .toSet();
+    final allTargetIds = {categoryId, ...subIds};
+    return _reasonLinks
+        .where((l) => allTargetIds.contains(l.reasonId))
+        .toList();
+  }
+
+  /// Whether a reason (or any of its subcategories) has linked persons.
+  bool hasLinkedPersons(int reasonId) {
+    return allLinksForCategoryTree(reasonId).isNotEmpty;
+  }
+
+  /// Returns a sorted unique list of known counterparty names from transactions and senders.
+  List<String> get uniqueCounterparties {
+    final Set<String> names = {};
+    for (final s in _senders) {
+      final n = s.senderName.trim();
+      if (n.isNotEmpty) names.add(n);
+    }
+    for (final t in _transactions) {
+      final n = t.sender.trim();
+      if (n.isNotEmpty) names.add(n);
+    }
+    final sorted = names.toList();
+    sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return sorted;
   }
 
   // ── Category / Subcategory Helpers ──────────────────────────────────────
@@ -1685,4 +1727,48 @@ class TransactionsViewModel extends ChangeNotifier {
     _reasonLinks = results[1] as List<AppReasonLink>;
     notifyListeners();
   }
+
+  // ── Transaction Splits Management ──────────────────────────────────────────
+
+  /// Returns all splits allocated to a transaction ID.
+  List<TransactionSplit> getSplitsForTransaction(String? txId) {
+    if (txId == null || txId.isEmpty) return const [];
+    return _transactionSplits[txId] ?? const [];
+  }
+
+  /// Whether a transaction has itemized splits.
+  bool hasSplits(String? txId) {
+    if (txId == null || txId.isEmpty) return false;
+    return _transactionSplits[txId]?.isNotEmpty ?? false;
+  }
+
+  /// Returns the total amount of all splits for a transaction ID.
+  double getSplitTotal(String? txId) {
+    if (txId == null || txId.isEmpty) return 0.0;
+    return (_transactionSplits[txId] ?? [])
+        .fold(0.0, (sum, s) => sum + s.amount);
+  }
+
+  /// Atomically saves splits for a transaction, persisting to SQLite and updating in-memory cache.
+  Future<void> saveTransactionSplits(
+      String txId, List<TransactionSplit> splits) async {
+    await _repository.saveTransactionSplits(txId, splits);
+    if (splits.isEmpty) {
+      _transactionSplits.remove(txId);
+    } else {
+      _transactionSplits[txId] = splits;
+    }
+    notifyListeners();
+  }
+
+  /// Deletes all splits for a transaction.
+  Future<void> deleteTransactionSplits(String txId) async {
+    await _repository.deleteTransactionSplits(txId);
+    _transactionSplits.remove(txId);
+    notifyListeners();
+  }
+
+  /// Total count of all active splits across all transactions.
+  int get totalSplitsCount =>
+      _transactionSplits.values.fold(0, (sum, l) => sum + l.length);
 }

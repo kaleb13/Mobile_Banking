@@ -95,7 +95,22 @@ void main() {
       expect(tx!.amount, equals(250.00));
       expect(tx.type, equals('income'));
       expect(tx.bankName, equals('Telebirr'));
+      expect(tx.counterparty, equals('Abebe Bikila'));
       expect(tx.id, equals('TB12345'));
+      expect(tx.patternType, equals(SmsPatternType.standardTransfer));
+    });
+
+    test('parses received SMS and strips masked phone and reference code from counterparty', () {
+      const sms =
+          "Dear Kaleb \nYou have received ETB 1.00 from kaleb teklemariyam(2519****9104) 101813 on 30/08/2026 21:29:13. Your transaction number is DHU9AZIHIL. Your current E-Money Account balance is ETB 4.32.\nThank you for using telebirr\nEthio telecom";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(1.00));
+      expect(tx.type, equals('income'));
+      expect(tx.bankName, equals('Telebirr'));
+      expect(tx.id, equals('DHU9AZIHIL'));
+      expect(tx.counterparty, equals('kaleb teklemariyam'));
+      expect(tx.totalBalance, equals(4.32));
       expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 

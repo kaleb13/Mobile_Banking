@@ -33,6 +33,8 @@ import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
 import 'reason_link_drawer.dart';
+import 'split_transaction_sheet.dart';
+import '../../models/transaction_split.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
@@ -361,6 +363,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         activeReasonName.contains('loan');
 
     final bankInfo = _getBankInfo();
+    final splits = txVM.getSplitsForTransaction(currentTx.id ?? '');
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -553,8 +556,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           ),
                         const SizedBox(height: 18),
 
-                        // ── 1. LOAN TRACKING / INTERNAL TRANSFER CARD (TOP MOST) ──
-                        if (linkedLoan != null) ...[
+                        // ── 1. SPLIT TRANSACTION BREAKDOWN / LOAN / INTERNAL TRANSFER CARD (TOP MOST) ──
+                        if (splits.isNotEmpty) ...[
+                          _buildSplitBreakdownCard(context, txVM, settingsVM, currentTx, splits),
+                          const SizedBox(height: 14),
+                        ] else if (linkedLoan != null) ...[
                           _buildLoanTrackingCard(context, linkedLoan, loansVM, settingsVM),
                           const SizedBox(height: 14),
                         ] else if (currentTx.linkedTransactionId != null && currentTx.linkedTransactionId!.isNotEmpty) ...[
@@ -571,23 +577,25 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           const SizedBox(height: 14),
                         ],
 
-                        // ── 2. ASSIGNED REASON CARD ─────────────────────────────────────────────
-                        _buildAssignedReasonCard(
-                          context,
-                          txVM,
-                          cashVM,
-                          loansVM,
-                          currentLabel,
-                          activeReasonId,
-                          isSpecialReason,
-                          isReasonBlocked,
-                          isAutoLocked,
-                          isCashWithDeductions,
-                          linkedLoan,
-                          activeLink,
-                          isIncome,
-                        ),
-                        const SizedBox(height: 14),
+                        // ── 2. ASSIGNED REASON CARD (WHEN NOT SPLIT) ───────────────────────────
+                        if (splits.isEmpty) ...[
+                          _buildAssignedReasonCard(
+                            context,
+                            txVM,
+                            cashVM,
+                            loansVM,
+                            currentLabel,
+                            activeReasonId,
+                            isSpecialReason,
+                            isReasonBlocked,
+                            isAutoLocked,
+                            isCashWithDeductions,
+                            linkedLoan,
+                            activeLink,
+                            isIncome,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
 
                         // ── 3. TRANSACTION DETAIL INFO CARD (ALWAYS EXPANDED) ───────────────────
                         _buildTransactionInfoCard(context, bankInfo, isIncome),
@@ -1436,6 +1444,175 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Icons.category_outlined;
   }
 
+  Widget _buildSplitBreakdownCard(
+    BuildContext context,
+    TransactionsViewModel txVM,
+    SettingsViewModel settingsVM,
+    AppTransaction currentTx,
+    List<TransactionSplit> splits,
+  ) {
+    final currency = settingsVM.currentCurrency.shortLabel;
+    final fmtShort = NumberFormat('#,##0.00');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.brandGreen.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.call_split_rounded,
+                    color: AppColors.brandGreen, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Split Breakdown',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${splits.length} categories itemized',
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              AppBadge.success(
+                text: '${fmtShort.format(currentTx.amount)} $currency',
+                size: AppBadgeSize.small,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+          const SizedBox(height: 10),
+          ...splits.map((s) {
+            final reasonLabel =
+                s.reasonName ?? s.customReasonText ?? 'Category';
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _getReasonCategoryIcon(reasonLabel, txVM),
+                    color: AppColors.brandGreen,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          reasonLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (s.note != null && s.note!.isNotEmpty)
+                          Text(
+                            s.note!,
+                            style: const TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${currentTx.type == 'income' ? '+' : '-'}${fmtShort.format(s.amount)} $currency',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton.secondary(
+                  text: 'Edit Splits',
+                  icon: Icons.edit_rounded,
+                  height: 40,
+                  fontSize: 12,
+                  onPressed: () {
+                    SplitTransactionSheet.show(
+                      context,
+                      transaction: currentTx,
+                      initialSplits: splits,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              AppButton.softDestructive(
+                text: 'Remove',
+                icon: Icons.delete_outline_rounded,
+                fullWidth: false,
+                height: 40,
+                fontSize: 12,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                onPressed: () async {
+                  await AppConfirmDialog.show(
+                    context: context,
+                    title: 'Remove Splits?',
+                    message:
+                        'This will revert this transaction back to a single category.',
+                    confirmText: 'Remove',
+                    isDestructive: true,
+                    onConfirm: () async {
+                      if (currentTx.id != null) {
+                        await txVM.deleteTransactionSplits(currentTx.id!);
+                        if (context.mounted) {
+                          AppToast.info(context,
+                              message: 'Transaction splits removed');
+                        }
+                      }
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAssignedReasonCard(
     BuildContext context,
     TransactionsViewModel txVM,
@@ -1570,6 +1747,24 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     ],
                   ),
                 ),
+                if (!isReasonBlocked && !isSpecialReason) ...[
+                  AppButton.secondary(
+                    text: 'Split',
+                    icon: Icons.call_split_rounded,
+                    fullWidth: false,
+                    height: 28,
+                    fontSize: 11,
+                    iconSize: 13,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    onPressed: () {
+                      SplitTransactionSheet.show(
+                        context,
+                        transaction: widget.transaction,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 if (!isReasonBlocked && activeReasonId != null && !isSpecialReason) ...[
                   if (activeLink != null)
                     AppButton.softDestructive(

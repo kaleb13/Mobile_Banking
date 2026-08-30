@@ -203,6 +203,8 @@ class AppTransaction {
 
   AppTransaction copyWith({
     String? name,
+    double? amount,
+    String? type,
     DateTime? date,
     int? reasonId,
     bool clearReasonId = false,
@@ -230,8 +232,8 @@ class AppTransaction {
     return AppTransaction(
       id: id,
       name: name ?? this.name,
-      amount: amount,
-      type: type,
+      amount: amount ?? this.amount,
+      type: type ?? this.type,
       date: date ?? this.date,
       sender: sender,
       category: category,

@@ -9,6 +9,7 @@ import '../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../presentation/viewmodels/analytics_view_model.dart';
 import '../../models/transaction.dart';
+import '../../models/transaction_split.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
 import '../../theme/app_theme.dart';
@@ -549,6 +550,43 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return 'Uncategorized';
   }
 
+  String _resolveSplitCategoryName(TransactionSplit split, TransactionsViewModel txVM) {
+    if (split.categoryId != null) {
+      final cat = txVM.reasons.where((r) => r.id == split.categoryId).firstOrNull;
+      if (cat != null) return cat.name;
+    }
+
+    if (split.reasonId != null) {
+      final r = txVM.reasons.where((r) => r.id == split.reasonId).firstOrNull;
+      if (r != null) {
+        if (r.isSubcategory && r.parentId != null) {
+          final p = txVM.reasons.where((pr) => pr.id == r.parentId).firstOrNull;
+          if (p != null) return p.name;
+        }
+        return r.name;
+      }
+    }
+
+    final raw = (split.reasonName ?? split.customReasonText ?? '').trim();
+    if (raw.isNotEmpty) {
+      final matchedReason = txVM.reasons
+          .where((r) => r.name.toLowerCase() == raw.toLowerCase())
+          .firstOrNull;
+      if (matchedReason != null) {
+        if (matchedReason.isSubcategory && matchedReason.parentId != null) {
+          final p = txVM.reasons
+              .where((pr) => pr.id == matchedReason.parentId)
+              .firstOrNull;
+          if (p != null) return p.name;
+        }
+        return matchedReason.name;
+      }
+      return _normalizeCategoryName(raw);
+    }
+
+    return 'Uncategorized';
+  }
+
   String _resolveCashTxCategoryName(CashTransaction ctx, TransactionsViewModel txVM) {
     if (ctx.reasonId != null) {
       final r = txVM.reasons.where((res) => res.id == ctx.reasonId).firstOrNull;
@@ -658,12 +696,27 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (_drilledCategory == null) {
       // Level 1: Top-Level Categories ONLY (Uncategorized always included)
       for (var tx in filteredBankTxs) {
-        final categoryLabel = _resolveTxCategoryName(tx, txVM);
-
-        if (tx.type == 'expense') {
-          categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
-        } else if (tx.type == 'income') {
-          categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
+        final splits = txVM.getSplitsForTransaction(tx.id);
+        if (splits.isNotEmpty) {
+          for (final split in splits) {
+            final categoryLabel = _resolveSplitCategoryName(split, txVM);
+            if (tx.type == 'expense') {
+              categoryExpenses[categoryLabel] =
+                  (categoryExpenses[categoryLabel] ?? 0) + split.amount;
+            } else if (tx.type == 'income') {
+              categoryIncome[categoryLabel] =
+                  (categoryIncome[categoryLabel] ?? 0) + split.amount;
+            }
+          }
+        } else {
+          final categoryLabel = _resolveTxCategoryName(tx, txVM);
+          if (tx.type == 'expense') {
+            categoryExpenses[categoryLabel] =
+                (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
+          } else if (tx.type == 'income') {
+            categoryIncome[categoryLabel] =
+                (categoryIncome[categoryLabel] ?? 0) + tx.amount;
+          }
         }
       }
 
@@ -680,16 +733,45 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       // Level 2: Subcategories inside _drilledCategory
       final categoryName = _drilledCategory!.name.toLowerCase();
       for (var tx in filteredBankTxs) {
-        final parentCat = _resolveTxCategoryName(tx, txVM);
-        if (parentCat.toLowerCase() == categoryName) {
-          String subName = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? 'General').trim();
-          if (subName.isEmpty || subName.toLowerCase() == categoryName) {
-            subName = 'General';
+        final splits = txVM.getSplitsForTransaction(tx.id);
+        if (splits.isNotEmpty) {
+          for (final split in splits) {
+            final parentCat = _resolveSplitCategoryName(split, txVM);
+            if (parentCat.toLowerCase() == categoryName) {
+              String subName = (split.reasonName ??
+                      split.customReasonText ??
+                      'General')
+                  .trim();
+              if (subName.isEmpty || subName.toLowerCase() == categoryName) {
+                subName = 'General';
+              }
+              if (tx.type == 'expense') {
+                categoryExpenses[subName] =
+                    (categoryExpenses[subName] ?? 0) + split.amount;
+              } else if (tx.type == 'income') {
+                categoryIncome[subName] =
+                    (categoryIncome[subName] ?? 0) + split.amount;
+              }
+            }
           }
-          if (tx.type == 'expense') {
-            categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
-          } else if (tx.type == 'income') {
-            categoryIncome[subName] = (categoryIncome[subName] ?? 0) + tx.amount;
+        } else {
+          final parentCat = _resolveTxCategoryName(tx, txVM);
+          if (parentCat.toLowerCase() == categoryName) {
+            String subName = (tx.reason ??
+                    tx.customReasonText ??
+                    tx.resolvedReason ??
+                    'General')
+                .trim();
+            if (subName.isEmpty || subName.toLowerCase() == categoryName) {
+              subName = 'General';
+            }
+            if (tx.type == 'expense') {
+              categoryExpenses[subName] =
+                  (categoryExpenses[subName] ?? 0) + tx.amount;
+            } else if (tx.type == 'income') {
+              categoryIncome[subName] =
+                  (categoryIncome[subName] ?? 0) + tx.amount;
+            }
           }
         }
       }
@@ -1034,7 +1116,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   dynamic _getCachedFilteredAnalyticsData(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
-    final key = '${txVM.transactions.length}_${cashVM.cashTransactions.length}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedYear}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_${_selectedBank}_$_selectedSimSlot';
+    final key = '${txVM.transactions.length}_${cashVM.cashTransactions.length}_${txVM.totalSplitsCount}_${_selectedPeriod.index}_${_selectedSubPeriodIndex}_${_selectedYear}_${_selectedHeatmapDay?.millisecondsSinceEpoch}_${_selectedAnalysisType}_${_drilledCategory?.id}_${_selectedBank}_$_selectedSimSlot';
     if (_cachedAnalyticsData != null && _lastAnalyticsCacheKey == key) {
       return _cachedAnalyticsData;
     }
@@ -2312,7 +2394,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
 
-    void processBankTx(AppTransaction tx, [Map<String, _CategoryDataAccumulator>? targetMap]) {
+    void processSingleBankTx(AppTransaction tx, [Map<String, _CategoryDataAccumulator>? targetMap]) {
       final map = targetMap ?? categoryMap;
       String? categoryName;
       AppReason? categoryReason;
@@ -2460,6 +2542,26 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         subAcc.bankTxs.add(tx);
       } else {
         acc.directBankTxs.add(tx);
+      }
+    }
+
+    void processBankTx(AppTransaction tx, [Map<String, _CategoryDataAccumulator>? targetMap]) {
+      final splits = txVM.getSplitsForTransaction(tx.id);
+      if (splits.isNotEmpty) {
+        for (final split in splits) {
+          final splitTx = tx.copyWith(
+            amount: split.amount,
+            reason: split.reasonName ?? split.customReasonText,
+            reasonId: split.reasonId,
+            categoryId: split.categoryId,
+            subcategoryId: split.subcategoryId,
+            customReasonText: split.customReasonText,
+            note: split.note ?? tx.note,
+          );
+          processSingleBankTx(splitTx, targetMap);
+        }
+      } else {
+        processSingleBankTx(tx, targetMap);
       }
     }
 

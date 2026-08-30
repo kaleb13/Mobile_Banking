@@ -171,15 +171,30 @@ class SmsBroadcastReceiverTest {
     }
 
     @Test
-    fun `parses Telebirr standard transfer with unlocked pattern`() {
+    fun `parses Telebirr standard transfer with unlocked pattern and cleaned counterparty`() {
         val msg = "Dear KALEB \nYou have transferred ETB 100.00 to NAHOM ABRAHAM(251921607264) on 24/04/2024 18:58:01. Your transaction number is BDO6RA9LCM."
         val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
 
         assertNotNull(parsed)
         assertEquals(100.0, parsed!!.amount, 0.001)
         assertTrue(parsed.isDebit)
+        assertEquals("NAHOM ABRAHAM", parsed.counterparty)
         assertFalse(parsed.isLocked)
         assertNull(parsed.lockedReasonName)
+    }
+
+    @Test
+    fun `parses Telebirr incoming transfer and strips masked phone and reference code`() {
+        val msg = "Dear Kaleb \nYou have received ETB 1.00 from kaleb teklemariyam(2519****9104) 101813 on 30/08/2026 21:29:13. Your transaction number is DHU9AZIHIL. Your current E-Money Account balance is ETB 4.32.\nThank you for using telebirr\nEthio telecom"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(1.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("kaleb teklemariyam", parsed.counterparty)
+        assertEquals("DHU9AZIHIL", parsed.txReference)
+        assertEquals(4.32, parsed.totalBalance, 0.001)
+        assertFalse(parsed.isLocked)
     }
 
     @Test

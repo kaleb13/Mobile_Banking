@@ -10,6 +10,7 @@ import '../models/expense_definition.dart';
 import '../models/cash_transaction.dart';
 import '../models/saving_goal.dart';
 import '../models/transaction_attachment.dart';
+import '../models/transaction_split.dart';
 import 'sms_batch_parser.dart';
 import 'bank_senders.dart';
 import '../utils/counterparty_matcher.dart';
@@ -54,7 +55,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 28, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 29, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -139,6 +140,24 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   FOREIGN KEY(transactionId) REFERENCES transactions(id) ON DELETE CASCADE
 )
 ''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS transaction_splits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transactionId TEXT NOT NULL,
+  amount REAL NOT NULL,
+  reasonId INTEGER,
+  reasonName TEXT,
+  categoryId INTEGER,
+  subcategoryId INTEGER,
+  customReasonText TEXT,
+  note TEXT,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (transactionId) REFERENCES transactions (id) ON DELETE CASCADE
+);
+''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_splits_tx_id ON transaction_splits(transactionId);');
 
     // Seed 4 core special reasons
     const specialReasonNames = ['Bounce', 'Cash', 'Internal Transfer', 'Loan'];
@@ -451,6 +470,31 @@ CREATE TABLE IF NOT EXISTS app_settings (
     if (oldVersion < 28) {
       await _upgradeToVersion28(db);
     }
+    if (oldVersion < 29) {
+      await _upgradeToVersion29(db);
+    }
+  }
+
+  Future<void> _upgradeToVersion29(Database db) async {
+    try {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS transaction_splits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transactionId TEXT NOT NULL,
+  amount REAL NOT NULL,
+  reasonId INTEGER,
+  reasonName TEXT,
+  categoryId INTEGER,
+  subcategoryId INTEGER,
+  customReasonText TEXT,
+  note TEXT,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (transactionId) REFERENCES transactions (id) ON DELETE CASCADE
+);
+''');
+      await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_splits_tx_id ON transaction_splits(transactionId);');
+    } catch (_) {}
   }
 
   Future<void> _upgradeToVersion28(Database db) async {
@@ -1878,6 +1922,55 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       'notifications',
       where: 'UPPER(sender) = ? AND (reason IS NULL OR reason = "")',
       whereArgs: [bankName.toUpperCase()],
+    );
+  }
+
+  // ──────────────────────────────────────────────
+  // Transaction Splits (Multi-Category Itemization)
+  // ──────────────────────────────────────────────
+
+  /// Returns all transaction splits across all transactions.
+  Future<List<TransactionSplit>> getAllTransactionSplits() async {
+    final db = await instance.database;
+    final rows = await db.query('transaction_splits', orderBy: 'id ASC');
+    return rows.map((r) => TransactionSplit.fromMap(r)).toList();
+  }
+
+  /// Returns all split allocations for a specific transaction ID.
+  Future<List<TransactionSplit>> getSplitsForTransaction(String transactionId) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'transaction_splits',
+      where: 'transactionId = ?',
+      whereArgs: [transactionId],
+      orderBy: 'id ASC',
+    );
+    return rows.map((r) => TransactionSplit.fromMap(r)).toList();
+  }
+
+  /// Atomically saves (replaces) all split allocations for a transaction.
+  Future<void> saveTransactionSplits(
+      String transactionId, List<TransactionSplit> splits) async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'transaction_splits',
+        where: 'transactionId = ?',
+        whereArgs: [transactionId],
+      );
+      for (final s in splits) {
+        await txn.insert('transaction_splits', s.toMap());
+      }
+    });
+  }
+
+  /// Deletes all split allocations for a specific transaction.
+  Future<int> deleteTransactionSplits(String transactionId) async {
+    final db = await instance.database;
+    return await db.delete(
+      'transaction_splits',
+      where: 'transactionId = ?',
+      whereArgs: [transactionId],
     );
   }
 }

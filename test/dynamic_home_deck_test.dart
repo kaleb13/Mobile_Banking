@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_banking_app/models/sender.dart';
 import 'package:mobile_banking_app/models/transaction.dart';
 import 'package:mobile_banking_app/models/reason.dart';
+import 'package:mobile_banking_app/models/transaction_split.dart';
 import 'package:mobile_banking_app/presentation/viewmodels/transactions_view_model.dart';
 import 'package:mobile_banking_app/data/repositories/transaction_repository.dart';
 
@@ -44,6 +45,28 @@ class FakeTxRepo implements TransactionRepository {
   Future<int> deleteUncategorizedTransactionsForBank(String bankName) async => 0;
   @override
   Future<int> deleteUncategorizedNotificationsForBank(String bankName) async => 0;
+  List<TransactionSplit> splits = [];
+
+  @override
+  Future<List<TransactionSplit>> getAllTransactionSplits() async => splits;
+
+  @override
+  Future<List<TransactionSplit>> getSplitsForTransaction(String transactionId) async =>
+      splits.where((s) => s.transactionId == transactionId).toList();
+
+  @override
+  Future<void> saveTransactionSplits(String transactionId, List<TransactionSplit> newSplits) async {
+    splits.removeWhere((s) => s.transactionId == transactionId);
+    splits.addAll(newSplits);
+  }
+
+  @override
+  Future<int> deleteTransactionSplits(String transactionId) async {
+    final count = splits.where((s) => s.transactionId == transactionId).length;
+    splits.removeWhere((s) => s.transactionId == transactionId);
+    return count;
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
