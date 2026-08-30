@@ -1836,13 +1836,9 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
 
     return AppDrawer(
       heightFactor: 0.88,
-      headerCard: AppDrawerHeaderCard(
+      headerCard: const AppDrawerHeaderCard(
         icon: Icons.handshake_outlined,
-        iconColor: _loanType == 'lent' ? AppColors.positive : AppColors.warning,
-        title: 'Create Loan Record',
-        subtitle: _loanType == 'lent'
-            ? 'Track money lent out with SMS repayment monitoring.'
-            : 'Track debt borrowed with SMS repayment monitoring.',
+        title: 'New Loan Record',
       ),
       bottomAction: AppButton.primary(
         text: 'Save Loan Record',
@@ -2435,20 +2431,12 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isLent = widget.loan.loanType == 'lent';
-    final accentColor =
-        isLent ? AppColors.positive : AppColors.warning;
-
     return AppDrawer(
       heightFactor: null,
       isBodyScrollable: false,
-      headerCard: AppDrawerHeaderCard(
+      headerCard: const AppDrawerHeaderCard(
         icon: Icons.payments_outlined,
-        iconColor: accentColor,
-        title: isLent
-            ? 'Record payment from ${widget.loan.personName}'
-            : 'Record repayment to ${widget.loan.personName}',
-        subtitle: '${NumberFormat('#,##0.00').format(widget.loan.remainingAmount)} ETB remaining',
+        title: 'Record Payment',
       ),
       bottomAction: AppButton.primary(
         text: 'Confirm Payment',

@@ -25,32 +25,27 @@ void showCashTransactionActions(
         isBodyScrollable: false,
         headerCard: AppDrawerHeaderCard(
           icon: Icons.receipt_long_rounded,
-          iconColor: AppColors.gold,
           title: title,
-          subtitle: 'ETB ${NumberFormat("#,##0.00").format(amount)}',
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Edit Amount
-            _actionTile(
+            AppDrawerActionTile(
               icon: Icons.edit_rounded,
-              iconColor: AppColors.gold,
-              label: 'Edit Amount',
-              sublabel: 'Change the recorded amount',
+              title: 'Edit Amount',
+              subtitle: 'Change the recorded amount',
               onTap: () {
                 Navigator.pop(context);
                 _showEditAmountDialog(context, viewModel, id, amount);
               },
             ),
-            const SizedBox(height: 10),
 
             // Delete Transaction
-            _actionTile(
-              icon: Icons.delete_rounded,
-              iconColor: AppColors.negative,
-              label: 'Delete Transaction',
-              sublabel: 'Permanently remove this entry',
+            AppDrawerActionTile(
+              icon: Icons.delete_outline_rounded,
+              title: 'Delete Transaction',
+              subtitle: 'Permanently remove this entry',
               onTap: () {
                 Navigator.pop(context);
                 _confirmDelete(context, viewModel, id, title);
@@ -60,71 +55,6 @@ void showCashTransactionActions(
         ),
       );
     },
-  );
-}
-
-Widget _actionTile({
-  required IconData icon,
-  required Color iconColor,
-  required String label,
-  required String sublabel,
-  required VoidCallback onTap,
-}) {
-  return Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.cardRadiusSm,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceElevated,
-          borderRadius: AppRadius.cardRadiusSm,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    sublabel,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textSoft,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    ),
   );
 }
 

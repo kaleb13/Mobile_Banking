@@ -29,6 +29,7 @@ Color _levelGlowColor(int level) {
 /// - [newLevelDescription]  — motivational description for [newLevel]
 /// - [nextLevelName]        — name of the next level, or null if at max
 /// - [nextLevelProgress]    — 0.0–1.0 progress towards the next level
+/// - [isBalanceVisible]     — whether monetary progress / percent should be displayed or masked
 /// - [onContinue]           — callback fired when the user dismisses / taps CTA
 Future<void> showLevelUpModal(
   BuildContext context, {
@@ -37,6 +38,7 @@ Future<void> showLevelUpModal(
   required String newLevelDescription,
   String? nextLevelName,
   double nextLevelProgress = 0.0,
+  bool isBalanceVisible = true,
   VoidCallback? onContinue,
 }) {
   return showModalBottomSheet<void>(
@@ -64,6 +66,7 @@ Future<void> showLevelUpModal(
           newLevelDescription: newLevelDescription,
           nextLevelName: nextLevelName,
           nextLevelProgress: nextLevelProgress,
+          isBalanceVisible: isBalanceVisible,
           onContinue: onContinue,
         ),
       ],
@@ -79,6 +82,7 @@ class _LevelUpSheet extends StatefulWidget {
   final String newLevelDescription;
   final String? nextLevelName;
   final double nextLevelProgress;
+  final bool isBalanceVisible;
   final VoidCallback? onContinue;
 
   const _LevelUpSheet({
@@ -87,6 +91,7 @@ class _LevelUpSheet extends StatefulWidget {
     required this.newLevelDescription,
     required this.nextLevelName,
     required this.nextLevelProgress,
+    this.isBalanceVisible = true,
     this.onContinue,
   });
 
@@ -438,7 +443,7 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
                   final pct = (_barAnim.value * widget.nextLevelProgress * 100)
                       .toStringAsFixed(1);
                   return AppBadge.success(
-                    text: '$pct%',
+                    text: widget.isBalanceVisible ? '$pct%' : '•••%',
                     size: AppBadgeSize.small,
                   );
                 },
@@ -449,7 +454,9 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
           AnimatedBuilder(
             animation: _barAnim,
             builder: (_, __) => CustomProgressBar(
-              progress: _barAnim.value * widget.nextLevelProgress,
+              progress: widget.isBalanceVisible
+                  ? _barAnim.value * widget.nextLevelProgress
+                  : 0.0,
               height: 8,
               backgroundColor: Colors.white.withValues(alpha: 0.08),
               progressColor: AppColors.positive,

@@ -222,9 +222,11 @@ class AnalyticsViewModel extends ChangeNotifier {
           tx.date.month == now.month &&
           tx.date.day == now.day) {
         final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-        final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+        final isPassThrough = tx.resolvedReason?.toLowerCase() == 'pass-through' ||
+            tx.resolvedReason?.toLowerCase() == 'pass through' ||
+            tx.resolvedReason?.toLowerCase() == 'bounce' ||
             tx.resolvedReason?.toLowerCase() == 'internal transfer';
-        if (!isCash && !isBounce) {
+        if (!isCash && !isPassThrough) {
           if (tx.type == 'income') income += tx.amount;
           if (tx.type == 'expense') expense += tx.amount;
         }
@@ -250,9 +252,11 @@ class AnalyticsViewModel extends ChangeNotifier {
     for (final tx in transactions) {
       if (tx.date.year != now.year || tx.date.month != now.month) continue;
       final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-      final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+      final isPassThrough = tx.resolvedReason?.toLowerCase() == 'pass-through' ||
+          tx.resolvedReason?.toLowerCase() == 'pass through' ||
+          tx.resolvedReason?.toLowerCase() == 'bounce' ||
           tx.resolvedReason?.toLowerCase() == 'internal transfer';
-      if (!isCash && !isBounce) {
+      if (!isCash && !isPassThrough) {
         if (tx.type == 'income') income += tx.amount;
         if (tx.type == 'expense') expense += tx.amount;
       }

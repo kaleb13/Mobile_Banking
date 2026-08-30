@@ -7,7 +7,6 @@ import 'manual_transaction_sheet.dart';
 import '../../models/sender.dart';
 import '../../models/transaction.dart';
 import '../../models/scan_window_option.dart';
-import '../../services/bank_senders.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
@@ -57,11 +56,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       context: context,
       builder: (context) {
         return AppDrawer(
-          headerCard: AppDrawerHeaderCard(
+          headerCard: const AppDrawerHeaderCard(
             icon: Icons.analytics_outlined,
-            iconColor: AppColors.positive,
-            title: "30D PNL (${widget.sender.senderName})",
-            subtitle: "30-Day Profit or Loss Calculation",
+            title: "30D PnL",
           ),
           bottomAction: AppButton.primary(
             text: "OK",
@@ -103,19 +100,13 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       _selectedAccountIndex = 0;
     }
 
-    final allTxForSender = txVM.allTransactionsUnfiltered.where((tx) {
-      final matchesBank = BankSenders.isSameBank(tx.name, widget.sender.senderName);
-
-      if (!matchesBank) return false;
-
-      if (accountItems.isNotEmpty && _selectedAccountIndex > 0) {
-        final targetSlot = accountItems[_selectedAccountIndex].simSlot;
-        if (targetSlot != null && tx.simSlot != targetSlot) {
-          return false;
-        }
-      }
-      return true;
-    }).toList();
+    final rawBankTx = txVM.transactionsForSender(widget.sender.senderName);
+    final allTxForSender = (accountItems.isNotEmpty && _selectedAccountIndex > 0)
+        ? rawBankTx.where((tx) {
+            final targetSlot = accountItems[_selectedAccountIndex].simSlot;
+            return targetSlot == null || tx.simSlot == targetSlot;
+          }).toList()
+        : rawBankTx;
 
     final uniqueSenders = allTxForSender
         .map((tx) => tx.sender.trim())
@@ -633,9 +624,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         return AppDrawer(
           headerCard: AppDrawerHeaderCard(
             icon: Icons.refresh_rounded,
-            iconColor: AppColors.positive,
             title: 'Refresh $bankName',
-            subtitle: 'Re-scan SMS records specifically for $bankName.',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

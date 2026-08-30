@@ -124,8 +124,6 @@ class _SingleDatePickerViewState extends State<_SingleDatePickerView> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final subtitleText = widget.customSubtitle ??
-        DateFormat('EEEE, MMMM d, yyyy').format(_selectedDate);
 
     final daysInMonth = DateUtils.getDaysInMonth(_currentMonth.year, _currentMonth.month);
     final firstDayWeekday = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday; // 1=Mon, 7=Sun
@@ -134,9 +132,7 @@ class _SingleDatePickerViewState extends State<_SingleDatePickerView> {
     return AppDrawer(
       headerCard: AppDrawerHeaderCard(
         icon: Icons.calendar_month_rounded,
-        iconColor: AppColors.positive,
         title: widget.title,
-        subtitle: subtitleText,
       ),
       bottomAction: Row(
         children: [
@@ -393,18 +389,6 @@ class _DateRangePickerViewState extends State<_DateRangePickerView> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    String subtitleText;
-    if (_startDate != null && _endDate != null) {
-      final daysCount = _endDate!.difference(_startDate!).inDays + 1;
-      final startFmt = DateFormat('MMM d').format(_startDate!);
-      final endFmt = DateFormat('MMM d, yyyy').format(_endDate!);
-      subtitleText = '$startFmt – $endFmt ($daysCount ${daysCount == 1 ? 'day' : 'days'})';
-    } else if (_startDate != null) {
-      subtitleText = 'Start: ${DateFormat('MMM d, yyyy').format(_startDate!)} (Select end date)';
-    } else {
-      subtitleText = 'Choose your starting date';
-    }
-
     final daysInMonth = DateUtils.getDaysInMonth(_currentMonth.year, _currentMonth.month);
     final firstDayWeekday = DateTime(_currentMonth.year, _currentMonth.month, 1).weekday;
     final leadingEmptyCount = (firstDayWeekday - 1) % 7;
@@ -412,9 +396,7 @@ class _DateRangePickerViewState extends State<_DateRangePickerView> {
     return AppDrawer(
       headerCard: AppDrawerHeaderCard(
         icon: Icons.date_range_rounded,
-        iconColor: AppColors.positive,
         title: widget.title,
-        subtitle: subtitleText,
       ),
       bottomAction: Row(
         children: [

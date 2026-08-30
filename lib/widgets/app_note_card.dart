@@ -133,9 +133,7 @@ class _AppNoteCardState extends State<AppNoteCard> {
         return AppDrawer(
           headerCard: const AppDrawerHeaderCard(
             icon: Icons.attach_file_rounded,
-            iconColor: AppColors.positive,
-            title: 'Attach Media / Receipt',
-            subtitle: 'Upload a picture, receipt, document, or web link',
+            title: 'Attach Media',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

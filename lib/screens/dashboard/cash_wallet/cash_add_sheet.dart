@@ -20,9 +20,7 @@ void showAddCashModal(BuildContext context, CashWalletViewModel viewModel) {
         isBodyScrollable: false,
         headerCard: const AppDrawerHeaderCard(
           icon: Icons.add_circle_outline_rounded,
-          iconColor: AppColors.positive,
           title: 'Add Cash',
-          subtitle: 'Manually add funds to your cash wallet',
         ),
         bottomAction: AppButton.primary(
           text: 'Add to Balance',

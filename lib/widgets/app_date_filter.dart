@@ -403,9 +403,7 @@ class _AppDateFilterSheet extends StatelessWidget {
     return AppDrawer(
       headerCard: AppDrawerHeaderCard(
         icon: Icons.calendar_month_rounded,
-        iconColor: AppColors.positive,
-        title: 'Filter by Date',
-        subtitle: 'Select a time preset or pick a custom range',
+        title: 'Filter Date',
         trailing: !currentValue.isDefault
             ? GestureDetector(
                 onTap: () => onSelected(const AppDateFilterValue.anyTime()),

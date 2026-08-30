@@ -11,6 +11,7 @@ import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_reset_filter_button.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import '../../widgets/app_money_text.dart';
@@ -28,27 +29,44 @@ class TransactionSearchScreen extends StatefulWidget {
 class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+
   String _searchQuery = '';
   String _typeFilter = 'All';
   bool _isBookmarkedOnly = false;
-  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
+  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.last30Days();
   String _senderFilter = 'All Senders';
   String _bankFilter = 'All Banks';
   String _sortBy = 'Date: Newest';
+  int _displayLimit = 50;
 
   int? _selectedSimSlot; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     // Auto-focus search field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
     });
   }
 
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      if (mounted) {
+        setState(() {
+          _displayLimit += 50;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -72,9 +90,10 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       _typeFilter = 'All';
       _selectedSimSlot = null;
       _sortBy = 'Date: Newest';
-      _dateFilterValue = const AppDateFilterValue.anyTime();
+      _dateFilterValue = const AppDateFilterValue.last30Days();
       _senderFilter = 'All Senders';
       _bankFilter = 'All Banks';
+      _displayLimit = 50;
     });
   }
 
@@ -82,17 +101,13 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   Widget build(BuildContext context) {
     final txVM = Provider.of<TransactionsViewModel>(context);
     final allTransactions = txVM.transactions;
-    final allSenders = ['All Senders'];
-    allSenders
-        .addAll(allTransactions.map((t) => t.sender).toSet().toList()..sort());
+    final allSenders = ['All Senders', ...txVM.uniqueSenders];
 
     if (!allSenders.contains(_senderFilter)) {
       _senderFilter = 'All Senders';
     }
 
-    final allBanks = ['All Banks'];
-    allBanks
-        .addAll(allTransactions.map((t) => t.name).toSet().toList()..sort());
+    final allBanks = ['All Banks', ...txVM.uniqueBanks];
 
     if (!allBanks.contains(_bankFilter)) {
       _bankFilter = 'All Banks';
@@ -438,12 +453,16 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       );
     }
 
+    final displayedTransactions = transactions.take(_displayLimit).toList();
+    final bool hasMore = transactions.length > _displayLimit;
+
     return ListView.separated(
+      controller: _scrollController,
       padding: const EdgeInsets.only(top: 4, bottom: 24),
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
-      itemCount: transactions.length,
+      itemCount: displayedTransactions.length + (hasMore ? 1 : 0),
       separatorBuilder: (context, index) => const Divider(
         height: 1,
         thickness: 0.5,
@@ -452,7 +471,24 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         color: AppColors.lightGreySurface,
       ),
       itemBuilder: (context, index) {
-        final tx = transactions[index];
+        if (index == displayedTransactions.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: AppButton.secondary(
+                text: 'Load More (${transactions.length - _displayLimit} remaining)',
+                icon: Icons.expand_more_rounded,
+                onLightSurface: true,
+                onPressed: () {
+                  setState(() {
+                    _displayLimit += 50;
+                  });
+                },
+              ),
+            ),
+          );
+        }
+        final tx = displayedTransactions[index];
         final bool isLatest = index == 0;
         return _buildWhiteTransactionItem(context, tx, isLatest);
       },

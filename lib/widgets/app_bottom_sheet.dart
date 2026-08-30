@@ -99,38 +99,28 @@ class AppBottomSheet extends StatelessWidget {
 
           if (title != null && title!.isNotEmpty) ...[
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title!,
-                        style: AppTypography.heading1.copyWith(
-                          color: context.themeTextPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (subtitle != null && subtitle!.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Text(
-                          subtitle!,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: context.themeTextSecondary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+                  child: Text(
+                    title!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (trailingHeader != null) trailingHeader!,
+                if (trailingHeader != null) ...[
+                  const SizedBox(width: 8),
+                  trailingHeader!,
+                ],
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
           ],
 
           Flexible(

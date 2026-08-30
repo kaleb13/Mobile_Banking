@@ -461,9 +461,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return AppDrawer(
           headerCard: const AppDrawerHeaderCard(
             icon: Icons.currency_exchange_rounded,
-            iconColor: AppColors.positive,
-            title: 'Select Default Currency',
-            subtitle: 'Choose your preferred currency symbol to display across balance and transactions.',
+            title: 'Select Currency',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -545,9 +543,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return AppDrawer(
           headerCard: const AppDrawerHeaderCard(
             icon: Icons.history_rounded,
-            iconColor: AppColors.positive,
-            title: 'SMS Scan History Range',
-            subtitle: 'Choose how far back Shibre is allowed to import and refresh your banking SMS.',
+            title: 'SMS Scan Range',
           ),
           heightFactor: null,
           child: Column(
@@ -570,6 +566,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: AppRadius.cardRadius,
                     child: InkWell(
                       borderRadius: AppRadius.cardRadius,
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
                       onTap: () async {
                         Navigator.pop(sheetCtx);
                         HapticFeedback.lightImpact();
@@ -630,7 +628,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                               child: Icon(
                                 _getScanOptionIcon(option),
-                                color: isSelected ? AppColors.positive : Colors.white70,
+                                color: isSelected ? AppColors.positive : Colors.white.withValues(alpha: 0.70),
                                 size: 18,
                               ),
                             ),
@@ -645,7 +643,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         child: Text(
                                           option.title,
                                           style: TextStyle(
-                                            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.95),
+                                            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.90),
                                             fontSize: 14,
                                             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                                           ),
@@ -675,21 +673,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   Text(
                                     option.subtitle,
                                     style: TextStyle(
-                                      color: isSelected
-                                          ? AppColors.positive.withValues(alpha: 0.8)
-                                          : AppColors.textSecondary,
+                                      color: Colors.white.withValues(alpha: 0.40),
                                       fontSize: 11.5,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            if (isSelected)
-                              const Icon(
-                                Icons.check_circle_rounded,
-                                color: AppColors.positive,
-                                size: 20,
-                              ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                              color: isSelected ? AppColors.positive : Colors.white24,
+                              size: isSelected ? 20 : 18,
+                            ),
                           ],
                         ),
                       ),

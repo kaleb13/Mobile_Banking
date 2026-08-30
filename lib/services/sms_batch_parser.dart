@@ -5,6 +5,7 @@ import '../models/transaction.dart';
 import '../models/parsed_sms_result.dart';
 import '../models/app_notification.dart';
 import '../models/sender.dart';
+import '../utils/counterparty_matcher.dart';
 import 'sms_service.dart';
 import 'bank_senders.dart';
 import 'telebirr_parser.dart';
@@ -231,7 +232,28 @@ class SmsBatchParser {
         } else {
           final sKey = parsed.counterparty.toLowerCase().trim();
           final tKey = parsed.type.toLowerCase().trim();
-          final matchedRule = ruleLookup['${sKey}_$tKey'] ?? ruleLookup[sKey];
+          AutoReasonRule? matchedRule = ruleLookup['${sKey}_$tKey'] ?? ruleLookup[sKey];
+
+          if (matchedRule == null) {
+            final norm = CounterpartyMatcher.normalize(parsed.counterparty).toLowerCase();
+            matchedRule = ruleLookup['${norm}_$tKey'] ?? ruleLookup[norm];
+          }
+
+          if (matchedRule == null) {
+            final phoneKey = CounterpartyMatcher.extractPhoneKey(parsed.counterparty);
+            if (phoneKey != null) {
+              for (final rule in params.autoReasonRules) {
+                final rulePhone = CounterpartyMatcher.extractPhoneKey(rule.sender);
+                if (rulePhone == phoneKey) {
+                  if (rule.type == null || rule.type == parsed.type) {
+                    matchedRule = rule;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
           if (matchedRule != null) {
             resolvedReasonId = matchedRule.id;
             resolvedReasonName = matchedRule.name;

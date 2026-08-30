@@ -1,0 +1,129 @@
+{
+  "app": "Shibre",
+  "exportType": "unrecognized_sms",
+  "developerContact": "@zkaleb",
+  "exportedAt": "2026-08-28T14:57:30.707461",
+  "bankFilter": "All",
+  "count": 17,
+  "messages": [
+    {
+      "id": "c5a4002c7d47a98f5ae60ec1a7237db4052080c4cca26fd4c80b4ec5b77b8151",
+      "sender": "CBE",
+      "displaySender": "CBE",
+      "body": "Dear Kaleab Afesha Abayneh You have received ETB 220.00 from account 1********4618 (Amanuel Mandefro Kebede) to your account 1********6766. Your current balance is ETB1,879.35. Thanks for Banking with CBE. https://mbreciept.cbe.com.et/v2-hfHCxGInudqmcjGP5LzF  for feedback: https://forms.gle/kGNGQpG3mQCCk3iD6",
+      "date": "2026-08-28T13:57:01.000"
+    },
+    {
+      "id": "d547b84e41530e5eb87a8c91a30abdc69b63f3dec7a9e744fdca85ef9ea6b549",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear Customer \nCongratulations! Additional Thank you Gift Package:500MB from telebirr is added to your service number. The service offer is valid until July 26, 2026.",
+      "date": "2026-07-25T20:59:44.940"
+    },
+    {
+      "id": "1d1c0b68afb6daad02f86c80393bf69736b6dd97c7525a233c7a056a330e594e",
+      "sender": "Ahadu Bank",
+      "displaySender": "Ahadu Bank",
+      "body": "Dear Customer Your One time  password is = 404322 Ahadu Bank S.C",
+      "date": "2026-04-24T06:33:02.293"
+    },
+    {
+      "id": "dabe0817df7d455ab9435ba07db186bbf4b53057d8fc37de9732b395a0d87d46",
+      "sender": "Ahadu Bank",
+      "displaySender": "Ahadu Bank",
+      "body": "Dear Customer Your One time  password is = 124114 Ahadu Bank S.C",
+      "date": "2026-04-22T05:50:31.879"
+    },
+    {
+      "id": "0f0b41016e46abaa5570782a07a6f768dcaf1ac8a7a9d8405c5d23c67baac60c",
+      "sender": "Ahadu Bank",
+      "displaySender": "Ahadu Bank",
+      "body": "Dear Customer Your One time  password is = 379634 Ahadu Bank S.C",
+      "date": "2026-04-22T05:49:31.723"
+    },
+    {
+      "id": "8f29574f6db631cc4568a690c2ff1450b5355541c9d9e33bfa6a902e9c4c6b38",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear Customer\nYour PIN or password will be locked if another attempt fails. Please check and try again. \nThank you for using telebirr \nEthio telecom",
+      "date": "2026-04-09T12:31:10.332"
+    },
+    {
+      "id": "9a3579117552e0bd281680ecc97c1246e0e2ba12fe0310feab7a4600a164da8d",
+      "sender": "Ahadu Ebirr",
+      "displaySender": "Ahadu Ebirr",
+      "body": "[-[--EBIRR-AHADU--]-] \n Welcome, you have successfully registered and activated your account.",
+      "date": "2026-01-28T09:47:43.127"
+    },
+    {
+      "id": "96f19e1fe13746d4401e025f66fdcea98f6c79390e5619118aa55718f1aa6376",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear  YITBAREK AFESHA\nYour telebirr account status has been changed from Active to Closed on 2026-01-08 10:50:49.\nThank you for using telebirr\nEthio telecom",
+      "date": "2026-01-08T10:50:51.450"
+    },
+    {
+      "id": "d72f800156181aa8599632220275f09b88cf07d74036f41d39a727c5a5aadee6",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear customer, you received 7 points from 251973150274 Thank you!",
+      "date": "2026-01-05T11:15:09.943"
+    },
+    {
+      "id": "bca723586e51b197fe3fddf67115b7405db7cfc587a1b04e76b9d42e303814e1",
+      "sender": "BOA",
+      "displaySender": "BOA",
+      "body": "Dear Customer, Your ATM Card is ready. Please collect your card from TULU DIMTU CONDOMIN BR during working hours. Bank of Abyssinia! The choice for all!",
+      "date": "2024-10-24T13:30:10.041"
+    },
+    {
+      "id": "e94ef8b53f7d1942d3237f114071f3ff89b53790d15806cfbef9e9cbfc27ad18",
+      "sender": "BOA",
+      "displaySender": "BOA",
+      "body": "Dear Customer,  Your BOA Mobile Password is:DgDpUrrR   Bank of Abyssinia. The Choice for All.\n for further enquiries please call us Toll free (24/7) on 8397.",
+      "date": "2024-10-17T17:44:03.018"
+    },
+    {
+      "id": "58e9024d7c2a4307a3cbf1f7e0fa0938f34e4bb9a00fffc7b4283d3c5ec2955d",
+      "sender": "BOA",
+      "displaySender": "BOA",
+      "body": "Dear Customer,\nYour BOA Mobile Banking Password is: DgDpUrrR. Bank of Abyssinia. The Choice for All.\nFor Further Enquiries Please Call Us Toll Free (24/7) on 8397.",
+      "date": "2024-10-17T17:25:29.382"
+    },
+    {
+      "id": "262cf8add2b8ce3385f72be542b67186e0e370d94823aa0569fb7dcf6b043085",
+      "sender": "CBEBirr",
+      "displaySender": "CBEBirr",
+      "body": "Dear Customer,you have received 100.00Br. from 0939382289 - mekides marie yirsaw on 21/08/24 13:54.Please collect the money from  CBE Birr agent using 05282756 code before 05/09/24 13:54.Thank you!",
+      "date": "2024-08-21T13:54:20.788"
+    },
+    {
+      "id": "d940e36fadff7154f68bc8ed0bfc332f0faab2d3a66931c3b3a1d6d9169f4292",
+      "sender": "telebirr",
+      "displaySender": "Telebirr",
+      "body": "Dear Customer\nYour VISA card number has been successfully created. To get your card number, please log in to telebirr SuperApp and click on the My Visa menu.\nThank you for using telebirr\nEthio telecom",
+      "date": "2024-08-20T09:31:05.691"
+    },
+    {
+      "id": "c39f1aaf2a6066ef85baa7d371aebad9011fac4851372f077bcc5b0bc6c30127",
+      "sender": "CBE",
+      "displaySender": "CBE",
+      "body": "Please download CBE Android application from Market Place and use Key AAL8GBK8JMV4ID to start activation",
+      "date": "2024-07-31T17:20:29.425"
+    },
+    {
+      "id": "5b1bd0e6b00eb7fa07eeca03b4bb77f53d5a5a4ee0f37b763e845077db1f2e84",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear Customer\nYour security question and Answer Successfully set. If you forget your PIN use the following steps to reset.\nEnter mobile number>Select forget PIN>select “Get code” then enter the verification code and select next button> \nAnswer the security question that you filled before and select submit button > finished. You will receive a new PIN via SMS from 127.\nThank you for using telebirr!\nEthio telecom",
+      "date": "2024-07-16T10:41:03.530"
+    },
+    {
+      "id": "d6038498cde19e0b9d01761642ea3d238a2579cd068aefa5b515f81981d6916c",
+      "sender": "CBE",
+      "displaySender": "CBE",
+      "body": "Please download CBE Android application from Market Place and use Key AA5VTWNGOHLS19 to start activation",
+      "date": "2024-06-21T11:07:48.726"
+    }
+  ]
+}

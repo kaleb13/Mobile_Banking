@@ -108,13 +108,10 @@ class AppTransaction {
   bool get hasLinks => extractedLinks.isNotEmpty;
 
   /// True when this transaction was auto-created with an immutable system reason from SMS
-  /// (Telebirr Airtime, Telebirr Package, Telebirr Sanduq/Savings, or Internal Transfer).
+  /// (Telebirr Airtime, Telebirr Package, Telebirr Sanduq/Savings, or actively linked transaction).
   bool get isReasonLocked {
-    final resReason = resolvedReason?.trim().toLowerCase();
-    final rReason = reason?.trim().toLowerCase();
-    if (resReason == 'internal transfer' ||
-        rReason == 'internal transfer' ||
-        (linkedTransactionId != null && linkedTransactionId!.isNotEmpty)) {
+    // 1. Actively linked to another transaction (e.g. linked internal transfer pair)
+    if (linkedTransactionId != null && linkedTransactionId!.isNotEmpty) {
       return true;
     }
 

@@ -29,7 +29,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     'loan': 'Track loans, credit lines & debt repayments',
     'internal transfer': 'Transfer money between your accounts',
     'cash': 'Cash wallet & manual cash expenses',
-    'bounce': "Pass through money that doesn't belong to you",
+    'pass-through': "Pass-through money that doesn't belong to you",
+    'pass through': "Pass-through money that doesn't belong to you",
+    'bounce': "Pass-through money that doesn't belong to you",
   };
 
   @override
@@ -142,16 +144,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       builder: (sheetCtx) {
         return AppDrawer(
           headerCard: AppDrawerHeaderCard(
-            icon: Icons.category_outlined,
-            iconColor: AppColors.positive,
+            icon: AppColors.getCategoryIcon(reason.name),
             title: reason.name,
-            subtitle: isSubProtected
-                ? 'System Locked Reason'
-                : isTopProtected
-                    ? 'System Category'
-                    : reason.isSubcategory
-                        ? 'Subcategory Options'
-                        : 'Category Options',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -173,71 +167,39 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                     style: TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                 ),
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: AppRadius.cardRadius,
-                  ),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-                    leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
-                    title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
+                AppDrawerActionTile(
+                  icon: Icons.add_circle_outline_rounded,
+                  title: 'Add Subcategory',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _showAddCategoryDialog(context, txVM, parentCategory: reason);
+                  },
+                ),
+              ] else ...[
+                AppDrawerActionTile(
+                  icon: Icons.edit_outlined,
+                  title: 'Edit / Rename',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _showAddCategoryDialog(context, txVM, existing: reason);
+                  },
+                ),
+                if (reason.isTopLevelCategory)
+                  AppDrawerActionTile(
+                    icon: Icons.add_circle_outline_rounded,
+                    title: 'Add Subcategory',
                     onTap: () {
                       Navigator.pop(sheetCtx);
                       _showAddCategoryDialog(context, txVM, parentCategory: reason);
                     },
                   ),
-                ),
-              ] else ...[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: AppRadius.cardRadius,
-                  ),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-                    leading: const Icon(Icons.edit_outlined, color: Colors.white70),
-                    title: const Text('Edit / Rename', style: TextStyle(color: Colors.white, fontSize: 14)),
-                    onTap: () {
-                      Navigator.pop(sheetCtx);
-                      _showAddCategoryDialog(context, txVM, existing: reason);
-                    },
-                  ),
-                ),
-                if (reason.isTopLevelCategory)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
-                      borderRadius: AppRadius.cardRadius,
-                    ),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-                      leading: const Icon(Icons.add_circle_outline_rounded, color: AppColors.positive),
-                      title: const Text('Add Subcategory', style: TextStyle(color: AppColors.positive, fontSize: 14, fontWeight: FontWeight.bold)),
-                      onTap: () {
-                        Navigator.pop(sheetCtx);
-                        _showAddCategoryDialog(context, txVM, parentCategory: reason);
-                      },
-                    ),
-                  ),
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.negative.withValues(alpha: 0.08),
-                    borderRadius: AppRadius.cardRadius,
-                  ),
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-                    leading: const Icon(Icons.delete_outline_rounded, color: AppColors.negative),
-                    title: const Text('Delete', style: TextStyle(color: AppColors.negative, fontSize: 14, fontWeight: FontWeight.bold)),
-                    onTap: () {
-                      Navigator.pop(sheetCtx);
-                      _confirmDeleteCategory(context, txVM, reason);
-                    },
-                  ),
+                AppDrawerActionTile(
+                  icon: Icons.delete_outline_rounded,
+                  title: reason.isTopLevelCategory ? 'Delete Category' : 'Delete Subcategory',
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _confirmDeleteCategory(context, txVM, reason);
+                  },
                 ),
               ],
             ],
@@ -343,7 +305,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.positive, size: 14),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.50), size: 14),
           const SizedBox(width: 6),
           Text(
             title,
@@ -470,6 +432,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                           borderRadius: BorderRadius.circular(10),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(10),
+                            onTap: () => _showCategoryOptionsModal(context, txVM, sub),
                             onLongPress: () => _showCategoryOptionsModal(context, txVM, sub),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

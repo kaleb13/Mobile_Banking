@@ -156,9 +156,15 @@ class BankSenders {
     if (lower.contains('pin changed') || lower.contains('password changed')) return true;
     if (lower.contains('pin code has been successfully changed')) return true;
     if (lower.contains('changed your telebirr pin')) return true;
+    // ── OTP / Password / PIN delivery or setup ──────────────────────────────
+    if ((lower.contains('one time') || lower.contains('onetime')) && lower.contains('password')) return true;
+    if (lower.contains('pin or password will be locked') || lower.contains('password will be locked') || lower.contains('pin will be locked')) return true;
+    if (lower.contains('mobile password is') || lower.contains('mobile banking password is')) return true;
+    if (lower.contains('security question') && lower.contains('pin')) return true;
     if (lower.contains('temporary pin') || lower.contains('temporary password')) return true;
     if (lower.contains('initial pin') || lower.contains('initial password')) return true;
     if (lower.contains('your pin is') || lower.contains('your password is') || lower.contains('new pin is')) return true;
+    if (lower.contains('pin or password is wrong') || lower.contains('password is wrong') || lower.contains('pin is wrong')) return true;
 
     // ── Security warnings with PIN / code context ────────────────────────────
     if ((lower.contains('do not share') ||
@@ -244,11 +250,13 @@ class BankSenders {
       return true;
     }
 
-    // 4. Marketing, Lottery, Points, Draws, KYC, Gift Letters
+    // 4. Marketing, Lottery, Points, Draws, KYC, Gift Letters, Bonus Packages
     if (lower.contains('lottery ticket') ||
         lower.contains('lottery id') ||
         lower.contains('received 1 point') ||
-        lower.contains('received point') ||
+        (lower.contains('received') && lower.contains('point')) ||
+        lower.contains('gift package') ||
+        (lower.contains('package:') && lower.contains('added to your service number')) ||
         lower.contains('lucky draw') ||
         lower.contains('spins on superapp') ||
         lower.contains('kyc upgrade') ||
@@ -264,13 +272,17 @@ class BankSenders {
       return true;
     }
 
-    // 5. ATM Cash-Out & Deposit Voucher codes / temporary invitations
+    // 5. ATM Cash-Out & Deposit Voucher codes / Card ready notices / temporary invitations
     if (lower.contains('atm cash out') ||
         lower.contains('cash out voucher') ||
         lower.contains('voucher number is') ||
         lower.contains('deposit voucher code') ||
         lower.contains('voucher code is') ||
         lower.contains('secret word is') ||
+        lower.contains('atm card is ready') ||
+        lower.contains('collect your card') ||
+        lower.contains('visa card number has been') ||
+        lower.contains('my visa menu') ||
         lower.contains('invitation code is') ||
         lower.contains('you have invited')) {
       return true;
@@ -295,26 +307,38 @@ class BankSenders {
         lower.contains('balance is insufficient to comp') ||
         lower.contains('wrong amount') ||
         lower.contains('account you try to transfer is not active') ||
-        lower.contains('account you try to pay is not active')) {
+        lower.contains('account you try to pay is not active') ||
+        lower.contains('failed to authenticate the transaction') ||
+        lower.contains('limit rule')) {
       return true;
     }
 
-    // 8. Account Activations & Welcome Notices
+    // 8. Account Activations, Status & Profile Notices
     if (lower.contains('saving service') ||
         lower.contains('customer status has been change') ||
+        lower.contains('account status has been changed') ||
+        lower.contains('status has been changed from') ||
+        lower.contains('changed to dormant') ||
+        lower.contains('signature on your account') ||
+        lower.contains('update your profile') ||
         lower.contains('registered for mobile banking') ||
         lower.contains('register yourself for') ||
+        lower.contains('successfully registered and activated') ||
         lower.contains('account has been successfully activated') ||
         lower.contains('has been activated successfully') ||
         lower.contains('account is activated successfully') ||
         lower.contains('welcome! we are delighted') ||
+        lower.contains('download cbe android application') ||
+        lower.contains('start activation') ||
         lower.contains('new login to your mobile')) {
       return true;
     }
 
     // 9. Informational balance breakdowns without transaction
     if (lower.contains('customer incentive account balance is') ||
-        lower.contains('pocketmoneyaccount balance is')) {
+        lower.contains('pocketmoneyaccount balance is') ||
+        lower.contains('e-money link bank balance is') ||
+        lower.contains('customer e-money account balance is')) {
       return true;
     }
 

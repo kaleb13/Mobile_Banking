@@ -280,6 +280,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
                   controller: _controller,
                   focusNode: _focusNode,
                   autofocus: widget.autofocus,
+                  cursorColor: isLight ? AppColors.darkCharcoal : AppColors.positive,
                   onChanged: widget.onChanged,
                   onSubmitted: widget.onSubmitted,
                   inputFormatters: [
@@ -364,8 +365,9 @@ class _AppSearchBarState extends State<AppSearchBar> {
     final iconColor = widget.iconColor ??
         (isLight ? AppColors.overlayDark50 : AppColors.textSecondary);
 
-    final buttonBg = widget.backgroundColor ??
-        (isLight ? AppColors.lightGreyBackground : AppColors.surface);
+    final effectiveButtonBg = isLight
+        ? AppColors.lightGreyBackground
+        : (widget.backgroundColor ?? AppColors.buttonSecondary);
 
     if (widget.mode == AppSearchBarMode.pill) {
       if (widget.centerTitle) {
@@ -400,9 +402,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
-                      color: isLight
-                          ? AppColors.lightGreyBackground
-                          : AppColors.buttonSecondary,
+                      color: effectiveButtonBg,
                       borderRadius: BorderRadius.circular(100),
                     ),
                     child: Row(
@@ -460,9 +460,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: isLight
-                      ? AppColors.lightGreyBackground
-                      : AppColors.buttonSecondary,
+                  color: effectiveButtonBg,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Row(
@@ -540,7 +538,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: buttonBg,
+                          color: effectiveButtonBg,
                           shape: BoxShape.circle,
                         ),
                         alignment: Alignment.center,
@@ -594,7 +592,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: buttonBg,
+                  color: effectiveButtonBg,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,

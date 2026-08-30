@@ -42,7 +42,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     this.selectedDay,
     required this.onDaySelected,
     this.onMonthSelected,
-    this.isBalanceVisible = true,
+    this.isBalanceVisible = false,
     this.userLevel = 1,
     this.analysisType = 'All',
   });
@@ -112,9 +112,11 @@ class DailyNetHeatmapWidget extends StatelessWidget {
       if (tx.date.year == selectedDate.year &&
           tx.date.month == selectedDate.month) {
         final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-        final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+        final isPassThrough = tx.resolvedReason?.toLowerCase() == 'pass-through' ||
+            tx.resolvedReason?.toLowerCase() == 'pass through' ||
+            tx.resolvedReason?.toLowerCase() == 'bounce' ||
             tx.resolvedReason?.toLowerCase() == 'internal transfer';
-        if (!isCash && !isBounce) {
+        if (!isCash && !isPassThrough) {
           if (analysisType == 'Expenses') {
             if (tx.type == 'expense') {
               final d = tx.date.day;
@@ -420,9 +422,11 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     for (final tx in bankTransactions) {
       if (tx.date.year == monthDate.year && tx.date.month == monthDate.month) {
         final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-        final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+        final isPassThrough = tx.resolvedReason?.toLowerCase() == 'pass-through' ||
+            tx.resolvedReason?.toLowerCase() == 'pass through' ||
+            tx.resolvedReason?.toLowerCase() == 'bounce' ||
             tx.resolvedReason?.toLowerCase() == 'internal transfer';
-        if (!isCash && !isBounce) {
+        if (!isCash && !isPassThrough) {
           if (analysisType == 'Expenses') {
             if (tx.type == 'expense') {
               final d = tx.date.day;
@@ -604,9 +608,11 @@ class DailyNetHeatmapWidget extends StatelessWidget {
               if (tx.date.year == selectedYear &&
                   tx.date.month == monthIndex + 1) {
                 final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
-                final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
+                final isPassThrough = tx.resolvedReason?.toLowerCase() == 'pass-through' ||
+                    tx.resolvedReason?.toLowerCase() == 'pass through' ||
+                    tx.resolvedReason?.toLowerCase() == 'bounce' ||
                     tx.resolvedReason?.toLowerCase() == 'internal transfer';
-                if (!isCash && !isBounce) {
+                if (!isCash && !isPassThrough) {
                   if (analysisType == 'Expenses') {
                     if (tx.type == 'expense') {
                       hasTx = true;

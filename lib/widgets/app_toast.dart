@@ -37,7 +37,7 @@ class AppToast {
     String? actionLabel,
     VoidCallback? onAction,
     AppToastType type = AppToastType.info,
-    Duration duration = const Duration(milliseconds: 3600),
+    Duration duration = const Duration(milliseconds: 2000),
     IconData? customIcon,
   }) {
     // Dismiss any active toast immediately
@@ -79,7 +79,7 @@ class AppToast {
     Map<String, String>? metadata,
     String? actionLabel,
     VoidCallback? onAction,
-    Duration duration = const Duration(milliseconds: 3600),
+    Duration duration = const Duration(milliseconds: 2000),
   }) {
     show(
       context,
@@ -103,7 +103,7 @@ class AppToast {
     Map<String, String>? metadata,
     String? actionLabel,
     VoidCallback? onAction,
-    Duration duration = const Duration(milliseconds: 3600),
+    Duration duration = const Duration(milliseconds: 2000),
   }) {
     show(
       context,
@@ -127,7 +127,7 @@ class AppToast {
     Map<String, String>? metadata,
     String? actionLabel,
     VoidCallback? onAction,
-    Duration duration = const Duration(milliseconds: 3600),
+    Duration duration = const Duration(milliseconds: 2200),
   }) {
     show(
       context,
@@ -151,7 +151,7 @@ class AppToast {
     Map<String, String>? metadata,
     String? actionLabel,
     VoidCallback? onAction,
-    Duration duration = const Duration(milliseconds: 4200),
+    Duration duration = const Duration(milliseconds: 2600),
   }) {
     show(
       context,
@@ -222,20 +222,20 @@ class _AppToastWidgetState extends State<_AppToastWidget>
   void initState() {
     super.initState();
 
-    // 1. Entry & Exit slide / scale / fade controller
+    // 1. Fast & Snappy Entry & Exit slide / scale / fade controller
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
-      reverseDuration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 200),
+      reverseDuration: const Duration(milliseconds: 150),
     );
 
     _slideAnim = Tween<Offset>(
-      begin: const Offset(0, -0.7),
+      begin: const Offset(0, -0.6),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
         parent: _entryController,
-        curve: Curves.easeOutCubic,
+        curve: Curves.easeOutBack,
         reverseCurve: Curves.easeInCubic,
       ),
     );
@@ -248,7 +248,7 @@ class _AppToastWidgetState extends State<_AppToastWidget>
       ),
     );
 
-    _scaleAnim = Tween<double>(begin: 0.92, end: 1.0).animate(
+    _scaleAnim = Tween<double>(begin: 0.88, end: 1.0).animate(
       CurvedAnimation(
         parent: _entryController,
         curve: Curves.easeOutBack,
@@ -271,8 +271,8 @@ class _AppToastWidgetState extends State<_AppToastWidget>
     // 3. Dynamic Expand / Collapse Morph Controller
     _expandController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 280),
-      reverseDuration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 180),
     );
 
     _expandAnim = CurvedAnimation(
@@ -348,6 +348,19 @@ class _AppToastWidgetState extends State<_AppToastWidget>
     }
   }
 
+  Color get _accentColor {
+    switch (widget.type) {
+      case AppToastType.success:
+        return AppColors.brandGreen;
+      case AppToastType.warning:
+        return AppColors.warning;
+      case AppToastType.error:
+        return AppColors.negative;
+      case AppToastType.info:
+        return AppColors.info;
+    }
+  }
+
   String _resolvedDetailText() {
     if (widget.details != null && widget.details!.isNotEmpty) {
       return widget.details!;
@@ -390,7 +403,7 @@ class _AppToastWidgetState extends State<_AppToastWidget>
                     sigmaY: 8.0 * expandVal,
                   ),
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.40 * expandVal),
+                    color: Colors.black.withValues(alpha: 0.45 * expandVal),
                   ),
                 ),
               ),
@@ -398,237 +411,311 @@ class _AppToastWidgetState extends State<_AppToastWidget>
           },
         ),
 
-        // ── 2. Top Floating Single Source-of-Truth Card ───────────────────────
+        // ── 2. Dynamic Island Single Source-of-Truth Pill/Card ────────────────
         Positioned(
-          top: topPadding + 20, // Comfortable breathing room below status bar
+          top: topPadding + 10,
           left: 16,
           right: 16,
-          child: Material(
-            type: MaterialType.transparency,
-            child: GestureDetector(
-              onVerticalDragUpdate: (details) {
-                if (details.primaryDelta! < -4) {
-                  _handleDismiss();
-                }
-              },
-              child: AnimatedBuilder(
-                animation: _entryController,
-                builder: (context, child) {
-                  return SlideTransition(
-                    position: _slideAnim,
-                    child: FadeTransition(
-                      opacity: _fadeAnim,
-                      child: Transform.scale(
-                        scale: _scaleAnim.value,
-                        child: child,
-                      ),
-                    ),
-                  );
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Material(
+              type: MaterialType.transparency,
+              child: GestureDetector(
+                onVerticalDragUpdate: (details) {
+                  if (details.primaryDelta! < -4) {
+                    _handleDismiss();
+                  }
                 },
                 child: AnimatedBuilder(
-                  animation: Listenable.merge([_progressController, _expandAnim]),
-                  builder: (context, _) {
-                    return GestureDetector(
-                      onTap: () {
-                        if (!_isExpanded) {
-                          _expandToast();
-                        }
-                      },
-                      behavior: HitTestBehavior.opaque,
-                      child: CustomPaint(
-                        foregroundPainter: _CapsuleBorderCountdownPainter(
-                          progress: _progressController.value,
-                          progressColor: AppColors.brandGreen,
-                          trackColor: Colors.white.withValues(alpha: 0.10),
-                          strokeWidth: 2.2,
-                          inset: 4.0,
-                          cornerRadius: AppRadius.card,
+                  animation: _entryController,
+                  builder: (context, child) {
+                    return SlideTransition(
+                      position: _slideAnim,
+                      child: FadeTransition(
+                        opacity: _fadeAnim,
+                        child: Transform.scale(
+                          scale: _scaleAnim.value,
+                          child: child,
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(AppRadius.card),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-                            child: Container(
-                              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceElevated.withValues(alpha: 0.82),
-                                borderRadius: BorderRadius.circular(AppRadius.card),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.35),
-                                    blurRadius: 30,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: AnimatedSize(
-                                duration: const Duration(milliseconds: 260),
-                                curve: Curves.easeOutCubic,
-                                alignment: Alignment.topCenter,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // ── Main Row (Always Identical) ──────────
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        // Leading: Semantic Icon Badge
-                                        Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.14),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Center(
-                                            child: Icon(
-                                              _icon,
-                                              color: Colors.white,
-                                              size: 17,
-                                            ),
-                                          ),
-                                        ),
+                      ),
+                    );
+                  },
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([_progressController, _expandAnim]),
+                    builder: (context, _) {
+                      final expandProgress = _expandAnim.value;
+                      final currentRadius = lerpDouble(100.0, 22.0, expandProgress)!;
+                      final currentMaxWidth = lerpDouble(280.0, 360.0, expandProgress)!;
+                      final currentHPad = lerpDouble(10.0, 16.0, expandProgress)!;
+                      final currentVPad = lerpDouble(6.0, 14.0, expandProgress)!;
 
-                                        const SizedBox(width: 12),
-
-                                        // Middle: Title & Description
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                widget.message,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 12.5,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: -0.2,
-                                                ),
-                                                maxLines: _isExpanded ? null : 1,
-                                                overflow: _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                                              ),
-                                              if (widget.subtitle != null &&
-                                                  widget.subtitle!.isNotEmpty &&
-                                                  !_isExpanded) ...[
-                                                const SizedBox(height: 1.5),
-                                                Text(
-                                                  widget.subtitle!,
-                                                  style: TextStyle(
-                                                    color: Colors.white.withValues(alpha: 0.70),
-                                                    fontSize: 10.5,
-                                                    fontWeight: FontWeight.w400,
-                                                    letterSpacing: -0.1,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-
-                                        const SizedBox(width: 8),
-
-                                        // Trailing: Vertically Centered Close Button 'X'
-                                        GestureDetector(
-                                          behavior: HitTestBehavior.opaque,
-                                          onTap: () {
-                                            HapticFeedback.selectionClick();
-                                            _handleDismiss();
-                                          },
-                                          child: Container(
-                                            width: 26,
-                                            height: 26,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withValues(alpha: 0.12),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Center(
-                                              child: Icon(
-                                                Icons.close_rounded,
-                                                color: Colors.white,
-                                                size: 13,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-
-                                    // ── Expanded Section (Clean & Simple) ────
-                                    ClipRect(
-                                      child: AnimatedCrossFade(
-                                        firstChild: const SizedBox(width: double.infinity, height: 0),
-                                        secondChild: Padding(
-                                          padding: const EdgeInsets.only(top: 14),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Low-opacity clean description text
-                                              Text(
-                                                _resolvedDetailText(),
-                                                style: TextStyle(
-                                                  color: Colors.white.withValues(alpha: 0.70),
-                                                  fontSize: 12.0,
-                                                  fontWeight: FontWeight.w400,
-                                                  height: 1.45,
-                                                  letterSpacing: -0.1,
-                                                ),
-                                              ),
-
-                                              // Optional Standard Badge Key-Values
-                                              if (widget.metadata != null && widget.metadata!.isNotEmpty) ...[
-                                                const SizedBox(height: 12),
-                                                Wrap(
-                                                  spacing: 6,
-                                                  runSpacing: 6,
-                                                  children: widget.metadata!.entries.map((entry) {
-                                                    return AppBadge.neutral(
-                                                      text: '${entry.key}: ${entry.value}',
-                                                      size: AppBadgeSize.small,
-                                                    );
-                                                  }).toList(),
-                                                ),
-                                              ],
-
-                                              // Optional Action Button
-                                              if (widget.actionLabel != null && widget.actionLabel!.isNotEmpty) ...[
-                                                const SizedBox(height: 14),
-                                                AppButton.primary(
-                                                  text: widget.actionLabel!,
-                                                  height: 36,
-                                                  onPressed: () {
-                                                    widget.onAction?.call();
-                                                    _handleDismiss();
-                                                  },
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                        crossFadeState: _isExpanded
-                                            ? CrossFadeState.showSecond
-                                            : CrossFadeState.showFirst,
-                                        duration: const Duration(milliseconds: 240),
-                                      ),
+                      return GestureDetector(
+                        onTap: () {
+                          if (!_isExpanded) {
+                            _expandToast();
+                          }
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: CustomPaint(
+                          foregroundPainter: _CapsuleBorderCountdownPainter(
+                            progress: _progressController.value,
+                            progressColor: _accentColor,
+                            trackColor: Colors.white.withValues(alpha: 0.08),
+                            strokeWidth: 2.0,
+                            inset: 3.0,
+                            cornerRadius: currentRadius,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(currentRadius),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: currentMaxWidth,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: currentHPad,
+                                  vertical: currentVPad,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceElevated.withValues(alpha: 0.90),
+                                  borderRadius: BorderRadius.circular(currentRadius),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.40),
+                                      blurRadius: 24,
+                                      offset: const Offset(0, 8),
                                     ),
                                   ],
+                                ),
+                                child: AnimatedSize(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOutCubic,
+                                  alignment: Alignment.topCenter,
+                                  child: _isExpanded
+                                      ? _buildExpandedContent()
+                                      : _buildCompactIslandContent(),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  /// Compact Dynamic Island Pill Layout
+  Widget _buildCompactIslandContent() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Semantic Icon Dot / Circle
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: _accentColor.withValues(alpha: 0.20),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Icon(
+              _icon,
+              color: _accentColor,
+              size: 13,
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 8),
+
+        // Message & optional subtle subtitle
+        Flexible(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  widget.message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
+                const SizedBox(width: 5),
+                Text(
+                  '•',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    widget.subtitle!,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  /// Expanded Detailed Card Layout
+  Widget _buildExpandedContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Main Header Row ────────────────────────────────────────────────
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Leading Icon Badge
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: _accentColor.withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  _icon,
+                  color: _accentColor,
+                  size: 17,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // Title & Subtitle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.subtitle!,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.70),
+                        fontSize: 11.0,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // Close 'X' Button
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _handleDismiss();
+              },
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // ── Details Body ──────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Text(
+            _resolvedDetailText(),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.70),
+              fontSize: 12.0,
+              fontWeight: FontWeight.w400,
+              height: 1.45,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ),
+
+        // ── Optional Metadata Chips ───────────────────────────────────────
+        if (widget.metadata != null && widget.metadata!.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: widget.metadata!.entries.map((entry) {
+              return AppBadge.neutral(
+                text: '${entry.key}: ${entry.value}',
+                size: AppBadgeSize.small,
+              );
+            }).toList(),
+          ),
+        ],
+
+        // ── Optional Action Button ────────────────────────────────────────
+        if (widget.actionLabel != null && widget.actionLabel!.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          AppButton.primary(
+            text: widget.actionLabel!,
+            height: 36,
+            onPressed: () {
+              widget.onAction?.call();
+              _handleDismiss();
+            },
+          ),
+        ],
       ],
     );
   }

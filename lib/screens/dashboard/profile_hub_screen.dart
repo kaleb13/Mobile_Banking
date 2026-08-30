@@ -105,6 +105,7 @@ class ProfileHubScreen extends StatelessWidget {
                                 newLevelDescription: levelDesc,
                                 nextLevelName: nextLvName,
                                 nextLevelProgress: progress,
+                                isBalanceVisible: isVisible,
                               ),
                               child: Interactive3DBadge(
                                 level: level,
@@ -172,18 +173,20 @@ class ProfileHubScreen extends StatelessWidget {
                                         ],
                                       ),
                                       AppBadge.success(
-                                        text: nextLvName != null
-                                            ? '${(progress * 100).toStringAsFixed(1)}%'
-                                            : 'MAX',
+                                        text: isVisible
+                                            ? (nextLvName != null
+                                                ? '${(progress * 100).toStringAsFixed(1)}%'
+                                                : 'MAX')
+                                            : '•••%',
                                         size: AppBadgeSize.small,
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 14),
 
-                                  // Reusable CustomProgressBar Component
+                                  // Reusable CustomProgressBar Component (Hidden progress when balance is hidden)
                                   CustomProgressBar(
-                                    progress: progress,
+                                    progress: isVisible ? progress : 0.0,
                                     height: 10,
                                     backgroundColor: Colors.white.withValues(alpha: 0.08),
                                     progressColor: AppColors.positive,
@@ -207,7 +210,9 @@ class ProfileHubScreen extends StatelessWidget {
                                           ),
                                         ),
                                         Text(
-                                          'Target: ${fmt.format(targetBal ?? 0)} ETB',
+                                          isVisible
+                                              ? 'Target: ${fmt.format(targetBal ?? 0)} ETB'
+                                              : 'Target: •••••••• ETB',
                                           style: TextStyle(
                                             color: Colors.white.withValues(alpha: 0.5),
                                             fontSize: 11.5,
@@ -383,14 +388,15 @@ class ProfileHubScreen extends StatelessWidget {
   void _showLevelsInfoDialog(BuildContext context) {
     AppDrawer.show(
       context: context,
-      builder: (ctx) => Consumer<AnalyticsViewModel>(
-        builder: (context, analyticsVM, _) {
+      builder: (ctx) => Consumer2<AnalyticsViewModel, SettingsViewModel>(
+        builder: (context, analyticsVM, settingsVM, _) {
           final currentLv = analyticsVM.userLevel;
           final currentLvName = analyticsVM.userLevelName;
           final nextLvName = analyticsVM.nextLevelName;
           final remaining = analyticsVM.remainingToNextLevel;
           final progress = analyticsVM.nextLevelProgress;
           final fmt = NumberFormat('#,##0.00');
+          final isVisible = settingsVM.isBalanceVisible;
 
           const levels = [
             {'level': 1, 'name': 'Survivor', 'range': '≤ 100K ETB', 'badge': 'assets/images/LV1.svg'},
@@ -403,9 +409,7 @@ class ProfileHubScreen extends StatelessWidget {
           return AppDrawer(
             headerCard: const AppDrawerHeaderCard(
               icon: Icons.military_tech_rounded,
-              iconColor: AppColors.gold,
               title: 'Financial Levels',
-              subtitle: 'Earn wealth tiers as your net worth grows',
             ),
             bottomAction: AppButton.primary(
               text: 'Got It',
@@ -455,7 +459,9 @@ class ProfileHubScreen extends StatelessWidget {
                                 const SizedBox(height: 2),
                                 Text(
                                   nextLvName != null
-                                      ? '${(progress * 100).toStringAsFixed(1)}% to Level ${currentLv + 1} ($nextLvName)'
+                                      ? (isVisible
+                                          ? '${(progress * 100).toStringAsFixed(1)}% to Level ${currentLv + 1} ($nextLvName)'
+                                          : '•••• to Level ${currentLv + 1} ($nextLvName)')
                                       : 'Max Financial Level Reached!',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.6),
@@ -469,9 +475,9 @@ class ProfileHubScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
 
-                      // Progress Bar
+                      // Progress Bar (Masked when balance is hidden)
                       CustomProgressBar(
-                        progress: progress,
+                        progress: isVisible ? progress : 0.0,
                         height: 8,
                         backgroundColor: Colors.white.withValues(alpha: 0.1),
                         progressColor: AppColors.positive,
@@ -481,7 +487,9 @@ class ProfileHubScreen extends StatelessWidget {
                       // Remaining Balance Statement
                       Text(
                         nextLvName != null
-                            ? 'You need ${fmt.format(remaining)} ETB more to reach Level ${currentLv + 1} ($nextLvName).'
+                            ? (isVisible
+                                ? 'You need ${fmt.format(remaining)} ETB more to reach Level ${currentLv + 1} ($nextLvName).'
+                                : 'You need •••••••• ETB more to reach Level ${currentLv + 1} ($nextLvName).')
                             : 'Congratulations! You have reached the highest financial level.',
                         style: const TextStyle(
                           color: Colors.white,

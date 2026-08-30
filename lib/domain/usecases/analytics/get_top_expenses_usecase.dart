@@ -31,7 +31,10 @@ class GetTopExpensesUseCase {
       if (tx.type != 'expense') continue;
 
       final resolvedReasonLower = tx.resolvedReason?.toLowerCase();
-      if (resolvedReasonLower == 'bounce' || resolvedReasonLower == 'internal transfer') {
+      if (resolvedReasonLower == 'pass-through' ||
+          resolvedReasonLower == 'pass through' ||
+          resolvedReasonLower == 'bounce' ||
+          resolvedReasonLower == 'internal transfer') {
         continue;
       }
 

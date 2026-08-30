@@ -33,6 +33,7 @@ class InternalTransferPickerSheet extends StatelessWidget {
       if (tx.id == sourceTransaction.id) return false;
       if (tx.type != targetType) return false;
       if (tx.linkedTransactionId != null) return false;
+      if (tx.amount != sourceTransaction.amount) return false;
       if (tx.date.isBefore(cutoffDate) || tx.date.isAfter(futureDate)) {
         return false;
       }
@@ -41,12 +42,9 @@ class InternalTransferPickerSheet extends StatelessWidget {
 
     return AppDrawer(
       heightFactor: 0.85,
-      headerCard: AppDrawerHeaderCard(
+      headerCard: const AppDrawerHeaderCard(
         icon: Icons.sync_alt_rounded,
-        iconColor: AppColors.gold,
-        title: 'Select Linked Transaction',
-        subtitle:
-            'Match with $targetType within 3 days to link this transfer.',
+        title: 'Link Transfer',
       ),
       child: candidates.isEmpty
           ? const Center(

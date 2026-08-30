@@ -139,6 +139,17 @@ class _BankCardActionModalState extends State<BankCardActionModal>
     final int activeAccountCount =
         accounts.where((slot) => !txVM.isAccountPaused(widget.senderName, slot)).length;
 
+    final activeSenders = txVM.activeSenders;
+    final int topDeckIndex = activeSenders.isNotEmpty
+        ? (activeSenders.length.clamp(1, 3) - 1)
+        : -1;
+    final int senderIndex = activeSenders.indexWhere(
+        (s) => s.senderName.toUpperCase() == widget.senderName.toUpperCase());
+    final bool isTopCard =
+        (senderIndex >= 0 && senderIndex == topDeckIndex);
+    final bool isDarkTextTheme =
+        BankCardWidget.isDarkTextTheme(widget.senderName, isTopCard: isTopCard, isPaused: currentPaused);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -192,6 +203,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                               txCount: liveTxCount,
                               isBalanceVisible: effectiveBalanceVisible,
                               isPaused: currentPaused,
+                              isTopCard: isTopCard,
                               accountCount: activeAccountCount,
                               animationFactor: 1.0,
                               showMoreButton: false, // Don't show nested 3-dot inside modal
@@ -200,6 +212,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                               top: 10,
                               right: 10,
                               child: _CloseModalButton(
+                                isDarkTextTheme: isDarkTextTheme,
                                 onTap: () => Navigator.of(context).pop(),
                               ),
                             ),
@@ -499,8 +512,12 @@ class _BankCardActionModalState extends State<BankCardActionModal>
 /// Frosted Close Button inside top-right of Card
 class _CloseModalButton extends StatelessWidget {
   final VoidCallback onTap;
+  final bool isDarkTextTheme;
 
-  const _CloseModalButton({required this.onTap});
+  const _CloseModalButton({
+    required this.onTap,
+    this.isDarkTextTheme = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -514,7 +531,9 @@ class _CloseModalButton extends StatelessWidget {
         width: 30,
         height: 30,
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.28),
+          color: isDarkTextTheme
+              ? AppColors.surface
+              : Colors.black.withValues(alpha: 0.28),
           shape: BoxShape.circle,
         ),
         child: const Icon(

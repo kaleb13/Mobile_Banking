@@ -388,7 +388,7 @@ class AppColors {
     if (cat == 'cash' || cat.contains('atm') || cat.contains('withdrawal')) {
       return chartBronzeAmber;
     }
-    if (cat == 'bounce') {
+    if (cat == 'pass-through' || cat == 'pass through' || cat == 'bounce') {
       return chartCrimson;
     }
     if (cat.contains('cbe') || cat.contains('bank')) {
@@ -404,6 +404,28 @@ class AppColors {
     // 2. Deterministic vibrant color for any undefined/custom reasons
     final hash = cat.codeUnits.fold<int>(0, (prev, elem) => prev + elem);
     return categoryFallbackPalette[hash.abs() % categoryFallbackPalette.length];
+  }
+
+  /// Returns the canonical icon for any category / reason name.
+  static IconData getCategoryIcon(String name) {
+    final lower = name.toLowerCase().trim();
+    if (lower.contains('food') || lower.contains('breakfast') || lower.contains('lunch') || lower.contains('dinner') || lower.contains('bakery') || lower.contains('snack') || lower.contains('restaurant')) return Icons.restaurant;
+    if (lower.contains('drink') || lower.contains('coffee') || lower.contains('tea') || lower.contains('keshir') || lower.contains('beer') || lower.contains('alcohol') || lower.contains('juice') || lower.contains('beverage')) return Icons.local_cafe;
+    if (lower.contains('transport') || lower.contains('taxi') || lower.contains('ride') || lower.contains('fuel') || lower.contains('gas') || lower.contains('vehicle') || lower.contains('transit') || lower.contains('parking')) return Icons.directions_car;
+    if (lower.contains('housing') || lower.contains('rent') || lower.contains('mortgage') || lower.contains('home') || lower.contains('furniture') || lower.contains('repair')) return Icons.home;
+    if (lower.contains('utility') || lower.contains('utilities') || lower.contains('light') || lower.contains('water') || lower.contains('electricity') || lower.contains('garbage') || lower.contains('sewer')) return Icons.lightbulb;
+    if (lower.contains('goods') || lower.contains('shopping') || lower.contains('clothing') || lower.contains('apparel') || lower.contains('electronics') || lower.contains('supermarket') || lower.contains('supplies') || lower.contains('gift')) return Icons.shopping_bag;
+    if (lower.contains('entertainment') || lower.contains('movie') || lower.contains('game') || lower.contains('gaming') || lower.contains('streaming') || lower.contains('event') || lower.contains('hobby')) return Icons.movie;
+    if (lower.contains('health') || lower.contains('medical') || lower.contains('pharmacy') || lower.contains('doctor') || lower.contains('hospital') || lower.contains('salon') || lower.contains('spa') || lower.contains('fitness') || lower.contains('gym')) return Icons.medical_services;
+    if (lower.contains('education') || lower.contains('school') || lower.contains('tuition') || lower.contains('book') || lower.contains('course')) return Icons.school;
+    if (lower.contains('investment') || lower.contains('saving') || lower.contains('deposit') || lower.contains('crypto') || lower.contains('stock')) return Icons.trending_up;
+    if (lower.contains('salary') || lower.contains('wage') || lower.contains('bonus') || lower.contains('freelance') || lower.contains('commission')) return Icons.account_balance_wallet;
+    if (lower.contains('mobile') || lower.contains('internet') || lower.contains('airtime') || lower.contains('package') || lower.contains('wifi') || lower.contains('phone')) return Icons.phone_android;
+    if (lower.contains('loan') || lower.contains('borrow') || lower.contains('lent') || lower.contains('debt') || lower.contains('credit')) return Icons.handshake_outlined;
+    if (lower.contains('cash') || lower.contains('atm') || lower.contains('wallet')) return Icons.payments_outlined;
+    if (lower.contains('pass-through') || lower.contains('pass through') || lower.contains('bounce') || lower.contains('reversal') || lower.contains('refund')) return Icons.undo_rounded;
+    if (lower.contains('internal transfer') || lower.contains('transfer') || lower.contains('swap')) return Icons.swap_horiz_rounded;
+    return Icons.category_outlined;
   }
 
   // ── Gradients ─────────────────────────────────────────────────────────────

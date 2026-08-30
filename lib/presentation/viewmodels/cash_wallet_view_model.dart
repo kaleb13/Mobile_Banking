@@ -89,9 +89,9 @@ class CashWalletViewModel extends ChangeNotifier {
   }
 
   /// Recalculates balance and notifies listeners when bank transactions change.
-  void recalcBalance() {
+  void recalcBalance({bool notify = true}) {
     _recalcBalance();
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   // ── Cash Transactions ─────────────────────────────────────────────────────

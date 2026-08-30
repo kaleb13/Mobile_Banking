@@ -72,14 +72,12 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<bool> getIsBalanceVisible() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('is_balance_visible') ?? true;
+    return false; // Cold start / fresh launch always starts hidden
   }
 
   @override
   Future<void> setIsBalanceVisible(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_balance_visible', value);
+    // Session-only visibility: not persisted across cold restarts
   }
 
   @override

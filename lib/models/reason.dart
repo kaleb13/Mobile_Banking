@@ -17,6 +17,36 @@ class AppReason {
     this.color,
   });
 
+  static const List<String> canonicalCategoryOrder = [
+    'food',
+    'drink',
+    'transportation',
+    'transport',
+    'housing',
+    'utilities',
+    'mobile & internet',
+    'goods',
+    'entertainment',
+    'health & personal care',
+    'education',
+    'investment & savings',
+    'salary',
+  ];
+
+  static int compareCategories(AppReason a, AppReason b) {
+    final aName = a.name.trim().toLowerCase();
+    final bName = b.name.trim().toLowerCase();
+    final aIdx = canonicalCategoryOrder.indexOf(aName);
+    final bIdx = canonicalCategoryOrder.indexOf(bName);
+
+    if (aIdx != -1 && bIdx != -1) {
+      return aIdx.compareTo(bIdx);
+    }
+    if (aIdx != -1) return -1;
+    if (bIdx != -1) return 1;
+    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
+
   bool get isSubcategory => parentId != null;
   bool get isTopLevelCategory => parentId == null && !isSpecial;
 

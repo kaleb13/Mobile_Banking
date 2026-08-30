@@ -18,6 +18,7 @@ import '../../services/sms_batch_parser.dart';
 import '../../services/bank_senders.dart';
 import '../../services/database_service.dart';
 import '../../models/app_notification.dart';
+import '../../utils/counterparty_matcher.dart';
 
 /// TransactionsViewModel — owns all transaction, sender, and reason state.
 ///
@@ -50,27 +51,30 @@ class TransactionsViewModel extends ChangeNotifier {
   /// Only auto-scans once per app session when the DB is empty.
   bool _hasScannedOnce = false;
 
+  // ── Indexed Aggregate Cache for O(1) Instant Lookups ─────────────────────
+  Map<String, double> _cachedSenderBalances = {};
+  Map<String, int> _cachedSenderTxCounts = {};
+  Map<String, List<int>> _cachedBankAccounts = {};
+  Map<String, Map<int, double>> _cachedAccountBalances = {};
+  Map<String, List<AppTransaction>> _cachedBankTransactions = {};
+  List<String> _cachedUniqueSenders = [];
+  List<String> _cachedUniqueBanks = [];
+  List<String> _cachedAllTrackedPersonNames = [];
+  List<int> _cachedDetectedSimSlots = [0];
+  List<AppSender> _cachedActiveSenders = [];
+  List<AppSender> _cachedPausedSenders = [];
+  List<AppTransaction> _cachedUnpausedTransactions = [];
+  List<AppTransaction> _cachedRecent30DaysTransactions = [];
+  double _cachedTotalBalance = 0.0;
+  int _cachedCashTxCount = 0;
+
   // ── Transactions Access ───────────────────────────────────────────────────
 
-  /// Filtered list excluding paused banks and paused accounts — what the UI sees.
-  List<AppTransaction> get transactions {
-    if (_pausedBanks.isEmpty) return _transactions;
-    return _transactions.where((tx) {
-      if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, tx.name))) {
-        return false;
-      }
-      final isPausedAcct = _pausedBanks.any((b) {
-        if (!b.contains(':')) return false;
-        final parts = b.split(':');
-        return BankSenders.isSameBank(parts[0], tx.name) &&
-            parts[1] == '${tx.simSlot}';
-      });
-      if (isPausedAcct) {
-        return false;
-      }
-      return true;
-    }).toList();
-  }
+  /// Filtered list excluding paused banks and paused accounts — what the UI sees (O(1)).
+  List<AppTransaction> get transactions => _cachedUnpausedTransactions;
+
+  /// Pre-filtered slice of the most recent 30 days of transactions (O(1)).
+  List<AppTransaction> get recent30DaysTransactions => _cachedRecent30DaysTransactions;
 
   /// Raw unfiltered list — used internally for loan lookups etc.
   List<AppTransaction> get allTransactionsUnfiltered => _transactions;
@@ -85,52 +89,32 @@ class TransactionsViewModel extends ChangeNotifier {
   List<String> get bankSenderNames =>
       _senders.map((s) => s.senderName).toList();
 
-  List<String> get uniqueSenders {
-    final sSet = <String>{};
-    for (final tx in _transactions) {
-      if (tx.sender.isNotEmpty) sSet.add(tx.sender);
-    }
-    return sSet.toList()..sort();
-  }
+  List<String> get uniqueSenders => _cachedUniqueSenders;
 
-  List<String> get uniqueBanks {
-    final bSet = <String>{};
-    for (final tx in _transactions) {
-      if (tx.name.isNotEmpty) bSet.add(tx.name);
-    }
-    return bSet.toList()..sort();
-  }
+  List<String> get uniqueBanks => _cachedUniqueBanks;
 
-  List<String> get allTrackedPersonNames {
-    final names = <String>{};
-    for (final tx in _transactions) {
-      if (tx.name.trim().isNotEmpty) names.add(tx.name.trim());
-    }
-    return names.toList()..sort();
-  }
+  List<String> get allTrackedPersonNames => _cachedAllTrackedPersonNames;
 
-  /// Returns all transactions matching a sender name.
+  /// Returns all transactions matching a sender name (O(1) map lookup).
   List<AppTransaction> transactionsForSender(String senderName) {
-    return _transactions.where((t) => BankSenders.isSameBank(t.name, senderName)).toList();
+    final canonical = BankSenders.match(senderName) ?? senderName.trim();
+    final key = canonical.toUpperCase();
+    return _cachedBankTransactions[key] ?? const [];
   }
 
-  /// Returns all distinct accounts / SIM slots detected for a bank.
+  /// Returns all distinct accounts / SIM slots detected for a bank (O(1) lookup).
   /// If a bank has no transactions, returns `[0]`.
   List<int> accountsForBank(String bankName) {
-    final txs = transactionsForSender(bankName);
-    if (txs.isEmpty) return [0];
-    final slots = txs.map((t) => t.simSlot).toSet().toList()..sort();
-    return slots.isEmpty ? [0] : slots;
+    final canonical = BankSenders.match(bankName) ?? bankName.trim();
+    final key = canonical.toUpperCase();
+    return _cachedBankAccounts[key] ?? const [0];
   }
 
-  /// Returns the latest balance for a specific SIM slot / account of a bank.
+  /// Returns the latest balance for a specific SIM slot / account of a bank (O(1) lookup).
   double balanceForAccount(String bankName, int simSlot) {
-    final txs = transactionsForSender(bankName).where((t) => t.simSlot == simSlot);
-    final withBal = txs.where((t) => t.totalBalance > 0);
-    if (withBal.isNotEmpty) {
-      return withBal.first.totalBalance;
-    }
-    return 0.0;
+    final canonical = BankSenders.match(bankName) ?? bankName.trim();
+    final key = canonical.toUpperCase();
+    return _cachedAccountBalances[key]?[simSlot] ?? 0.0;
   }
 
   /// Returns transactions for a specific SIM slot / account of a bank.
@@ -225,6 +209,7 @@ class TransactionsViewModel extends ChangeNotifier {
     final key = '$canonical:$simSlot';
     _pausedBanks = {..._pausedBanks, key};
     await _repository.setPausedBanks(_pausedBanks);
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -240,6 +225,7 @@ class TransactionsViewModel extends ChangeNotifier {
       return !BankSenders.isSameBank(b, canonical);
     }).toSet();
     await _repository.setPausedBanks(_pausedBanks);
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -252,39 +238,22 @@ class TransactionsViewModel extends ChangeNotifier {
   }
 
   List<AppSender> get activeSenders =>
-      _senders.where((s) => !isTrackingPaused(s.senderName)).toList();
+      UnmodifiableListView(_cachedActiveSenders);
 
-  List<AppSender> get pausedSenders {
-    final Map<String, AppSender> map = {};
-    for (final s in _senders) {
-      if (isTrackingPaused(s.senderName)) {
-        final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
-        map[canonical.toUpperCase()] = s;
-      }
-    }
-    // Self-healing: Ensure any bank in _pausedBanks is represented in pausedSenders
-    for (final paused in _pausedBanks) {
-      final base = paused.contains(':') ? paused.split(':').first : paused;
-      final canonical = BankSenders.match(base) ?? base.trim();
-      final key = canonical.toUpperCase();
-      if (key.isNotEmpty && !map.containsKey(key)) {
-        map[key] = AppSender(senderName: canonical);
-      }
-    }
-    return map.values.toList();
-  }
+  List<AppSender> get pausedSenders =>
+      UnmodifiableListView(_cachedPausedSenders);
 
   List<String> get orderedWalletNames {
     return [
-      ...activeSenders.map((s) => s.senderName),
+      ..._cachedActiveSenders.map((s) => s.senderName),
       'Cash Wallet',
-      ...pausedSenders.map((s) => s.senderName),
+      ..._cachedPausedSenders.map((s) => s.senderName),
     ];
   }
 
   /// Reorders active bank cards and persists the new order across the app.
   Future<void> reorderActiveSenders(int oldIndex, int newIndex) async {
-    final active = activeSenders;
+    final active = List<AppSender>.from(_cachedActiveSenders);
     if (oldIndex < 0 || oldIndex >= active.length) return;
     if (newIndex < 0 || newIndex > active.length) return;
 
@@ -294,8 +263,9 @@ class TransactionsViewModel extends ChangeNotifier {
     final movedSender = active.removeAt(oldIndex);
     active.insert(newIndex, movedSender);
 
-    final paused = pausedSenders;
+    final paused = _cachedPausedSenders;
     _senders = [...active, ...paused];
+    _recomputeActiveAndPausedSenders();
     notifyListeners();
 
     try {
@@ -364,7 +334,7 @@ class TransactionsViewModel extends ChangeNotifier {
 
   /// Returns true if the top 3 active unpaused wallets are Telebirr, CBE, and CBE Birr in order.
   bool get hasClassicTopThreeDeck {
-    final active = activeSenders;
+    final active = _cachedActiveSenders;
     if (active.length < 3) return false;
     final firstThree =
         active.take(3).map((s) => s.senderName.trim().toUpperCase()).toList();
@@ -376,7 +346,7 @@ class TransactionsViewModel extends ChangeNotifier {
     return isTelebirr && isCbe && isCbeBirr;
   }
 
-  /// Calculates total balance for a sender.
+  /// Calculates total balance for a sender in O(1) time.
   /// For multi-account banks, sums up the latest balance of each active account.
   double balanceForSender(String senderName, {double cashBalance = 0.0}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
@@ -384,20 +354,21 @@ class TransactionsViewModel extends ChangeNotifier {
     }
     if (isTrackingPaused(senderName)) return 0.0;
 
+    final canonical = BankSenders.match(senderName) ?? senderName.trim();
+    final key = canonical.toUpperCase();
+
     final accounts = accountsForBank(senderName);
     if (accounts.length <= 1) {
-      final txs = transactionsForSender(senderName);
-      final withBal = txs.where((t) => t.totalBalance > 0);
-      if (withBal.isNotEmpty) {
-        return withBal.first.totalBalance;
-      }
-      return 0.0;
+      return _cachedSenderBalances[key] ?? 0.0;
     }
 
     double sum = 0.0;
-    for (final slot in accounts) {
-      if (!isAccountPaused(senderName, slot)) {
-        sum += balanceForAccount(senderName, slot);
+    final slotMap = _cachedAccountBalances[key];
+    if (slotMap != null) {
+      for (final slot in accounts) {
+        if (!isAccountPaused(senderName, slot)) {
+          sum += (slotMap[slot] ?? 0.0);
+        }
       }
     }
     return sum;
@@ -409,14 +380,14 @@ class TransactionsViewModel extends ChangeNotifier {
   double totalBalanceForSim(int? simSlot, {double cashBalance = 0.0}) {
     if (simSlot == null) {
       double sum = cashBalance;
-      for (final sender in activeSenders) {
+      for (final sender in _cachedActiveSenders) {
         sum += balanceForSender(sender.senderName);
       }
       return sum;
     }
 
     double sum = 0.0;
-    for (final sender in activeSenders) {
+    for (final sender in _cachedActiveSenders) {
       if (sender.senderName.trim().toUpperCase() == 'CASH WALLET') continue;
       if (!isAccountPaused(sender.senderName, simSlot)) {
         sum += balanceForAccount(sender.senderName, simSlot);
@@ -425,22 +396,13 @@ class TransactionsViewModel extends ChangeNotifier {
     return sum;
   }
 
-  double get totalBalance {
-    double sum = 0.0;
-    for (final sender in activeSenders) {
-      sum += balanceForSender(sender.senderName);
-    }
-    return sum;
-  }
+  double get totalBalance => _cachedTotalBalance;
 
   /// Returns all distinct SIM slots detected across all stored transactions.
-  List<int> get detectedSimSlots {
-    final slots = _transactions.map((t) => t.simSlot).toSet().toList()..sort();
-    return slots.isEmpty ? [0] : slots;
-  }
+  List<int> get detectedSimSlots => _cachedDetectedSimSlots;
 
   /// Whether the app has detected multiple SIM accounts across stored transactions.
-  bool get hasMultipleSims => detectedSimSlots.length > 1;
+  bool get hasMultipleSims => _cachedDetectedSimSlots.length > 1;
 
   /// Returns Telebirr Sanduq / Savings balance for a specific SIM slot.
   /// If [simSlot] is null, returns the accumulated sum of latest Sanduq balances from all active SIM slots.
@@ -479,29 +441,144 @@ class TransactionsViewModel extends ChangeNotifier {
 
   double get telebirrSavingBalance => telebirrSavingBalanceForAccount(null);
 
+  /// Returns transaction count for a sender in O(1) time.
   int txCountForSender(String senderName, {int cashTxCount = 0}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
-      int count = 0;
-      for (var tx in _transactions) {
-        if (tx.reason?.toLowerCase() == 'cash' ||
-            tx.customReasonText?.toLowerCase() == 'cash' ||
-            tx.resolvedReason?.toLowerCase() == 'cash') {
-          count++;
-        }
-      }
-      return count + cashTxCount;
+      return _cachedCashTxCount + cashTxCount;
     }
-    return transactionsForSender(senderName).length;
+    final canonical = BankSenders.match(senderName) ?? senderName.trim();
+    final key = canonical.toUpperCase();
+    return _cachedSenderTxCounts[key] ?? 0;
   }
 
   List<AppTransaction> get activeBankCashWithdrawals {
-    return _transactions.where((t) {
+    return _cachedUnpausedTransactions.where((t) {
       if (t.type != 'expense') return false;
       final reasonStr = (t.reason ?? t.customReasonText ?? t.resolvedReason ?? '')
           .toLowerCase()
           .trim();
       return reasonStr == 'cash';
     }).toList();
+  }
+
+  // ── Indexed Aggregate Computation (Single O(N) pass) ─────────────────────
+
+  void _rebuildAggregateIndices() {
+    final senderBalances = <String, double>{};
+    final senderTxCounts = <String, int>{};
+    final bankAccounts = <String, Set<int>>{};
+    final bankSlotBalances = <String, Map<int, double>>{};
+    final bankTransactions = <String, List<AppTransaction>>{};
+    final uniqueSendersSet = SplayTreeSet<String>((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final uniqueBanksSet = SplayTreeSet<String>((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final allPersonNamesSet = SplayTreeSet<String>((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final allSimSlots = <int>{};
+    int cashReasonCount = 0;
+
+    final unpausedList = <AppTransaction>[];
+    final recent30DaysList = <AppTransaction>[];
+    final cutoff30Days = DateTime.now().subtract(const Duration(days: 30));
+
+    // Single O(N) pass across all transactions in memory
+    for (int i = 0; i < _transactions.length; i++) {
+      final tx = _transactions[i];
+
+      if (tx.sender.isNotEmpty) uniqueSendersSet.add(tx.sender);
+      if (tx.name.isNotEmpty) {
+        uniqueBanksSet.add(tx.name);
+        allPersonNamesSet.add(tx.name.trim());
+      }
+      allSimSlots.add(tx.simSlot);
+
+      final canonicalBank = BankSenders.match(tx.name) ?? tx.name.trim();
+      final bankKey = canonicalBank.toUpperCase();
+
+      // Group transactions by canonical bank key
+      bankTransactions.putIfAbsent(bankKey, () => []).add(tx);
+
+      // Track SIM slots per bank
+      bankAccounts.putIfAbsent(bankKey, () => <int>{}).add(tx.simSlot);
+
+      // Track latest balance per bank & per SIM slot (first occurrence because _transactions is sorted date DESC)
+      if (tx.totalBalance > 0) {
+        senderBalances.putIfAbsent(bankKey, () => tx.totalBalance);
+        bankSlotBalances.putIfAbsent(bankKey, () => <int, double>{});
+        bankSlotBalances[bankKey]!.putIfAbsent(tx.simSlot, () => tx.totalBalance);
+      }
+
+      senderTxCounts[bankKey] = (senderTxCounts[bankKey] ?? 0) + 1;
+
+      final reasonStr = (tx.reason ?? tx.customReasonText ?? tx.resolvedReason ?? '').toLowerCase().trim();
+      if (reasonStr == 'cash') {
+        cashReasonCount++;
+      }
+
+      // Check paused
+      bool isTxPaused = false;
+      if (_pausedBanks.isNotEmpty) {
+        if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, tx.name))) {
+          isTxPaused = true;
+        } else {
+          isTxPaused = _pausedBanks.any((b) {
+            if (!b.contains(':')) return false;
+            final parts = b.split(':');
+            return BankSenders.isSameBank(parts[0], tx.name) && parts[1] == '${tx.simSlot}';
+          });
+        }
+      }
+
+      if (!isTxPaused) {
+        unpausedList.add(tx);
+        if (!tx.date.isBefore(cutoff30Days)) {
+          recent30DaysList.add(tx);
+        }
+      }
+    }
+
+    _cachedSenderBalances = senderBalances;
+    _cachedSenderTxCounts = senderTxCounts;
+    _cachedBankAccounts = bankAccounts.map((k, v) => MapEntry(k, v.toList()..sort()));
+    _cachedAccountBalances = bankSlotBalances;
+    _cachedBankTransactions = bankTransactions;
+    _cachedUniqueSenders = uniqueSendersSet.toList();
+    _cachedUniqueBanks = uniqueBanksSet.toList();
+    _cachedAllTrackedPersonNames = allPersonNamesSet.toList();
+    _cachedDetectedSimSlots = allSimSlots.isEmpty ? [0] : (allSimSlots.toList()..sort());
+    _cachedCashTxCount = cashReasonCount;
+    _cachedUnpausedTransactions = unpausedList;
+    _cachedRecent30DaysTransactions = recent30DaysList;
+
+    _recomputeActiveAndPausedSenders();
+    _recomputeTotalBalance();
+  }
+
+  void _recomputeActiveAndPausedSenders() {
+    _cachedActiveSenders = _senders.where((s) => !isTrackingPaused(s.senderName)).toList();
+
+    final Map<String, AppSender> map = {};
+    for (final s in _senders) {
+      if (isTrackingPaused(s.senderName)) {
+        final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
+        map[canonical.toUpperCase()] = s;
+      }
+    }
+    for (final paused in _pausedBanks) {
+      final base = paused.contains(':') ? paused.split(':').first : paused;
+      final canonical = BankSenders.match(base) ?? base.trim();
+      final key = canonical.toUpperCase();
+      if (key.isNotEmpty && !map.containsKey(key)) {
+        map[key] = AppSender(senderName: canonical);
+      }
+    }
+    _cachedPausedSenders = map.values.toList();
+  }
+
+  void _recomputeTotalBalance() {
+    double sum = 0.0;
+    for (final sender in _cachedActiveSenders) {
+      sum += balanceForSender(sender.senderName);
+    }
+    _cachedTotalBalance = sum;
   }
 
   // ── Category Resolution ─────────────────────────────────────────────────
@@ -561,6 +638,7 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<void> setPausedBanks(Set<String> banks) async {
     _pausedBanks = banks;
     await _repository.setPausedBanks(banks);
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -642,6 +720,7 @@ class TransactionsViewModel extends ChangeNotifier {
       _reasons = results[2] as List<AppReason>;
       _reasonLinks = results[3] as List<AppReasonLink>;
       _pausedBanks = results[4] as Set<String>;
+      _rebuildAggregateIndices();
 
       try {
         _simCards = await SmsService().getSimCards();
@@ -982,6 +1061,7 @@ class TransactionsViewModel extends ChangeNotifier {
   }) async {
     await _repository.deleteAllTransactions();
     _transactions = [];
+    _rebuildAggregateIndices();
     notifyListeners();
     await scanSms(scanWindowOption: scanWindowOption, onProgress: onProgress);
   }
@@ -998,6 +1078,7 @@ class TransactionsViewModel extends ChangeNotifier {
     _reasons = await _repository.getReasons();
     _reasonLinks = [];
     await _repository.deleteAllNotifications();
+    _rebuildAggregateIndices();
     notifyListeners();
     await scanSms(scanWindowOption: ScanWindowOption.allTime, onProgress: onProgress);
   }
@@ -1008,6 +1089,7 @@ class TransactionsViewModel extends ChangeNotifier {
     _transactions = [];
     _pausedBanks = {};
     await _repository.setPausedBanks({});
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1016,6 +1098,7 @@ class TransactionsViewModel extends ChangeNotifier {
     await _repository.deleteAllUserReasons();
     _reasons = await _repository.getReasons();
     _reasonLinks = [];
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1031,6 +1114,7 @@ class TransactionsViewModel extends ChangeNotifier {
     await _repository.insertTransaction(transaction);
     _transactions.insert(0, transaction);
     await _ensureSenderExists(transaction.name);
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1040,6 +1124,7 @@ class TransactionsViewModel extends ChangeNotifier {
     for (final tx in transactions) {
       await _ensureSenderExists(tx.name);
     }
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1060,6 +1145,7 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<void> deleteTransaction(String id) async {
     await _repository.deleteTransaction(id);
     _transactions.removeWhere((t) => t.id == id);
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1106,6 +1192,7 @@ class TransactionsViewModel extends ChangeNotifier {
         customReasonText: customReasonText ?? (resolvedReasonId == null ? resolvedReason : null),
       );
       _transactions[idx] = updated;
+      _rebuildAggregateIndices();
       notifyListeners();
       await _repository.updateTransaction(updated);
     } else {
@@ -1125,6 +1212,7 @@ class TransactionsViewModel extends ChangeNotifier {
         clearSubcategoryId: true,
         clearCustomReason: true,
       );
+      _rebuildAggregateIndices();
       notifyListeners();
     }
   }
@@ -1139,6 +1227,7 @@ class TransactionsViewModel extends ChangeNotifier {
     );
     // Reload to get fresh state
     _transactions = await _repository.getTransactions();
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1151,6 +1240,7 @@ class TransactionsViewModel extends ChangeNotifier {
       _transactions[idx] = _transactions[idx].copyWith(
         isBookmarked: !current,
       );
+      _rebuildAggregateIndices();
       notifyListeners();
       await _repository.setTransactionBookmarked(transactionId, !current);
     }
@@ -1164,6 +1254,7 @@ class TransactionsViewModel extends ChangeNotifier {
         note: note,
         clearNote: note == null,
       );
+      _rebuildAggregateIndices();
       notifyListeners();
       await _repository.updateTransaction(_transactions[idx]);
     }
@@ -1380,7 +1471,7 @@ class TransactionsViewModel extends ChangeNotifier {
           final tx = _transactions[i];
           final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
 
-          if (tx.sender.toLowerCase() == lowerName &&
+          if (CounterpartyMatcher.matches(tx.sender, linkedName) &&
               expectedLinkType == linkType) {
             final newTx = tx.copyWith(
               reasonId: reasonId,
@@ -1442,7 +1533,7 @@ class TransactionsViewModel extends ChangeNotifier {
           final tx = _transactions[i];
           final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
 
-          if (tx.sender.toLowerCase() == lowerName &&
+          if (CounterpartyMatcher.matches(tx.sender, linkedName) &&
               expectedLinkType == linkType &&
               (reasonId == null || tx.reasonId == reasonId)) {
             _transactions[i] = tx.copyWith(
@@ -1489,14 +1580,18 @@ class TransactionsViewModel extends ChangeNotifier {
   // ── Category / Subcategory Helpers ──────────────────────────────────────
 
   /// Top-level user-visible categories (excludes system specials like
-  /// bounce, cash, internal transfer, loan).
-  List<AppReason> get topLevelCategories => _reasons
-      .where((r) =>
-          r.parentId == null &&
-          !r.isSpecial &&
-          !['bounce', 'cash', 'internal transfer', 'loan']
-              .contains(r.name.trim().toLowerCase()))
-      .toList();
+  /// pass-through, cash, internal transfer, loan) ordered by frequent expenses.
+  List<AppReason> get topLevelCategories {
+    final list = _reasons
+        .where((r) =>
+            r.parentId == null &&
+            !r.isSpecial &&
+            !['pass-through', 'pass through', 'bounce', 'cash', 'internal transfer', 'loan']
+                .contains(r.name.trim().toLowerCase()))
+        .toList();
+    list.sort(AppReason.compareCategories);
+    return list;
+  }
 
   /// Subcategories for a given parent category, with loan/borrow filtering
   /// under food/drink parents.

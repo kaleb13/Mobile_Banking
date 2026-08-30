@@ -141,7 +141,12 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
         (isLight ? AppColors.darkCharcoal : Colors.white);
 
     final Color popupBgColor = isLight ? Colors.white : AppColors.surface;
-    final Color itemTextColor = isLight ? AppColors.darkCharcoal : Colors.white;
+    final Color defaultIconColor = isLight
+        ? AppColors.darkCharcoal.withValues(alpha: 0.60)
+        : Colors.white.withValues(alpha: 0.50);
+    final Color defaultTextColor = isLight
+        ? AppColors.darkCharcoal
+        : Colors.white.withValues(alpha: 0.85);
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -187,7 +192,7 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
                     Icon(
                       item.icon,
                       size: hasSubtitle ? 19 : 17,
-                      color: item.iconColor ?? itemTextColor,
+                      color: item.iconColor ?? defaultIconColor,
                     ),
                     const SizedBox(width: 10),
                   ],
@@ -199,9 +204,9 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
                         Text(
                           item.label,
                           style: AppTypography.bodyMedium.copyWith(
-                            color: item.textColor ?? itemTextColor,
+                            color: item.textColor ?? defaultTextColor,
                             fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

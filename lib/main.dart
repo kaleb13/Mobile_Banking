@@ -91,7 +91,7 @@ void main() async {
           update: (context, txVM, cashVM) {
             final vm = cashVM ?? CashWalletViewModel(repository: cashWalletRepo);
             vm.getTransactions = () => txVM.allTransactionsUnfiltered;
-            vm.recalcBalance();
+            vm.recalcBalance(notify: false);
             return vm;
           },
         ),
@@ -122,6 +122,15 @@ void main() async {
               body: body,
               date: date,
             );
+            vm.removeLoanNotification = (candidateName, trackedName, txId) async {
+              await notifsVM.removeNotificationsWhere((n) {
+                final isLoanSender = n.sender.contains('Loan') || n.sender.contains('System');
+                final hasMatch = (candidateName.isNotEmpty && n.body.contains(candidateName)) ||
+                    (trackedName.isNotEmpty && n.body.contains(trackedName)) ||
+                    n.body.contains('Loan Match');
+                return isLoanSender && hasMatch;
+              });
+            };
             // Wire SMS event callback to also reload notifications
             txVM.onSmsEventReceived = () => notifsVM.loadNotifications();
             // Wire notification reconciliation callbacks
@@ -213,18 +222,19 @@ class _MobileBankingAppState extends State<MobileBankingApp>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<SettingsViewModel>(
-      builder: (context, settingsVM, child) {
+    return Selector<SettingsViewModel, ({AppThemeMode themeMode, bool isOnboardingComplete})>(
+      selector: (_, vm) => (themeMode: vm.currentThemeMode, isOnboardingComplete: vm.isOnboardingComplete),
+      builder: (context, data, child) {
         return MaterialApp(
           title: 'Shibre',
-          theme: AppTheme.themeFor(settingsVM.currentThemeMode),
+          theme: AppTheme.themeFor(data.themeMode),
           debugShowCheckedModeBanner: false,
           navigatorKey: appNavigatorKey,
           home: !_checkedOnStart
               ? Scaffold(backgroundColor: AppColors.background)
               : _isLocked
                   ? AppLockScreen(onUnlocked: _unlock)
-                  : !settingsVM.isOnboardingComplete
+                  : !data.isOnboardingComplete
                       ? const OnboardingScreen()
                       : const MainShell(),
         );

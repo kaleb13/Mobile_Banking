@@ -388,8 +388,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             val cursorExp = db.rawQuery(
                 "SELECT SUM(amount) FROM transactions WHERE type = 'expense' AND date >= ? AND date <= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer'))",
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer'))",
                 arrayOf(startIso, endIso)
             )
             if (cursorExp.moveToFirst()) {
@@ -401,8 +401,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             val cursorInc = db.rawQuery(
                 "SELECT SUM(amount) FROM transactions WHERE type = 'income' AND date >= ? AND date <= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer'))",
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer'))",
                 arrayOf(startIso, endIso)
             )
             if (cursorInc.moveToFirst()) {
@@ -470,8 +470,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             val cursorExp = db.rawQuery(
                 "SELECT SUM(amount) FROM transactions WHERE type = 'expense' AND date >= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer'))",
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer'))",
                 arrayOf(startIso)
             )
             if (cursorExp.moveToFirst()) {
@@ -483,8 +483,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             val cursorInc = db.rawQuery(
                 "SELECT SUM(amount) FROM transactions WHERE type = 'income' AND date >= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer'))",
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer'))",
                 arrayOf(startIso)
             )
             if (cursorInc.moveToFirst()) {
@@ -499,8 +499,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
                 "FROM transactions " +
                 "WHERE type = 'expense' AND date >= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
                 "AND (COALESCE(NULLIF(TRIM(customReasonText), ''), TRIM(reason)) IS NOT NULL AND COALESCE(NULLIF(TRIM(customReasonText), ''), TRIM(reason)) != '') " +
                 "GROUP BY cat ORDER BY total DESC LIMIT 1",
                 arrayOf(startIso)
@@ -580,8 +580,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             val cursorExp = db.rawQuery(
                 "SELECT SUM(amount) FROM transactions WHERE type = 'expense' AND date >= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer'))",
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer'))",
                 arrayOf(startIso)
             )
             if (cursorExp.moveToFirst()) {
@@ -593,8 +593,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             val cursorInc = db.rawQuery(
                 "SELECT SUM(amount) FROM transactions WHERE type = 'income' AND date >= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer'))",
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer'))",
                 arrayOf(startIso)
             )
             if (cursorInc.moveToFirst()) {
@@ -609,8 +609,8 @@ class PeriodicReportReceiver : BroadcastReceiver() {
                 "FROM transactions " +
                 "WHERE type = 'expense' AND date >= ? " +
                 "AND (linkedTransactionId IS NULL OR linkedTransactionId = '') " +
-                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
-                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (reason IS NULL OR LOWER(TRIM(reason)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
+                "AND (customReasonText IS NULL OR LOWER(TRIM(customReasonText)) NOT IN ('pass-through', 'pass through', 'bounce', 'internal transfer', 'cash', 'transfer')) " +
                 "AND (COALESCE(NULLIF(TRIM(customReasonText), ''), TRIM(reason)) IS NOT NULL AND COALESCE(NULLIF(TRIM(customReasonText), ''), TRIM(reason)) != '') " +
                 "GROUP BY cat ORDER BY total DESC LIMIT 1",
                 arrayOf(startIso)

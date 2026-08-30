@@ -75,15 +75,103 @@ class TransactionQuickEditActivity : FlutterActivity() {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "getTransactionData" -> {
+                    val currentTx = loadCurrentTransaction(txId, smsBody)
+                    val resolvedTxId = (currentTx["id"] as? String)?.takeIf { it.isNotBlank() } ?: txId
+                    val resolvedBank = (currentTx["name"] as? String)?.takeIf { it.isNotBlank() } ?: bankName
+                    val resolvedAmount = (currentTx["amount"] as? String)?.takeIf { it.isNotBlank() } ?: amount
+                    val resolvedType = (currentTx["type"] as? String)?.takeIf { it.isNotBlank() }
+                        ?: if (direction.contains("From", true)) "income" else "expense"
+                    val resolvedSender = (currentTx["sender"] as? String) ?: ""
+                    val resolvedDate = (currentTx["date"] as? String) ?: ""
+                    val rawAmount = (currentTx["rawAmount"] as? Double) ?: 0.0
+
                     val data = mapOf(
-                        "txId" to txId,
+                        "txId" to resolvedTxId,
                         "smsBody" to smsBody,
-                        "bankName" to bankName,
-                        "amount" to amount,
+                        "bankName" to resolvedBank,
+                        "amount" to resolvedAmount,
+                        "rawAmount" to rawAmount,
+                        "type" to resolvedType,
                         "direction" to direction,
+                        "sender" to resolvedSender,
+                        "date" to resolvedDate,
                         "reasons" to reasons,
                     )
                     result.success(data)
+                }
+
+                "getTransferCandidates" -> {
+                    val candidates = getTransferCandidates(txId, smsBody)
+                    result.success(candidates)
+                }
+
+                "linkInternalTransfer" -> {
+                    val targetTxId = call.argument<String>("targetTxId") ?: ""
+                    if (targetTxId.isNotBlank()) {
+                        val linked = linkInternalTransfer(txId, smsBody, targetTxId)
+                        if (linked) {
+                            setReasonUpdatePending()
+                            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                            if (notifId != -1) notificationManager?.cancel(notifId)
+                            if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
+                            if (targetTxId.isNotBlank()) notificationManager?.cancel(targetTxId.hashCode())
+                            try {
+                                MainActivity.smsEventSink?.success("reasonUpdated")
+                            } catch (_: Exception) {}
+                        }
+                        result.success(linked)
+                    } else {
+                        result.error("INVALID", "Target transaction ID is blank", null)
+                    }
+                    finish()
+                }
+
+                "saveLoan" -> {
+                    val loanType = call.argument<String>("loanType") ?: "lent"
+                    val personName = call.argument<String>("personName") ?: ""
+                    val trackedSenderName = call.argument<String>("trackedSenderName") ?: bankName
+                    val principalAmount = call.argument<Double>("amount") ?: 0.0
+                    val loanDate = call.argument<String>("loanDate") ?: ""
+                    val dueDate = call.argument<String>("dueDate") ?: ""
+                    val note = call.argument<String>("note")
+
+                    val saved = saveLoanRecord(
+                        txId, smsBody, loanType, personName, trackedSenderName,
+                        principalAmount, loanDate, dueDate, note
+                    )
+                    if (saved) {
+                        setReasonUpdatePending()
+                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                        if (notifId != -1) notificationManager?.cancel(notifId)
+                        if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
+                        try {
+                            MainActivity.smsEventSink?.success("reasonUpdated")
+                        } catch (_: Exception) {}
+                    }
+                    result.success(saved)
+                    finish()
+                }
+
+                "saveReasonWithRule" -> {
+                    val reasonName = call.argument<String>("reasonName") ?: ""
+                    val reasonId = call.argument<Int>("reasonId")
+                    val contactName = call.argument<String>("contactName") ?: ""
+                    if (reasonName.isNotBlank()) {
+                        val saved = saveReasonWithRule(txId, smsBody, reasonName, reasonId, contactName)
+                        if (saved) {
+                            setReasonUpdatePending()
+                            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                            if (notifId != -1) notificationManager?.cancel(notifId)
+                            if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
+                            try {
+                                MainActivity.smsEventSink?.success("reasonUpdated")
+                            } catch (_: Exception) {}
+                        }
+                        result.success(saved)
+                    } else {
+                        result.error("INVALID", "Reason name is blank", null)
+                    }
+                    finish()
                 }
 
                 "saveReason" -> {
@@ -94,13 +182,8 @@ class TransactionQuickEditActivity : FlutterActivity() {
                         if (saved) {
                             setReasonUpdatePending()
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
-                            // Dismiss the Android status bar notification banner on save
-                            if (notifId != -1) {
-                                notificationManager?.cancel(notifId)
-                            }
-                            if (txId.isNotBlank()) {
-                                notificationManager?.cancel(txId.hashCode())
-                            }
+                            if (notifId != -1) notificationManager?.cancel(notifId)
+                            if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
                             try {
                                 MainActivity.smsEventSink?.success("reasonUpdated")
                             } catch (_: Exception) {}
@@ -304,6 +387,263 @@ class TransactionQuickEditActivity : FlutterActivity() {
             Log.e(TAG, "saveReasonToTransaction failed", e)
             false
         }
+    }
+
+    private fun loadCurrentTransaction(txId: String, smsBody: String): Map<String, Any?> {
+        return try {
+            val dbPath = File(getDatabasePath(DB_NAME).path)
+            if (!dbPath.exists()) return emptyMap()
+
+            val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READONLY)
+            var result: Map<String, Any?> = emptyMap()
+
+            if (smsBody.isNotBlank()) {
+                val normalizedBody = smsBody.replace(Regex("\\s+"), " ").trim()
+                val cursor = db.rawQuery("SELECT id, name, amount, type, date, sender, category, rawMessage FROM transactions", null)
+                while (cursor.moveToNext()) {
+                    val txRaw = cursor.getString(7) ?: ""
+                    if (txRaw.replace(Regex("\\s+"), " ").trim() == normalizedBody) {
+                        result = mapOf(
+                            "id" to cursor.getString(0),
+                            "name" to cursor.getString(1),
+                            "rawAmount" to cursor.getDouble(2),
+                            "amount" to "ETB " + String.format(java.util.Locale.US, "%,.2f", cursor.getDouble(2)),
+                            "type" to cursor.getString(3),
+                            "date" to cursor.getString(4),
+                            "sender" to cursor.getString(5),
+                            "category" to cursor.getString(6),
+                            "rawMessage" to txRaw
+                        )
+                        break
+                    }
+                }
+                cursor.close()
+            }
+
+            if (result.isEmpty() && txId.isNotBlank()) {
+                val cursor = db.rawQuery(
+                    "SELECT id, name, amount, type, date, sender, category, rawMessage FROM transactions WHERE id = ? OR bankReference = ? LIMIT 1",
+                    arrayOf(txId, txId)
+                )
+                if (cursor.moveToFirst()) {
+                    result = mapOf(
+                        "id" to cursor.getString(0),
+                        "name" to cursor.getString(1),
+                        "rawAmount" to cursor.getDouble(2),
+                        "amount" to "ETB " + String.format(java.util.Locale.US, "%,.2f", cursor.getDouble(2)),
+                        "type" to cursor.getString(3),
+                        "date" to cursor.getString(4),
+                        "sender" to cursor.getString(5),
+                        "category" to cursor.getString(6),
+                        "rawMessage" to (cursor.getString(7) ?: "")
+                    )
+                }
+                cursor.close()
+            }
+
+            db.close()
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "loadCurrentTransaction failed", e)
+            emptyMap()
+        }
+    }
+
+    private fun getTransferCandidates(sourceTxId: String, smsBody: String): List<Map<String, Any?>> {
+        return try {
+            val dbPath = File(getDatabasePath(DB_NAME).path)
+            if (!dbPath.exists()) return emptyList()
+
+            val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READONLY)
+            val currentTx = loadCurrentTransaction(sourceTxId, smsBody)
+            val currentRealId = (currentTx["id"] as? String) ?: sourceTxId
+            val currentType = (currentTx["type"] as? String) ?: "expense"
+            val currentRawAmount = (currentTx["rawAmount"] as? Double) ?: 0.0
+            val targetType = if (currentType.equals("income", ignoreCase = true)) "expense" else "income"
+
+            val candidates = mutableListOf<Map<String, Any?>>()
+            val cursor = if (currentRawAmount > 0.0) {
+                db.rawQuery(
+                    "SELECT id, name, amount, type, date, sender, rawMessage FROM transactions WHERE (linkedTransactionId IS NULL OR linkedTransactionId = '') AND id != ? AND LOWER(type) = LOWER(?) AND ABS(amount - ?) < 0.01 ORDER BY date DESC LIMIT 25",
+                    arrayOf(currentRealId, targetType, currentRawAmount.toString())
+                )
+            } else {
+                db.rawQuery(
+                    "SELECT id, name, amount, type, date, sender, rawMessage FROM transactions WHERE (linkedTransactionId IS NULL OR linkedTransactionId = '') AND id != ? AND LOWER(type) = LOWER(?) ORDER BY date DESC LIMIT 25",
+                    arrayOf(currentRealId, targetType)
+                )
+            }
+            while (cursor.moveToNext()) {
+                candidates.add(
+                    mapOf(
+                        "id" to cursor.getString(0),
+                        "name" to cursor.getString(1),
+                        "amount" to cursor.getDouble(2),
+                        "type" to cursor.getString(3),
+                        "date" to cursor.getString(4),
+                        "sender" to cursor.getString(5),
+                        "rawMessage" to (cursor.getString(6) ?: "")
+                    )
+                )
+            }
+            cursor.close()
+            db.close()
+            candidates
+        } catch (e: Exception) {
+            Log.e(TAG, "getTransferCandidates failed", e)
+            emptyList()
+        }
+    }
+
+    private fun linkInternalTransfer(sourceTxId: String, smsBody: String, targetTxId: String): Boolean {
+        return try {
+            val dbPath = File(getDatabasePath(DB_NAME).path)
+            if (!dbPath.exists()) return false
+
+            val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
+            val currentTx = loadCurrentTransaction(sourceTxId, smsBody)
+            val sourceRealId = (currentTx["id"] as? String) ?: sourceTxId
+
+            // Resolve internal transfer reasonId
+            var internalReasonId: Int? = null
+            val cursorReason = db.rawQuery("SELECT id FROM reasons WHERE LOWER(name) LIKE '%internal%' OR LOWER(name) = 'transfer' LIMIT 1", null)
+            if (cursorReason.moveToFirst()) {
+                internalReasonId = cursorReason.getInt(0)
+            }
+            cursorReason.close()
+
+            // Update source transaction
+            val sourceValues = ContentValues().apply {
+                put("linkedTransactionId", targetTxId)
+                put("reason", "Internal Transfer")
+                if (internalReasonId != null) put("reasonId", internalReasonId)
+            }
+            db.update("transactions", sourceValues, "id = ?", arrayOf(sourceRealId))
+
+            // Update target transaction
+            val targetValues = ContentValues().apply {
+                put("linkedTransactionId", sourceRealId)
+                put("reason", "Internal Transfer")
+                if (internalReasonId != null) put("reasonId", internalReasonId)
+            }
+            db.update("transactions", targetValues, "id = ?", arrayOf(targetTxId))
+
+            // Clean counterpart notifications & cancel Android notification banners
+            try {
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                notificationManager?.cancel(targetTxId.hashCode())
+                notificationManager?.cancel(sourceRealId.hashCode())
+
+                val cursorNotif = db.rawQuery(
+                    "SELECT id, body FROM notifications WHERE transactionId = ? OR id = ? OR transactionId = ?",
+                    arrayOf(targetTxId, targetTxId, sourceRealId)
+                )
+                while (cursorNotif.moveToNext()) {
+                    val nId = cursorNotif.getString(0)
+                    notificationManager?.cancel(nId.hashCode())
+                }
+                cursorNotif.close()
+
+                db.execSQL("UPDATE notifications SET isRead = 1, reason = 'Internal Transfer' WHERE transactionId = ? OR id = ? OR transactionId = ?", arrayOf(targetTxId, targetTxId, sourceRealId))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to cancel counterpart notifications", e)
+            }
+
+            db.close()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "linkInternalTransfer failed", e)
+            false
+        }
+    }
+
+    private fun saveLoanRecord(
+        sourceTxId: String,
+        smsBody: String,
+        loanType: String,
+        personName: String,
+        trackedSenderName: String,
+        principalAmount: Double,
+        loanDate: String,
+        dueDate: String,
+        note: String?
+    ): Boolean {
+        return try {
+            val dbPath = File(getDatabasePath(DB_NAME).path)
+            if (!dbPath.exists()) return false
+
+            val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
+            val currentTx = loadCurrentTransaction(sourceTxId, smsBody)
+            val sourceRealId = (currentTx["id"] as? String) ?: sourceTxId
+
+            val loanValues = ContentValues().apply {
+                put("loanType", loanType)
+                put("personName", personName)
+                put("trackedSenderName", trackedSenderName)
+                put("principalAmount", principalAmount)
+                put("paidAmount", 0.0)
+                put("loanDate", loanDate.ifBlank { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).format(java.util.Date()) })
+                put("dueDate", dueDate.ifBlank { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).format(java.util.Date(System.currentTimeMillis() + 30L * 24 * 3600 * 1000)) })
+                put("linkedTransactionId", sourceRealId)
+                put("status", "active")
+                if (!note.isNullOrBlank()) put("note", note)
+            }
+            val loanId = db.insert("loan_records", null, loanValues)
+
+            // Resolve loan reasonId
+            var loanReasonId: Int? = null
+            val cursorReason = db.rawQuery("SELECT id FROM reasons WHERE LOWER(name) = 'loan' LIMIT 1", null)
+            if (cursorReason.moveToFirst()) loanReasonId = cursorReason.getInt(0)
+            cursorReason.close()
+
+            val txValues = ContentValues().apply {
+                put("reason", "Loan")
+                if (loanReasonId != null) put("reasonId", loanReasonId)
+            }
+            db.update("transactions", txValues, "id = ?", arrayOf(sourceRealId))
+
+            db.close()
+            loanId > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "saveLoanRecord failed", e)
+            false
+        }
+    }
+
+    private fun saveReasonWithRule(
+        txId: String,
+        smsBody: String,
+        reasonName: String,
+        reasonId: Int?,
+        contactName: String
+    ): Boolean {
+        val saved = saveReasonToTransaction(txId, smsBody, reasonName, reasonId)
+        if (saved && contactName.isNotBlank()) {
+            try {
+                val dbPath = File(getDatabasePath(DB_NAME).path)
+                if (dbPath.exists()) {
+                    val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
+                    var rId = reasonId
+                    if (rId == null) {
+                        val cursor = db.rawQuery("SELECT id FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1", arrayOf(reasonName))
+                        if (cursor.moveToFirst()) rId = cursor.getInt(0)
+                        cursor.close()
+                    }
+                    if (rId != null) {
+                        val ruleValues = ContentValues().apply {
+                            put("reasonId", rId)
+                            put("linkedName", contactName.trim())
+                            put("linkType", "counterparty")
+                        }
+                        db.insertWithOnConflict("reason_links", null, ruleValues, SQLiteDatabase.CONFLICT_REPLACE)
+                    }
+                    db.close()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save reason_links rule", e)
+            }
+        }
+        return saved
     }
 
     private fun setReasonUpdatePending() {

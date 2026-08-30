@@ -81,24 +81,6 @@ class SmsService {
     return await Permission.sms.isGranted;
   }
 
-  /// Opens the device's native SMS app focused on the specific sender or thread
-  Future<bool> openSmsInNativeApp({
-    required String sender,
-    String body = '',
-    DateTime? date,
-  }) async {
-    try {
-      final res = await _smsScannerChannel.invokeMethod('openSmsInNativeApp', {
-        'sender': sender,
-        'body': body,
-        'date': date?.millisecondsSinceEpoch,
-      });
-      return res == true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// High-speed native Android query that filters by bank senders and anchor date
   /// on a background thread in native code before crossing to Dart.
   Future<List<RawSmsData>> getBankMessagesFast({

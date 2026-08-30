@@ -29,7 +29,7 @@ class InteractiveBalanceChart extends StatefulWidget {
     this.initialFilter = '30D',
     this.filterTabs = const ['1D', '7D', '30D', '180D', '360D'],
     this.accentColor = AppColors.positive,
-    this.isBalanceVisible = true,
+    this.isBalanceVisible = false,
     this.chartHeight = 120.0,
     this.onFilterChanged,
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

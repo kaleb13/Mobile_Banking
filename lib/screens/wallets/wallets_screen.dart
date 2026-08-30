@@ -253,9 +253,14 @@ class _WalletsScreenState extends State<WalletsScreen>
                                 !settingsVM
                                     .isBankBalanceHidden(sender.senderName);
 
+                        final int topDeckIndex = activeSenders.isNotEmpty
+                            ? (activeSenders.length.clamp(1, 3) - 1)
+                            : -1;
+                        final bool isTop = (index == topDeckIndex);
+
                         final bool isDark = BankCardWidget.isDarkTextTheme(
                             sender.senderName,
-                            isTopCard: false);
+                            isTopCard: isTop);
 
                         return KeyedSubtree(
                           key: ValueKey(sender.senderName),
@@ -267,7 +272,7 @@ class _WalletsScreenState extends State<WalletsScreen>
                               txCount: txCount,
                               isBalanceVisible: cardBalanceVisible,
                               isPaused: false,
-                              isTopCard: false,
+                              isTopCard: isTop,
                               accountCount: activeAccountCount,
                               dragHandle: ReorderableDragStartListener(
                                 index: index,
@@ -540,37 +545,39 @@ class _WalletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settingsVM = Provider.of<SettingsViewModel>(context);
-    final pageOffset = settingsVM.pageOffset;
+    return Selector<SettingsViewModel, bool>(
+      selector: (_, vm) => vm.pageOffset < 0.98,
+      builder: (context, isTransitioning, _) {
+        // During any flight/transition between Home and Wallet (pageOffset < 0.98),
+        // main_shell's overlay handles 100% of the flying cards with ZERO ghost cards underneath.
+        // As soon as user arrives on Wallet Manager (pageOffset >= 0.98),
+        // render the 100% real card widget in-tree.
+        if (isTransitioning) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            height: 172,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: AppRadius.cardRadius,
+            ),
+          );
+        }
 
-    // During any flight/transition between Home and Wallet (pageOffset < 0.98),
-    // main_shell's overlay handles 100% of the flying cards with ZERO ghost cards underneath.
-    // As soon as user arrives on Wallet Manager (pageOffset >= 0.98),
-    // render the 100% real card widget in-tree.
-    if (pageOffset < 0.98) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        height: 172,
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          borderRadius: AppRadius.cardRadius,
-        ),
-      );
-    }
-
-    // Fully expanded real card widget
-    return BankCardWidget(
-      senderName: senderName,
-      balance: balance,
-      txCount: txCount,
-      isBalanceVisible: isBalanceVisible,
-      isPaused: isPaused,
-      accountCount: accountCount,
-      onTap: onTap,
-      onEnterReorderMode: onEnterReorderMode,
-      isTopCard: isTopCard,
-      dragHandle: dragHandle,
-      animationFactor: 1.0,
+        // Fully expanded real card widget
+        return BankCardWidget(
+          senderName: senderName,
+          balance: balance,
+          txCount: txCount,
+          isBalanceVisible: isBalanceVisible,
+          isPaused: isPaused,
+          accountCount: accountCount,
+          onTap: onTap,
+          onEnterReorderMode: onEnterReorderMode,
+          isTopCard: isTopCard,
+          dragHandle: dragHandle,
+          animationFactor: 1.0,
+        );
+      },
     );
   }
 }

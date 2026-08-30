@@ -160,6 +160,18 @@ class NotificationsViewModel extends ChangeNotifier {
     await _repository.ignoreAllNotifications(toIgnore);
   }
 
+  /// Remove notifications matching a predicate from memory and DB
+  Future<void> removeNotificationsWhere(bool Function(AppNotification) test) async {
+    final toRemove = _notifications.where(test).toList();
+    if (toRemove.isEmpty) return;
+    for (final n in toRemove) {
+      _notifications.removeWhere((item) => item.id == n.id);
+      await _repository.deleteNotification(n.id);
+    }
+    _unreadCount = _notifications.where((n) => !n.isRead).length;
+    notifyListeners();
+  }
+
   /// Exports unread notification messages to a JSON file and presents the native
   /// share sheet (attaching the file) and opens Telegram for @zkaleb.
   Future<String?> exportUnreadSmsAndOpenTelegram({String? bankFilter}) async {

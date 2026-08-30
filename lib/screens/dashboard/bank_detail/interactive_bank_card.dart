@@ -234,7 +234,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                         children: [
                           AppBackButton(
                             variant: isDarkTextTheme
-                                ? AppBackButtonVariant.light
+                                ? AppBackButtonVariant.dark
                                 : AppBackButtonVariant.auto,
                           ),
                           Opacity(

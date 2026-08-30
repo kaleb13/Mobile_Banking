@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'reason_transactions_screen.dart';
 import 'package:provider/provider.dart';
 import '../../models/reason.dart';
@@ -55,7 +56,9 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     'loan': 'Track loans, credit lines & debt repayments',
     'internal transfer': 'Transfer money between your accounts',
     'cash': 'Cash wallet & manual cash expenses',
-    'bounce': "Pass through money that doesn't belong to you",
+    'pass-through': "Pass-through money that doesn't belong to you",
+    'pass through': "Pass-through money that doesn't belong to you",
+    'bounce': "Pass-through money that doesn't belong to you",
   };
 
   @override
@@ -249,8 +252,8 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                 _searchQuery = '';
               });
             },
-            backgroundColor: AppColors.surfaceElevated,
-            iconColor: AppColors.positive,
+            backgroundColor: AppColors.drawerCard,
+            iconColor: Colors.white70,
             textColor: Colors.white,
             hintColor: AppColors.textSoft,
           ),
@@ -351,7 +354,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
       padding: const EdgeInsets.only(left: 2, bottom: 4, top: 4),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.positive, size: 12),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.50), size: 12),
           const SizedBox(width: 5),
           Text(
             title,
@@ -378,13 +381,16 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
       iconData = Icons.swap_horiz_rounded;
     } else if (nameLower == 'cash') {
       iconData = Icons.payments_outlined;
-    } else if (nameLower == 'bounce') {
-      iconData = Icons.replay_rounded;
+    } else if (nameLower == 'pass-through' || nameLower == 'pass through' || nameLower == 'bounce') {
+      iconData = Icons.undo_rounded;
     }
 
     final descText = _getSpecialDescription(reason.name);
 
-    return Container(
+    return AnimatedContainer(
+      key: ValueKey('special_${reason.id ?? reason.name}'),
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: isSelected
@@ -392,46 +398,76 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
             : AppColors.drawerCard,
         borderRadius: AppRadius.cardRadius,
       ),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        leading: Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: AppColors.positive.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            iconData,
-            color: AppColors.positive,
-            size: 14,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: AppRadius.cardRadius,
+        child: InkWell(
+          borderRadius: AppRadius.cardRadius,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _selectedReason = reason;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  curve: Curves.easeOutCubic,
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.positive.withValues(alpha: 0.20)
+                        : Colors.white.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    iconData,
+                    color: isSelected ? AppColors.positive : Colors.white.withValues(alpha: 0.70),
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        reason.name,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.90),
+                          fontSize: 13.5,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        descText,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.40),
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                  color: isSelected ? AppColors.positive : Colors.white24,
+                  size: isSelected ? 18 : 16,
+                ),
+              ],
+            ),
           ),
         ),
-        title: Text(
-          reason.name,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.9),
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          descText,
-          style: const TextStyle(color: Colors.white38, fontSize: 10),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: isSelected
-            ? const Icon(Icons.check_circle_rounded, color: AppColors.positive, size: 16)
-            : const Icon(Icons.radio_button_unchecked, color: Colors.white24, size: 14),
-        onTap: () {
-          setState(() {
-            _selectedReason = reason;
-          });
-        },
       ),
     );
   }
@@ -452,7 +488,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     if (lower.contains('mobile') || lower.contains('internet') || lower.contains('airtime')) return Icons.phone_android;
     if (lower.contains('loan')) return Icons.handshake_outlined;
     if (lower.contains('cash')) return Icons.payments_outlined;
-    if (lower.contains('bounce')) return Icons.replay_rounded;
+    if (lower.contains('pass-through') || lower.contains('pass through') || lower.contains('bounce')) return Icons.undo_rounded;
     if (lower.contains('internal transfer')) return Icons.swap_horiz_rounded;
     return Icons.category_outlined;
   }
@@ -462,169 +498,221 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     final isExpanded = _expandedCategoryId == category.id || _searchQuery.isNotEmpty;
     final isCategorySelected = _isSelected(category);
 
-    return Container(
+    return AnimatedContainer(
+      key: ValueKey('cat_${category.id}'),
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOutCubic,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: isCategorySelected
-            ? AppColors.positive.withValues(alpha: 0.08)
+            ? AppColors.positive.withValues(alpha: 0.14)
             : AppColors.drawerCard,
         borderRadius: AppRadius.cardRadius,
       ),
-      child: Column(
-        children: [
-          ListTile(
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-            dense: true,
-            visualDensity: VisualDensity.compact,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            leading: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.positive.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _getCategoryIcon(category.name),
-                color: AppColors.positive,
-                size: 14,
-              ),
-            ),
-            title: Text(
-              category.name,
-              style: TextStyle(
-                color: isCategorySelected ? AppColors.positive : Colors.white,
-                fontSize: 13,
-                fontWeight: isCategorySelected ? FontWeight.bold : FontWeight.w600,
-              ),
-            ),
-            subtitle: Text(
-              '${subcategories.length} subcategories',
-              style: const TextStyle(color: Colors.white38, fontSize: 10),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isCategorySelected)
-                  const Icon(Icons.check_circle_rounded, color: AppColors.positive, size: 16)
-                else
-                  const Icon(Icons.radio_button_unchecked, color: Colors.white24, size: 14),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    // Clicking only the arrow toggles expansion WITHOUT checking/selecting category
-                    setState(() {
-                      _expandedCategoryId = isExpanded ? null : category.id;
-                    });
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    child: Icon(
-                      isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded,
-                      color: Colors.white54,
-                      size: 18,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: AppRadius.cardRadius,
+        child: Column(
+          children: [
+            InkWell(
+              borderRadius: isExpanded
+                  ? BorderRadius.vertical(top: Radius.circular(AppRadius.card))
+                  : AppRadius.cardRadius,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  _selectedReason = category;
+                  if (subcategories.isNotEmpty) {
+                    _expandedCategoryId = isExpanded ? null : category.id;
+                  }
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOutCubic,
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: isCategorySelected
+                            ? AppColors.positive.withValues(alpha: 0.20)
+                            : Colors.white.withValues(alpha: 0.06),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _getCategoryIcon(category.name),
+                        color: isCategorySelected ? AppColors.positive : Colors.white.withValues(alpha: 0.70),
+                        size: 16,
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-            onTap: () {
-              // Clicking category body CHECKS/selects category AND expands if subcategories exist
-              setState(() {
-                _selectedReason = category;
-                if (subcategories.isNotEmpty) {
-                  _expandedCategoryId = isExpanded ? null : category.id;
-                }
-              });
-            },
-          ),
-          if (isExpanded)
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 0, 10, 8),
-              child: Column(
-                children: [
-                  const Divider(color: Colors.white10, height: 1),
-                  const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ReasonTransactionsScreen(reason: category),
-                        ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                      child: Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.list_alt_rounded, color: AppColors.positive, size: 14),
-                          const SizedBox(width: 6),
                           Text(
-                            'View ${category.name} Transactions',
-                            style: const TextStyle(
-                              color: AppColors.positive,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                            category.name,
+                            style: TextStyle(
+                              color: isCategorySelected ? Colors.white : Colors.white.withValues(alpha: 0.90),
+                              fontSize: 13.5,
+                              fontWeight: isCategorySelected ? FontWeight.bold : FontWeight.w600,
                             ),
                           ),
-                          const Spacer(),
-                          const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.positive, size: 11),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${subcategories.length} subcategories',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.40),
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  ...subcategories.map((sub) {
-                    final isSubSelected = _isSelected(sub);
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      decoration: BoxDecoration(
-                        color: isSubSelected
-                            ? AppColors.positive.withValues(alpha: 0.12)
-                            : Colors.white.withValues(alpha: 0.02),
-                        borderRadius: AppRadius.cardRadius,
+                    const SizedBox(width: 8),
+                    Icon(
+                      isCategorySelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                      color: isCategorySelected ? AppColors.positive : Colors.white24,
+                      size: isCategorySelected ? 18 : 16,
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        setState(() {
+                          _expandedCategoryId = isExpanded ? null : category.id;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Icon(
+                          isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.chevron_right_rounded,
+                          color: isCategorySelected ? AppColors.positive : Colors.white54,
+                          size: 18,
+                        ),
                       ),
-                      child: ListTile(
-                        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                        leading: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: AppColors.positive.withValues(alpha: 0.08),
-                            shape: BoxShape.circle,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (isExpanded)
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 0, 10, 8),
+                child: Column(
+                  children: [
+                    const Divider(color: Colors.white10, height: 1),
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ReasonTransactionsScreen(reason: category),
                           ),
-                          child: Icon(
-                            _getCategoryIcon(sub.name != 'General' ? sub.name : category.name),
-                            color: AppColors.positive.withValues(alpha: 0.85),
-                            size: 12,
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.list_alt_rounded, color: AppColors.positive, size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              'View ${category.name} Transactions',
+                              style: const TextStyle(
+                                color: AppColors.positive,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Spacer(),
+                            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.positive, size: 11),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    ...subcategories.map((sub) {
+                      final isSubSelected = _isSelected(sub);
+                      return AnimatedContainer(
+                        key: ValueKey('sub_${sub.id}'),
+                        duration: const Duration(milliseconds: 140),
+                        curve: Curves.easeOutCubic,
+                        margin: const EdgeInsets.only(bottom: 4),
+                        decoration: BoxDecoration(
+                          color: isSubSelected
+                              ? AppColors.positive.withValues(alpha: 0.14)
+                              : Colors.white.withValues(alpha: 0.03),
+                          borderRadius: AppRadius.cardRadius,
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: AppRadius.cardRadius,
+                          child: InkWell(
+                            borderRadius: AppRadius.cardRadius,
+                            splashColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              setState(() {
+                                _selectedReason = sub;
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 140),
+                                    curve: Curves.easeOutCubic,
+                                    width: 26,
+                                    height: 26,
+                                    decoration: BoxDecoration(
+                                      color: isSubSelected
+                                          ? AppColors.positive.withValues(alpha: 0.20)
+                                          : Colors.white.withValues(alpha: 0.05),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      _getCategoryIcon(sub.name != 'General' ? sub.name : category.name),
+                                      color: isSubSelected
+                                          ? AppColors.positive
+                                          : Colors.white.withValues(alpha: 0.65),
+                                      size: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      sub.name,
+                                      style: TextStyle(
+                                        color: isSubSelected
+                                            ? Colors.white
+                                            : Colors.white.withValues(alpha: 0.85),
+                                        fontSize: 12.5,
+                                        fontWeight: isSubSelected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    isSubSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                                    color: isSubSelected ? AppColors.positive : Colors.white12,
+                                    size: isSubSelected ? 16 : 14,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                        title: Text(
-                          sub.name,
-                          style: TextStyle(
-                            color: isSubSelected ? AppColors.positive : Colors.white70,
-                            fontSize: 12,
-                            fontWeight: isSubSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                        trailing: isSubSelected
-                            ? const Icon(Icons.check_circle_rounded,
-                                color: AppColors.positive, size: 14)
-                            : const Icon(Icons.radio_button_unchecked, color: Colors.white12, size: 12),
-                        onTap: () {
-                          setState(() {
-                            _selectedReason = sub;
-                          });
-                        },
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 4),
+                      );
+                    }),
+                    const SizedBox(height: 4),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: AppButton.secondary(
@@ -637,10 +725,11 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                         onPressed: () => _showAddCategoryDialog(context, txVM, parentCategory: category),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

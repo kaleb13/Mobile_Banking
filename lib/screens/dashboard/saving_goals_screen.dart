@@ -609,21 +609,6 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   void _showGoalOptionsSheet(
       BuildContext context, SavingGoal goal, SavingsViewModel savingsVM) {
-    final analyticsVM = Provider.of<AnalyticsViewModel>(context, listen: false);
-    final feasibility = savingsVM.goalFeasibility(
-      goal,
-      liveBalances: analyticsVM.latestBalancesMap,
-      totalBalance: analyticsVM.totalBalance,
-    );
-    final isOnHold = goal.status == 'on_hold';
-    final allocatedFromBanks = isOnHold ? 0.0 : feasibility.availableAmount;
-    final totalCovered =
-        (goal.savedAmount + allocatedFromBanks).clamp(0.0, goal.targetAmount);
-    final fraction = goal.targetAmount > 0
-        ? (totalCovered / goal.targetAmount).clamp(0.0, 1.0)
-        : 0.0;
-    final pctInt = (fraction * 100).round();
-
     AppDrawer.show(
       context: context,
       builder: (ctx) => AppDrawer(
@@ -631,24 +616,21 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Container(
-              width: 44,
-              height: 44,
+              width: 32,
+              height: 32,
               color: Colors.white,
               child: _buildGoalThumbnail(goal.imagePath),
             ),
           ),
           title: goal.title,
-          subtitle:
-              '${currencyFmt.format(totalCovered)} ETB of ${currencyFmt.format(goal.targetAmount)} ETB ($pctInt% covered)',
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 1. Edit Goal
-            _buildOptionTile(
+            AppDrawerActionTile(
               icon: Icons.edit_rounded,
-              iconColor: Colors.white,
               title: 'Edit Goal',
               subtitle: 'Change title, target, saved amount, or icon',
               onTap: () {
@@ -658,13 +640,10 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
             ),
 
             // 2. Put on Hold / Reactivate
-            _buildOptionTile(
+            AppDrawerActionTile(
               icon: goal.status == 'on_hold'
                   ? Icons.play_arrow_rounded
                   : Icons.pause_rounded,
-              iconColor: goal.status == 'on_hold'
-                  ? AppColors.positive
-                  : AppColors.gold,
               title: goal.status == 'on_hold'
                   ? 'Reactivate Goal'
                   : 'Put on Hold',
@@ -681,83 +660,16 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
             ),
 
             // 3. Delete Goal
-            _buildOptionTile(
+            AppDrawerActionTile(
               icon: Icons.delete_outline_rounded,
-              iconColor: AppColors.destructiveRed,
               title: 'Delete Goal',
               subtitle: 'Permanently remove this saving goal',
-              isDestructive: true,
               onTap: () {
                 Navigator.pop(ctx);
                 _confirmDeleteGoal(context, goal, savingsVM);
               },
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOptionTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        splashColor: AppColors.buttonSecondary,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isDestructive
-                      ? AppColors.buttonSoftDestructiveBg
-                      : AppColors.buttonSecondary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: isDestructive ? AppColors.destructiveRed : AppColors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.white.withValues(alpha: 0.3),
-                size: 20,
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -961,11 +873,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
       heightFactor: 0.88,
       headerCard: AppDrawerHeaderCard(
         icon: Icons.savings_outlined,
-        iconColor: AppColors.positive,
-        title: isEditing ? 'Edit Saving Goal' : 'New Saving Goal',
-        subtitle: isEditing
-            ? 'Update your target, priority, or bank allocations'
-            : 'Set a target amount, priority rank, and funding allocation',
+        title: isEditing ? 'Edit Goal' : 'New Goal',
       ),
       bottomAction: AppButton.primary(
         text: isEditing ? 'Update Goal' : 'Save Goal',

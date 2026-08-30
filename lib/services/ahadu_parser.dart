@@ -72,6 +72,13 @@ class AhaduParser {
           .firstMatch(message);
       if (toMatchRef != null) {
         recipientOrSender = toMatchRef.group(1)?.trim() ?? '';
+        final ofMatch = RegExp(
+                r'^(?:Telebirr|CBE|BOA|Dashen|Bank|[A-Za-z]+)\s+of\s+(.+)$',
+                caseSensitive: false)
+            .firstMatch(recipientOrSender);
+        if (ofMatch != null) {
+          recipientOrSender = ofMatch.group(1)?.trim() ?? recipientOrSender;
+        }
       }
     } else if (lowerMsg.contains('received') ||
         lowerMsg.contains('credited') ||
@@ -99,6 +106,13 @@ class AhaduParser {
           .firstMatch(message);
       if (fromMatch != null) {
         recipientOrSender = fromMatch.group(1)?.trim() ?? '';
+        final ofMatch = RegExp(
+                r'^(?:Telebirr|CBE|BOA|Dashen|Bank|[A-Za-z]+)\s+of\s+(.+)$',
+                caseSensitive: false)
+            .firstMatch(recipientOrSender);
+        if (ofMatch != null) {
+          recipientOrSender = ofMatch.group(1)?.trim() ?? recipientOrSender;
+        }
       }
     } else {
       if (lowerMsg.contains('etb')) {

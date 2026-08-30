@@ -12,6 +12,7 @@ import '../models/saving_goal.dart';
 import '../models/transaction_attachment.dart';
 import 'sms_batch_parser.dart';
 import 'bank_senders.dart';
+import '../utils/counterparty_matcher.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -524,8 +525,13 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 )
 ''');
 
-    // Mark 4 core special reasons
-    const specialReasonNames = ['Bounce', 'Cash', 'Internal Transfer', 'Loan'];
+    // Mark 4 core special reasons (using Pass-Through)
+    await db.execute('''
+      UPDATE reasons SET name = 'Pass-Through' WHERE LOWER(TRIM(name)) = 'bounce';
+      UPDATE transactions SET reason = 'Pass-Through' WHERE LOWER(TRIM(reason)) = 'bounce';
+      UPDATE transactions SET customReasonText = 'Pass-Through' WHERE LOWER(TRIM(customReasonText)) = 'bounce';
+    ''');
+    const specialReasonNames = ['Pass-Through', 'Cash', 'Internal Transfer', 'Loan'];
     for (final name in specialReasonNames) {
       final existing = await db.query('reasons', where: 'LOWER(name) = ?', whereArgs: [name.toLowerCase()]);
       if (existing.isEmpty) {
@@ -995,13 +1001,38 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     );
   }
 
-  /// Clears/unlinks reasons from all past transactions matching a given contact name.
+  /// Clears/unlinks reasons from all past transactions matching a given contact name or phone number.
   Future<int> unlinkAllTransactionsForContact({
     required String contactName,
     int? reasonId,
   }) async {
     final db = await instance.database;
     final lowerName = contactName.toLowerCase();
+    final phoneKey = CounterpartyMatcher.extractPhoneKey(contactName);
+
+    String whereClause;
+    List<dynamic> whereArgs;
+
+    if (phoneKey != null) {
+      final variations = [
+        phoneKey,
+        '0$phoneKey',
+        '251$phoneKey',
+        '+251$phoneKey',
+      ];
+      final parts = <String>[];
+      whereArgs = <dynamic>[];
+      for (final v in variations) {
+        parts.add('LOWER(sender) = ?');
+        whereArgs.add(v.toLowerCase());
+        parts.add('sender LIKE ?');
+        whereArgs.add('%$v%');
+      }
+      whereClause = '(${parts.join(' OR ')})';
+    } else {
+      whereClause = 'LOWER(sender) = ?';
+      whereArgs = [lowerName];
+    }
     
     if (reasonId != null) {
       return await db.update(
@@ -1013,8 +1044,8 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
           'subcategoryId': null,
           'customReasonText': null,
         },
-        where: 'LOWER(sender) = ? AND reasonId = ?',
-        whereArgs: [lowerName, reasonId],
+        where: '$whereClause AND reasonId = ?',
+        whereArgs: [...whereArgs, reasonId],
       );
     } else {
       return await db.update(
@@ -1026,8 +1057,8 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
           'subcategoryId': null,
           'customReasonText': null,
         },
-        where: 'LOWER(sender) = ?',
-        whereArgs: [lowerName],
+        where: whereClause,
+        whereArgs: whereArgs,
       );
     }
   }
@@ -1285,18 +1316,23 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       );
     ''');
 
-    // 3. Ensure 4 core special reasons exist with isSpecial = 1 and isSystem = 1
-    const specialNames = ['Loan', 'Cash', 'Internal Transfer', 'Bounce'];
-    for (final name in specialNames) {
-      final existing = await db.query('reasons',
-          where: 'LOWER(name) = ?', whereArgs: [name.toLowerCase()]);
-      if (existing.isEmpty) {
-        await db.insert('reasons', {'name': name, 'isSystem': 1, 'isSpecial': 1});
-      } else if ((existing.first['isSpecial'] as int?) != 1) {
-        await db.update('reasons', {'isSpecial': 1, 'isSystem': 1},
-            where: 'id = ?', whereArgs: [existing.first['id']]);
+      // 3. Ensure 4 core special reasons exist with isSpecial = 1 and isSystem = 1 (Migrate Bounce to Pass-Through)
+      await db.execute('''
+        UPDATE reasons SET name = 'Pass-Through' WHERE LOWER(TRIM(name)) = 'bounce';
+        UPDATE transactions SET reason = 'Pass-Through' WHERE LOWER(TRIM(reason)) = 'bounce';
+        UPDATE transactions SET customReasonText = 'Pass-Through' WHERE LOWER(TRIM(customReasonText)) = 'bounce';
+      ''');
+      const specialNames = ['Loan', 'Cash', 'Internal Transfer', 'Pass-Through'];
+      for (final name in specialNames) {
+        final existing = await db.query('reasons',
+            where: 'LOWER(name) = ?', whereArgs: [name.toLowerCase()]);
+        if (existing.isEmpty) {
+          await db.insert('reasons', {'name': name, 'isSystem': 1, 'isSpecial': 1});
+        } else if ((existing.first['isSpecial'] as int?) != 1) {
+          await db.update('reasons', {'isSpecial': 1, 'isSystem': 1},
+              where: 'id = ?', whereArgs: [existing.first['id']]);
+        }
       }
-    }
 
     // 4. Ensure top-level categories and subcategories exist if DB has no subcategories
     final countRes = await db.rawQuery(

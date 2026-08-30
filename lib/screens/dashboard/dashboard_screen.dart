@@ -53,10 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
   final ScrollController _topScrollController = ScrollController();
-  late PageController _bannerController;
   final bool _isShowingTodayOnly = false;
-  Timer? _bannerTimer;
-  final int _bannerLoopFactor = 10000;
   bool _isOverallChartVisible = false;
   String _chartFilter = '30D';
   final GlobalKey _topSectionKey = GlobalKey();
@@ -67,10 +64,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Start PageController at a large central value for "infinite" scroll
-    _bannerController = PageController(initialPage: _bannerLoopFactor ~/ 2);
-    _startAutoScroll();
-    _sheetController.addListener(_onSheetScroll);
     _topScrollController.addListener(_onTopScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateTopSectionHeight());
   }
@@ -81,33 +74,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .setHomeTopScrollOffset(_topScrollController.hasClients ? _topScrollController.offset : 0.0);
   }
 
-  void _onSheetScroll() {
-    if (!mounted || !_sheetController.isAttached) return;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final sheetTopY = screenHeight * (1.0 - _sheetController.size);
-    Provider.of<SettingsViewModel>(context, listen: false).setHomeSheetTopY(sheetTopY);
-  }
-
-  void _startAutoScroll() {
-    _bannerTimer?.cancel();
-    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (!mounted) return;
-      if (_bannerController.hasClients) {
-        _bannerController.nextPage(
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.fastOutSlowIn,
-        );
-      }
-    });
-  }
-
   @override
   void dispose() {
-    _sheetController.removeListener(_onSheetScroll);
     _topScrollController.removeListener(_onTopScroll);
     _topScrollController.dispose();
-    _bannerTimer?.cancel();
-    _bannerController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _sheetController.dispose();
@@ -172,11 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return AppDrawer(
           headerCard: AppDrawerHeaderCard(
             icon: Icons.auto_awesome_rounded,
-            iconColor: AppColors.positive,
-            title: isToday ? "Today's PNL" : "Overall PNL",
-            subtitle: isToday
-                ? "Today's Profit or Loss Summary"
-                : "Overall Cumulative Net Progress",
+            title: isToday ? "Today's PnL" : "Overall PnL",
           ),
           bottomAction: AppButton.primary(
             text: "Got It",
@@ -216,7 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (r.contains('education') || r.contains('school')) return Icons.school;
     if (r.contains('loan') || r.contains('debt')) return Icons.handshake_outlined;
     if (r.contains('cash')) return Icons.payments_outlined;
-    if (r.contains('bounce')) return Icons.replay_rounded;
+    if (r.contains('pass-through') || r.contains('pass through') || r.contains('bounce')) return Icons.undo_rounded;
     if (r.contains('internal transfer')) return Icons.swap_horiz_rounded;
     if (r.contains('mobile') || r.contains('internet') || r.contains('airtime') || r.contains('phone')) return Icons.phone_android;
     if (r.contains('investment') || r.contains('saving') || r.contains('stock')) return Icons.trending_up;
@@ -239,18 +205,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         double newRestSize = (screenHeight - (newHeight + topPadding)) / screenHeight;
         newRestSize = newRestSize.clamp(0.20, 0.75);
 
-        if (_measuredTopSectionHeight != newHeight || forceAnimate) {
-          if (_measuredTopSectionHeight != newHeight) {
+        final bool heightChanged = (_measuredTopSectionHeight == null) ||
+            ((_measuredTopSectionHeight! - newHeight).abs() > 3.0);
+
+        if (heightChanged || forceAnimate) {
+          if (heightChanged) {
             setState(() {
               _measuredTopSectionHeight = newHeight;
             });
           }
-          if (_sheetController.isAttached) {
+          if (forceAnimate && _sheetController.isAttached) {
             final currentSize = _sheetController.size;
-            if (forceAnimate || (currentSize - _lastDynamicRestSize).abs() < 0.15 || currentSize <= 0.60) {
+            if ((currentSize - _lastDynamicRestSize).abs() < 0.15 || currentSize <= 0.60) {
               _sheetController.animateTo(
                 newRestSize,
-                duration: const Duration(milliseconds: 320),
+                duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutCubic,
               );
             }
@@ -258,20 +227,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _lastDynamicRestSize = newRestSize;
         }
       }
-      _onSheetScroll();
     });
   }
 
   Widget _buildMainDashboardLayout(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final RenderBox? box =
-          _topSectionKey.currentContext?.findRenderObject() as RenderBox?;
-      if (box != null && box.hasSize && _measuredTopSectionHeight != box.size.height) {
-        _updateTopSectionHeight(forceAnimate: true);
-      }
-    });
-
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) {
         if (notification.metrics.axis == Axis.vertical) {
@@ -625,80 +584,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildStackedCardsDeck(BuildContext context) {
-    return Consumer2<TransactionsViewModel, SettingsViewModel>(
-      builder: (context, txVM, settingsVM, _) {
+    return Selector<SettingsViewModel, ({bool isBalanceVisible, Set<String> hiddenBanks, bool isHomeResting})>(
+      selector: (_, s) => (
+        isBalanceVisible: s.isBalanceVisible,
+        hiddenBanks: s.hiddenBalanceBanks,
+        isHomeResting: s.pageOffset <= 0.02,
+      ),
+      builder: (context, settingsData, _) {
+        final txVM = Provider.of<TransactionsViewModel>(context);
         final senders = txVM.senders;
-        final t = settingsVM.pageOffset.clamp(0.0, 1.0);
 
-        // If swiping page transition is active (t > 0.02), let MainShell flying overlay handle it
-        if (senders.isEmpty || t > 0.02) {
+        // If swiping page transition is active, let MainShell flying overlay handle it
+        if (senders.isEmpty || !settingsData.isHomeResting) {
           return GestureDetector(
-            onTap: () => settingsVM.tabNavigationNotifier.value = 1,
+            onTap: () => Provider.of<SettingsViewModel>(context, listen: false).tabNavigationNotifier.value = 1,
             behavior: HitTestBehavior.opaque,
             child: const SizedBox(width: 108, height: 188),
           );
         }
 
-    // Render native stacked cards in-tree on Home Page for 100% synchronous scroll/pull
-    const double baseLeftOffset = -42.0;
-    const double leftStep = 22.0;
-    const double homeW = 104.0;
-    const double homeH = 188.0;
+        // Render native stacked cards in-tree on Home Page for 100% synchronous scroll/pull
+        const double baseLeftOffset = -42.0;
+        const double leftStep = 22.0;
+        const double homeW = 104.0;
+        const double homeH = 188.0;
 
-    final activeSenders = txVM.activeSenders;
-    final List<Widget> cardWidgets = [];
-    final int stackCount = activeSenders.length.clamp(0, 3);
+        final activeSenders = txVM.activeSenders;
+        final List<Widget> cardWidgets = [];
+        final int stackCount = activeSenders.length.clamp(0, 3);
 
-    for (int i = 0; i < stackCount; i++) {
-      final sender = activeSenders[i];
-      final String cardName = sender.senderName;
+        for (int i = 0; i < stackCount; i++) {
+          final sender = activeSenders[i];
+          final String cardName = sender.senderName;
 
-      final int deckIndex = i;
-      final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
+          final int deckIndex = i;
+          final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
 
-      final double balance = txVM.balanceForSender(cardName);
-      final int txCount = txVM.txCountForSender(cardName);
+          final double balance = txVM.balanceForSender(cardName);
+          final int txCount = txVM.txCountForSender(cardName);
 
-      final bool cardBalanceVisible =
-          settingsVM.isBalanceVisible && !settingsVM.isBankBalanceHidden(cardName);
+          final bool isBankHidden = settingsData.hiddenBanks.any(
+            (b) => b.trim().toUpperCase() == cardName.trim().toUpperCase(),
+          );
+          final bool cardBalanceVisible =
+              settingsData.isBalanceVisible && !isBankHidden;
 
-      // Top-most card in the rendered stack dynamically takes the White version
-      final bool isTop = (i == stackCount - 1);
+          // Top-most card in the rendered stack dynamically takes the White version
+          final bool isTop = (i == stackCount - 1);
 
-      final Widget card = BankCardWidget(
-        senderName: cardName,
-        balance: balance,
-        txCount: txCount,
-        isBalanceVisible: cardBalanceVisible,
-        isPaused: false,
-        isTopCard: isTop,
-        animationFactor: 0.0,
-        onTap: () => settingsVM.tabNavigationNotifier.value = 1,
-      );
+          final Widget card = BankCardWidget(
+            senderName: cardName,
+            balance: balance,
+            txCount: txCount,
+            isBalanceVisible: cardBalanceVisible,
+            isPaused: false,
+            isTopCard: isTop,
+            animationFactor: 0.0,
+            onTap: () => Provider.of<SettingsViewModel>(context, listen: false).tabNavigationNotifier.value = 1,
+          );
 
-      cardWidgets.add(
-        Positioned(
-          left: deckLeftOffset + 42.0,
-          top: 0,
-          width: homeW,
-          height: homeH,
-          child: card,
-        ),
-      );
-    }
+          cardWidgets.add(
+            Positioned(
+              left: deckLeftOffset + 42.0,
+              top: 0,
+              width: homeW,
+              height: homeH,
+              child: card,
+            ),
+          );
+        }
 
-    return GestureDetector(
-      onTap: () => settingsVM.tabNavigationNotifier.value = 1,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 108,
-        height: 188,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: cardWidgets,
-        ),
-      ),
-    );
+        return GestureDetector(
+          onTap: () => Provider.of<SettingsViewModel>(context, listen: false).tabNavigationNotifier.value = 1,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: 108,
+            height: 188,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: cardWidgets,
+            ),
+          ),
+        );
       },
     );
   }
@@ -718,10 +685,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return AppDrawer(
           headerCard: AppDrawerHeaderCard(
             leading: Container(
-              width: 34,
-              height: 34,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: AppColors.brandGreen.withValues(alpha: 0.15),
+                color: Colors.white.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -730,14 +697,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: 16,
                   height: 16,
                   colorFilter: const ColorFilter.mode(
-                    AppColors.brandGreen,
+                    Colors.white,
                     BlendMode.srcIn,
                   ),
                 ),
               ),
             ),
             title: 'Account Balances',
-            subtitle: 'Overview of your balances across all active accounts',
           ),
           bottomAction: AppButton.primary(
             text: 'Got it',

@@ -82,13 +82,9 @@ void showCashDeductModal(
 
           return AppDrawer(
             heightFactor: 0.88,
-            headerCard: AppDrawerHeaderCard(
+            headerCard: const AppDrawerHeaderCard(
               icon: Icons.money_off_rounded,
-              iconColor: availableBal <= 0 ? AppColors.negative : AppColors.positive,
-              title: 'Deduct Cash Expense',
-              subtitle: availableBal <= 0
-                  ? 'Available: 0.00 ETB (Insufficient funds)'
-                  : 'Available: ${fmtShort.format(availableBal)} ETB',
+              title: 'Deduct Cash',
             ),
             bottomAction: AppButton.primary(
               text: buttonText,

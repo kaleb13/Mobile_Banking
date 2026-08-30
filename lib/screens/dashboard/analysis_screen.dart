@@ -619,7 +619,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 '')
             .trim()
             .toLowerCase();
-        if (reasonStr == 'bounce' ||
+        if (reasonStr == 'pass-through' ||
+            reasonStr == 'pass through' ||
+            reasonStr == 'bounce' ||
             reasonStr == 'internal transfer' ||
             reasonStr == 'cash') {
           continue;
@@ -1971,6 +1973,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                           selectedItem.label.toLowerCase();
                                       final isSpecial = [
                                         'loan',
+                                        'pass-through',
+                                        'pass through',
                                         'bounce',
                                         'internal transfer',
                                         'cash',
@@ -2595,7 +2599,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final Map<String, _CategoryDataAccumulator> allTimeCategoryMap = {};
     for (var t in txVM.transactions) {
       final reasonStr = (t.reason ?? t.customReasonText ?? t.resolvedReason ?? '').trim().toLowerCase();
-      if (reasonStr == 'bounce' || reasonStr == 'internal transfer' || reasonStr == 'cash') {
+      if (reasonStr == 'pass-through' || reasonStr == 'pass through' || reasonStr == 'bounce' || reasonStr == 'internal transfer' || reasonStr == 'cash') {
         continue;
       }
       if (_selectedSimSlot != null && t.simSlot != _selectedSimSlot) {
@@ -3883,11 +3887,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
             return AppDrawer(
               heightFactor: 0.78,
-              headerCard: AppDrawerHeaderCard(
+              headerCard: const AppDrawerHeaderCard(
                 icon: Icons.person_search_rounded,
-                iconColor: AppColors.positive,
                 title: 'Select Contact',
-                subtitle: '${list.length} total contacts recorded',
               ),
               child: Column(
                 children: [

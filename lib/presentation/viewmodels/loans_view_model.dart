@@ -41,6 +41,7 @@ class LoansViewModel extends ChangeNotifier {
   // Cross-domain callbacks (injected from main.dart via ProxyProvider bridge)
   UpdateTransactionReasonFn? updateTransactionReason;
   AddNotificationFn? addNotification;
+  Future<void> Function(String candidateName, String trackedName, String txId)? removeLoanNotification;
 
   // Cross-domain read-only accessors (set by ProxyProvider bridge)
   List<AppTransaction> Function()? getTransactions;
@@ -450,6 +451,11 @@ class LoansViewModel extends ChangeNotifier {
 
     _pendingRepaymentRequests =
         await _repository.getPendingRepaymentRequests();
+
+    if (removeLoanNotification != null) {
+      await removeLoanNotification!(req.senderFound, req.trackedName, req.transactionId);
+    }
+
     notifyListeners();
   }
 
@@ -457,6 +463,11 @@ class LoansViewModel extends ChangeNotifier {
     await _repository.updateRepaymentRequestStatus(req.id!, 'rejected');
     _pendingRepaymentRequests =
         await _repository.getPendingRepaymentRequests();
+
+    if (removeLoanNotification != null) {
+      await removeLoanNotification!(req.senderFound, req.trackedName, req.transactionId);
+    }
+
     notifyListeners();
   }
 

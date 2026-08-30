@@ -33,7 +33,6 @@ import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
 import 'reason_link_drawer.dart';
-import '../../services/sms_service.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
@@ -224,12 +223,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             'Reason': 'Transfer',
             'Impact': 'Neutral (No PnL change)',
           };
-        } else if (rLower == 'bounce' || rLower.contains('reversal')) {
-          toastSubtitle = 'Categorized as Bounce (Pass-Through)';
+        } else if (rLower == 'pass-through' || rLower == 'pass through' || rLower == 'bounce' || rLower.contains('reversal')) {
+          toastSubtitle = 'Categorized as Pass-Through';
           toastDetails =
               'This transaction is for transit or pass-through money that does not belong to you. It is completely excluded from expense analysis and financial calculations.';
           toastMetadata = {
-            'Reason': 'Bounce',
+            'Reason': 'Pass-Through',
             'Impact': 'Excluded from analytics & expenses',
           };
         } else {
@@ -266,9 +265,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     final shouldDelete = await AppConfirmDialog.show(
       context: context,
-      title: 'Delete from Shibre?',
+      title: 'Delete Transaction?',
       message:
-          'Are you sure you want to delete this transaction from Shibre? Your wallet balances and charts will update immediately.',
+          'Are you sure you want to delete this transaction? Your wallet balances and charts will update immediately.',
       details:
           'The original SMS will remain safely in your phone\'s inbox.',
       confirmText: 'Delete',
@@ -282,45 +281,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       if (context.mounted) {
         AppToast.info(
           context,
-          message: 'Deleted from Shibre',
+          message: 'Transaction Deleted',
           subtitle: 'Original SMS remains safe in your phone.',
-        );
-        Navigator.of(context).pop();
-      }
-    }
-  }
-
-  Future<void> _confirmDeleteFromPhone(
-      BuildContext context, TransactionsViewModel txVM) async {
-    if (widget.transaction.id == null) return;
-
-    final shouldDelete = await AppConfirmDialog.show(
-      context: context,
-      title: 'Delete SMS from Phone?',
-      message:
-          'This will delete the transaction from Shibre and open your SMS app so you can delete the SMS directly from your device.',
-      details:
-          'Android security rules require opening the SMS app to delete messages from the phone.',
-      confirmText: 'Open & Delete',
-      cancelText: 'Cancel',
-      isDestructive: false,
-      onConfirm: () {},
-    );
-
-    if (shouldDelete == true && context.mounted) {
-      await txVM.deleteTransaction(widget.transaction.id!);
-      await SmsService().openSmsInNativeApp(
-        sender: widget.transaction.sender.isNotEmpty
-            ? widget.transaction.sender
-            : widget.transaction.name,
-        body: widget.transaction.rawMessage,
-        date: widget.transaction.date,
-      );
-      if (context.mounted) {
-        AppToast.info(
-          context,
-          message: 'Opened in SMS App',
-          subtitle: 'Long press the message in your SMS app to delete from phone.',
         );
         Navigator.of(context).pop();
       }
@@ -388,7 +350,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     // Special reasons have dedicated tile renderer — hide the generic Link User button for these
     const specialReasonNames = {
-      'loan', 'bounce', 'internal transfer', 'cash'
+      'loan', 'pass-through', 'pass through', 'bounce', 'internal transfer', 'cash'
     };
     final activeReasonName = (_selectedReason?.name ??
             currentTx.resolvedReason ??
@@ -470,28 +432,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               const SizedBox(width: 6),
             ],
             AppMenuButton<String>.dark(
-              minWidth: 200,
+              minWidth: 170,
               items: const [
                 AppMenuItem<String>(
-                  value: 'delete_app',
-                  label: 'Delete from Shibre',
-                  subtitle: 'App data only',
+                  value: 'delete',
+                  label: 'Delete Transaction',
                   icon: Icons.delete_outline_rounded,
-                  iconColor: AppColors.negative,
-                ),
-                AppMenuItem<String>(
-                  value: 'delete_phone',
-                  label: 'Delete SMS from Phone',
-                  subtitle: 'Opens SMS app',
-                  icon: Icons.phone_android_rounded,
-                  iconColor: AppColors.brandGreen,
                 ),
               ],
               onSelected: (value) {
-                if (value == 'delete_app') {
+                if (value == 'delete') {
                   _confirmDeleteFromApp(context, txVM);
-                } else if (value == 'delete_phone') {
-                  _confirmDeleteFromPhone(context, txVM);
                 }
               },
             ),
@@ -606,13 +557,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         if (linkedLoan != null) ...[
                           _buildLoanTrackingCard(context, linkedLoan, loansVM, settingsVM),
                           const SizedBox(height: 14),
-                        ] else if (currentTx.linkedTransactionId != null || (isAutoLocked && (activeReasonName == 'internal transfer' || activeReasonName == 'transfer'))) ...[
+                        ] else if (currentTx.linkedTransactionId != null && currentTx.linkedTransactionId!.isNotEmpty) ...[
                           _buildInternalTransferCard(context, txVM, currentTx),
                           const SizedBox(height: 14),
-                        ] else if (!isAutoLocked && (activeReasonName == 'loan' || activeReasonName.contains('loan'))) ...[
+                        ] else if (activeReasonName == 'loan' || activeReasonName.contains('loan')) ...[
                           _buildCreateLoanPromptCard(context, currentTx),
                           const SizedBox(height: 14),
-                        ] else if (!isAutoLocked && (activeReasonName == 'internal transfer' || activeReasonName.contains('internal transfer') || activeReasonName == 'transfer')) ...[
+                        ] else if (activeReasonName == 'internal transfer' || activeReasonName.contains('internal transfer') || activeReasonName == 'transfer') ...[
                           _buildLinkInternalTransferPromptCard(context, currentTx),
                           const SizedBox(height: 14),
                         ] else if ((currentLabel?.toLowerCase() == 'cash' || currentTx.reason?.toLowerCase() == 'cash') && currentTx.type == 'expense') ...[
@@ -1077,11 +1028,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
           return AppDrawer(
             heightFactor: 0.85,
-            headerCard: AppDrawerHeaderCard(
+            headerCard: const AppDrawerHeaderCard(
               icon: Icons.money_off_rounded,
-              iconColor: AppColors.positive,
-              title: 'Deduct Cash Expense',
-              subtitle: 'Linked to ${bankTx.name} (${fmtShort.format(remaining)} ETB left)',
+              title: 'Deduct Cash',
             ),
             bottomAction: AppButton.primary(
               text: buttonText,
@@ -1455,11 +1404,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         name.contains('credit')) {
       return Icons.handshake_outlined;
     }
-    if (name.contains('bounce') ||
+    if (name.contains('pass-through') ||
+        name.contains('pass through') ||
+        name.contains('bounce') ||
         name.contains('reversal') ||
         name.contains('refund') ||
         name.contains('return')) {
-      return Icons.replay_rounded;
+      return Icons.undo_rounded;
     }
     if (name.contains('internal transfer') ||
         name.contains('transfer') ||
@@ -2048,13 +1999,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: AppRadius.cardRadius,
-          boxShadow: [
-            BoxShadow(
-              color: accentColor.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2152,45 +2096,27 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       builder: (ctx) => AppDrawer(
         heightFactor: null,
         isBodyScrollable: false,
-        headerCard: AppDrawerHeaderCard(
+        headerCard: const AppDrawerHeaderCard(
           icon: Icons.handshake_outlined,
-          iconColor: AppColors.positive,
           title: 'Loan Options',
-          subtitle: loan.personName,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.cardRadius),
-              tileColor: AppColors.drawerCard,
-              leading: const Icon(Icons.open_in_new, color: AppColors.brandGreen),
-              title: const Text('Open in Loan Manager',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
-              subtitle: const Text('View repayments & full schedule',
-                  style: TextStyle(color: AppColors.textSoft, fontSize: 12)),
+            AppDrawerActionTile(
+              icon: Icons.open_in_new_rounded,
+              title: 'Open in Loan Manager',
+              subtitle: 'View repayments & full schedule',
               onTap: () {
                 Navigator.pop(ctx);
                 settingsVM.animateToTab(3);
                 Navigator.popUntil(context, (route) => route.isFirst);
               },
             ),
-            const SizedBox(height: 10),
-            ListTile(
-              shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.cardRadius),
-              tileColor: AppColors.negative.withValues(alpha: 0.1),
-              leading: const Icon(Icons.delete_outline,
-                  color: AppColors.negative),
-              title: const Text('Delete Loan Record',
-                  style: TextStyle(
-                      color: AppColors.negative,
-                      fontWeight: FontWeight.bold)),
-              subtitle: const Text(
-                  'Deletes loan tracking & unlocks reason editing',
-                  style: TextStyle(color: AppColors.textSoft, fontSize: 12)),
+            AppDrawerActionTile(
+              icon: Icons.delete_outline_rounded,
+              title: 'Delete Loan Record',
+              subtitle: 'Deletes loan tracking & unlocks reason editing',
               onTap: () async {
                 Navigator.pop(ctx);
                 if (!mounted) return;

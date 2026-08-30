@@ -139,13 +139,24 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (lower.contains("change your pin")) return true
             if (lower.contains("change your password")) return true
             if (lower.contains("pin changed") || lower.contains("password changed")) return true
+            if ((lower.contains("one time") || lower.contains("onetime")) && lower.contains("password")) return true
+            if (lower.contains("pin or password will be locked") || lower.contains("password will be locked") || lower.contains("pin will be locked")) return true
+            if (lower.contains("mobile password is") || lower.contains("mobile banking password is")) return true
+            if (lower.contains("security question") && lower.contains("pin")) return true
             if (lower.contains("temporary pin") || lower.contains("temporary password")) return true
             if (lower.contains("initial pin") || lower.contains("initial password")) return true
-            if (lower.contains("your pin is") || lower.contains("your password is")) return true
+            if (lower.contains("your pin is") || lower.contains("your password is") || lower.contains("new pin is")) return true
+            if (lower.contains("pin or password is wrong") || lower.contains("password is wrong") || lower.contains("pin is wrong")) return true
 
-            if ((lower.contains("do not share") || lower.contains("never share") ||
-                 lower.contains("do not disclose") || lower.contains("keep it confidential")) &&
-                (lower.contains("pin") || lower.contains("otp") || lower.contains("password") || lower.contains("code"))) {
+            if ((lower.contains("do not share") ||
+                lower.contains("never share") ||
+                lower.contains("do not disclose") ||
+                lower.contains("keep it confidential") ||
+                lower.contains("keep it secret")) &&
+                (lower.contains("pin") ||
+                 lower.contains("otp") ||
+                 lower.contains("password") ||
+                 lower.contains("code"))) {
                 return true
             }
 
@@ -201,11 +212,13 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 return true
             }
 
-            // Marketing, Lottery, Points, KYC, Gift Letters
+            // Marketing, Lottery, Points, KYC, Gift Letters, Bonus Packages
             if (lower.contains("lottery ticket") ||
                 lower.contains("lottery id") ||
                 lower.contains("received 1 point") ||
-                lower.contains("received point") ||
+                (lower.contains("received") && lower.contains("point")) ||
+                lower.contains("gift package") ||
+                (lower.contains("package:") && lower.contains("added to your service number")) ||
                 lower.contains("lucky draw") ||
                 lower.contains("spins on superapp") ||
                 lower.contains("kyc upgrade") ||
@@ -221,13 +234,17 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 return true
             }
 
-            // ATM Cash-Out & Deposit Voucher codes / temporary invitations
+            // ATM Cash-Out & Deposit Voucher codes / Card ready notices / temporary invitations
             if (lower.contains("atm cash out") ||
                 lower.contains("cash out voucher") ||
                 lower.contains("voucher number is") ||
                 lower.contains("deposit voucher code") ||
                 lower.contains("voucher code is") ||
                 lower.contains("secret word is") ||
+                lower.contains("atm card is ready") ||
+                lower.contains("collect your card") ||
+                lower.contains("visa card number has been") ||
+                lower.contains("my visa menu") ||
                 lower.contains("invitation code is") ||
                 lower.contains("you have invited")) {
                 return true
@@ -252,26 +269,38 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 lower.contains("balance is insufficient to comp") ||
                 lower.contains("wrong amount") ||
                 lower.contains("account you try to transfer is not active") ||
-                lower.contains("account you try to pay is not active")) {
+                lower.contains("account you try to pay is not active") ||
+                lower.contains("failed to authenticate the transaction") ||
+                lower.contains("limit rule")) {
                 return true
             }
 
-            // Activation & Welcome Notices
+            // Activation, Status & Profile Notices
             if (lower.contains("saving service") ||
                 lower.contains("customer status has been change") ||
+                lower.contains("account status has been changed") ||
+                lower.contains("status has been changed from") ||
+                lower.contains("changed to dormant") ||
+                lower.contains("signature on your account") ||
+                lower.contains("update your profile") ||
                 lower.contains("registered for mobile banking") ||
                 lower.contains("register yourself for") ||
+                lower.contains("successfully registered and activated") ||
                 lower.contains("account has been successfully activated") ||
                 lower.contains("has been activated successfully") ||
                 lower.contains("account is activated successfully") ||
                 lower.contains("welcome! we are delighted") ||
+                lower.contains("download cbe android application") ||
+                lower.contains("start activation") ||
                 lower.contains("new login to your mobile")) {
                 return true
             }
 
             // Informational Balances
             if (lower.contains("customer incentive account balance is") ||
-                lower.contains("pocketmoneyaccount balance is")) {
+                lower.contains("pocketmoneyaccount balance is") ||
+                lower.contains("e-money link bank balance is") ||
+                lower.contains("customer e-money account balance is")) {
                 return true
             }
 
@@ -756,13 +785,24 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         }
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 
+                        var counterparty = "Ahadu Deposit"
+                        val fromMatch = Regex("(?i)from\\s+(.*?)\\s+(?:with\\s+reference|with\\s+ref|on\\s+\\d{1,2}-|\\.)").find(singleLine)
+                        if (fromMatch != null) {
+                            var rawSender = fromMatch.groupValues[1].trim()
+                            val ofMatch = Regex("(?i)^(?:Telebirr|CBE|BOA|Dashen|Bank|[A-Za-z]+)\\s+of\\s+(.+)$").find(rawSender)
+                            if (ofMatch != null) {
+                                rawSender = ofMatch.groupValues[1].trim()
+                            }
+                            if (rawSender.isNotEmpty()) counterparty = rawSender
+                        }
+
                         return NativeParsedSms(
                             bankName = "Ahadu Bank",
                             amount = amount,
                             formattedAmount = formatEtb(amount),
                             isDebit = false,
-                            counterparty = "Ahadu Deposit",
-                            directionHeader = "From: Ahadu Deposit",
+                            counterparty = counterparty,
+                            directionHeader = "From: $counterparty",
                             title = "Income",
                             isLocked = false,
                             lockedReasonName = null,
@@ -780,13 +820,24 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         }
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 
+                        var counterparty = "Ahadu Transfer"
+                        val toMatch = Regex("(?i)to\\s+(.*?)\\s+(?:with\\s+reference|with\\s+ref|on\\s+\\d{1,2}-|\\.)").find(singleLine)
+                        if (toMatch != null) {
+                            var rawRecipient = toMatch.groupValues[1].trim()
+                            val ofMatch = Regex("(?i)^(?:Telebirr|CBE|BOA|Dashen|Bank|[A-Za-z]+)\\s+of\\s+(.+)$").find(rawRecipient)
+                            if (ofMatch != null) {
+                                rawRecipient = ofMatch.groupValues[1].trim()
+                            }
+                            if (rawRecipient.isNotEmpty()) counterparty = rawRecipient
+                        }
+
                         return NativeParsedSms(
                             bankName = "Ahadu Bank",
                             amount = amount,
                             formattedAmount = formatEtb(amount),
                             isDebit = true,
-                            counterparty = "Ahadu Transfer",
-                            directionHeader = "To: Ahadu Bank",
+                            counterparty = counterparty,
+                            directionHeader = "To: $counterparty",
                             title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,

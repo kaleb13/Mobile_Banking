@@ -195,11 +195,7 @@ class _AddEditExpenseDefinitionScreenState
       heightFactor: 0.88,
       headerCard: AppDrawerHeaderCard(
         icon: Icons.receipt_long_rounded,
-        iconColor: AppColors.positive,
-        title: isEditing ? 'Edit Expense Definition' : 'New Expense Definition',
-        subtitle: isEditing
-            ? 'Update your template amount, category, or schedule'
-            : 'Create a template for manual or recurring cash expenses',
+        title: isEditing ? 'Edit Definition' : 'New Definition',
       ),
       bottomAction: AppButton.primary(
         text: isEditing ? 'Update Definition' : 'Save Definition',

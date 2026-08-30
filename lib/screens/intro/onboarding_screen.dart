@@ -616,6 +616,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   }
 
                   return GestureDetector(
+                    key: ValueKey(option),
                     onTap: () {
                       HapticFeedback.lightImpact();
                       setState(() {
@@ -624,27 +625,30 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     },
                     behavior: HitTestBehavior.opaque,
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
+                      duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOutCubic,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.brandGreen.withValues(alpha: 0.12)
+                            ? AppColors.positive.withValues(alpha: 0.14)
                             : AppColors.surface,
                         borderRadius: BorderRadius.circular(AppRadius.card),
                       ),
                       child: Row(
                         children: [
-                          Container(
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 140),
+                            curve: Curves.easeOutCubic,
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? AppColors.brandGreen.withValues(alpha: 0.20)
-                                  : AppColors.surfaceElevated,
+                                  ? AppColors.positive.withValues(alpha: 0.20)
+                                  : Colors.white.withValues(alpha: 0.06),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               _getScanOptionIcon(option),
-                              color: isSelected ? AppColors.brandGreen : AppColors.textSecondary,
+                              color: isSelected ? AppColors.positive : Colors.white.withValues(alpha: 0.70),
                               size: 18,
                             ),
                           ),
@@ -660,9 +664,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                         option.title,
                                         style: AppTypography.bodyMedium.copyWith(
                                           color: isSelected
-                                              ? AppColors.brandGreen
-                                              : context.themeTextPrimary,
-                                          fontWeight: FontWeight.w700,
+                                              ? Colors.white
+                                              : Colors.white.withValues(alpha: 0.90),
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                                         ),
                                       ),
                                     ),
@@ -676,7 +680,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                 Text(
                                   option.subtitle,
                                   style: AppTypography.caption.copyWith(
-                                    color: context.themeTextSecondary,
+                                    color: Colors.white.withValues(alpha: 0.40),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -685,21 +689,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             ),
                           ),
                           const SizedBox(width: 10),
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isSelected ? AppColors.brandGreen : Colors.transparent,
-                            ),
-                            child: isSelected
-                                ? Icon(Icons.check, color: AppColors.buttonPrimaryText, size: 13)
-                                : Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppColors.surfaceElevated,
-                                    ),
-                                  ),
+                          Icon(
+                            isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                            color: isSelected ? AppColors.positive : Colors.white24,
+                            size: isSelected ? 20 : 18,
                           ),
                         ],
                       ),

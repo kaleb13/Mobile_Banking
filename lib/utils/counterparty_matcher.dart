@@ -1,7 +1,8 @@
 import '../models/transaction.dart';
 
 /// Utility class for robust, cross-bank counterparty matching and name normalization.
-/// Handles bank variations, parenthetical account numbers, prefixes, dates, and token overlap.
+/// Handles bank variations, phone number formats (935389104, 0935389104, 251935389104),
+/// parenthetical account numbers, prefixes, dates, and token overlap.
 class CounterpartyMatcher {
   const CounterpartyMatcher._();
 
@@ -12,7 +13,7 @@ class CounterpartyMatcher {
   static final RegExp _trailingDateRegex =
       RegExp(r'\s+on\s+\d{2}[/-]\d{2}(?:[/-]\d{2,4})?.*$', caseSensitive: false);
   static final RegExp _leadingPrefixRegex = RegExp(
-    r'^(?:to|from|credited\s+by|debited\s+for|account|ato|dr\.?|w/ro|w/rt|mr\.?|mrs\.?|ms\.?)\s+',
+    r'^(?:to|from|credited\s+by|debited\s+for|account|ato|dr\.?|w/ro|w/rt|mr\.?|mrs\.?|ms\.?|telebirr\s+of|cbe\s+of|cbebirr\s+of|boa\s+of|abyssinia\s+of|dashen\s+of|bank\s+of)\s+',
     caseSensitive: false,
   );
   static final RegExp _trailingSuffixRegex = RegExp(
@@ -21,6 +22,20 @@ class CounterpartyMatcher {
   );
   static final RegExp _nonWordChars =
       RegExp(r'[^\w\s/]', unicode: true);
+
+  /// Extracts the standard 9-digit Ethiopian subscriber phone number
+  /// (e.g. "935389104" or "712345678") from strings containing phone numbers
+  /// such as "0935389104", "+251935389104", "251935389104", "0935-38-9104", etc.
+  static String? extractPhoneKey(String raw) {
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 9) {
+      final last9 = digits.substring(digits.length - 9);
+      if (last9.startsWith('9') || last9.startsWith('7')) {
+        return last9;
+      }
+    }
+    return null;
+  }
 
   /// Normalizes a counterparty/sender string into a clean, canonical name.
   static String normalize(String raw) {
@@ -42,8 +57,17 @@ class CounterpartyMatcher {
     // Strip trailing " on DD/MM/YYYY..."
     s = s.replaceAll(_trailingDateRegex, '').trim();
 
-    // Strip common leading noise prefixes (e.g. "to ", "from ", "Ato ")
+    // Strip common leading noise prefixes (e.g. "to ", "from ", "Ato ", "Telebirr of ")
     s = s.replaceAll(_leadingPrefixRegex, '').trim();
+
+    // If the entire remaining string is a phone number, normalize to canonical "09XXXXXXXX" format
+    final phoneKey = extractPhoneKey(s);
+    if (phoneKey != null) {
+      final nonPhoneChars = s.replaceAll(RegExp(r'[\s+().\-_0-9]'), '');
+      if (nonPhoneChars.isEmpty) {
+        return '0$phoneKey';
+      }
+    }
 
     // Strip common trailing corporate suffixes (e.g. " PLC", " S.C.")
     s = s.replaceAll(_trailingSuffixRegex, '').trim();
@@ -65,6 +89,14 @@ class CounterpartyMatcher {
     if (rawA.isEmpty || rawB.isEmpty) return false;
     if (rawA == rawB) return true;
     if (rawA.contains(rawB) || rawB.contains(rawA)) return true;
+
+    // ── Phone number matching ───────────────────────────────────────────────
+    // Handles matches between 935389104, 0935389104, 251935389104, +251935389104, etc.
+    final phoneA = extractPhoneKey(a);
+    final phoneB = extractPhoneKey(b);
+    if (phoneA != null && phoneB != null && phoneA == phoneB) {
+      return true;
+    }
 
     final normA = normalize(a).toLowerCase();
     final normB = normalize(b).toLowerCase();

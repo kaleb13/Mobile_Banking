@@ -7,6 +7,7 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../utils/counterparty_matcher.dart';
 
 /// Standard drawer to link a Category/Reason to a contact/counterparty.
 /// Offers 2 scopes:
@@ -55,7 +56,7 @@ class LinkReasonDrawer extends StatelessWidget {
     final expectedType = linkType == 'sender' ? 'income' : 'expense';
 
     final matchingCount = txVM.transactions.where((t) {
-      final matchesName = t.sender.toLowerCase().trim() == lowerName;
+      final matchesName = CounterpartyMatcher.matches(t.sender, contactName);
       final matchesType = t.type.toLowerCase() == expectedType;
       return matchesName && matchesType;
     }).length;
@@ -65,9 +66,7 @@ class LinkReasonDrawer extends StatelessWidget {
       maxHeightFactor: 0.85,
       headerCard: AppDrawerHeaderCard(
         icon: Icons.add_link_rounded,
-        iconColor: AppColors.positive,
         title: 'Link "$reasonName"',
-        subtitle: 'Auto-categorize transactions for "$contactName"',
         trailing: AppBadge.neutral(
           text: '$matchingCount ${matchingCount == 1 ? 'tx' : 'txs'}',
           size: AppBadgeSize.small,
@@ -281,7 +280,7 @@ class UnlinkReasonDrawer extends StatelessWidget {
     final lowerName = contactName.toLowerCase().trim();
 
     final matchingCount = txVM.transactions.where((t) {
-      final matchesName = t.sender.toLowerCase().trim() == lowerName;
+      final matchesName = CounterpartyMatcher.matches(t.sender, contactName);
       final matchesReason = t.reasonId == link.reasonId ||
           (t.resolvedReason?.toLowerCase() == reasonName.toLowerCase());
       return matchesName && matchesReason;
@@ -292,9 +291,7 @@ class UnlinkReasonDrawer extends StatelessWidget {
       maxHeightFactor: 0.90,
       headerCard: AppDrawerHeaderCard(
         icon: Icons.link_off_rounded,
-        iconColor: AppColors.negative,
         title: 'Unlink "$reasonName"',
-        subtitle: 'Manage rule for "$contactName"',
         trailing: AppBadge.neutral(
           text: '$matchingCount ${matchingCount == 1 ? 'tx linked' : 'txs linked'}',
           size: AppBadgeSize.small,

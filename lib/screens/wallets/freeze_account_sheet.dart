@@ -60,13 +60,7 @@ class _FreezeAccountBottomSheetState extends State<FreezeAccountBottomSheet> {
     return AppDrawer(
       headerCard: AppDrawerHeaderCard(
         icon: isPaused ? Icons.pause_circle_rounded : Icons.pause_circle_outline_rounded,
-        iconColor: isPaused ? AppColors.warning : AppColors.brandGreen,
-        title: isPaused
-            ? '$activeSenderName Tracking Paused'
-            : 'Pause Tracking for $activeSenderName',
-        subtitle: isPaused
-            ? 'Tracking is currently paused. Tap below to resume.'
-            : 'Temporarily pause SMS detection and balance updates.',
+        title: isPaused ? 'Resume Tracking' : 'Pause Tracking',
       ),
       bottomAction: AppButton.primary(
         text: isPaused

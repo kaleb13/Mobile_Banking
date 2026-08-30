@@ -137,41 +137,28 @@ class AppDrawer extends StatelessWidget {
             ] else if (title != null && title!.isNotEmpty) ...[
               // ── Standard Title Row ──────────────────────────────────────
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title!,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (subtitle != null && subtitle!.isNotEmpty) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            subtitle!,
-                            style: const TextStyle(
-                              color: AppColors.textSoft,
-                              fontSize: 12,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
+                    child: Text(
+                      title!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (trailingHeader != null) trailingHeader!,
+                  if (trailingHeader != null) ...[
+                    const SizedBox(width: 8),
+                    trailingHeader!,
+                  ],
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
             ],
 
             // ── Body Content (Content-wrapped or Expanded) ────────────────
@@ -192,7 +179,9 @@ class AppDrawer extends StatelessWidget {
   }
 }
 
-/// Standardized card placed beneath the drag handle in an [AppDrawer].
+/// Standardized top title row placed beneath the drag handle in an [AppDrawer].
+/// Features a transparent white circular icon on the left, short bold title,
+/// and trailing actions/buttons on the right. Zero bulky background box and zero description text.
 class AppDrawerHeaderCard extends StatelessWidget {
   final IconData? icon;
   final Color? iconColor;
@@ -212,72 +201,150 @@ class AppDrawerHeaderCard extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.backgroundColor,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return Padding(
       padding: padding,
-      decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.drawerCard,
-        borderRadius: AppRadius.cardRadius,
-      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (leading != null) ...[
             leading!,
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
           ] else if (icon != null) ...[
             Container(
-              width: 36,
-              height: 36,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: (iconColor ?? AppColors.positive).withValues(alpha: 0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
+              alignment: Alignment.center,
               child: Icon(
                 icon,
-                color: iconColor ?? AppColors.positive,
-                size: 18,
+                color: Colors.white,
+                size: 16,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
           ],
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
-                      fontSize: 11,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.3,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (trailing != null) trailing!,
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing!,
+          ],
         ],
       ),
     );
   }
 }
+
+/// Standardized modal menu / 3-dot action item tile for drawers & modal sheets.
+///
+/// Follows the design system monochrome hierarchy:
+/// - Container background: Clean dark surface (`AppColors.surface` / translucent white) with rounded corners and zero borders
+/// - Bare icon (NO background box or circle) in translucent white (~50% opacity)
+/// - Title in semi-white text (~85% opacity, brighter than the icon, softer than pure white title)
+/// - Subtitle in soft white (~45% opacity)
+class AppDrawerActionTile extends StatelessWidget {
+  final IconData? icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback onTap;
+  final EdgeInsetsGeometry margin;
+
+  const AppDrawerActionTile({
+    super.key,
+    this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    required this.onTap,
+    this.margin = const EdgeInsets.only(bottom: 6),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSubtitle = subtitle != null && subtitle!.isNotEmpty;
+    return Container(
+      margin: margin,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: AppRadius.cardRadius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.cardRadius,
+          splashColor: Colors.white.withValues(alpha: 0.08),
+          highlightColor: Colors.white.withValues(alpha: 0.04),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(
+                    icon,
+                    size: 20,
+                    color: Colors.white.withValues(alpha: 0.50),
+                  ),
+                  const SizedBox(width: 14),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (hasSubtitle) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 10),
+                  trailing!,
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

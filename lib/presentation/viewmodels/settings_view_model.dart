@@ -73,7 +73,7 @@ class SettingsViewModel extends ChangeNotifier {
   bool _isOnboardingComplete = false;
   bool get isOnboardingComplete => _isOnboardingComplete;
 
-  bool _isBalanceVisible = true;
+  bool _isBalanceVisible = false;
   bool get isBalanceVisible => _isBalanceVisible;
 
   Set<String> _hiddenBalanceBanks = {};
@@ -146,24 +146,7 @@ class SettingsViewModel extends ChangeNotifier {
 
   void setHomeTopScrollOffset(double offset) {
     final clamped = offset < 0 ? 0.0 : offset;
-    if ((_homeTopScrollOffset - clamped).abs() > 0.5) {
-      _homeTopScrollOffset = clamped;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
-    }
-  }
-
-  double? _homeSheetTopY;
-  double? get homeSheetTopY => _homeSheetTopY;
-
-  void setHomeSheetTopY(double y) {
-    if ((_homeSheetTopY ?? -1.0) != y) {
-      _homeSheetTopY = y;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifyListeners();
-      });
-    }
+    _homeTopScrollOffset = clamped;
   }
 
   bool _isMenuOpen = false;

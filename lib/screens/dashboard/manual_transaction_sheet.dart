@@ -209,11 +209,9 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
 
     return AppDrawer(
       heightFactor: 0.88,
-      headerCard: AppDrawerHeaderCard(
+      headerCard: const AppDrawerHeaderCard(
         icon: Icons.add_circle_outline_rounded,
-        iconColor: AppColors.positive,
-        title: 'Insert Transaction',
-        subtitle: '${_selectedSender?.senderName ?? "Wallet"} · ${DateFormat("MMM d, HH:mm").format(_fixedDate)}',
+        title: 'Add Transaction',
       ),
       bottomAction: AppButton.primary(
         text: buttonText,

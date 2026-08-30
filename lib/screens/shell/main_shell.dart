@@ -137,10 +137,15 @@ class _MainShellState extends State<MainShell> {
         systemNavigationBarIconBrightness:
             context.isLightMode ? Brightness.dark : Brightness.light,
       ),
-      child: Consumer3<SettingsViewModel, TransactionsViewModel, LoansViewModel>(
-        builder: (context, settingsVM, txVM, loansVM, child) {
+      child: Selector<SettingsViewModel, ({int currentIndex, bool isMenuOpen})>(
+        selector: (_, vm) => (
+          currentIndex: vm.currentScreenIndex,
+          isMenuOpen: vm.isMenuOpen,
+        ),
+        builder: (context, navData, child) {
           final isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-          final currentIndex = settingsVM.currentScreenIndex;
+          final currentIndex = navData.currentIndex;
+          final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
 
           return PopScope(
             canPop: false,
@@ -170,10 +175,24 @@ class _MainShellState extends State<MainShell> {
                       ProfileHubScreen(),
                     ],
                   ),
-                  _buildFlyingCardsOverlay(context, settingsVM, txVM, loansVM),
+                  Consumer2<TransactionsViewModel, LoansViewModel>(
+                    builder: (context, txVM, loansVM, _) {
+                      return AnimatedBuilder(
+                        animation: _pageController,
+                        builder: (context, _) {
+                          return _buildFlyingCardsOverlay(
+                            context,
+                            settingsVM,
+                            txVM,
+                            loansVM,
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ],
               ),
-              bottomNavigationBar: (settingsVM.isMenuOpen || isKeyboardOpen)
+              bottomNavigationBar: (navData.isMenuOpen || isKeyboardOpen)
                   ? const SizedBox.shrink()
                   : CustomBottomNavBar(
                       currentIndex: currentIndex,
@@ -193,10 +212,13 @@ class _MainShellState extends State<MainShell> {
     TransactionsViewModel txVM,
     LoansViewModel loansVM,
   ) {
-    final t = settingsVM.pageOffset.clamp(0.0, 1.0);
+    final double page = _pageController.hasClients
+        ? (_pageController.page ?? 0.0)
+        : settingsVM.pageOffset;
+    final t = page.clamp(0.0, 1.0);
 
-    // Hide when resting on Home (t <= 0.02) or resting on/beyond Wallet Page (t >= 0.98 || settingsVM.pageOffset >= 0.98)
-    if (t <= 0.02 || t >= 0.98 || settingsVM.pageOffset >= 0.98) return const SizedBox.shrink();
+    // Hide when resting on Home (t <= 0.02) or resting on/beyond Wallet Page (t >= 0.98 || page >= 0.98)
+    if (t <= 0.02 || t >= 0.98 || page >= 0.98) return const SizedBox.shrink();
 
     final senders = txVM.senders;
     if (senders.isEmpty) return const SizedBox.shrink();

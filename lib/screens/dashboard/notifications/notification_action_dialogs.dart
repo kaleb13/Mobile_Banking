@@ -4,6 +4,8 @@ import '../../../theme/app_theme.dart';
 import '../../../widgets/app_back_button.dart';
 import '../../../widgets/app_button.dart';
 
+import '../../../widgets/app_drawer.dart';
+
 class NotificationOptionsSheet extends StatelessWidget {
   final AppNotification notification;
   final VoidCallback onClose;
@@ -51,58 +53,30 @@ class NotificationOptionsSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (!isSystem) ...[
-            _buildModalItem(
-              icon: Icons.add_circle_outline_rounded,
-              label: 'Insert Transaction Manually',
-              iconColor: AppColors.positive,
-              onTap: onManualInsert,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!isSystem) ...[
+                  AppDrawerActionTile(
+                    icon: Icons.add_circle_outline_rounded,
+                    title: 'Insert Transaction Manually',
+                    subtitle: 'Create a custom record from this SMS',
+                    onTap: onManualInsert,
+                  ),
+                ],
+                AppDrawerActionTile(
+                  icon: Icons.block_rounded,
+                  title: 'Ignore Message',
+                  subtitle: 'Dismiss permanently from notifications',
+                  onTap: onIgnore,
+                ),
+              ],
             ),
-          ],
-          _buildModalItem(
-            icon: Icons.block_rounded,
-            label: 'Ignore Message (Never show again)',
-            iconColor: AppColors.textSecondary,
-            onTap: onIgnore,
           ),
           const SizedBox(height: 16),
         ],
-      ),
-    );
-  }
-
-  Widget _buildModalItem({
-    required IconData icon,
-    required String label,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      splashColor: AppColors.buttonSecondary,
-      highlightColor: AppColors.buttonSecondary,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Text(
-              label,
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
