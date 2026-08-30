@@ -46,9 +46,21 @@ class GetBalanceHistoryUseCase {
     required List<CashTransaction> cashTransactions,
     required String filter, // '1D', '7D', '30D', '180D', '360D', 'ALL'
     DateTime? referenceDate,
+    Set<String>? allowedBanks,
   }) {
     final now = referenceDate ?? DateTime.now();
     final nowMidnight = DateTime(now.year, now.month, now.day);
+
+    final List<AppTransaction> scopedTxs;
+    if (allowedBanks != null && allowedBanks.isNotEmpty) {
+      final upperAllowed =
+          allowedBanks.map((b) => b.trim().toUpperCase()).toSet();
+      scopedTxs = transactions
+          .where((tx) => upperAllowed.contains(tx.name.trim().toUpperCase()))
+          .toList();
+    } else {
+      scopedTxs = transactions;
+    }
 
     // Determine the max number of days for the chosen filter
     int maxFilterDays = 30;
@@ -61,7 +73,7 @@ class GetBalanceHistoryUseCase {
 
     // Find the oldest recorded transaction or cash transaction
     DateTime? oldestDate;
-    for (final tx in transactions) {
+    for (final tx in scopedTxs) {
       if (oldestDate == null || tx.date.isBefore(oldestDate)) {
         oldestDate = tx.date;
       }
@@ -90,7 +102,7 @@ class GetBalanceHistoryUseCase {
         nowMidnight.subtract(Duration(days: daysLimit - 1));
 
     // Sort transactions oldest-first
-    final sortedTxs = List<AppTransaction>.from(transactions)
+    final sortedTxs = List<AppTransaction>.from(scopedTxs)
       ..sort((a, b) => a.date.compareTo(b.date));
     final sortedCashTxs = List<CashTransaction>.from(cashTransactions)
       ..sort((a, b) => a.date.compareTo(b.date));
@@ -105,20 +117,28 @@ class GetBalanceHistoryUseCase {
           tx.resolvedReason?.toLowerCase() == 'cash';
     }
 
-    // Pre-seed all banks with their earliest known positive balance in history
+    // Pre-seed all accounts with their earliest known positive balance in history
     // so that active accounts don't start at zero before their first transaction in this window.
     for (final tx in sortedTxs) {
-      final bankKey = tx.name.trim();
-      if (!lastKnownBalance.containsKey(bankKey) && tx.totalBalance > 0) {
-        lastKnownBalance[bankKey] = tx.totalBalance;
+      final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
+      if (!lastKnownBalance.containsKey(accountKey) && tx.totalBalance > 0) {
+        lastKnownBalance[accountKey] = tx.totalBalance;
       }
     }
 
     // Accumulate cash pre-seed strictly BEFORE the chart window
     for (final tx in sortedTxs) {
       if (tx.date.isBefore(actualChartStart)) {
+        final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
         if (tx.totalBalance > 0) {
-          lastKnownBalance[tx.name] = tx.totalBalance;
+          lastKnownBalance[accountKey] = tx.totalBalance;
+        } else if (lastKnownBalance.containsKey(accountKey)) {
+          if (tx.type == 'income') {
+            lastKnownBalance[accountKey] = lastKnownBalance[accountKey]! + tx.amount;
+          } else {
+            final newBal = lastKnownBalance[accountKey]! - tx.amount;
+            lastKnownBalance[accountKey] = newBal > 0 ? newBal : 0.0;
+          }
         }
         if (isCashTransfer(tx)) {
           if (tx.type == 'expense') {
@@ -168,8 +188,16 @@ class GetBalanceHistoryUseCase {
       final dayTxs = txsByDay[key];
       if (dayTxs != null) {
         for (final tx in dayTxs) {
+          final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
           if (tx.totalBalance > 0) {
-            lastKnownBalance[tx.name] = tx.totalBalance;
+            lastKnownBalance[accountKey] = tx.totalBalance;
+          } else if (lastKnownBalance.containsKey(accountKey)) {
+            if (tx.type == 'income') {
+              lastKnownBalance[accountKey] = lastKnownBalance[accountKey]! + tx.amount;
+            } else {
+              final newBal = lastKnownBalance[accountKey]! - tx.amount;
+              lastKnownBalance[accountKey] = newBal > 0 ? newBal : 0.0;
+            }
           }
           if (isCashTransfer(tx)) {
             if (tx.type == 'expense') {

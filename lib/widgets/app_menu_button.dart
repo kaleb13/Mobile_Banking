@@ -18,13 +18,19 @@ enum AppMenuButtonVariant {
 class AppMenuItem<T> {
   final T value;
   final String label;
+  final String? subtitle;
   final IconData? icon;
+  final Color? iconColor;
+  final Color? textColor;
   final bool enabled;
 
   const AppMenuItem({
     required this.value,
     required this.label,
+    this.subtitle,
     this.icon,
+    this.iconColor,
+    this.textColor,
     this.enabled = true,
   });
 }
@@ -154,7 +160,7 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
         },
         onCanceled: () => setState(() => _isOpen = false),
         offset: widget.offset,
-        constraints: BoxConstraints(minWidth: widget.minWidth, maxWidth: 220),
+        constraints: BoxConstraints(minWidth: widget.minWidth, maxWidth: 260),
         borderRadius: BorderRadius.circular(100),
         padding: EdgeInsets.zero,
         color: popupBgColor,
@@ -169,31 +175,51 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
         },
         itemBuilder: (context) {
           return widget.items.map((item) {
+            final hasSubtitle = item.subtitle != null && item.subtitle!.isNotEmpty;
             return PopupMenuItem<T>(
               value: item.value,
               enabled: item.enabled,
-              height: 42,
+              height: hasSubtitle ? 52 : 42,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
                   if (item.icon != null) ...[
                     Icon(
                       item.icon,
-                      size: 17,
-                      color: itemTextColor,
+                      size: hasSubtitle ? 19 : 17,
+                      color: item.iconColor ?? itemTextColor,
                     ),
                     const SizedBox(width: 10),
                   ],
                   Expanded(
-                    child: Text(
-                      item.label,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: itemTextColor,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          item.label,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: item.textColor ?? itemTextColor,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (hasSubtitle) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            item.subtitle!,
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

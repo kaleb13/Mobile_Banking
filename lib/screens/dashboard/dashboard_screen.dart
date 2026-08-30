@@ -131,8 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Stack(
             children: [
-              // Top background ambient glow — uses a RadialGradient instead of
-              // ImageFilter.blur to avoid an expensive off-screen render pass.
+              // Permanent Top-Right Ambient Glow
               Positioned(
                 top: -30,
                 right: -100,
@@ -392,10 +391,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-
   Widget _buildBalanceCard(BuildContext context) {
-    return Consumer2<AnalyticsViewModel, SettingsViewModel>(
-      builder: (context, analyticsVM, settingsVM, _) {
+    return Consumer3<AnalyticsViewModel, SettingsViewModel, TransactionsViewModel>(
+      builder: (context, analyticsVM, settingsVM, txVM, _) {
+        final cashVM = Provider.of<CashWalletViewModel>(context, listen: false);
         final netVal = _isShowingTodayOnly ? analyticsVM.netForSelectedDate : analyticsVM.netOverall;
         final pctVal = _isShowingTodayOnly ? analyticsVM.incomePercentageChange : analyticsVM.percentageChangeOverall;
         final bool isPositive = netVal >= 0;
@@ -407,186 +406,211 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-            // Left Column: Total Balance & PNL
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Label + Visibility icon
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      settingsVM.toggleBalanceVisibility();
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Total balance',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          settingsVM.isBalanceVisible
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          size: 15,
-                          color: AppColors.textSecondary,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Large Animated Balance Display (Auto-scales down for high amounts e.g. 1M+ so it never truncates)
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      settingsVM.toggleBalanceVisibility();
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                // Left Column: Total Balance & PNL
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Label + Question Icon (before eye) + Visibility Eye Icon
+                      Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const CurrencySymbolWidget(
-                            size: 26,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          AnimatedBalanceText(
-                            value: analyticsVM.totalBalance,
-                            isMasked: !settingsVM.isBalanceVisible,
-                            integerStyle: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 38,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -1.0,
-                              height: 1.05,
-                            ),
-                            decimalStyle: const TextStyle(
+                          const Text(
+                            'Total balance',
+                            style: TextStyle(
                               color: AppColors.textSecondary,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              height: 1.05,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          if (txVM.hasMultipleSims) ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                _showAccountBreakdownDrawer(context, txVM, cashVM, analyticsVM);
+                              },
+                              behavior: HitTestBehavior.opaque,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 2.0),
+                                child: SvgPicture.asset(
+                                  'assets/images/message_question_Icon.svg',
+                                  width: 14,
+                                  height: 14,
+                                  colorFilter: const ColorFilter.mode(
+                                    AppColors.textSecondary,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              settingsVM.toggleBalanceVisibility();
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 2.0),
+                              child: Icon(
+                                settingsVM.isBalanceVisible
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 15,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                      const SizedBox(height: 6),
 
-                  // Sub-row: Today's / Overall PNL with Dashed Underline & Chart Toggle Arrow
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => _showPNLInfo(context, _isShowingTodayOnly),
-                          behavior: HitTestBehavior.opaque,
-                          child: IntrinsicWidth(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
-                                  style: const TextStyle(
-                                    color: AppColors.textSoft,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 1),
-                                CustomPaint(
-                                  size: const Size(double.infinity, 1),
-                                  painter: DashedUnderlinePainter(
-                                    color: AppColors.textSoft.withValues(alpha: 0.4),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: () {
-                            HapticFeedback.selectionClick();
-                            setState(() {
-                              _isOverallChartVisible = !_isOverallChartVisible;
-                            });
-                            _updateTopSectionHeight(forceAnimate: true);
-                            Future.delayed(const Duration(milliseconds: 100), () {
-                              if (mounted) _updateTopSectionHeight(forceAnimate: true);
-                            });
-                          },
-                          behavior: HitTestBehavior.opaque,
+                      // Large Animated Balance Display (Auto-scales down for high amounts e.g. 1M+ so it never truncates)
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          settingsVM.toggleBalanceVisibility();
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                settingsVM.isBalanceVisible
-                                    ? '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}'
-                                    : '••••••',
-                                style: TextStyle(
-                                  color: isPositive ? AppColors.positive : AppColors.negative,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
+                              const CurrencySymbolWidget(
+                                size: 26,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              AnimatedBalanceText(
+                                value: analyticsVM.totalBalance,
+                                isMasked: !settingsVM.isBalanceVisible,
+                                integerStyle: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -1.0,
+                                  height: 1.05,
                                 ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '(',
-                                style: TextStyle(
-                                  color: isPositive ? AppColors.positive : AppColors.negative,
-                                  fontSize: 10,
+                                decimalStyle: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 24,
                                   fontWeight: FontWeight.w600,
+                                  height: 1.05,
                                 ),
-                              ),
-                              const SizedBox(width: 2),
-                              Icon(
-                                isPositive ? Icons.trending_up : Icons.trending_down,
-                                color: isPositive ? AppColors.positive : AppColors.negative,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                '${pctVal.abs().toStringAsFixed(2)}%)',
-                                style: TextStyle(
-                                  color: isPositive ? AppColors.positive : AppColors.negative,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                _isOverallChartVisible
-                                    ? Icons.keyboard_arrow_up
-                                    : Icons.keyboard_arrow_down,
-                                color: Colors.white54,
-                                size: 16,
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Sub-row: Today's / Overall PNL with Dashed Underline & Chart Toggle Arrow
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _showPNLInfo(context, _isShowingTodayOnly),
+                              behavior: HitTestBehavior.opaque,
+                              child: IntrinsicWidth(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      _isShowingTodayOnly ? 'TODAY PNL' : 'OVERALL PNL',
+                                      style: const TextStyle(
+                                        color: AppColors.textSoft,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 1),
+                                    CustomPaint(
+                                      size: const Size(double.infinity, 1),
+                                      painter: DashedUnderlinePainter(
+                                        color: AppColors.textSoft.withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                setState(() {
+                                  _isOverallChartVisible = !_isOverallChartVisible;
+                                });
+                                _updateTopSectionHeight(forceAnimate: true);
+                                Future.delayed(const Duration(milliseconds: 100), () {
+                                  if (mounted) _updateTopSectionHeight(forceAnimate: true);
+                                });
+                              },
+                              behavior: HitTestBehavior.opaque,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    settingsVM.isBalanceVisible
+                                        ? '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}'
+                                        : '••••••',
+                                    style: TextStyle(
+                                      color: isPositive ? AppColors.positive : AppColors.negative,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '(',
+                                    style: TextStyle(
+                                      color: isPositive ? AppColors.positive : AppColors.negative,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    isPositive ? Icons.trending_up : Icons.trending_down,
+                                    color: isPositive ? AppColors.positive : AppColors.negative,
+                                    size: 12,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${pctVal.abs().toStringAsFixed(2)}%)',
+                                    style: TextStyle(
+                                      color: isPositive ? AppColors.positive : AppColors.negative,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    _isOverallChartVisible
+                                        ? Icons.keyboard_arrow_up
+                                        : Icons.keyboard_arrow_down,
+                                    color: Colors.white54,
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
                 const SizedBox(width: 12),
 
@@ -634,11 +658,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final double balance = txVM.balanceForSender(cardName);
       final int txCount = txVM.txCountForSender(cardName);
 
+      final bool cardBalanceVisible =
+          settingsVM.isBalanceVisible && !settingsVM.isBankBalanceHidden(cardName);
+
       final Widget card = BankCardWidget(
         senderName: cardName,
         balance: balance,
         txCount: txCount,
-        isBalanceVisible: settingsVM.isBalanceVisible,
+        isBalanceVisible: cardBalanceVisible,
         isPaused: false,
         animationFactor: 0.0,
         onTap: () => settingsVM.tabNavigationNotifier.value = 1,
@@ -671,10 +698,220 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _showAccountBreakdownDrawer(
+    BuildContext context,
+    TransactionsViewModel txVM,
+    CashWalletViewModel cashVM,
+    AnalyticsViewModel analyticsVM,
+  ) {
+    final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
+    final fmt = NumberFormat('#,##0.00');
+
+    AppDrawer.show(
+      context: context,
+      builder: (drawerCtx) {
+        return AppDrawer(
+          headerCard: AppDrawerHeaderCard(
+            leading: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.brandGreen.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: SvgPicture.asset(
+                  'assets/images/message_question_Icon.svg',
+                  width: 16,
+                  height: 16,
+                  colorFilter: const ColorFilter.mode(
+                    AppColors.brandGreen,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+            ),
+            title: 'Account Balances',
+            subtitle: 'Overview of your balances across all active accounts',
+          ),
+          bottomAction: AppButton.primary(
+            text: 'Got it',
+            onPressed: () => Navigator.pop(drawerCtx),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Dual-account / Multi-SIM view: Collapsible per-SIM cards (collapsed by default)
+              if (txVM.hasMultipleSims) ...[
+                for (final slot in txVM.detectedSimSlots) ...[
+                  Builder(
+                    builder: (context) {
+                      final sim = txVM.simCards.where((s) => s.simSlot == slot).firstOrNull;
+                      final double simBal = txVM.totalBalanceForSim(slot);
+
+                      // Non-zero bank balances under this SIM
+                      final nonZeroBanks = <MapEntry<String, double>>[];
+                      for (final sender in txVM.activeSenders) {
+                        if (sender.senderName.trim().toUpperCase() == 'CASH WALLET') continue;
+                        if (!txVM.isAccountPaused(sender.senderName, slot)) {
+                          final bBal = txVM.balanceForAccount(sender.senderName, slot);
+                          if (bBal > 0) {
+                            nonZeroBanks.add(MapEntry(sender.senderName, bBal));
+                          }
+                        }
+                      }
+
+                      return _CollapsibleSimAccountCard(
+                        slot: slot,
+                        displayName: sim?.displayName,
+                        totalBalance: simBal,
+                        bankBalances: nonZeroBanks,
+                        isBalanceVisible: settingsVM.isBalanceVisible,
+                      );
+                    },
+                  ),
+                ],
+              ] else ...[
+                // Single-SIM view: List only active banks with balance > 0 (compact, no icons)
+                Builder(
+                  builder: (context) {
+                    final nonZeroSenders = txVM.activeSenders.where((sender) {
+                      if (sender.senderName.trim().toUpperCase() == 'CASH WALLET') return false;
+                      return txVM.balanceForSender(sender.senderName) > 0;
+                    }).toList();
+
+                    if (nonZeroSenders.isEmpty) return const SizedBox.shrink();
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.cardSm),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final sender in nonZeroSenders)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      sender.senderName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    settingsVM.isBalanceVisible
+                                        ? '${fmt.format(txVM.balanceForSender(sender.senderName))} ETB'
+                                        : '••••••••',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+
+
+              // Cash Wallet (only if balance > 0)
+              if (cashVM.balance > 0)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.cardSm),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Physical Cash',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        settingsVM.isBalanceVisible
+                            ? '${fmt.format(cashVM.balance)} ETB'
+                            : '••••••••',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Summary Total Card (Compact)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(AppRadius.cardSm),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Combined Net Assets',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      settingsVM.isBalanceVisible
+                          ? '${fmt.format(analyticsVM.totalBalance)} ETB'
+                          : '••••••••',
+                      style: const TextStyle(
+                        color: AppColors.brandGreen,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildOverallChartSection(BuildContext context) {
     if (!_isOverallChartVisible) return const SizedBox.shrink();
     return Consumer3<TransactionsViewModel, CashWalletViewModel, SettingsViewModel>(
       builder: (context, txVM, cashVM, settingsVM, _) {
+        final activeBankNames =
+            txVM.activeSenders.map((s) => s.senderName).toSet();
         return InteractiveBalanceChart(
           transactions: txVM.transactions,
           cashTransactions: cashVM.cashTransactions,
@@ -682,6 +919,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           isBalanceVisible: settingsVM.isBalanceVisible,
           accentColor: AppColors.positive,
           chartHeight: 120,
+          allowedBanks: activeBankNames,
           onFilterChanged: (val) => setState(() => _chartFilter = val),
         );
       },
@@ -1146,7 +1384,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         const SizedBox(width: 8),
                         _buildWhiteFilterDropdown(
                           value: _typeFilter,
-                          items: const ['All', 'Incoming', 'Outgoing'],
+                          items: const ['All', 'Income', 'Expense'],
                           onChanged: (val) {
                             if (val != null) {
                               setState(() {
@@ -1284,7 +1522,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildWhiteTransactionItem(
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
-    final String label = isIncome ? 'Deposit' : 'Transferred';
+    final String label = isIncome ? 'Income' : 'Expense';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
     return InkWell(
@@ -1544,5 +1782,158 @@ class DashedUnderlinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
+class _CollapsibleSimAccountCard extends StatefulWidget {
+  final int slot;
+  final String? displayName;
+  final double totalBalance;
+  final List<MapEntry<String, double>> bankBalances;
+  final bool isBalanceVisible;
+
+  const _CollapsibleSimAccountCard({
+    required this.slot,
+    this.displayName,
+    required this.totalBalance,
+    required this.bankBalances,
+    required this.isBalanceVisible,
+  });
+
+  @override
+  State<_CollapsibleSimAccountCard> createState() => _CollapsibleSimAccountCardState();
+}
+
+class _CollapsibleSimAccountCardState extends State<_CollapsibleSimAccountCard> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat('#,##0.00');
+    final bg = widget.slot == 0 ? AppColors.sim1BadgeBg : AppColors.sim2BadgeBg;
+    final hasNonZeroBanks = widget.bankBalances.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.cardSm),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Clickable Summary Header (Tapping toggles expansion if there are bank items)
+          InkWell(
+            onTap: hasNonZeroBanks
+                ? () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _isExpanded = !_isExpanded);
+                  }
+                : null,
+            borderRadius: BorderRadius.circular(AppRadius.cardSm),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      'SIM ${widget.slot + 1}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (widget.displayName != null && widget.displayName!.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.displayName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const Spacer(),
+                  ],
+                  Text(
+                    widget.isBalanceVisible ? '${fmt.format(widget.totalBalance)} ETB' : '••••••••',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (hasNonZeroBanks) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      _isExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: AppColors.textSecondary,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Animated Collapsible Details (Hidden by default)
+          if (_isExpanded && hasNonZeroBanks) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: Column(
+                children: [
+                  const Divider(height: 1, color: AppColors.surfaceElevated),
+                  const SizedBox(height: 8),
+                  for (final item in widget.bankBalances)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.key,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            widget.isBalanceVisible ? '${fmt.format(item.value)} ETB' : '••••••••',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 

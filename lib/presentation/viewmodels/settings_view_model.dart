@@ -4,6 +4,7 @@ import '../../models/app_currency.dart';
 import '../../models/scan_window_option.dart';
 import '../../models/scan_progress_status.dart';
 import '../../data/repositories/settings_repository.dart';
+import '../../services/report_notification_service.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   final SettingsRepository _repository;
@@ -74,6 +75,44 @@ class SettingsViewModel extends ChangeNotifier {
 
   bool _isBalanceVisible = true;
   bool get isBalanceVisible => _isBalanceVisible;
+
+  Set<String> _hiddenBalanceBanks = {};
+  Set<String> get hiddenBalanceBanks => Set.unmodifiable(_hiddenBalanceBanks);
+
+  bool isBankBalanceHidden(String bankName) {
+    return _hiddenBalanceBanks
+        .any((b) => b.trim().toUpperCase() == bankName.trim().toUpperCase());
+  }
+
+  Future<void> toggleBankBalanceVisibility(String bankName) async {
+    final nameUp = bankName.trim().toUpperCase();
+    if (isBankBalanceHidden(bankName)) {
+      _hiddenBalanceBanks =
+          _hiddenBalanceBanks.where((b) => b.trim().toUpperCase() != nameUp).toSet();
+    } else {
+      _hiddenBalanceBanks = {..._hiddenBalanceBanks, bankName.trim()};
+    }
+    notifyListeners();
+    await _repository.setHiddenBalanceBanks(_hiddenBalanceBanks);
+  }
+
+  Future<void> setBankBalanceHidden(String bankName, bool isHidden) async {
+    final nameUp = bankName.trim().toUpperCase();
+    if (isHidden) {
+      if (!isBankBalanceHidden(bankName)) {
+        _hiddenBalanceBanks = {..._hiddenBalanceBanks, bankName.trim()};
+        notifyListeners();
+        await _repository.setHiddenBalanceBanks(_hiddenBalanceBanks);
+      }
+    } else {
+      if (isBankBalanceHidden(bankName)) {
+        _hiddenBalanceBanks =
+            _hiddenBalanceBanks.where((b) => b.trim().toUpperCase() != nameUp).toSet();
+        notifyListeners();
+        await _repository.setHiddenBalanceBanks(_hiddenBalanceBanks);
+      }
+    }
+  }
 
   double _pageOffset = 0.0;
   double get pageOffset => _pageOffset;
@@ -151,9 +190,15 @@ class SettingsViewModel extends ChangeNotifier {
     _userName = await _repository.getUserName();
     _isOnboardingComplete = await _repository.getIsOnboardingComplete();
     _isBalanceVisible = await _repository.getIsBalanceVisible();
+    _hiddenBalanceBanks = await _repository.getHiddenBalanceBanks();
     _scanWindowOption = await _repository.getScanWindow();
     _isInitialized = true;
     notifyListeners();
+
+    // Synchronize scheduled background alarms
+    if (_isPushNotificationsEnabled) {
+      await ReportNotificationService.instance.syncSchedules();
+    }
   }
 
   Future<void> setThemeMode(AppThemeMode mode) async {
@@ -166,6 +211,10 @@ class SettingsViewModel extends ChangeNotifier {
     _currentCurrency = AppCurrency.fromCode(code);
     notifyListeners();
     await _repository.setCurrency(code);
+    // Currency changed: update scheduled reports formatting
+    if (_isPushNotificationsEnabled) {
+      await ReportNotificationService.instance.syncSchedules();
+    }
   }
 
   Future<void> setSmsListeningEnabled(bool value) async {
@@ -178,24 +227,51 @@ class SettingsViewModel extends ChangeNotifier {
     _isPushNotificationsEnabled = value;
     notifyListeners();
     await _repository.setPushNotificationsEnabled(value);
+    if (value) {
+      await ReportNotificationService.instance.syncSchedules();
+    } else {
+      await ReportNotificationService.instance.cancelSchedules();
+    }
   }
 
   Future<void> setDailyReportEnabled(bool value) async {
     _isDailyReportEnabled = value;
     notifyListeners();
     await _repository.setReportDailyEnabled(value);
+    if (_isPushNotificationsEnabled) {
+      await ReportNotificationService.instance.syncSchedules();
+    }
   }
 
   Future<void> setWeeklyReportEnabled(bool value) async {
     _isWeeklyReportEnabled = value;
     notifyListeners();
     await _repository.setReportWeeklyEnabled(value);
+    if (_isPushNotificationsEnabled) {
+      await ReportNotificationService.instance.syncSchedules();
+    }
   }
 
   Future<void> setMonthlyReportEnabled(bool value) async {
     _isMonthlyReportEnabled = value;
     notifyListeners();
     await _repository.setReportMonthlyEnabled(value);
+    if (_isPushNotificationsEnabled) {
+      await ReportNotificationService.instance.syncSchedules();
+    }
+  }
+
+  /// Fires an immediate test push notification for previewing with live total balance
+  Future<bool> sendTestReport(
+    String reportType, {
+    double? totalBalance,
+    String? currency,
+  }) async {
+    return await ReportNotificationService.instance.sendTestReport(
+      reportType,
+      totalBalance: totalBalance,
+      currency: currency,
+    );
   }
 
   Future<void> setNotifQuickButton1(String value) async {

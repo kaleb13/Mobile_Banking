@@ -983,6 +983,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
             label: 'Goal Name',
             hint: 'e.g. New Car, Dream House',
             keyboardType: TextInputType.text,
+            maxLength: 50,
           ),
           const SizedBox(height: 12),
           _buildField(
@@ -991,6 +992,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                 'Target Amount (${Provider.of<SettingsViewModel>(context, listen: false).currentCurrency.shortLabel})',
             hint: 'e.g. 200,000',
             keyboardType: TextInputType.number,
+            maxLength: 14,
           ),
           const SizedBox(height: 12),
           _buildField(
@@ -999,6 +1001,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
                 'Already Saved (${Provider.of<SettingsViewModel>(context, listen: false).currentCurrency.shortLabel})',
             hint: '0',
             keyboardType: TextInputType.number,
+            maxLength: 14,
           ),
           const SizedBox(height: 12),
 
@@ -1652,14 +1655,14 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
     required String label,
     required String hint,
     required TextInputType keyboardType,
+    int? maxLength,
   }) {
-    return AppTextField(
+    return AppTextField.modal(
       controller: controller,
       label: label,
       hint: hint,
       keyboardType: keyboardType,
-      backgroundColor: AppColors.previewCardBg,
-      borderRadius: BorderRadius.circular(16),
+      maxLength: maxLength,
     );
   }
 }

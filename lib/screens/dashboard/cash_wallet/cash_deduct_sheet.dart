@@ -45,43 +45,50 @@ void showCashDeductModal(
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setModalState) {
+          final double availableBal = selectedWithdrawal != null
+              ? cashVM.getCashWithdrawalRemainingAmount(
+                  selectedWithdrawal!.id!, selectedWithdrawal!.amount)
+              : cashVM.cashBalance;
+
           final enteredAmt = double.tryParse(amountController.text.trim());
           String? limitError;
-          if (enteredAmt != null && enteredAmt > 0) {
-            if (selectedWithdrawal != null) {
-              final rem = cashVM.getCashWithdrawalRemainingAmount(
-                  selectedWithdrawal!.id!, selectedWithdrawal!.amount);
-              if (enteredAmt > rem) {
-                limitError =
-                    'Exceeds remaining withdrawal balance of ${fmtShort.format(rem)} ETB';
-              }
-            } else if (cashVM.cashBalance > 0 &&
-                enteredAmt > cashVM.cashBalance) {
+          if (availableBal <= 0) {
+            limitError = selectedWithdrawal != null
+                ? 'Selected withdrawal has 0.00 ETB remaining'
+                : 'No available cash balance to deduct from (0.00 ETB)';
+          } else if (enteredAmt != null && enteredAmt > 0) {
+            if (enteredAmt > availableBal) {
               limitError =
-                  'Exceeds available cash balance of ${fmtShort.format(cashVM.cashBalance)} ETB';
+                  'Exceeds available balance of ${fmtShort.format(availableBal)} ETB';
             }
           }
+
           final bool isExceeded = limitError != null;
           final bool isValid = enteredAmt != null &&
               enteredAmt > 0 &&
               !isExceeded &&
+              availableBal > 0 &&
+              enteredAmt <= availableBal &&
               selectedReason != null;
-          final String buttonText = isExceeded
-              ? 'Exceeds Available Balance'
-              : (selectedReason == null
-                  ? 'Select Reason to Record'
-                  : (enteredAmt == null || enteredAmt <= 0
-                      ? 'Enter Amount'
-                      : 'Record Expense'));
+          final String buttonText = availableBal <= 0
+              ? 'Insufficient Cash Balance'
+              : (isExceeded
+                  ? 'Exceeds Available Balance'
+                  : (selectedReason == null
+                      ? 'Select Reason to Record'
+                      : (enteredAmt == null || enteredAmt <= 0
+                          ? 'Enter Amount'
+                          : 'Record Expense')));
 
           return AppDrawer(
             heightFactor: 0.88,
             headerCard: AppDrawerHeaderCard(
               icon: Icons.money_off_rounded,
-              iconColor: AppColors.positive,
+              iconColor: availableBal <= 0 ? AppColors.negative : AppColors.positive,
               title: 'Deduct Cash Expense',
-              subtitle:
-                  'Available: ${fmtShort.format(cashVM.cashBalance)} ETB',
+              subtitle: availableBal <= 0
+                  ? 'Available: 0.00 ETB (Insufficient funds)'
+                  : 'Available: ${fmtShort.format(availableBal)} ETB',
             ),
             bottomAction: AppButton.primary(
               text: buttonText,
@@ -91,7 +98,11 @@ void showCashDeductModal(
                   : () async {
                       final amtStr = amountController.text.trim();
                       final amt = double.tryParse(amtStr);
-                      if (amt == null || amt <= 0 || selectedReason == null) {
+                      if (amt == null ||
+                          amt <= 0 ||
+                          selectedReason == null ||
+                          availableBal <= 0 ||
+                          amt > availableBal) {
                         return;
                       }
 
@@ -207,19 +218,19 @@ void showCashDeductModal(
 
                 AppTextField(
                   controller: amountController,
+                  maxLength: 14,
+                  label:
+                      'AMOUNT (${settingsVM.currentCurrency.shortLabel})',
+                  hint: '0.00',
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.center,
-                  variant: AppTextFieldVariant.modal,
-                  backgroundColor: Colors.transparent,
+                  prefixIcon: Icons.account_balance_wallet_outlined,
+                  backgroundColor: AppColors.previewCardBg,
+                  borderRadius: BorderRadius.circular(16),
                   style: TextStyle(
                     color: isExceeded ? AppColors.negative : Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
-                  hint: '0.00',
-                  hintColor: Colors.white.withValues(alpha: 0.1),
-                  prefixText: '${settingsVM.currentCurrency.shortLabel} ',
                   onChanged: (_) => setModalState(() {}),
                 ),
                 if (isExceeded) ...[

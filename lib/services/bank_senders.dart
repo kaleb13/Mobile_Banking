@@ -74,6 +74,40 @@ class BankSenders {
     return null;
   }
 
+  /// Returns the sender search keywords for a specific bank name.
+  static List<String> getKeywordsForBank(String bankName) {
+    final up = bankName.trim().toUpperCase();
+    if (up == 'TELEBIRR' || up.contains('TELEBIRR')) {
+      return ['telebirr', '127'];
+    } else if (up == 'CBE BIRR' || up == 'CBEBIRR' || (up.contains('CBE') && up.contains('BIRR'))) {
+      return ['cbebirr', 'cbe birr', 'cbe'];
+    } else if (up == 'CBE' || up.contains('COMMERCIAL BANK') || up.contains('CBE')) {
+      return ['cbe'];
+    } else if (up.contains('AHADU')) {
+      return ['ahadu'];
+    } else if (up == 'BOA' || up.contains('ABYSSINIA')) {
+      return ['boa', 'abyssinia'];
+    } else if (up.contains('DASHEN') || up.contains('AMOLE')) {
+      return ['dashen', 'amole'];
+    } else {
+      return [bankName.trim().toLowerCase()];
+    }
+  }
+
+  /// Returns true if [bankA] and [bankB] represent the same bank entity,
+  /// normalizing variations such as 'CBE Birr' vs 'CBEBirr', 'BOA' vs 'Abyssinia', etc.
+  static bool isSameBank(String? bankA, String? bankB) {
+    if (bankA == null || bankB == null) return false;
+    final aTrim = bankA.trim();
+    final bTrim = bankB.trim();
+    if (aTrim.isEmpty || bTrim.isEmpty) return false;
+    if (aTrim.toUpperCase() == bTrim.toUpperCase()) return true;
+
+    final canonicalA = match(aTrim) ?? aTrim;
+    final canonicalB = match(bTrim) ?? bTrim;
+    return canonicalA.toUpperCase() == canonicalB.toUpperCase();
+  }
+
   /// Returns true if [body] is a password, PIN, authentication failure, or security
   /// verification message (e.g. "Sorry, your PIN or password is incorrect", OTP codes,
   /// PIN reset notifications) that should be auto-ignored and never saved into Shibre.

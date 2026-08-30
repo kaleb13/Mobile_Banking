@@ -38,9 +38,10 @@ class BankCardWidget extends StatelessWidget {
     this.accountCount = 1,
   });
 
-  static Widget bankLogo(String name, [double size = 34.0, Color? iconColor]) {
+  static Widget bankLogo(String name, [double size = 34.0, Color? iconColor, bool onLightSurface = false]) {
     final nameUp = name.toUpperCase();
     String imagePath = '';
+    final Color effectiveMonoColor = iconColor ?? (onLightSurface ? AppColors.iconDark : AppColors.iconLight);
 
     if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL BANK') || nameUp.contains('COMMERCIAL')) {
       return SvgPicture.asset(
@@ -54,37 +55,25 @@ class BankCardWidget extends StatelessWidget {
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       imagePath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
-      return SvgPicture.asset(
+      return AppSvgIcon(
         'assets/images/Ahadu_Logo.svg',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        colorFilter: ColorFilter.mode(
-          iconColor ?? Colors.white,
-          BlendMode.srcIn,
-        ),
+        size: size,
+        color: iconColor,
+        onLightSurface: onLightSurface,
       );
     } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
-      return SvgPicture.asset(
+      return AppSvgIcon(
         'assets/images/Bank_of_Abyssinia_Icon.svg',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        colorFilter: ColorFilter.mode(
-          iconColor ?? Colors.white,
-          BlendMode.srcIn,
-        ),
+        size: size,
+        color: iconColor,
+        onLightSurface: onLightSurface,
       );
     } else if (nameUp.contains('DASHEN')) {
-      return SvgPicture.asset(
+      return AppSvgIcon(
         'assets/images/Dashen_Bank_Logo.svg',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        colorFilter: ColorFilter.mode(
-          iconColor ?? Colors.white,
-          BlendMode.srcIn,
-        ),
+        size: size,
+        color: iconColor,
+        onLightSurface: onLightSurface,
       );
     }
 
@@ -98,27 +87,23 @@ class BankCardWidget extends StatelessWidget {
     }
 
     if (nameUp == 'CASH WALLET') {
-      return SvgPicture.asset(
+      return AppSvgIcon(
         'assets/images/Wallet Icon.svg',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        colorFilter: ColorFilter.mode(
-          iconColor ?? Colors.white,
-          BlendMode.srcIn,
-        ),
+        size: size,
+        color: iconColor,
+        onLightSurface: onLightSurface,
       );
     } else if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
       return Icon(
         Icons.handshake_rounded,
-        color: iconColor ?? Colors.white,
+        color: effectiveMonoColor,
         size: size,
       );
     }
 
     return Icon(
       Icons.account_balance,
-      color: Colors.white.withValues(alpha: 0.9),
+      color: effectiveMonoColor,
       size: size,
     );
   }

@@ -37,6 +37,7 @@ class AppButton extends StatelessWidget {
   final double borderRadius;
   final double elevation;
   final bool isSelected; // For pill variant
+  final bool onLightSurface; // For light/white backgrounds (e.g. CBE Birr card)
   final EdgeInsetsGeometry? padding;
   final double? fontSize;
   final double? iconSize;
@@ -62,7 +63,32 @@ class AppButton extends StatelessWidget {
     this.fontSize,
     this.iconSize,
     this.tooltip,
+    this.onLightSurface = false,
   })  : variant = AppButtonVariant.primary,
+        isSelected = false,
+        customBackgroundColor = null,
+        customTextColor = null;
+
+  const AppButton.primaryOnLight({
+    super.key,
+    required String this.text,
+    required this.onPressed,
+    this.icon,
+    this.trailingIcon,
+    this.isLoading = false,
+    this.fullWidth = true,
+    this.width,
+    this.minWidth,
+    this.maxWidth,
+    this.height = 50.0,
+    this.borderRadius = 100.0,
+    this.elevation = 0.0,
+    this.padding,
+    this.fontSize,
+    this.iconSize,
+    this.tooltip,
+  })  : variant = AppButtonVariant.primary,
+        onLightSurface = true,
         isSelected = false,
         customBackgroundColor = null,
         customTextColor = null;
@@ -85,7 +111,32 @@ class AppButton extends StatelessWidget {
     this.fontSize,
     this.iconSize,
     this.tooltip,
+    this.onLightSurface = false,
   })  : variant = AppButtonVariant.secondary,
+        isSelected = false,
+        customBackgroundColor = null,
+        customTextColor = null;
+
+  const AppButton.secondaryOnLight({
+    super.key,
+    required String this.text,
+    required this.onPressed,
+    this.icon,
+    this.trailingIcon,
+    this.isLoading = false,
+    this.fullWidth = true,
+    this.width,
+    this.minWidth,
+    this.maxWidth,
+    this.height = 48.0,
+    this.borderRadius = 100.0,
+    this.elevation = 0.0,
+    this.padding,
+    this.fontSize,
+    this.iconSize,
+    this.tooltip,
+  })  : variant = AppButtonVariant.secondary,
+        onLightSurface = true,
         isSelected = false,
         customBackgroundColor = null,
         customTextColor = null;
@@ -109,6 +160,7 @@ class AppButton extends StatelessWidget {
     this.fontSize,
     this.iconSize,
     this.tooltip,
+    this.onLightSurface = false,
   })  : variant = AppButtonVariant.destructive,
         isSelected = false,
         customBackgroundColor = null,
@@ -133,6 +185,7 @@ class AppButton extends StatelessWidget {
     this.fontSize,
     this.iconSize,
     this.tooltip,
+    this.onLightSurface = false,
   })  : variant = AppButtonVariant.softDestructive,
         isSelected = false,
         customBackgroundColor = null,
@@ -157,6 +210,7 @@ class AppButton extends StatelessWidget {
     this.fontSize,
     this.iconSize,
     this.tooltip,
+    this.onLightSurface = false,
   })  : variant = AppButtonVariant.ghost,
         isSelected = false,
         customBackgroundColor = null,
@@ -181,6 +235,7 @@ class AppButton extends StatelessWidget {
     this.fontSize,
     this.iconSize,
     this.tooltip,
+    this.onLightSurface = false,
   })  : variant = AppButtonVariant.pill,
         customBackgroundColor = null,
         customTextColor = null;
@@ -195,19 +250,35 @@ class AppButton extends StatelessWidget {
 
     switch (variant) {
       case AppButtonVariant.primary:
-        bg = customBackgroundColor ??
-            (isInteractive
-                ? AppColors.buttonPrimary
-                : AppColors.buttonPrimaryDisabled);
-        textColor = customTextColor ?? AppColors.buttonPrimaryText;
+        if (onLightSurface) {
+          bg = customBackgroundColor ??
+              (isInteractive
+                  ? AppColors.buttonPrimaryOnLight
+                  : AppColors.buttonPrimaryOnLight.withValues(alpha: 0.45));
+          textColor = customTextColor ?? AppColors.buttonPrimaryTextOnLight;
+        } else {
+          bg = customBackgroundColor ??
+              (isInteractive
+                  ? AppColors.buttonPrimary
+                  : AppColors.buttonPrimaryDisabled);
+          textColor = customTextColor ?? AppColors.buttonPrimaryText;
+        }
         break;
 
       case AppButtonVariant.secondary:
-        bg = customBackgroundColor ??
-            (isInteractive
-                ? AppColors.buttonSecondary
-                : AppColors.buttonSecondary.withValues(alpha: 0.05));
-        textColor = customTextColor ?? AppColors.buttonSecondaryText;
+        if (onLightSurface) {
+          bg = customBackgroundColor ??
+              (isInteractive
+                  ? AppColors.buttonSecondaryOnLight
+                  : AppColors.buttonSecondaryOnLight.withValues(alpha: 0.45));
+          textColor = customTextColor ?? AppColors.buttonSecondaryTextOnLight;
+        } else {
+          bg = customBackgroundColor ??
+              (isInteractive
+                  ? AppColors.buttonSecondary
+                  : AppColors.buttonSecondary.withValues(alpha: 0.05));
+          textColor = customTextColor ?? AppColors.buttonSecondaryText;
+        }
         break;
 
       case AppButtonVariant.destructive:
@@ -228,16 +299,20 @@ class AppButton extends StatelessWidget {
 
       case AppButtonVariant.ghost:
         bg = customBackgroundColor ?? Colors.transparent;
-        textColor = customTextColor ?? Colors.white;
+        textColor = customTextColor ?? (onLightSurface ? AppColors.darkCharcoal : Colors.white);
         break;
 
       case AppButtonVariant.pill:
         if (isSelected) {
-          bg = customBackgroundColor ?? AppColors.buttonPrimary;
-          textColor = customTextColor ?? AppColors.buttonPrimaryText;
+          bg = customBackgroundColor ??
+              (onLightSurface ? AppColors.buttonPrimaryOnLight : AppColors.buttonPrimary);
+          textColor = customTextColor ??
+              (onLightSurface ? AppColors.buttonPrimaryTextOnLight : AppColors.buttonPrimaryText);
         } else {
-          bg = customBackgroundColor ?? AppColors.buttonSecondary;
-          textColor = customTextColor ?? AppColors.textSecondary;
+          bg = customBackgroundColor ??
+              (onLightSurface ? AppColors.buttonSecondaryOnLight : AppColors.buttonSecondary);
+          textColor = customTextColor ??
+              (onLightSurface ? AppColors.buttonSecondaryTextOnLight : AppColors.textSecondary);
         }
         break;
     }
@@ -351,17 +426,25 @@ class AppButton extends StatelessWidget {
                   HapticFeedback.lightImpact();
                   onPressed?.call();
                 },
-                splashColor: (variant == AppButtonVariant.primary
-                        ? AppColors.buttonPrimaryText
-                        : (variant == AppButtonVariant.softDestructive
-                            ? AppColors.buttonDestructive
-                            : Colors.white))
+                splashColor: (onLightSurface
+                        ? (variant == AppButtonVariant.primary
+                            ? Colors.white
+                            : AppColors.darkCharcoal)
+                        : (variant == AppButtonVariant.primary
+                            ? AppColors.buttonPrimaryText
+                            : (variant == AppButtonVariant.softDestructive
+                                ? AppColors.buttonDestructive
+                                : Colors.white)))
                     .withValues(alpha: 0.12),
-                highlightColor: (variant == AppButtonVariant.primary
-                        ? AppColors.buttonPrimaryText
-                        : (variant == AppButtonVariant.softDestructive
-                            ? AppColors.buttonDestructive
-                            : Colors.white))
+                highlightColor: (onLightSurface
+                        ? (variant == AppButtonVariant.primary
+                            ? Colors.white
+                            : AppColors.darkCharcoal)
+                        : (variant == AppButtonVariant.primary
+                            ? AppColors.buttonPrimaryText
+                            : (variant == AppButtonVariant.softDestructive
+                                ? AppColors.buttonDestructive
+                                : Colors.white)))
                     .withValues(alpha: 0.06),
                 child: Padding(
                   padding: effectivePadding,

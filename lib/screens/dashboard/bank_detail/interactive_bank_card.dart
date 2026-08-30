@@ -217,11 +217,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                       height: 54,
                       child: Row(
                         children: [
-                          AppBackButton(
-                            color: isDarkTextTheme
-                                ? AppColors.darkCharcoal
-                                : Colors.white,
-                          ),
+                          const AppBackButton(),
                           Opacity(
                             opacity:
                                 (widget.collapseRatio * 2.0).clamp(0.0, 1.0),
@@ -232,9 +228,8 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                 BankCardWidget.bankLogo(
                                   senderName,
                                   20,
-                                  isDarkTextTheme
-                                      ? AppColors.darkCharcoal
-                                      : Colors.white,
+                                  null,
+                                  isDarkTextTheme,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
@@ -274,9 +269,8 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                   BankCardWidget.bankLogo(
                                     senderName,
                                     34,
-                                    isDarkTextTheme
-                                        ? AppColors.darkCharcoal
-                                        : Colors.white,
+                                    null,
+                                    isDarkTextTheme,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
@@ -503,6 +497,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                       iconSize: 15,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 6),
+                                      onLightSurface: isDarkTextTheme,
                                       onPressed: widget.onAddTransaction,
                                     ),
                                   ),
@@ -516,6 +511,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                       iconSize: 15,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 6),
+                                      onLightSurface: isDarkTextTheme,
                                       onPressed: widget.onAnalytics,
                                     ),
                                   ),
@@ -533,6 +529,7 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                       iconSize: 15,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 6),
+                                      onLightSurface: isDarkTextTheme,
                                       onPressed: widget.onToggleChart,
                                     ),
                                   ),

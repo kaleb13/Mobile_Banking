@@ -11,6 +11,7 @@ import '../models/cash_transaction.dart';
 import '../models/saving_goal.dart';
 import '../models/transaction_attachment.dart';
 import 'sms_batch_parser.dart';
+import 'bank_senders.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -21,6 +22,7 @@ class DatabaseService {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('finance_v3.db');
+    await _ensureSendersTableSchema(_database!);
     await _createIndexes(_database!);
     await _seedHierarchicalCategories(_database!);
     return _database!;
@@ -51,7 +53,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 27, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 28, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -445,6 +447,44 @@ CREATE TABLE IF NOT EXISTS app_settings (
         await db.execute('ALTER TABLE transactions ADD COLUMN accountIdentifier TEXT;');
       } catch (_) {}
     }
+    if (oldVersion < 28) {
+      await _upgradeToVersion28(db);
+    }
+  }
+
+  Future<void> _upgradeToVersion28(Database db) async {
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS senders_v28 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          senderName TEXT NOT NULL
+        );
+      ''');
+      await db.execute('''
+        INSERT OR IGNORE INTO senders_v28 (id, senderName)
+        SELECT id, senderName FROM senders;
+      ''');
+      await db.execute('DROP TABLE IF EXISTS senders;');
+      await db.execute('ALTER TABLE senders_v28 RENAME TO senders;');
+    } catch (_) {}
+  }
+
+  Future<void> _ensureSendersTableSchema(Database db) async {
+    try {
+      final tableInfo = await db.rawQuery("PRAGMA table_info(senders)");
+      final hasLegacyKeywords = tableInfo.any((c) =>
+          c['name'] == 'depositKeywords' || c['name'] == 'expenseKeywords');
+      if (hasLegacyKeywords) {
+        await _upgradeToVersion28(db);
+      }
+      // Clean up duplicate sender rows in SQLite
+      await db.execute('''
+        DELETE FROM senders
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM senders GROUP BY UPPER(senderName)
+        );
+      ''');
+    } catch (_) {}
   }
 
   Future<void> _upgradeToVersion23(Database db) async {
@@ -644,13 +684,135 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   // ──────────────────────────────────────────────
   Future<int> insertSender(AppSender sender) async {
     final db = await instance.database;
-    return await db.insert('senders', sender.toMap());
+    try {
+      return await db.insert(
+        'senders',
+        sender.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {
+      final map = sender.toMap();
+      map['depositKeywords'] = '[]';
+      map['expenseKeywords'] = '[]';
+      return await db.insert(
+        'senders',
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
 
   Future<List<AppSender>> getSenders() async {
     final db = await instance.database;
     final maps = await db.query('senders');
-    return maps.map((map) => AppSender.fromMap(map)).toList();
+    final rawList = maps.map((map) => AppSender.fromMap(map)).toList();
+
+    // Top 3 default banks that always appear on every phone
+    const defaultBanks = [
+      'Telebirr',
+      'CBE',
+      'CBE Birr',
+    ];
+
+    // All standard supported banks
+    const supportedBanks = [
+      'Telebirr',
+      'CBE',
+      'CBE Birr',
+      'Ahadu Bank',
+      'BOA',
+      'Dashen Bank',
+    ];
+
+    // Check which banks actually have recorded transactions in the database
+    final txMaps = await db.rawQuery(
+      'SELECT DISTINCT name FROM transactions WHERE name IS NOT NULL AND TRIM(name) != ""',
+    );
+    final activeTxBankNames = <String>{};
+    for (final row in txMaps) {
+      final n = row['name'] as String?;
+      if (n != null && n.trim().isNotEmpty) {
+        final canonical = BankSenders.match(n) ?? n.trim();
+        activeTxBankNames.add(canonical.toUpperCase());
+      }
+    }
+
+    // Load paused banks so they are NEVER pruned/deleted even if they have 0 transactions
+    final pausedBanks = await getPausedBanks();
+    final pausedCanonicalUpper = <String>{};
+    for (final b in pausedBanks) {
+      final base = b.contains(':') ? b.split(':').first : b;
+      final canonical = BankSenders.match(base) ?? base.trim();
+      if (canonical.isNotEmpty) {
+        pausedCanonicalUpper.add(canonical.toUpperCase());
+      }
+    }
+
+    final uniqueMap = <String, AppSender>{};
+    final toDeleteIds = <String>[];
+
+    for (final s in rawList) {
+      final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
+      final key = canonical.toUpperCase();
+      final isSupported = supportedBanks.any((d) => d.toUpperCase() == key);
+      final isPaused = pausedCanonicalUpper.contains(key);
+      final hasTxs = activeTxBankNames.contains(key);
+
+      // Keep if it is a supported bank, paused bank, OR has actual transactions recorded
+      if (isSupported || isPaused || hasTxs) {
+        if (!uniqueMap.containsKey(key)) {
+          uniqueMap[key] = AppSender(id: s.id, senderName: canonical);
+        } else {
+          if (s.id != null) toDeleteIds.add(s.id!);
+        }
+      } else {
+        // Unused custom bank with no transactions — clean up
+        if (s.id != null) toDeleteIds.add(s.id!);
+      }
+    }
+
+    for (final id in toDeleteIds) {
+      try {
+        await db.delete('senders', where: 'id = ?', whereArgs: [id]);
+      } catch (_) {}
+    }
+
+    // Ensure default top 3 banks exist
+    for (final bank in defaultBanks) {
+      final key = bank.toUpperCase();
+      if (!uniqueMap.containsKey(key)) {
+        try {
+          final id = await db.insert(
+            'senders',
+            {'senderName': bank},
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+          uniqueMap[key] = AppSender(id: id.toString(), senderName: bank);
+        } catch (_) {
+          uniqueMap[key] = AppSender(senderName: bank);
+        }
+      }
+    }
+
+    // Ensure banks with transactions OR paused banks exist in senders
+    final criticalBanks = {...activeTxBankNames, ...pausedCanonicalUpper};
+    for (final key in criticalBanks) {
+      if (!uniqueMap.containsKey(key)) {
+        final canonical = BankSenders.match(key) ?? key;
+        try {
+          final id = await db.insert(
+            'senders',
+            {'senderName': canonical},
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+          uniqueMap[key] = AppSender(id: id.toString(), senderName: canonical);
+        } catch (_) {
+          uniqueMap[key] = AppSender(senderName: canonical);
+        }
+      }
+    }
+
+    return uniqueMap.values.toList();
   }
 
   Future<int> updateSender(AppSender sender) async {

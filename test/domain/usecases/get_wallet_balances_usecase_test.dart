@@ -70,5 +70,52 @@ void main() {
       expect(result.totalBalance, 576.0);
       expect(result.latestBalancesMap.containsKey('CBE'), isFalse);
     });
+
+    test('correctly calculates cash wallet from bank cash withdrawal minus deductions (300 - 100 = 200)', () {
+      final senders = [
+        AppSender(id: '1', senderName: 'CBE'),
+      ];
+
+      final transactions = [
+        // Bank cash withdrawal of 300 ETB
+        AppTransaction(
+          name: 'CBE',
+          sender: 'ATM Withdrawal',
+          amount: 300,
+          type: 'expense',
+          date: DateTime(2026, 8, 20),
+          category: 'Cash',
+          reason: 'Cash',
+          rawMessage: '300 ETB withdrawn',
+          isAutoDetected: true,
+          totalBalance: 1500.0,
+        ),
+      ];
+
+      final cashTransactions = [
+        // Deducted 100 ETB from cash wallet
+        CashTransaction(
+          id: 1,
+          amount: 100,
+          type: 'expense',
+          reasonName: 'Coffee & Snacks',
+          date: DateTime(2026, 8, 21),
+          linkedTransactionId: transactions.first.id,
+        ),
+      ];
+
+      final result = useCase.execute(
+        senders: senders,
+        transactions: transactions,
+        cashTransactions: cashTransactions,
+        pausedBanks: {},
+      );
+
+      // Cash balance should be +200 (300 bank cash in - 100 cash expense out)
+      expect(result.cashBalance, 200.0);
+      expect(result.latestBalancesMap['Cash Wallet'], 200.0);
+      expect(result.latestBalancesMap['CBE'], 1500.0);
+      expect(result.totalBalance, 1700.0); // 1500 (CBE) + 200 (Cash)
+    });
   });
 }

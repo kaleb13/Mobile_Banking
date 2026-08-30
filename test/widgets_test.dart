@@ -483,6 +483,16 @@ class FakeSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> setScanWindow(ScanWindowOption option) async {}
+
+  Set<String> hiddenBanks = {};
+
+  @override
+  Future<Set<String>> getHiddenBalanceBanks() async => hiddenBanks;
+
+  @override
+  Future<void> setHiddenBalanceBanks(Set<String> banks) async {
+    hiddenBanks = banks;
+  }
 }
 
 

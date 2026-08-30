@@ -46,11 +46,12 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
   bool _isSearchActive = false;
   bool _isFilterExpanded = false;
   bool _isBookmarkedOnly = false;
-  String _typeFilter = 'All'; // 'All', 'Withdrawals', 'Deposits', 'Bookmarked'
+  String _typeFilter = 'All'; // 'All', 'Income', 'Expense', 'Bookmarked'
   String _sortBy = 'Date: Newest';
   AppDateFilterValue _dateFilterValue = const AppDateFilterValue.thisMonth();
   String _bankFilter = 'All Banks';
   String _senderFilter = 'All Senders';
+  String _selectedSubcategory = 'All';
   int _displayLimit = 30;
 
   final TextEditingController _searchController = TextEditingController();
@@ -199,11 +200,105 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
     final allSendersList = senders.toList()..sort();
     if (!allSendersList.contains(_senderFilter)) _senderFilter = 'All Senders';
 
+    // Collect and count active subcategories
+    final List<({String name, int count, double totalAmount})> activeSubcategories = [];
+    final Map<String, ({int count, double totalAmount})> subCounts = {};
+
+    // ── Build Fast O(1) Lookup Maps ONCE ─────────────────────────────────────
+    final Map<int, AppReason> reasonsById = {};
+    final Map<String, AppReason> reasonsByNameLower = {};
+    final Map<String, String> subcategoryNameExactMap = {};
+
+    for (final r in txVM.reasons) {
+      if (r.id != null) {
+        reasonsById[r.id!] = r;
+      }
+      reasonsByNameLower[r.name.trim().toLowerCase()] = r;
+    }
+
+    if (widget.reason != null && widget.reason!.id != null) {
+      final subs = txVM.subcategoriesFor(widget.reason!.id!);
+      for (final s in subs) {
+        final cleanName = s.name.trim();
+        subCounts[cleanName] = (count: 0, totalAmount: 0.0);
+        subcategoryNameExactMap[cleanName.toLowerCase()] = cleanName;
+      }
+    }
+
+    for (final tx in rawBankTransactions) {
+      String? matchedSub;
+      if (tx.subcategoryId != null) {
+        matchedSub = reasonsById[tx.subcategoryId!]?.name;
+      }
+      if (matchedSub == null && tx.reasonId != null) {
+        final r = reasonsById[tx.reasonId!];
+        if (r != null && r.isSubcategory) {
+          matchedSub = r.name;
+        }
+      }
+      if (matchedSub == null) {
+        final raw = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
+        if (raw.isNotEmpty) {
+          matchedSub = subcategoryNameExactMap[raw.toLowerCase()];
+        }
+      }
+      if (matchedSub != null) {
+        final curr = subCounts[matchedSub] ?? (count: 0, totalAmount: 0.0);
+        subCounts[matchedSub] = (count: curr.count + 1, totalAmount: curr.totalAmount + tx.amount);
+      }
+    }
+
+    for (final ctx in rawCashTransactions) {
+      String? matchedSub;
+      if (ctx.reasonId != null) {
+        final r = reasonsById[ctx.reasonId!];
+        if (r != null && r.isSubcategory) {
+          matchedSub = r.name;
+        }
+      }
+      if (matchedSub == null) {
+        final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
+        if (raw.isNotEmpty) {
+          matchedSub = subcategoryNameExactMap[raw.toLowerCase()];
+        }
+      }
+      if (matchedSub != null) {
+        final curr = subCounts[matchedSub] ?? (count: 0, totalAmount: 0.0);
+        subCounts[matchedSub] = (count: curr.count + 1, totalAmount: curr.totalAmount + ctx.amount);
+      }
+    }
+
+    subCounts.forEach((name, data) {
+      if (data.count > 0) {
+        activeSubcategories.add((name: name, count: data.count, totalAmount: data.totalAmount));
+      }
+    });
+    activeSubcategories.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+
     // Filter Bank Transactions
     final filteredBankTxs = rawBankTransactions.where((tx) {
+      if (_selectedSubcategory != 'All') {
+        final subLower = _selectedSubcategory.toLowerCase().trim();
+        String? txSub;
+        if (tx.subcategoryId != null) {
+          txSub = reasonsById[tx.subcategoryId!]?.name;
+        }
+        if (txSub == null && tx.reasonId != null) {
+          final r = reasonsById[tx.reasonId!];
+          if (r != null && r.isSubcategory) {
+            txSub = r.name;
+          }
+        }
+        if (txSub == null) {
+          final raw = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
+          if (raw.isNotEmpty) txSub = raw;
+        }
+        if ((txSub ?? '').toLowerCase().trim() != subLower) return false;
+      }
+
       if (_isBookmarkedOnly && !tx.isBookmarked) return false;
-      if (_typeFilter == 'Withdrawals' && tx.type != 'expense') return false;
-      if (_typeFilter == 'Deposits' && tx.type != 'income') return false;
+      if (_typeFilter == 'Expense' && tx.type != 'expense') return false;
+      if (_typeFilter == 'Income' && tx.type != 'income') return false;
 
       if (_bankFilter != 'All Banks' &&
           tx.name.toLowerCase() != _bankFilter.toLowerCase()) {
@@ -242,10 +337,26 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
 
     // Filter Cash Transactions
     final filteredCashTxs = rawCashTransactions.where((ctx) {
+      if (_selectedSubcategory != 'All') {
+        final subLower = _selectedSubcategory.toLowerCase().trim();
+        String? ctxSub;
+        if (ctx.reasonId != null) {
+          final r = reasonsById[ctx.reasonId!];
+          if (r != null && r.isSubcategory) {
+            ctxSub = r.name;
+          }
+        }
+        if (ctxSub == null) {
+          final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
+          if (raw.isNotEmpty) ctxSub = raw;
+        }
+        if ((ctxSub ?? '').toLowerCase().trim() != subLower) return false;
+      }
+
       if (_isBookmarkedOnly) return false;
       final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-      if (_typeFilter == 'Withdrawals' && isAddition) return false;
-      if (_typeFilter == 'Deposits' && !isAddition) return false;
+      if (_typeFilter == 'Expense' && isAddition) return false;
+      if (_typeFilter == 'Income' && !isAddition) return false;
 
       if (_bankFilter != 'All Banks' && _bankFilter != 'Cash') return false;
       if (_senderFilter != 'All Senders' &&
@@ -415,7 +526,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                           ),
                                           SizedBox(width: 4),
                                           Text(
-                                            'Outflow / Spent',
+                                            'Expense',
                                             style: TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 10,
@@ -464,7 +575,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                           ),
                                           SizedBox(width: 4),
                                           Text(
-                                            'Inflow / Received',
+                                            'Income',
                                             style: TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 10,
@@ -498,7 +609,81 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
 
                     const SizedBox(height: 14),
 
-                    // ── 2. Search & Filter Bar ───────────────────────────────
+                    // ── 2. Subcategories Horizontal Filter Bar (If available) ─
+                    if (activeSubcategories.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'SUBCATEGORIES',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            Text(
+                              '${activeSubcategories.length} Subcategories',
+                              style: const TextStyle(
+                                color: AppColors.textSoft,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            // "All" Pill
+                            _buildSubcategoryChip(
+                              label: 'All Subcategories',
+                              count: rawBankTransactions.length +
+                                  rawCashTransactions.length,
+                              isSelected: _selectedSubcategory == 'All',
+                              onTap: () {
+                                setState(() {
+                                  _selectedSubcategory = 'All';
+                                  _displayLimit = 30;
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Individual Subcategory Chips
+                            ...activeSubcategories.map((sub) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _buildSubcategoryChip(
+                                  label: sub.name,
+                                  count: sub.count,
+                                  netAmount: sub.totalAmount,
+                                  isSelected: _selectedSubcategory == sub.name,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedSubcategory = sub.name;
+                                      _displayLimit = 30;
+                                    });
+                                  },
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // ── 3. Search & Filter Bar ───────────────────────────────
                     AppSearchBar(
                       mode: AppSearchBarMode.icon,
                       isExpanded: _isSearchActive,
@@ -621,8 +806,8 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                               value: _typeFilter,
                               items: const [
                                 'All',
-                                'Withdrawals',
-                                'Deposits',
+                                'Expense',
+                                'Income',
                               ],
                               variant: AppDropdownVariant.dark,
                               maxWidth: 120,
@@ -781,7 +966,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
   ) {
     final isIncome = item.isIncome;
     final amountStr = isBalanceVisible ? fmt.format(item.amount) : '••••••••';
-    final String label = isIncome ? 'Deposit' : 'Transferred';
+    final String label = isIncome ? 'Income' : 'Expense';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -914,6 +1099,71 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubcategoryChip({
+    required String label,
+    required int count,
+    double? netAmount,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
+    final fmt = NumberFormat('#,##0');
+    final String countLabel = netAmount != null && netAmount > 0
+        ? (settingsVM.isBalanceVisible
+            ? '$count • ${fmt.format(netAmount)} ETB'
+            : '$count')
+        : '$count';
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.brandGreen.withValues(alpha: 0.20)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppColors.brandGreen : Colors.white,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.brandGreen.withValues(alpha: 0.25)
+                    : AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                countLabel,
+                style: TextStyle(
+                  color: isSelected ? AppColors.brandGreen : AppColors.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

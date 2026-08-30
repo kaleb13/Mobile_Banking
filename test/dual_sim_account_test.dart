@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_banking_app/models/transaction.dart';
 import 'package:mobile_banking_app/models/sender.dart';
 import 'package:mobile_banking_app/models/reason.dart';
-import 'package:mobile_banking_app/models/parsed_sms_result.dart';
 import 'package:mobile_banking_app/services/sms_service.dart';
 import 'package:mobile_banking_app/services/sms_batch_parser.dart';
 import 'package:mobile_banking_app/data/repositories/transaction_repository.dart';

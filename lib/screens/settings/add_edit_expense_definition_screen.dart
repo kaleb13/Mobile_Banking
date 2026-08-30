@@ -236,7 +236,7 @@ class _AddEditExpenseDefinitionScreenState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.drawerCard,
+                color: AppColors.surface,
                 borderRadius: AppRadius.cardRadius,
               ),
               child: Row(
@@ -277,22 +277,20 @@ class _AddEditExpenseDefinitionScreenState
           // ── Description Input ─────────────────────────────────────────────
           AppTextField(
             controller: _nameController,
+            maxLength: 80,
             label: 'DESCRIPTION (OPTIONAL)',
             hint: 'e.g. Daily Coffee, Internet Bill',
-            backgroundColor: AppColors.drawerCard,
-            borderRadius: AppRadius.cardRadius,
           ),
           const SizedBox(height: 14),
 
           // ── Default Amount Input ──────────────────────────────────────────
           AppTextField(
             controller: _amountController,
+            maxLength: 14,
             label: 'DEFAULT AMOUNT ($currency)',
             hint: '0.00',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             prefixText: '$currency ',
-            backgroundColor: AppColors.drawerCard,
-            borderRadius: AppRadius.cardRadius,
           ),
           const SizedBox(height: 20),
 
@@ -349,11 +347,10 @@ class _AddEditExpenseDefinitionScreenState
 
                   AppTextField(
                     controller: _timesPerDayController,
+                    maxLength: 2,
                     label: 'TIMES PER DAY',
                     hint: 'e.g. 1 (or 3 for meals)',
                     keyboardType: TextInputType.number,
-                    backgroundColor: AppColors.drawerCard,
-                    borderRadius: BorderRadius.circular(16),
                   ),
                   const SizedBox(height: 14),
 
@@ -395,7 +392,7 @@ class _AddEditExpenseDefinitionScreenState
                       }
                     },
                     height: 46,
-                    borderRadius: 14,
+                    borderRadius: 100,
                     maxWidth: double.infinity,
                     isDefault: false,
                   ),
@@ -404,21 +401,19 @@ class _AddEditExpenseDefinitionScreenState
                   if (_recurringType == 'interval')
                     AppTextField(
                       controller: _intervalDaysController,
+                      maxLength: 4,
                       label: 'INTERVAL (DAYS)',
                       hint: 'e.g. 2 (every other day)',
                       keyboardType: TextInputType.number,
-                      backgroundColor: AppColors.drawerCard,
-                      borderRadius: BorderRadius.circular(16),
                     ),
 
                   if (_recurringType == 'specific_day')
                     AppTextField(
                       controller: _specificDayController,
+                      maxLength: 2,
                       label: 'DAY OF THE MONTH (1-31)',
                       hint: 'e.g. 15',
                       keyboardType: TextInputType.number,
-                      backgroundColor: AppColors.drawerCard,
-                      borderRadius: BorderRadius.circular(16),
                     ),
 
                   if (_recurringType == 'days_of_week')

@@ -24,53 +24,59 @@ class ProfileHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
+        statusBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
+        systemNavigationBarIconBrightness:
+            context.isLightMode ? Brightness.dark : Brightness.light,
       ),
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        extendBody: true,
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: AppColors.screenBackgroundGradient,
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: context.isLightMode
+              ? const LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [
+                    AppColors.backgroundLight,
+                    AppColors.bgMidLight,
+                  ],
+                )
+              : AppColors.screenBackgroundGradient,
+        ),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
           ),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 12),
-                    
-                    // ── Header: AppHeader with Levels Action ──────────────────
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: AppHeader(
-                        title: 'Profile Hub',
-                        showBackButton: false,
-                        padding: EdgeInsets.zero,
-                        trailing: AppButton.secondary(
-                          text: 'Levels',
-                          trailingIcon: Icons.arrow_forward_ios_rounded,
-                          fullWidth: false,
-                          height: 28,
-                          fontSize: 11.5,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          onPressed: () => _showLevelsInfoDialog(context),
-                        ),
-                      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // ── Header: AppHeader with Levels Action ──────────────────
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AppHeader(
+                    title: 'Profile Hub',
+                    showBackButton: false,
+                    padding: EdgeInsets.zero,
+                    trailing: AppButton.secondary(
+                      text: 'Levels',
+                      trailingIcon: Icons.arrow_forward_ios_rounded,
+                      fullWidth: false,
+                      height: 28,
+                      fontSize: 11.5,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      onPressed: () => _showLevelsInfoDialog(context),
                     ),
+                  ),
+                ),
+              ),
 
-                    const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
                     // ── Hero Section: Dynamic Level Badge & Progress Card ───────────────
                     Consumer2<AnalyticsViewModel, SettingsViewModel>(
@@ -279,14 +285,9 @@ class ProfileHubScreen extends StatelessWidget {
                       _buildMenuItemTile(
                         context,
                         title: 'Settings',
-                        iconWidget: SvgPicture.asset(
+                        iconWidget: const AppSvgIcon(
                           'assets/images/Settings_icon.svg',
-                          width: 24,
-                          height: 24,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
+                          size: 24,
                         ),
                         showDivider: false,
                         onTap: () {
@@ -300,15 +301,12 @@ class ProfileHubScreen extends StatelessWidget {
                       ),
                     ]),
 
-                    const SizedBox(height: 100),
+                    const SizedBox(height: 120),
                   ],
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
+          );
   }
 
   Widget _buildGroupedCardBase(List<Widget> children) {

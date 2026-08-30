@@ -20,6 +20,7 @@ class InteractiveBalanceChart extends StatefulWidget {
   final double chartHeight;
   final ValueChanged<String>? onFilterChanged;
   final EdgeInsetsGeometry padding;
+  final Set<String>? allowedBanks;
 
   const InteractiveBalanceChart({
     super.key,
@@ -32,6 +33,7 @@ class InteractiveBalanceChart extends StatefulWidget {
     this.chartHeight = 120.0,
     this.onFilterChanged,
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    this.allowedBanks,
   });
 
   @override
@@ -71,6 +73,7 @@ class _InteractiveBalanceChartState extends State<InteractiveBalanceChart> {
       cashTransactions: widget.cashTransactions,
       filter: _selectedFilter,
       referenceDate: todayMidnight,
+      allowedBanks: widget.allowedBanks,
     );
     final List<FlSpot> spots = List.from(historyResult.spots);
 

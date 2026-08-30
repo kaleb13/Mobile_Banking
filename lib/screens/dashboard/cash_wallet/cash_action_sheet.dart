@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../models/cash_transaction.dart';
 import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_confirm_dialog.dart';
@@ -135,34 +136,59 @@ void _showEditAmountDialog(
 ) {
   final controller =
       TextEditingController(text: oldAmount.toStringAsFixed(0));
+  final tx = viewModel.cashTransactions.cast<CashTransaction?>().firstWhere(
+        (t) => t?.id == id,
+        orElse: () => null,
+      );
+
   AppModalDialog.show(
     context: context,
-    builder: (c) => AppModalDialog(
-      title: 'Edit Amount',
-      subtitle: 'Enter the updated cash amount in ETB',
-      confirmText: 'Save',
-      cancelText: 'Cancel',
-      onConfirm: () {
+    builder: (c) => StatefulBuilder(
+      builder: (c, setDialogState) {
         final amt = double.tryParse(controller.text.trim());
-        if (amt != null && amt > 0) {
-          viewModel.updateCashTransactionAmount(id, amt);
-          Navigator.pop(c);
+        String? error;
+        if (tx != null && tx.type == 'expense') {
+          final maxAllowed = viewModel.cashBalance + oldAmount;
+          if (amt != null && amt > maxAllowed) {
+            error = 'Exceeds available balance (${NumberFormat("#,##0.00").format(maxAllowed)} ETB)';
+          }
         }
+
+        return AppModalDialog(
+          title: 'Edit Amount',
+          subtitle: 'Enter the updated cash amount in ETB',
+          confirmText: 'Save',
+          cancelText: 'Cancel',
+          onConfirm: () {
+            if (amt != null && amt > 0 && error == null) {
+              viewModel.updateCashTransactionAmount(id, amt);
+              Navigator.pop(c);
+            }
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppTextField.modal(
+                controller: controller,
+                maxLength: 14,
+                label: 'AMOUNT (ETB)',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                hint: '0.00',
+                prefixIcon: Icons.account_balance_wallet_outlined,
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  error,
+                  style: const TextStyle(color: AppColors.negative, fontSize: 12),
+                ),
+              ],
+            ],
+          ),
+        );
       },
-      child: AppTextField.modal(
-        controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        textAlign: TextAlign.center,
-        autofocus: true,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-        hint: '0.00',
-        prefixText: 'ETB ',
-        borderRadius: AppRadius.cardRadiusSm,
-      ),
     ),
   );
 }

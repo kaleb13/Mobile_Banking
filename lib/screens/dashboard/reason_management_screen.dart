@@ -29,7 +29,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     'loan': 'Track loans, credit lines & debt repayments',
     'internal transfer': 'Transfer money between your accounts',
     'cash': 'Cash wallet & manual cash expenses',
-    'bounce': 'Bounced, reversed & failed transactions',
+    'bounce': "Pass through money that doesn't belong to you",
   };
 
   @override
@@ -84,9 +84,10 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
               children: [
                 AppTextField.modal(
                   controller: ctrl,
+                  maxLength: 40,
                   autofocus: true,
                   hint: isSubcategory ? 'Subcategory name...' : 'Category name...',
-                  borderRadius: AppRadius.cardRadiusSm,
+                  borderRadius: BorderRadius.circular(16),
                   onChanged: (_) {
                     if (errorMsg != null) setInner(() => errorMsg = null);
                   },
@@ -284,12 +285,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         body: SafeArea(
-          bottom: false,
+          bottom: true,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding: const EdgeInsets.only(left: 0, right: 0, top: 16, bottom: 100),
+            padding: const EdgeInsets.only(left: 0, right: 0, top: 16, bottom: 80),
             children: [
               // ── Header ───────────────────────────────────────────
               Padding(

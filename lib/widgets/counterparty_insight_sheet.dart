@@ -8,16 +8,18 @@ import '../presentation/viewmodels/transactions_view_model.dart';
 import '../screens/dashboard/all_transactions_screen.dart';
 import '../screens/dashboard/transaction_detail_screen.dart';
 import '../theme/app_theme.dart';
+import '../utils/counterparty_matcher.dart';
 import 'app_badges.dart';
 import 'app_bottom_sheet.dart';
 import 'app_button.dart';
+import 'app_date_filter.dart';
 import 'bank_card_widget.dart';
 import 'currency_symbol_widget.dart';
 import 'custom_progress_bar.dart';
 
 /// Modal bottom sheet displaying detailed person-to-person cashflow metrics,
 /// historical velocity, net standing, and direct transaction drilldown.
-class CounterpartyInsightSheet extends StatelessWidget {
+class CounterpartyInsightSheet extends StatefulWidget {
   final String personName;
 
   const CounterpartyInsightSheet({
@@ -39,18 +41,25 @@ class CounterpartyInsightSheet extends StatelessWidget {
   }
 
   @override
+  State<CounterpartyInsightSheet> createState() =>
+      _CounterpartyInsightSheetState();
+}
+
+class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
+  bool _showAll = false;
+
+  @override
   Widget build(BuildContext context) {
     final settingsVM = context.watch<SettingsViewModel>();
     final txVM = context.watch<TransactionsViewModel>();
     final isBalanceVisible = settingsVM.isBalanceVisible;
     final fmt = NumberFormat('#,##0.00');
 
-    // Filter transactions exclusively for this counterparty/person
-    final personTxs = txVM.transactions.where((tx) {
-      final s = tx.sender.trim().toLowerCase();
-      final target = personName.trim().toLowerCase();
-      return s == target || (target.isNotEmpty && s.contains(target));
-    }).toList();
+    // Filter transactions exclusively for this counterparty/person using robust matching
+    final personTxs = CounterpartyMatcher.filterForCounterparty(
+      txVM.transactions,
+      widget.personName,
+    );
 
     // Sort newest first
     personTxs.sort((a, b) => b.date.compareTo(a.date));
@@ -77,6 +86,13 @@ class CounterpartyInsightSheet extends StatelessWidget {
     final DateTime? lastTxDate =
         personTxs.isNotEmpty ? personTxs.first.date : null;
 
+    final cleanDisplayName =
+        CounterpartyMatcher.normalize(widget.personName).isNotEmpty
+            ? CounterpartyMatcher.normalize(widget.personName)
+            : widget.personName;
+
+    final displayedTxs = _showAll ? personTxs : personTxs.take(3).toList();
+
     return AppBottomSheet(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -94,8 +110,8 @@ class CounterpartyInsightSheet extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    personName.isNotEmpty
-                        ? personName.substring(0, 1).toUpperCase()
+                    cleanDisplayName.isNotEmpty
+                        ? cleanDisplayName.substring(0, 1).toUpperCase()
                         : '?',
                     style: const TextStyle(
                       color: AppColors.buttonPrimaryText,
@@ -111,7 +127,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      personName,
+                      cleanDisplayName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -163,12 +179,12 @@ class CounterpartyInsightSheet extends StatelessWidget {
                     ),
                     if (netStanding > 0)
                       const AppBadge.success(
-                        text: 'Net Received',
+                        text: 'Net From',
                         size: AppBadgeSize.small,
                       )
                     else if (netStanding < 0)
                       const AppBadge.destructive(
-                        text: 'Net Sent',
+                        text: 'Net To',
                         size: AppBadgeSize.small,
                       )
                     else
@@ -215,7 +231,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Sent: ${(sentRatio * 100).toStringAsFixed(0)}%',
+                      'To: ${(sentRatio * 100).toStringAsFixed(0)}%',
                       style: const TextStyle(
                         color: AppColors.negative,
                         fontSize: 11,
@@ -223,7 +239,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Received: ${((1.0 - sentRatio) * 100).toStringAsFixed(0)}%',
+                      'From: ${((1.0 - sentRatio) * 100).toStringAsFixed(0)}%',
                       style: const TextStyle(
                         color: AppColors.positive,
                         fontSize: 11,
@@ -244,9 +260,9 @@ class CounterpartyInsightSheet extends StatelessWidget {
                 child: _buildTile(
                   icon: Icons.arrow_upward_rounded,
                   iconColor: AppColors.negative,
-                  title: 'Total Sent',
+                  title: 'Total To',
                   amount: totalSent,
-                  subtitle: '${expenseTxs.length} outgoing payments',
+                  subtitle: '${expenseTxs.length} transfers to',
                   isBalanceVisible: isBalanceVisible,
                   fmt: fmt,
                 ),
@@ -256,9 +272,9 @@ class CounterpartyInsightSheet extends StatelessWidget {
                 child: _buildTile(
                   icon: Icons.arrow_downward_rounded,
                   iconColor: AppColors.positive,
-                  title: 'Total Received',
+                  title: 'Total From',
                   amount: totalReceived,
-                  subtitle: '${incomeTxs.length} incoming deposits',
+                  subtitle: '${incomeTxs.length} transfers from',
                   isBalanceVisible: isBalanceVisible,
                   fmt: fmt,
                 ),
@@ -316,16 +332,60 @@ class CounterpartyInsightSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // ── Recent Activity Mini List (Up to 3 Items) ───────────────────────
+          // ── Interactions List ───────────────────────────────────────────────
           if (personTxs.isNotEmpty) ...[
-            const Text(
-              'Recent Interactions',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.2,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _showAll
+                      ? 'All Interactions (${personTxs.length})'
+                      : 'Recent Interactions',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (personTxs.length > 3)
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _showAll = !_showAll;
+                      });
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _showAll
+                                ? 'Show Recent'
+                                : 'Show All (${personTxs.length})',
+                            style: const TextStyle(
+                              color: AppColors.brandGreen,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            _showAll
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: AppColors.brandGreen,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             Container(
@@ -335,7 +395,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  for (int i = 0; i < personTxs.take(3).length; i++) ...[
+                  for (int i = 0; i < displayedTxs.length; i++) ...[
                     if (i > 0)
                       Container(
                         height: 1,
@@ -343,7 +403,7 @@ class CounterpartyInsightSheet extends StatelessWidget {
                       ),
                     _buildTransactionRow(
                       context,
-                      personTxs[i],
+                      displayedTxs[i],
                       isBalanceVisible,
                       fmt,
                     ),
@@ -365,7 +425,8 @@ class CounterpartyInsightSheet extends StatelessWidget {
               nav.push(
                 MaterialPageRoute(
                   builder: (_) => AllTransactionsScreen(
-                    initialSenderFilter: personName,
+                    initialSenderFilter: widget.personName,
+                    initialDateFilter: const AppDateFilterValue.anyTime(),
                   ),
                 ),
               );

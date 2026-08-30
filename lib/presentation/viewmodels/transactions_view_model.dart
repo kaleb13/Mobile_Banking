@@ -14,6 +14,7 @@ import '../../models/scan_progress_status.dart';
 import '../../services/telebirr_parser.dart';
 import '../../services/sms_service.dart';
 import '../../services/sms_batch_parser.dart';
+import '../../services/bank_senders.dart';
 import '../../services/database_service.dart';
 import '../../models/app_notification.dart';
 
@@ -54,11 +55,16 @@ class TransactionsViewModel extends ChangeNotifier {
   List<AppTransaction> get transactions {
     if (_pausedBanks.isEmpty) return _transactions;
     return _transactions.where((tx) {
-      if (_pausedBanks.any((b) => b.toUpperCase() == tx.name.toUpperCase())) {
+      if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, tx.name))) {
         return false;
       }
-      final acctKey = '${tx.name.toUpperCase()}:${tx.simSlot}';
-      if (_pausedBanks.contains(acctKey)) {
+      final isPausedAcct = _pausedBanks.any((b) {
+        if (!b.contains(':')) return false;
+        final parts = b.split(':');
+        return BankSenders.isSameBank(parts[0], tx.name) &&
+            parts[1] == '${tx.simSlot}';
+      });
+      if (isPausedAcct) {
         return false;
       }
       return true;
@@ -104,18 +110,7 @@ class TransactionsViewModel extends ChangeNotifier {
 
   /// Returns all transactions matching a sender name.
   List<AppTransaction> transactionsForSender(String senderName) {
-    final sNameUp = senderName.trim().toUpperCase();
-    return _transactions.where((t) {
-      final txName = t.name.trim().toUpperCase();
-      final tSender = t.sender.trim().toUpperCase();
-      if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
-        return txName == 'BOA' ||
-            tSender == 'BOA' ||
-            txName.contains('ABYSSINIA') ||
-            tSender.contains('ABYSSINIA');
-      }
-      return txName == sNameUp || tSender == sNameUp;
-    }).toList();
+    return _transactions.where((t) => BankSenders.isSameBank(t.name, senderName)).toList();
   }
 
   /// Returns all distinct accounts / SIM slots detected for a bank.
@@ -197,25 +192,52 @@ class TransactionsViewModel extends ChangeNotifier {
   List<AppReasonLink> linksForReason(int reasonId) =>
       _reasonLinks.where((l) => l.reasonId == reasonId).toList();
 
-  bool isTrackingPaused(String bankName) =>
-      _pausedBanks.any((b) => b.toUpperCase() == bankName.toUpperCase());
+  bool isTrackingPaused(String bankName) {
+    if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, bankName))) {
+      return true;
+    }
+    final accounts = accountsForBank(bankName);
+    if (accounts.length > 1 &&
+        accounts.every((slot) => _pausedBanks.any((b) {
+          if (!b.contains(':')) return false;
+          final parts = b.split(':');
+          return BankSenders.isSameBank(parts[0], bankName) && parts[1] == '$slot';
+        }))) {
+      return true;
+    }
+    return false;
+  }
 
   bool isAccountPaused(String bankName, int simSlot) {
-    if (isTrackingPaused(bankName)) return true;
-    final key = '${bankName.toUpperCase()}:$simSlot';
-    return _pausedBanks.contains(key);
+    if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, bankName))) {
+      return true;
+    }
+    return _pausedBanks.any((b) {
+      if (!b.contains(':')) return false;
+      final parts = b.split(':');
+      return BankSenders.isSameBank(parts[0], bankName) && parts[1] == '$simSlot';
+    });
   }
 
   Future<void> pauseAccountTracking(String bankName, int simSlot) async {
-    final key = '${bankName.toUpperCase()}:$simSlot';
+    final canonical = BankSenders.match(bankName) ?? bankName.trim();
+    final key = '$canonical:$simSlot';
     _pausedBanks = {..._pausedBanks, key};
     await _repository.setPausedBanks(_pausedBanks);
     notifyListeners();
   }
 
   Future<void> resumeAccountTracking(String bankName, int simSlot) async {
-    final key = '${bankName.toUpperCase()}:$simSlot';
-    _pausedBanks = _pausedBanks.where((b) => b.toUpperCase() != key).toSet();
+    final canonical = BankSenders.match(bankName) ?? bankName.trim();
+    _pausedBanks = _pausedBanks.where((b) {
+      if (b.contains(':')) {
+        final parts = b.split(':');
+        final isThisSlot = BankSenders.isSameBank(parts[0], canonical) && parts[1] == '$simSlot';
+        return !isThisSlot;
+      }
+      // If a whole-bank pause existed, remove it so remaining unpaused accounts can function
+      return !BankSenders.isSameBank(b, canonical);
+    }).toSet();
     await _repository.setPausedBanks(_pausedBanks);
     notifyListeners();
   }
@@ -231,8 +253,25 @@ class TransactionsViewModel extends ChangeNotifier {
   List<AppSender> get activeSenders =>
       _senders.where((s) => !isTrackingPaused(s.senderName)).toList();
 
-  List<AppSender> get pausedSenders =>
-      _senders.where((s) => isTrackingPaused(s.senderName)).toList();
+  List<AppSender> get pausedSenders {
+    final Map<String, AppSender> map = {};
+    for (final s in _senders) {
+      if (isTrackingPaused(s.senderName)) {
+        final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
+        map[canonical.toUpperCase()] = s;
+      }
+    }
+    // Self-healing: Ensure any bank in _pausedBanks is represented in pausedSenders
+    for (final paused in _pausedBanks) {
+      final base = paused.contains(':') ? paused.split(':').first : paused;
+      final canonical = BankSenders.match(base) ?? base.trim();
+      final key = canonical.toUpperCase();
+      if (key.isNotEmpty && !map.containsKey(key)) {
+        map[key] = AppSender(senderName: canonical);
+      }
+    }
+    return map.values.toList();
+  }
 
   List<String> get orderedWalletNames {
     return [
@@ -240,6 +279,20 @@ class TransactionsViewModel extends ChangeNotifier {
       'Cash Wallet',
       ...pausedSenders.map((s) => s.senderName),
     ];
+  }
+
+  /// Returns true if the top 3 active unpaused wallets are Telebirr, CBE, and CBE Birr in order.
+  bool get hasClassicTopThreeDeck {
+    final active = activeSenders;
+    if (active.length < 3) return false;
+    final firstThree =
+        active.take(3).map((s) => s.senderName.trim().toUpperCase()).toList();
+    final isTelebirr = firstThree[0] == 'TELEBIRR';
+    final isCbe =
+        firstThree[1] == 'CBE' || firstThree[1].contains('COMMERCIAL');
+    final isCbeBirr =
+        firstThree[2] == 'CBE BIRR' || firstThree[2] == 'CBEBIRR';
+    return isTelebirr && isCbe && isCbeBirr;
   }
 
   /// Calculates total balance for a sender.
@@ -271,6 +324,26 @@ class TransactionsViewModel extends ChangeNotifier {
 
   double getLatestBalanceForBank(String bankName) => balanceForSender(bankName);
 
+  /// Calculates total balance across all active banks for a specific SIM slot (or combined if [simSlot] is null).
+  double totalBalanceForSim(int? simSlot, {double cashBalance = 0.0}) {
+    if (simSlot == null) {
+      double sum = cashBalance;
+      for (final sender in activeSenders) {
+        sum += balanceForSender(sender.senderName);
+      }
+      return sum;
+    }
+
+    double sum = 0.0;
+    for (final sender in activeSenders) {
+      if (sender.senderName.trim().toUpperCase() == 'CASH WALLET') continue;
+      if (!isAccountPaused(sender.senderName, simSlot)) {
+        sum += balanceForAccount(sender.senderName, simSlot);
+      }
+    }
+    return sum;
+  }
+
   double get totalBalance {
     double sum = 0.0;
     for (final sender in activeSenders) {
@@ -279,16 +352,51 @@ class TransactionsViewModel extends ChangeNotifier {
     return sum;
   }
 
-  double get telebirrSavingBalance {
-    final telebirrTxs = transactionsForSender('Telebirr');
-    for (final tx in telebirrTxs) {
-      if (TelebirrParser.isSavingsMessage(tx.rawMessage)) {
-        final bal = TelebirrParser.extractSavingBalance(tx.rawMessage);
-        if (bal != null && bal > 0) return bal;
+  /// Returns all distinct SIM slots detected across all stored transactions.
+  List<int> get detectedSimSlots {
+    final slots = _transactions.map((t) => t.simSlot).toSet().toList()..sort();
+    return slots.isEmpty ? [0] : slots;
+  }
+
+  /// Whether the app has detected multiple SIM accounts across stored transactions.
+  bool get hasMultipleSims => detectedSimSlots.length > 1;
+
+  /// Returns Telebirr Sanduq / Savings balance for a specific SIM slot.
+  /// If [simSlot] is null, returns the accumulated sum of latest Sanduq balances from all active SIM slots.
+  double telebirrSavingBalanceForAccount([int? simSlot]) {
+    if (simSlot != null) {
+      final simTxs = transactionsForSenderAndAccount('Telebirr', simSlot);
+      for (final tx in simTxs) {
+        if (TelebirrParser.isSavingsMessage(tx.rawMessage)) {
+          final bal = TelebirrParser.extractSavingBalance(tx.rawMessage);
+          if (bal != null && bal > 0) return bal;
+        }
+      }
+      return 0.0;
+    }
+
+    final accounts = accountsForBank('Telebirr');
+    if (accounts.length <= 1) {
+      final telebirrTxs = transactionsForSender('Telebirr');
+      for (final tx in telebirrTxs) {
+        if (TelebirrParser.isSavingsMessage(tx.rawMessage)) {
+          final bal = TelebirrParser.extractSavingBalance(tx.rawMessage);
+          if (bal != null && bal > 0) return bal;
+        }
+      }
+      return 0.0;
+    }
+
+    double sum = 0.0;
+    for (final slot in accounts) {
+      if (!isAccountPaused('Telebirr', slot)) {
+        sum += telebirrSavingBalanceForAccount(slot);
       }
     }
-    return 0.0;
+    return sum;
   }
+
+  double get telebirrSavingBalance => telebirrSavingBalanceForAccount(null);
 
   int txCountForSender(String senderName, {int cashTxCount = 0}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
@@ -376,21 +484,27 @@ class TransactionsViewModel extends ChangeNotifier {
   }
 
   Future<void> pauseTracking(String bankName) async {
-    _pausedBanks = {..._pausedBanks, bankName};
+    final canonical = BankSenders.match(bankName) ?? bankName.trim();
+    _pausedBanks = {..._pausedBanks, canonical};
     await _repository.setPausedBanks(_pausedBanks);
-    await _repository.deleteUncategorizedTransactionsForBank(bankName);
-    await _repository.deleteUncategorizedNotificationsForBank(bankName);
-    _transactions = await _repository.getTransactions();
-    notifyListeners();
+    // Note: Do NOT delete transactions from SQLite so history is never permanently lost.
+    // The filtered getter txVM.transactions automatically hides transactions while paused.
+    await _repository.deleteUncategorizedNotificationsForBank(canonical);
+    await loadAll();
   }
 
   Future<void> resumeTracking(String bankName) async {
-    _pausedBanks = _pausedBanks
-        .where((b) => b.toUpperCase() != bankName.toUpperCase())
-        .toSet();
+    final canonical = BankSenders.match(bankName) ?? bankName.trim();
+    final cUp = canonical.toUpperCase();
+    final bUp = bankName.toUpperCase();
+    _pausedBanks = _pausedBanks.where((b) {
+      if (BankSenders.isSameBank(b, canonical)) return false;
+      if (b.toUpperCase() == cUp || b.toUpperCase() == bUp) return false;
+      if (b.toUpperCase().startsWith('$cUp:') || b.toUpperCase().startsWith('$bUp:')) return false;
+      return true;
+    }).toSet();
     await _repository.setPausedBanks(_pausedBanks);
-    _transactions = await _repository.getTransactions();
-    notifyListeners();
+    await loadAll();
   }
 
   // ── Data Loading & SMS Scanning ──────────────────────────────────────────
@@ -451,52 +565,6 @@ class TransactionsViewModel extends ChangeNotifier {
         _simCards = await SmsService().getSimCards();
       } catch (_) {}
 
-      // Auto-backfill in-memory and DB reasons for any records where reason or reasonId is set
-      for (int i = 0; i < _transactions.length; i++) {
-        final tx = _transactions[i];
-        if (tx.reasonId != null || (tx.reason != null && tx.reason!.isNotEmpty && tx.reason!.toLowerCase() != 'uncategorized')) {
-          final matched = tx.reasonId != null
-              ? _reasons.where((r) => r.id == tx.reasonId).firstOrNull
-              : _reasons.where((r) => r.name.toLowerCase().trim() == tx.reason!.toLowerCase().trim()).firstOrNull;
-          if (matched != null) {
-            final isSub = matched.isSubcategory;
-            final isTop = matched.isTopLevelCategory;
-            final expectedCategoryId = isSub ? matched.parentId : (isTop ? matched.id : null);
-            final expectedSubcategoryId = isSub ? matched.id : null;
-            final expectedReasonId = matched.id;
-            final expectedReasonName = matched.name;
-
-            if (tx.reason != expectedReasonName ||
-                tx.reasonId != expectedReasonId ||
-                tx.categoryId != expectedCategoryId ||
-                tx.subcategoryId != expectedSubcategoryId) {
-              _transactions[i] = tx.copyWith(
-                reason: expectedReasonName,
-                reasonId: expectedReasonId,
-                categoryId: expectedCategoryId,
-                subcategoryId: expectedSubcategoryId,
-              );
-              _repository.updateTransaction(_transactions[i]);
-            }
-          }
-        }
-      }
-
-      // Seed default bank senders if database is completely empty on fresh install
-      if (_senders.isEmpty) {
-        _senders = [
-          AppSender(id: '1', senderName: 'Telebirr'),
-          AppSender(id: '2', senderName: 'CBE'),
-          AppSender(id: '3', senderName: 'CBE Birr'),
-          AppSender(id: '4', senderName: 'Ahadu Bank'),
-          AppSender(id: '5', senderName: 'BOA'),
-          AppSender(id: '6', senderName: 'Dashen Bank'),
-        ];
-        for (var s in _senders) {
-          await _repository.insertSender(s);
-        }
-      }
-
       // Auto-scan SMS on startup when DB is empty and we haven't scanned yet
       // this session. This handles first boot when no data exists.
       if (_transactions.isEmpty && !_hasScannedOnce) {
@@ -538,9 +606,6 @@ class TransactionsViewModel extends ChangeNotifier {
           AppSender(id: '1', senderName: 'Telebirr'),
           AppSender(id: '2', senderName: 'CBE'),
           AppSender(id: '3', senderName: 'CBE Birr'),
-          AppSender(id: '4', senderName: 'Ahadu Bank'),
-          AppSender(id: '5', senderName: 'BOA'),
-          AppSender(id: '6', senderName: 'Dashen Bank'),
         ];
         for (var s in _senders) {
           await _repository.insertSender(s);
@@ -689,7 +754,6 @@ class TransactionsViewModel extends ChangeNotifier {
       if (newOption != ScanWindowOption.allTime) {
         final cutoff = newOption.anchorDate;
         await _repository.deleteTransactionsOlderThan(cutoff);
-        await loadAll();
       }
 
       // Ingest SMS within the updated window
@@ -713,6 +777,114 @@ class TransactionsViewModel extends ChangeNotifier {
     );
   }
 
+  /// Reloads transaction data specifically for [bankName], querying only this bank's SMS
+  /// up to [scanWindowOption] (or [lastDays]), parsing in an isolate, and persisting new records.
+  Future<int> refreshBankData({
+    required String bankName,
+    int? lastDays,
+    ScanWindowOption? scanWindowOption,
+    void Function(ScanProgressStatus)? onProgress,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      onProgress?.call(ScanProgressStatus(
+        progress: 0.05,
+        stage: 'Connecting to $bankName SMS records…',
+      ));
+
+      // Calculate anchor date / cutoff
+      final DateTime? anchorDate = scanWindowOption != null
+          ? (scanWindowOption == ScanWindowOption.allTime ? null : scanWindowOption.anchorDate)
+          : (lastDays != null ? DateTime.now().subtract(Duration(days: lastDays)) : null);
+
+      final DateTime? cutoff = anchorDate?.subtract(const Duration(minutes: 1));
+
+      // Resolve targeted bank search keywords
+      final targetKeywords = BankSenders.getKeywordsForBank(bankName);
+
+      final rawMessages = await SmsService().getBankMessagesFast(
+        since: cutoff,
+        overrideSenders: targetKeywords,
+      );
+
+      if (rawMessages.isEmpty) {
+        onProgress?.call(ScanProgressStatus(
+          progress: 1.0,
+          stage: 'No $bankName messages found in window',
+          scannedBanks: [],
+          isComplete: true,
+        ));
+        return 0;
+      }
+
+      onProgress?.call(ScanProgressStatus(
+        progress: 0.35,
+        stage: 'Reading & analyzing $bankName records…',
+      ));
+
+      final autoRules = await _repository.getAutoReasonRules();
+      final initialBalances = <String, double>{
+        bankName: balanceForSender(bankName),
+      };
+
+      final parseResult = await SmsBatchParser.parseInIsolate(BatchParseParams(
+        rawMessages: rawMessages,
+        pausedBanks: _pausedBanks.toList(),
+        customSenders: _senders,
+        autoReasonRules: autoRules,
+        initialBankBalances: initialBalances,
+      ));
+
+      onProgress?.call(ScanProgressStatus(
+        progress: 0.80,
+        stage: 'Storing verified $bankName transactions in database…',
+        scannedBanks: [
+          ScannedBankProgress(
+            bankName: bankName,
+            transactionCount: parseResult.transactions.length,
+            latestBalance: parseResult.transactions.isNotEmpty && parseResult.transactions.last.totalBalance > 0
+                ? parseResult.transactions.last.totalBalance
+                : null,
+          ),
+        ],
+      ));
+
+      final insertedCount = await _repository
+          .insertTransactionsBatch(parseResult.transactions);
+
+      await _repository.reconcilePendingNotificationReasons();
+
+      if (parseResult.unrecognizedNotifications.isNotEmpty) {
+        await insertNotificationsBatch?.call(
+            parseResult.unrecognizedNotifications);
+      }
+
+      await loadAll();
+      onSmsEventReceived?.call();
+
+      onProgress?.call(ScanProgressStatus(
+        progress: 1.0,
+        stage: 'Refreshed $bankName transactions',
+        isComplete: true,
+      ));
+
+      return insertedCount;
+    } catch (e) {
+      debugPrint('Error during refreshBankData for $bankName: $e');
+      onProgress?.call(ScanProgressStatus(
+        progress: 1.0,
+        stage: 'Failed to refresh $bankName records',
+        isComplete: true,
+      ));
+      return 0;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Smart refresh: re-scans the SMS inbox using the active scan window.
   Future<void> smartRefresh({
     ScanWindowOption scanWindowOption = ScanWindowOption.thirtyDays,
@@ -721,12 +893,25 @@ class TransactionsViewModel extends ChangeNotifier {
     await scanSms(scanWindowOption: scanWindowOption, onProgress: onProgress);
   }
 
-  /// Full reset: clears transactions, custom reasons, notifications and re-scans all available history.
+  /// Purges transactions and re-scans cleanly from the SMS inbox.
+  Future<void> purgeAndRescan({
+    ScanWindowOption scanWindowOption = ScanWindowOption.thirtyDays,
+    void Function(ScanProgressStatus)? onProgress,
+  }) async {
+    await _repository.deleteAllTransactions();
+    _transactions = [];
+    notifyListeners();
+    await scanSms(scanWindowOption: scanWindowOption, onProgress: onProgress);
+  }
+
+  /// Full reset: clears transactions, custom reasons, notifications, paused banks and re-scans all available history.
   Future<void> fullReset({
     void Function(ScanProgressStatus)? onProgress,
   }) async {
     await _repository.deleteAllTransactions();
     _transactions = [];
+    _pausedBanks = {};
+    await _repository.setPausedBanks({});
     await _repository.deleteAllUserReasons();
     _reasons = await _repository.getReasons();
     _reasonLinks = [];
@@ -735,10 +920,12 @@ class TransactionsViewModel extends ChangeNotifier {
     await scanSms(scanWindowOption: ScanWindowOption.allTime, onProgress: onProgress);
   }
 
-  /// Step 1 of full reset: delete all transactions from database.
+  /// Step 1 of full reset: delete all transactions from database and clear paused banks.
   Future<void> fullResetStep1DeleteTransactions() async {
     await _repository.deleteAllTransactions();
     _transactions = [];
+    _pausedBanks = {};
+    await _repository.setPausedBanks({});
     notifyListeners();
   }
 
@@ -761,13 +948,31 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<void> addTransaction(AppTransaction transaction) async {
     await _repository.insertTransaction(transaction);
     _transactions.insert(0, transaction);
+    await _ensureSenderExists(transaction.name);
     notifyListeners();
   }
 
   Future<void> addTransactionsBatch(List<AppTransaction> transactions) async {
     await _repository.insertTransactionsBatch(transactions);
     _transactions.insertAll(0, transactions);
+    for (final tx in transactions) {
+      await _ensureSenderExists(tx.name);
+    }
     notifyListeners();
+  }
+
+  Future<void> _ensureSenderExists(String bankName) async {
+    final trimmed = bankName.trim();
+    if (trimmed.isEmpty) return;
+    final canonical = BankSenders.match(trimmed) ?? trimmed;
+    final exists = _senders.any(
+      (s) => s.senderName.trim().toUpperCase() == canonical.toUpperCase(),
+    );
+    if (!exists) {
+      final newSender = AppSender(senderName: canonical);
+      final id = await _repository.insertSender(newSender);
+      _senders.add(AppSender(id: id.toString(), senderName: canonical));
+    }
   }
 
   Future<void> deleteTransaction(String id) async {

@@ -11,7 +11,7 @@ class AboutAppScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        bottom: false,
+        bottom: true,
         child: Column(
           children: [
             Padding(
@@ -114,7 +114,7 @@ class AboutAppScreen extends StatelessWidget {
                             color: AppColors.info, size: 12),
                         SizedBox(width: 6),
                         Text(
-                          '@Shibre_Plus',
+                          '@Shi_bre',
                           style: TextStyle(
                             color: AppColors.info,
                             fontSize: 12,
@@ -158,7 +158,7 @@ class AboutAppScreen extends StatelessWidget {
         borderRadius: AppRadius.cardRadius,
       ),
       child: Text(
-        'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from CBE, Telebirr, and CBE Birr, providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',
+        'Shibre is an advanced SMS tracking application designed to simplify your financial management. It automatically parses and categorizes bank notifications from your supported banks (Telebirr, CBE, CBE Birr, Ahadu Bank, BOA, Dashen Bank, and custom senders), providing you with real-time balance tracking and detailed spending analytics. All processing is done strictly offline to ensure your financial privacy.',
         style: TextStyle(
           color: Colors.white.withValues(alpha: 0.65),
           fontSize: 14,
@@ -169,7 +169,7 @@ class AboutAppScreen extends StatelessWidget {
   }
 
   Future<void> _launchTelegram() async {
-    final Uri url = Uri.parse('https://t.me/Shibre_Plus');
+    final Uri url = Uri.parse('https://t.me/Shi_bre');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       // Fallback or log error
     }

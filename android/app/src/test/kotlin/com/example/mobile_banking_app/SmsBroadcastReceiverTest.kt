@@ -126,6 +126,7 @@ class SmsBroadcastReceiverTest {
         assertTrue(parsed.isLocked)
         assertEquals("Airtime", parsed.lockedReasonName)
         assertEquals("DHJ9WSTUPZ", parsed.txReference)
+        assertEquals(485.32, parsed.totalBalance, 0.001)
     }
 
     @Test
@@ -139,6 +140,7 @@ class SmsBroadcastReceiverTest {
         assertEquals("To: 251972665987", parsed.directionHeader)
         assertTrue(parsed.isLocked)
         assertEquals("Airtime", parsed.lockedReasonName)
+        assertEquals(39.69, parsed.totalBalance, 0.001)
     }
 
     @Test
@@ -152,6 +154,7 @@ class SmsBroadcastReceiverTest {
         assertEquals("972665987", parsed.counterparty)
         assertTrue(parsed.isLocked)
         assertEquals("Package", parsed.lockedReasonName)
+        assertEquals(24.61, parsed.totalBalance, 0.001)
     }
 
     @Test
@@ -164,6 +167,7 @@ class SmsBroadcastReceiverTest {
         assertTrue(parsed.isDebit)
         assertTrue(parsed.isLocked)
         assertEquals("Internal Transfer", parsed.lockedReasonName)
+        assertEquals(13.60, parsed.totalBalance, 0.001)
     }
 
     @Test
@@ -176,6 +180,111 @@ class SmsBroadcastReceiverTest {
         assertTrue(parsed.isDebit)
         assertFalse(parsed.isLocked)
         assertNull(parsed.lockedReasonName)
+    }
+
+    @Test
+    fun `parses CBE credit with total balance`() {
+        val msg = "Dear Customer, your account 1000*** has been credited with ETB 500.00 from JOHN DOE on 12/03/2024. Your Current Balance is ETB 5,784.66. Ref: FT123456"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("CBE", msg)
+
+        assertNotNull(parsed)
+        assertEquals(500.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals(5784.66, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses BOA credit with total balance`() {
+        val msg = "Dear customer, your account has been credited with ETB 1,000.00 by ALMAZ on 15-May-2024. Available Balance is ETB 12,345.67. trx=TRX9988"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("BOA", msg)
+
+        assertNotNull(parsed)
+        assertEquals(1000.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals(12345.67, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Ahadu Bank debit with total balance`() {
+        val msg = "Dear customer, your Ahadu account has been debited ETB 250.00 on 10/01/2024. Current balance is ETB 8,900.50. Ref: AH7766"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Ahadu Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(250.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals(8900.50, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Dashen Bank transfer with total balance`() {
+        val msg = "Dear customer, you have transferred ETB 300.00 on 05/02/2024. Current balance is ETB 4,321.00."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Dashen Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(300.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals(4321.00, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Dashen Bank Super App transfer to telebirr`() {
+        val msg = """Dear Getasew, you have successfully transferred ETB 50.00 from your account  5822**011 to Getasew Adane Ambaw tele birr account +251945557122 on 2026-08-14 at 08:52:25 with transaction reference 822LTWS2622600WJ.  The service charge is 
+ETB 5, VAT (15%) ETB 0.75 and DRRF (5%) ETB 0.25. Your current balance is ETB 6,999.44.
+
+Download receipt:  = https://receipts.dashenbanksc.com/receipt/822LTWS2622600WJ.
+Share us your feedback:  https://forms.gle/mbzfguGEdytV5GKj6
+Contact us on: 6333
+Thank you for using Dashen Super app"""
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Dashen Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(50.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("822LTWS2622600WJ", parsed.txReference)
+        assertEquals("Getasew Adane Ambaw", parsed.counterparty)
+        assertEquals(6999.44, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Dashen Bank account to account transfer`() {
+        val msg = """Dear GETASEW ADANE AMBAW, you have successfully transferred ETB 50,000.00 from your account number 5822**011 to BIRUK WORKU NEMTA's account number  5822**011 on 2026-08-12 at 02:07:46 with transaction reference: 822WDTS262240002. The service 
+charge is ETB 0.00, VAT (15%) ETB 0.00 and DRRF (5%) 
+ETB 0.00. Your current balance is ETB 6,055.44.
+
+Download receipt: = https://receipts.dashenbanksc.com/receipt/822WDTS262240002.
+Share us your feedback: https://forms.gle/mbzfguGEdytV5GKj6 Contact us on: 6333.
+Thank you for using Dashen Super app"""
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Dashen Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(50000.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("822WDTS262240002", parsed.txReference)
+        assertEquals("BIRUK WORKU NEMTA", parsed.counterparty)
+        assertEquals(6055.44, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses standard Dashen debit alert`() {
+        val msg = """Dear Customer, your account '5822**011' is debited with ETB 50,000.00 on 12/08/2026 at 02:07:46 PM. Your current balance is ETB 6,055.44.
+Dashen Bank - Always one step ahead!"""
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Dashen Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(50000.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals(6055.44, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses CBE Birr with total balance`() {
+        val msg = "You have transferred 200.00 Br. to 0911223344 on 01/01/2024. Txn ID is TXN8877. Your current balance is 1,500.25 Br."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("CBE Birr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(200.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals(1500.25, parsed.totalBalance, 0.001)
     }
 
     @Test

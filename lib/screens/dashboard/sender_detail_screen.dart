@@ -6,6 +6,8 @@ import '../../widgets/interactive_balance_chart.dart';
 import 'manual_transaction_sheet.dart';
 import '../../models/sender.dart';
 import '../../models/transaction.dart';
+import '../../models/scan_window_option.dart';
+import '../../services/bank_senders.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
@@ -68,7 +70,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              "This 30-Day Profit or Loss calculation for this specific account = (Deposits) - (Expenditures) over the last 30 days.\n\nIt reflects the recent net performance of this wallet or account.",
+              "This 30-Day Profit or Loss calculation for this specific account = (Income) - (Expense) over the last 30 days.\n\nIt reflects the recent net performance of this wallet or account.",
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 13.5,
@@ -100,16 +102,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       _selectedAccountIndex = 0;
     }
 
-    final sNameUp = widget.sender.senderName.toUpperCase();
     final allTxForSender = txVM.allTransactionsUnfiltered.where((tx) {
-      final tNameUp = tx.name.toUpperCase();
-      final tSenderUp = tx.sender.toUpperCase();
-      final matchesBank = (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA'))
-          ? (tNameUp == 'BOA' ||
-              tSenderUp == 'BOA' ||
-              tNameUp.contains('ABYSSINIA') ||
-              tSenderUp.contains('ABYSSINIA'))
-          : (tNameUp == sNameUp || tSenderUp == sNameUp);
+      final matchesBank = BankSenders.isSameBank(tx.name, widget.sender.senderName);
 
       if (!matchesBank) return false;
 
@@ -212,6 +206,10 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         if (monthPercent.isInfinite || monthPercent.isNaN) monthPercent = 0;
       }
     }
+    final int? activeSimSlot = (accountItems.isNotEmpty && _selectedAccountIndex > 0)
+        ? accountItems[_selectedAccountIndex].simSlot
+        : null;
+    final double telebirrSavings = txVM.telebirrSavingBalanceForAccount(activeSimSlot);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -236,94 +234,106 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               ],
             ),
           ),
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              // ── Dynamic Collapsing Interactive Bank Card Header ──
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: BankDetailHeaderDelegate(
-                  sender: currentSender,
-                  topSafeArea: topSafeArea,
-                  currentBalance: currentBalance,
-                  monthChange: monthChange,
-                  monthPercent: monthPercent,
-                  txCount: allTxForSender.length,
-                  isChartVisible: _isChartVisible,
-                  accounts: accountItems,
-                  selectedAccountIndex: _selectedAccountIndex,
-                  onAccountChanged: (idx) =>
-                      setState(() => _selectedAccountIndex = idx),
-                  onToggleAccountPause: (idx) async {
-                    if (idx > 0 && idx < accountItems.length) {
-                      final slot = accountItems[idx].simSlot;
-                      if (slot != null) {
-                        await txVM.toggleAccountPause(
-                            widget.sender.senderName, slot);
-                      }
-                    }
-                  },
-                  onAddTransaction: () {
-                    AppBottomSheet.show(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (context) => ManualTransactionSheet(
-                        txVM: txVM,
-                        initialSender: widget.sender,
-                      ),
-                    );
-                  },
-                  onAnalytics: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => AnalysisScreen(
-                          initialBankFilter: widget.sender.senderName,
-                        ),
-                      ),
-                    );
-                  },
-                  onShowPnlInfo: () => _showPNLInfo(context),
-                  onCredentials: () => _showRefreshChooser(context, txVM),
-                  onToggleChart: () => setState(() => _isChartVisible = !_isChartVisible),
-                ),
+          child: RefreshIndicator(
+            color: AppColors.brandGreen,
+            backgroundColor: AppColors.surfaceElevated,
+            onRefresh: () async {
+              final activeOption = context.read<SettingsViewModel>().scanWindowOption;
+              await txVM.refreshBankData(
+                bankName: widget.sender.senderName,
+                scanWindowOption: activeOption,
+              );
+            },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
+              slivers: [
+                // ── Dynamic Collapsing Interactive Bank Card Header ──
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: BankDetailHeaderDelegate(
+                    sender: currentSender,
+                    topSafeArea: topSafeArea,
+                    currentBalance: currentBalance,
+                    monthChange: monthChange,
+                    monthPercent: monthPercent,
+                    txCount: allTxForSender.length,
+                    isChartVisible: _isChartVisible,
+                    accounts: accountItems,
+                    selectedAccountIndex: _selectedAccountIndex,
+                    onAccountChanged: (idx) =>
+                        setState(() => _selectedAccountIndex = idx),
+                    onToggleAccountPause: (idx) async {
+                      if (idx > 0 && idx < accountItems.length) {
+                        final slot = accountItems[idx].simSlot;
+                        if (slot != null) {
+                          await txVM.toggleAccountPause(
+                              widget.sender.senderName, slot);
+                        }
+                      }
+                    },
+                    onAddTransaction: () {
+                      AppBottomSheet.show(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (context) => ManualTransactionSheet(
+                          txVM: txVM,
+                          initialSender: widget.sender,
+                        ),
+                      );
+                    },
+                    onAnalytics: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AnalysisScreen(
+                            initialBankFilter: widget.sender.senderName,
+                          ),
+                        ),
+                      );
+                    },
+                    onShowPnlInfo: () => _showPNLInfo(context),
+                    onCredentials: () => _showRefreshChooser(context, txVM),
+                    onToggleChart: () => setState(() => _isChartVisible = !_isChartVisible),
+                  ),
+                ),
 
-              // ── Extra Bank Details (Telebirr Savings, Charts, Filters) ──
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    if (widget.sender.senderName.toUpperCase() == 'TELEBIRR' &&
-                        txVM.telebirrSavingBalance > 0)
-                      _buildTelebirrSavingSummaryCard(
-                        txVM.telebirrSavingBalance,
-                      ),
-                    if (_isChartVisible) ...[
-                      const SizedBox(height: 8),
-                      InteractiveBalanceChart(
-                        transactions: allTxForSender,
-                        initialFilter: _chartFilter,
-                        isBalanceVisible: settingsVM.isBalanceVisible,
-                        chartHeight: 140,
-                        onFilterChanged: (val) =>
-                            setState(() => _chartFilter = val),
+                // ── Extra Bank Details (Telebirr Savings, Charts, Filters) ──
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      if (widget.sender.senderName.toUpperCase() == 'TELEBIRR' &&
+                          telebirrSavings > 0)
+                        _buildTelebirrSavingSummaryCard(
+                          telebirrSavings,
+                          activeSimSlot,
+                        ),
+                      if (_isChartVisible) ...[
+                        const SizedBox(height: 8),
+                        InteractiveBalanceChart(
+                          transactions: allTxForSender,
+                          initialFilter: _chartFilter,
+                          isBalanceVisible: settingsVM.isBalanceVisible,
+                          chartHeight: 140,
+                          onFilterChanged: (val) =>
+                              setState(() => _chartFilter = val),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      _buildActivityFilterSection(
+                        filteredTransactions.length,
+                        senderOptions,
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    _buildActivityFilterSection(
-                      filteredTransactions.length,
-                      senderOptions,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
 
-              // ── Transaction List (Virtualized SliverList with Lazy Loading) ──
-              _buildTransactionSliverList(filteredTransactions),
-            ],
+                // ── Transaction List (Virtualized SliverList with Lazy Loading) ──
+                _buildTransactionSliverList(filteredTransactions),
+              ],
+            ),
           ),
         ),
       ),
@@ -331,9 +341,12 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   }
 
   /// Summary card for Telebirr Savings (Sanduq) when savings balance exists
-  Widget _buildTelebirrSavingSummaryCard(double savingBalance) {
+  Widget _buildTelebirrSavingSummaryCard(double savingBalance, [int? activeSimSlot]) {
     final fmt = NumberFormat('#,##0.00');
     final settingsVM = context.watch<SettingsViewModel>();
+    final String subtitle = activeSimSlot != null
+        ? 'SIM ${activeSimSlot + 1} savings vault'
+        : 'High-yield savings vault';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
@@ -363,18 +376,26 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Telebirr Sanduq (Savings)',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      const Text(
+                        'Telebirr Sanduq (Savings)',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (activeSimSlot != null) ...[
+                        const SizedBox(width: 6),
+                        SimBadge(simSlot: activeSimSlot),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 2),
-                  const Text(
-                    'High-yield savings vault',
-                    style: TextStyle(
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
                       color: AppColors.textSoft,
                       fontSize: 11,
                     ),
@@ -414,38 +435,48 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       );
   }
 
-  /// Lets the user pick how far back to re-scan SMS, then refreshes.
+  /// Lets the user pick how far back to re-scan SMS for this bank, synchronized with the active scan range.
   void _showRefreshChooser(BuildContext context, TransactionsViewModel txVM) {
-    Future<void> runRefresh(int days) async {
+    final settingsVM = context.read<SettingsViewModel>();
+    final activeScanOption = settingsVM.scanWindowOption;
+    final bankName = widget.sender.senderName;
+
+    Future<void> runRefresh(ScanWindowOption option) async {
+      final rangeLabel = option == ScanWindowOption.allTime
+          ? 'all historical records'
+          : option.title.toLowerCase();
       AppToast.info(
         context,
-        message: 'Rescanning SMS',
-        subtitle: 'Refreshing transactions from the last $days days…',
+        message: 'Rescanning $bankName SMS',
+        subtitle: 'Refreshing $bankName transactions from $rangeLabel…',
         duration: const Duration(seconds: 2),
       );
-      await txVM.refreshData(lastDays: days);
+      await txVM.refreshBankData(
+        bankName: bankName,
+        scanWindowOption: option,
+      );
       if (!context.mounted) return;
       AppToast.success(
         context,
         message: 'Sync Complete',
-        subtitle: 'Refreshed the last $days days of transactions',
+        subtitle: 'Refreshed $bankName transactions ($rangeLabel)',
       );
     }
 
     AppDrawer.show(
       context: context,
       builder: (sheetCtx) {
-        Widget option({
+        Widget optionWidget({
           required IconData icon,
           required String title,
           required String subtitle,
-          required int days,
+          required ScanWindowOption option,
         }) {
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
               Navigator.pop(sheetCtx);
-              runRefresh(days);
+              runRefresh(option);
             },
             child: Container(
               margin: const EdgeInsets.only(bottom: 10),
@@ -458,28 +489,29 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 children: [
                   Icon(icon, color: Colors.white, size: 22),
                   const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const Spacer(),
                   const Icon(
                     Icons.chevron_right_rounded,
                     color: AppColors.textSecondary,
@@ -491,29 +523,104 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           );
         }
 
+        final List<Widget> optionWidgets = [];
+
+        if (activeScanOption == ScanWindowOption.todayOnly) {
+          optionWidgets.add(optionWidget(
+            icon: Icons.today_rounded,
+            title: 'Today only',
+            subtitle: 'Recent 24 hours of $bankName messages',
+            option: ScanWindowOption.todayOnly,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.history_rounded,
+            title: 'Past 7 days',
+            subtitle: 'Quick — recent $bankName messages',
+            option: ScanWindowOption.sevenDays,
+          ));
+        } else if (activeScanOption == ScanWindowOption.sevenDays) {
+          optionWidgets.add(optionWidget(
+            icon: Icons.today_rounded,
+            title: 'Today only',
+            subtitle: 'Recent 24 hours of $bankName messages',
+            option: ScanWindowOption.todayOnly,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.history_rounded,
+            title: 'Past 7 days',
+            subtitle: 'Standard — recent $bankName messages',
+            option: ScanWindowOption.sevenDays,
+          ));
+        } else if (activeScanOption == ScanWindowOption.thirtyDays) {
+          optionWidgets.add(optionWidget(
+            icon: Icons.history_rounded,
+            title: 'Past 7 days',
+            subtitle: 'Quick — recent $bankName messages only',
+            option: ScanWindowOption.sevenDays,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.date_range_rounded,
+            title: 'Last 30 days',
+            subtitle: 'Standard — 1-month $bankName catch-up',
+            option: ScanWindowOption.thirtyDays,
+          ));
+        } else if (activeScanOption == ScanWindowOption.ninetyDays) {
+          optionWidgets.add(optionWidget(
+            icon: Icons.history_rounded,
+            title: 'Past 7 days',
+            subtitle: 'Quick — recent $bankName messages only',
+            option: ScanWindowOption.sevenDays,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.date_range_rounded,
+            title: 'Last 30 days',
+            subtitle: 'Standard — 1-month $bankName catch-up',
+            option: ScanWindowOption.thirtyDays,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.calendar_month_rounded,
+            title: 'Last 90 days',
+            subtitle: 'Extended — 3-month $bankName catch-up',
+            option: ScanWindowOption.ninetyDays,
+          ));
+        } else {
+          // ScanWindowOption.allTime
+          optionWidgets.add(optionWidget(
+            icon: Icons.history_rounded,
+            title: 'Past 7 days',
+            subtitle: 'Quick — recent $bankName messages only',
+            option: ScanWindowOption.sevenDays,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.date_range_rounded,
+            title: 'Last 30 days',
+            subtitle: 'Standard — 1-month $bankName catch-up',
+            option: ScanWindowOption.thirtyDays,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.calendar_month_rounded,
+            title: 'Last 90 days',
+            subtitle: 'Extended — 3-month $bankName catch-up',
+            option: ScanWindowOption.ninetyDays,
+          ));
+          optionWidgets.add(optionWidget(
+            icon: Icons.all_inclusive_rounded,
+            title: 'All Time',
+            subtitle: 'Complete — all historical $bankName records',
+            option: ScanWindowOption.allTime,
+          ));
+        }
+
         return AppDrawer(
-          headerCard: const AppDrawerHeaderCard(
+          headerCard: AppDrawerHeaderCard(
             icon: Icons.refresh_rounded,
             iconColor: AppColors.positive,
-            title: 'Refresh transactions',
-            subtitle: 'Choose how far back to re-scan your SMS.',
+            title: 'Refresh $bankName',
+            subtitle: 'Re-scan SMS records specifically for $bankName.',
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              option(
-                icon: Icons.history_rounded,
-                title: 'Past 7 days',
-                subtitle: 'Quick — recent messages only',
-                days: 7,
-              ),
-              option(
-                icon: Icons.date_range_rounded,
-                title: 'Last 30 days',
-                subtitle: 'Thorough — wider catch-up',
-                days: 30,
-              ),
-            ],
+            children: optionWidgets,
           ),
         );
       },
@@ -860,8 +967,8 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
     final isIncome = tx.type == 'income';
     final partyName = tx.sender.trim();
     final partyLabel = partyName.isNotEmpty
-        ? (isIncome ? 'From $partyName' : 'For $partyName')
-        : (isIncome ? 'Deposit' : 'Transfer');
+        ? (isIncome ? 'From $partyName' : 'To $partyName')
+        : (isIncome ? 'Income' : 'Expense');
 
     return Material(
       color: Colors.transparent,
@@ -905,7 +1012,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         Flexible(
                           child: Text(
                             tx.resolvedReason ??
-                                (isIncome ? 'Deposit' : 'Expense'),
+                                (isIncome ? 'Income' : 'Expense'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

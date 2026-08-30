@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../models/scan_window_option.dart';
+import '../../models/scan_progress_status.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_card.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_toast.dart';
 import 'maintenance_progress_dialog.dart';
@@ -38,8 +39,12 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     super.dispose();
   }
 
-  Future<void> _handleSmartRefresh() async {
+  Future<void> _handleSmartRefresh({
+    ScanWindowOption? scanWindowOption,
+  }) async {
     final txVM = context.read<TransactionsViewModel>();
+    final settingsVM = context.read<SettingsViewModel>();
+    final effectiveWindow = scanWindowOption ?? settingsVM.scanWindowOption;
     final ctrl = await showMaintenanceProgressDialog(
       context: context,
       title: 'Smart Refresh',
@@ -56,48 +61,45 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     await Future.delayed(const Duration(milliseconds: 300));
 
     try {
-      ctrl.updateStep(0, MaintenanceStepStatus.running);
+      ctrl.activateStep(0);
       ctrl.setProgress(0.05, 'Connecting to SMS inbox…');
 
-      await txVM.smartRefresh(
-        onProgress: (status) {
-          if (status.progress >= 0.05 && status.progress < 0.35) {
-            ctrl.updateStep(0, MaintenanceStepStatus.running);
-            ctrl.setProgress(status.progress * 0.4, status.stage);
-          } else if (status.progress >= 0.35 && status.progress < 0.55) {
-            ctrl.updateStep(0, MaintenanceStepStatus.done);
-            ctrl.updateStep(1, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.2 + status.progress * 0.3, status.stage);
-          } else if (status.progress >= 0.55 && status.progress < 0.80) {
-            ctrl.updateStep(1, MaintenanceStepStatus.done);
-            ctrl.updateStep(2, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.4 + status.progress * 0.3, status.stage);
-            if (status.scannedBanks.isNotEmpty) {
-              ctrl.setScanStatus(status);
-            }
-          } else if (status.progress >= 0.80) {
-            ctrl.updateStep(2, MaintenanceStepStatus.done);
-            ctrl.updateStep(3, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.7 + status.progress * 0.2, status.stage);
-            if (status.scannedBanks.isNotEmpty) {
-              ctrl.setScanStatus(status);
-            }
+      void handleProgress(ScanProgressStatus status) {
+        if (status.isComplete) {
+          if (status.scannedBanks.isNotEmpty) {
+            ctrl.setScanStatus(status);
           }
+          ctrl.complete();
+          return;
+        }
 
-          if (status.isComplete) {
-            ctrl.updateStep(3, MaintenanceStepStatus.done);
-            if (status.scannedBanks.isNotEmpty) {
-              ctrl.setScanStatus(status);
-            }
-            ctrl.complete();
+        if (status.progress < 0.35) {
+          ctrl.activateStep(0);
+          ctrl.setProgress(status.progress * 0.4, status.stage);
+        } else if (status.progress < 0.75) {
+          ctrl.activateStep(1);
+          ctrl.setProgress(0.2 + status.progress * 0.4, status.stage);
+        } else if (status.progress < 0.95) {
+          ctrl.activateStep(2);
+          ctrl.setProgress(0.5 + status.progress * 0.3, status.stage);
+          if (status.scannedBanks.isNotEmpty) {
+            ctrl.setScanStatus(status);
           }
-        },
+        } else {
+          ctrl.activateStep(3);
+          ctrl.setProgress(0.8 + status.progress * 0.2, status.stage);
+          if (status.scannedBanks.isNotEmpty) {
+            ctrl.setScanStatus(status);
+          }
+        }
+      }
+
+      await txVM.smartRefresh(
+        scanWindowOption: effectiveWindow,
+        onProgress: handleProgress,
       );
 
       if (!ctrl.isComplete) {
-        for (int i = 0; i < 4; i++) {
-          ctrl.updateStep(i, MaintenanceStepStatus.done);
-        }
         ctrl.complete();
       }
 
@@ -130,66 +132,54 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
 
     try {
       // Step 1: Delete all transactions
-      ctrl.updateStep(0, MaintenanceStepStatus.running);
+      ctrl.activateStep(0);
       ctrl.setProgress(0.05, 'Deleting all transactions…');
       await txVM.fullResetStep1DeleteTransactions();
-      ctrl.updateStep(0, MaintenanceStepStatus.done);
 
       // Step 2: Clear all custom reasons
-      ctrl.updateStep(1, MaintenanceStepStatus.running);
+      ctrl.activateStep(1);
       ctrl.setProgress(0.12, 'Clearing custom reason mappings…');
       await txVM.fullResetStep2ClearCustomReasons();
-      ctrl.updateStep(1, MaintenanceStepStatus.done);
 
       // Step 3: Delete notifications
-      ctrl.updateStep(2, MaintenanceStepStatus.running);
+      ctrl.activateStep(2);
       ctrl.setProgress(0.20, 'Clearing notifications cache…');
       await txVM.fullResetStep3DeleteNotifications();
-      ctrl.updateStep(2, MaintenanceStepStatus.done);
 
       // Steps 4-6: Re-scan SMS from beginning
-      ctrl.updateStep(3, MaintenanceStepStatus.running);
+      ctrl.activateStep(3);
       ctrl.setProgress(0.28, 'Connecting to SMS archive…');
 
       await txVM.scanSms(
         scanWindowOption: ScanWindowOption.allTime,
         onProgress: (status) {
-          if (status.progress >= 0.05 && status.progress < 0.35) {
-            ctrl.updateStep(3, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.28 + status.progress * 0.15, status.stage);
-          } else if (status.progress >= 0.35 && status.progress < 0.55) {
-            ctrl.updateStep(3, MaintenanceStepStatus.done);
-            ctrl.updateStep(4, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.42 + status.progress * 0.2, status.stage);
-          } else if (status.progress >= 0.55 && status.progress < 0.80) {
-            ctrl.updateStep(4, MaintenanceStepStatus.done);
-            ctrl.updateStep(5, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.60 + status.progress * 0.2, status.stage);
-            if (status.scannedBanks.isNotEmpty) {
-              ctrl.setScanStatus(status);
-            }
-          } else if (status.progress >= 0.80) {
-            ctrl.updateStep(5, MaintenanceStepStatus.running);
-            ctrl.setProgress(0.80 + status.progress * 0.15, status.stage);
-            if (status.scannedBanks.isNotEmpty) {
-              ctrl.setScanStatus(status);
-            }
-          }
-
           if (status.isComplete) {
-            ctrl.updateStep(5, MaintenanceStepStatus.done);
             if (status.scannedBanks.isNotEmpty) {
               ctrl.setScanStatus(status);
             }
             ctrl.complete();
+            return;
+          }
+
+          if (status.progress < 0.35) {
+            ctrl.activateStep(3);
+            ctrl.setProgress(0.28 + status.progress * 0.15, status.stage);
+          } else if (status.progress < 0.75) {
+            // Parsing banking transactions (Step 5 in UI)
+            ctrl.activateStep(4);
+            ctrl.setProgress(0.42 + status.progress * 0.25, status.stage);
+          } else {
+            // Storing verified data & balances (Step 6 in UI)
+            ctrl.activateStep(5);
+            ctrl.setProgress(0.70 + status.progress * 0.25, status.stage);
+            if (status.scannedBanks.isNotEmpty) {
+              ctrl.setScanStatus(status);
+            }
           }
         },
       );
 
       if (!ctrl.isComplete) {
-        for (int i = 0; i < 6; i++) {
-          ctrl.updateStep(i, MaintenanceStepStatus.done);
-        }
         ctrl.complete();
       }
 
@@ -305,7 +295,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         children: [
           _buildInfoCard(
@@ -320,23 +310,30 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
                 '• Rescans unassigned messages',
           ),
           const SizedBox(height: 24),
-          _buildStatusItem(
-            context: context,
-            icon: Icons.check_circle_outline_rounded,
-            title: 'Reason Labels Preserved',
-            subtitle: 'Your categories and notes are safe.',
-          ),
-          _buildStatusItem(
-            context: context,
-            icon: Icons.check_circle_outline_rounded,
-            title: 'Message Integrity',
-            subtitle: 'Missing entries will be restored.',
-          ),
-          _buildStatusItem(
-            context: context,
-            icon: Icons.lock_outline_rounded,
-            title: 'Secure Process',
-            subtitle: 'Data is processed locally on your device.',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                _buildStatusItem(
+                  context: context,
+                  icon: Icons.check_circle_outline_rounded,
+                  title: 'Reason Labels Preserved',
+                  subtitle: 'Your categories and notes are safe.',
+                ),
+                _buildStatusItem(
+                  context: context,
+                  icon: Icons.check_circle_outline_rounded,
+                  title: 'Message Integrity',
+                  subtitle: 'Missing entries will be restored.',
+                ),
+                _buildStatusItem(
+                  context: context,
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Secure Process',
+                  subtitle: 'Data is processed locally on your device.',
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -348,7 +345,7 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
       child: Column(
         children: [
           _buildInfoCard(
@@ -363,23 +360,30 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
                 '• Rescans ALL SMS from the beginning',
           ),
           const SizedBox(height: 24),
-          _buildStatusItem(
-            context: context,
-            icon: Icons.error_outline_rounded,
-            title: 'Permanent Deletion',
-            subtitle: 'Transactions and custom reasons cannot be recovered.',
-          ),
-          _buildStatusItem(
-            context: context,
-            icon: Icons.history_rounded,
-            title: 'Fresh Start',
-            subtitle: 'SMS messages will be re-processed from scratch.',
-          ),
-          _buildStatusItem(
-            context: context,
-            icon: Icons.info_outline_rounded,
-            title: 'Full Rescan',
-            subtitle: 'Calculates all historical balances and account tiers.',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                _buildStatusItem(
+                  context: context,
+                  icon: Icons.error_outline_rounded,
+                  title: 'Permanent Deletion',
+                  subtitle: 'Transactions and custom reasons cannot be recovered.',
+                ),
+                _buildStatusItem(
+                  context: context,
+                  icon: Icons.history_rounded,
+                  title: 'Fresh Start',
+                  subtitle: 'SMS messages will be re-processed from scratch.',
+                ),
+                _buildStatusItem(
+                  context: context,
+                  icon: Icons.info_outline_rounded,
+                  title: 'Full Rescan',
+                  subtitle: 'Calculates all historical balances and account tiers.',
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -393,10 +397,13 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
     required String title,
     required String body,
   }) {
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      customColor: AppColors.surface,
-      borderRadius: AppRadius.card,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -409,6 +416,8 @@ class _DataMaintenanceScreenState extends State<DataMaintenanceScreen>
                   title,
                   style: AppTypography.heading2.copyWith(
                     color: context.themeTextPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

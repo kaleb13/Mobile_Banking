@@ -1,6 +1,5 @@
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
@@ -245,15 +244,9 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const SizedBox(width: 8),
-                                SvgPicture.asset(
+                                const AppSvgIcon(
                                   'assets/images/Wallet Icon.svg',
-                                  width: 18,
-                                  height: 18,
-                                  fit: BoxFit.contain,
-                                  colorFilter: const ColorFilter.mode(
-                                    Colors.white,
-                                    BlendMode.srcIn,
-                                  ),
+                                  size: 18,
                                 ),
                                 const SizedBox(width: 8),
                                 const Text(

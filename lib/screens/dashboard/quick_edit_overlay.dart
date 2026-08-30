@@ -374,8 +374,8 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                           children: [
                             Text(
                               isExpense
-                                  ? 'Transferred Amount'
-                                  : 'Deposited Amount',
+                                  ? 'Expense Amount'
+                                  : 'Income Amount',
                               style: const TextStyle(
                                 color: AppColors.textSoft,
                                 fontSize: 10,

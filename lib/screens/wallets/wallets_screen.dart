@@ -111,16 +111,22 @@ class _WalletsScreenState extends State<WalletsScreen> {
                                   txVM.balanceForSender(sender.senderName, cashBalance: cashVM.cashBalance);
                               final int txCount =
                                   txVM.txCountForSender(sender.senderName, cashTxCount: cashVM.cashTransactions.length);
-                              final int accountCount =
-                                  txVM.accountsForBank(sender.senderName).length;
+                              final allAccounts = txVM.accountsForBank(sender.senderName);
+                              final activeAccounts = allAccounts
+                                  .where((slot) => !txVM.isAccountPaused(sender.senderName, slot))
+                                  .toList();
+                              final int activeAccountCount = activeAccounts.length;
+                              final bool cardBalanceVisible =
+                                  settingsVM.isBalanceVisible &&
+                                  !settingsVM.isBankBalanceHidden(sender.senderName);
 
                               return _WalletCard(
                                 senderName: sender.senderName,
                                 balance: balance,
                                 txCount: txCount,
-                                isBalanceVisible: settingsVM.isBalanceVisible,
+                                isBalanceVisible: cardBalanceVisible,
                                 isPaused: false,
-                                accountCount: accountCount,
+                                accountCount: activeAccountCount,
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(

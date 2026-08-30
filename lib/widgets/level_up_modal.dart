@@ -211,7 +211,14 @@ class _LevelUpSheetState extends State<_LevelUpSheet>
               SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    18,
+                    24,
+                    24 + (MediaQuery.viewInsetsOf(context).bottom > 0
+                        ? MediaQuery.viewInsetsOf(context).bottom
+                        : MediaQuery.paddingOf(context).bottom),
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

@@ -78,15 +78,21 @@ void main() async {
             ..fetchSavingGoals(),
         ),
         ChangeNotifierProvider(
-          create: (_) => CashWalletViewModel(repository: cashWalletRepo)
-            ..loadCashData(),
-        ),
-        ChangeNotifierProvider(
           create: (context) {
             final txVM = TransactionsViewModel(repository: transactionRepo)
               ..loadAll()
               ..initEventListener();
             return txVM;
+          },
+        ),
+        ChangeNotifierProxyProvider<TransactionsViewModel, CashWalletViewModel>(
+          create: (_) => CashWalletViewModel(repository: cashWalletRepo)
+            ..loadCashData(),
+          update: (context, txVM, cashVM) {
+            final vm = cashVM ?? CashWalletViewModel(repository: cashWalletRepo);
+            vm.getTransactions = () => txVM.allTransactionsUnfiltered;
+            vm.recalcBalance();
+            return vm;
           },
         ),
         ChangeNotifierProxyProvider2<TransactionsViewModel, NotificationsViewModel, LoansViewModel>(

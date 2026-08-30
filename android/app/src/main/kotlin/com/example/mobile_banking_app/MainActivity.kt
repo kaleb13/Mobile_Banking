@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.telephony.TelephonyManager
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -99,6 +98,27 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.shibre/reports").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "scheduleReports" -> {
+                    PeriodicReportReceiver.scheduleAll(this)
+                    result.success(true)
+                }
+                "cancelReports" -> {
+                    PeriodicReportReceiver.cancelAll(this)
+                    result.success(true)
+                }
+                "sendTestReport" -> {
+                    val reportType = call.argument<String>("type") ?: "daily"
+                    val explicitBalance = call.argument<Double>("totalBalance")
+                    val explicitCurrency = call.argument<String>("currency")
+                    PeriodicReportReceiver.fireTestReport(this, reportType, explicitBalance, explicitCurrency)
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.shibre/sms_scanner").setMethodCallHandler { call, result ->
             when (call.method) {
                 "getSimCards" -> {
@@ -117,6 +137,88 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                     } catch (_: Throwable) {}
                     result.success(sims)
+                }
+                "openSmsInNativeApp" -> {
+                    val sender = call.argument<String>("sender") ?: ""
+                    val body = call.argument<String>("body") ?: ""
+                    val dateMs = call.argument<Long>("date")
+                    
+                    var opened = false
+
+                    // 1. Try to locate the exact thread_id from Android's Telephony database
+                    try {
+                        var threadId: Long? = null
+                        val selection = when {
+                            dateMs != null && dateMs > 0 -> "${Telephony.Sms.DATE} BETWEEN ? AND ?"
+                            body.isNotBlank() -> "${Telephony.Sms.BODY} LIKE ?"
+                            else -> null
+                        }
+                        val selectionArgs = when {
+                            dateMs != null && dateMs > 0 -> arrayOf((dateMs - 5000).toString(), (dateMs + 5000).toString())
+                            body.isNotBlank() -> arrayOf("%${body.take(30)}%")
+                            else -> null
+                        }
+
+                        contentResolver.query(
+                            Uri.parse("content://sms"),
+                            arrayOf("thread_id", "_id", "address"),
+                            selection,
+                            selectionArgs,
+                            "date DESC LIMIT 1"
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val tIdx = cursor.getColumnIndex("thread_id")
+                                if (tIdx >= 0) {
+                                    val t = cursor.getLong(tIdx)
+                                    if (t > 0) threadId = t
+                                }
+                            }
+                        }
+
+                        if (threadId != null && threadId > 0) {
+                            val threadUri = Uri.parse("content://mms-sms/conversations/$threadId")
+                            val intent = Intent(Intent.ACTION_VIEW, threadUri).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                            opened = true
+                        }
+                    } catch (_: Throwable) {}
+
+                    // 2. Fallback to sender address / shortcode thread (e.g. 6061, 127, Telebirr)
+                    if (!opened) {
+                        try {
+                            val resolvedAddress = when {
+                                sender.matches(Regex("^[0-9+]+$")) -> sender
+                                sender.contains("CBE", ignoreCase = true) -> "6061"
+                                sender.contains("TELEBIRR", ignoreCase = true) -> "127"
+                                sender.contains("AHADU", ignoreCase = true) -> "Ahadu"
+                                sender.contains("DASHEN", ignoreCase = true) -> "Dashen"
+                                sender.contains("ABYSSINIA", ignoreCase = true) || sender.contains("BOA", ignoreCase = true) -> "BOA"
+                                else -> sender
+                            }
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("smsto:${Uri.encode(resolvedAddress)}")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                            opened = true
+                        } catch (_: Throwable) {}
+                    }
+
+                    // 3. Fallback to opening default messaging app main screen
+                    if (!opened) {
+                        try {
+                            val genericIntent = Intent(Intent.ACTION_MAIN).apply {
+                                addCategory(Intent.CATEGORY_APP_MESSAGING)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(genericIntent)
+                            opened = true
+                        } catch (_: Throwable) {}
+                    }
+
+                    result.success(opened)
                 }
                 "getBankSmsFast" -> {
                     val sinceTimestamp = call.argument<Long>("since")
@@ -212,7 +314,7 @@ class MainActivity : FlutterFragmentActivity() {
                                     val phoneIdVal = if (phoneIdIdx >= 0) try { it.getInt(phoneIdIdx) } catch (_: Throwable) { -1 } else -1
                                     val simSlotVal = if (simSlotIdx >= 0) try { it.getInt(simSlotIdx) } catch (_: Throwable) { -1 } else -1
                                     val simIdVal = if (simIdIdx >= 0) try { it.getInt(simIdIdx) } catch (_: Throwable) { -1 } else -1
-                                    
+
                                     // Determine physical SIM slot (0 = SIM 1, 1 = SIM 2):
                                     // 1. Authoritative lookup from SubscriptionManager via sub_id (AOSP standard)
                                     // 2. Hardware phone_id (0 = SIM 1, 1 = SIM 2 on Qualcomm/Samsung RIL)

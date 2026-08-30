@@ -46,6 +46,9 @@ abstract class SettingsRepository {
 
   Future<bool> getIsBalanceVisible();
   Future<void> setIsBalanceVisible(bool value);
+
+  Future<Set<String>> getHiddenBalanceBanks();
+  Future<void> setHiddenBalanceBanks(Set<String> banks);
 }
 
 class SettingsRepositoryImpl implements SettingsRepository {
@@ -53,6 +56,19 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   SettingsRepositoryImpl({DatabaseService? dbService})
       : _dbService = dbService ?? DatabaseService.instance;
+
+  @override
+  Future<Set<String>> getHiddenBalanceBanks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('hidden_balance_banks') ?? [];
+    return list.toSet();
+  }
+
+  @override
+  Future<void> setHiddenBalanceBanks(Set<String> banks) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('hidden_balance_banks', banks.toList());
+  }
 
   @override
   Future<bool> getIsBalanceVisible() async {

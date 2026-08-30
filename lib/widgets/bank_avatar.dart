@@ -62,11 +62,10 @@ class BankAvatar extends StatelessWidget {
           ? AppColors.cbeBirrPink.withValues(alpha: 0.10)
           : AppColors.cbeBirrMagenta.withValues(alpha: 0.20);
     } else if (nameUp.contains('AHADU')) {
-      img = SvgPicture.asset(
+      img = AppSvgIcon(
         'assets/images/Ahadu_Logo.svg',
-        width: iconSize,
-        height: iconSize,
-        fit: BoxFit.contain,
+        size: iconSize,
+        onLightSurface: isLight,
       );
       bgColor = isLight
           ? AppColors.cardAhaduRed.withValues(alpha: 0.10)
@@ -74,37 +73,27 @@ class BankAvatar extends StatelessWidget {
     } else if (nameUp.contains('ABYSSINIA') ||
         nameUp == 'BOA' ||
         nameUp.contains('BOA')) {
-      img = SvgPicture.asset(
+      img = AppSvgIcon(
         'assets/images/Bank_of_Abyssinia_Icon.svg',
-        width: iconSize,
-        height: iconSize,
-        fit: BoxFit.contain,
+        size: iconSize,
+        onLightSurface: isLight,
       );
       bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
-      img = SvgPicture.asset(
+      img = AppSvgIcon(
         'assets/images/Dashen_Bank_Logo.svg',
-        width: iconSize * 1.15,
-        height: iconSize * 1.15,
-        fit: BoxFit.contain,
-        colorFilter: ColorFilter.mode(
-          isLight ? AppColors.cardDashenDark : Colors.white,
-          BlendMode.srcIn,
-        ),
+        size: iconSize * 1.15,
+        color: isLight ? AppColors.cardDashenDark : AppColors.iconLight,
+        onLightSurface: isLight,
       );
       bgColor = isLight
           ? AppColors.cardDashenLight.withValues(alpha: 0.15)
           : AppColors.cardDashenDark.withValues(alpha: 0.35);
     } else if (nameUp.contains('CASH') || nameUp.contains('WALLET')) {
-      img = SvgPicture.asset(
+      img = AppSvgIcon(
         'assets/images/Wallet Icon.svg',
-        width: iconSize * 0.9,
-        height: iconSize * 0.9,
-        fit: BoxFit.contain,
-        colorFilter: const ColorFilter.mode(
-          AppColors.positive,
-          BlendMode.srcIn,
-        ),
+        size: iconSize * 0.9,
+        color: AppColors.positive,
       );
       bgColor = isLight
           ? AppColors.positive.withValues(alpha: 0.12)

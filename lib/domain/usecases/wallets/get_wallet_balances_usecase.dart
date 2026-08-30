@@ -1,6 +1,7 @@
 import '../../../models/sender.dart';
 import '../../../models/transaction.dart';
 import '../../../models/cash_transaction.dart';
+import '../../../services/bank_senders.dart';
 
 class WalletBalancesResult {
   final double totalBalance;
@@ -31,35 +32,60 @@ class GetWalletBalancesUseCase {
 
     // 1. Bank Accounts: Match latest transaction balance by bank name (tx.name)
     for (final sender in senders) {
-      if (pausedUpper.contains(sender.senderName.toUpperCase())) {
+      if (pausedBanks.any((b) => BankSenders.isSameBank(b, sender.senderName))) {
         continue;
       }
 
-      final sNameUp = sender.senderName.trim().toUpperCase();
-      final senderTxs = transactions.where((t) {
-        final tNameUp = t.name.trim().toUpperCase();
-        final tSenderUp = t.sender.trim().toUpperCase();
-        if (sNameUp == 'BOA' || sNameUp.contains('ABYSSINIA')) {
-          return tNameUp == 'BOA' ||
-              tSenderUp == 'BOA' ||
-              tNameUp.contains('ABYSSINIA') ||
-              tSenderUp.contains('ABYSSINIA');
+      final senderTxs = transactions.where((t) => BankSenders.isSameBank(t.name, sender.senderName));
+
+      final slots = senderTxs.map((t) => t.simSlot).toSet().toList();
+      double bankTotal = 0.0;
+
+      if (slots.length <= 1) {
+        final withBal = senderTxs.where((t) => t.totalBalance > 0);
+        bankTotal = withBal.isNotEmpty ? withBal.first.totalBalance : 0.0;
+      } else {
+        // Multi-account / Dual-SIM bank: sum the latest balance of each separate account
+        for (final slot in slots) {
+          final isSlotPaused = pausedBanks.any((b) {
+            if (!b.contains(':')) return false;
+            final parts = b.split(':');
+            return BankSenders.isSameBank(parts[0], sender.senderName) && parts[1] == '$slot';
+          });
+          if (!isSlotPaused) {
+            final slotTxs = senderTxs.where((t) => t.simSlot == slot && t.totalBalance > 0);
+            if (slotTxs.isNotEmpty) {
+              bankTotal += slotTxs.first.totalBalance;
+            }
+          }
         }
-        return tNameUp == sNameUp || tSenderUp == sNameUp;
-      });
+      }
 
-      final withBal = senderTxs.where((t) => t.totalBalance > 0);
-      final double bal = withBal.isNotEmpty ? withBal.first.totalBalance : 0.0;
-
-      if (bal > 0) {
-        latestBalancesMap[sender.senderName] = bal;
-        totalBalance += bal;
+      if (bankTotal > 0) {
+        latestBalancesMap[sender.senderName] = bankTotal;
+        totalBalance += bankTotal;
       }
     }
 
     // 2. Cash Transactions: calculate net cash balance
     double cashInflows = 0;
     double cashOutflows = 0;
+
+    // 2a. Bank transactions categorized as Cash (Withdrawals = Inflows, Deposits = Outflows)
+    for (final tx in transactions) {
+      final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
+          .toLowerCase()
+          .trim();
+      if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
+        if (tx.type == 'expense') {
+          cashInflows += tx.amount.abs();
+        } else if (tx.type == 'income') {
+          cashOutflows += tx.amount.abs();
+        }
+      }
+    }
+
+    // 2b. Manual cash additions and deductions
     for (final ctx in cashTransactions) {
       if (ctx.type == 'addition') {
         cashInflows += ctx.amount;

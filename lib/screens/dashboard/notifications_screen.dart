@@ -3,6 +3,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import 'notifications/dynamic_notification_pill.dart';
 import 'notifications/notifications_panel_content.dart';
+import '../../widgets/app_bottom_sheet.dart';
 
 export 'notifications/dynamic_notification_pill.dart';
 export 'notifications/notifications_panel_overlay.dart';
@@ -65,19 +66,15 @@ class NotificationsModalWidget extends StatelessWidget {
 
 /// Legacy function kept for any lingering references.
 void showNotificationsOverlay(BuildContext context) {
-  showModalBottomSheet(
+  AppBottomSheet.show(
     context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.65),
     builder: (ctx) => Container(
       height: MediaQuery.of(ctx).size.height * 0.92,
       margin: EdgeInsets.only(
         top: MediaQuery.of(ctx).padding.top + 8,
         left: 12,
         right: 12,
-        bottom: 12,
+        bottom: 12 + MediaQuery.paddingOf(ctx).bottom,
       ),
       decoration: BoxDecoration(
         color: AppColors.surfaceElevated,

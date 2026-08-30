@@ -67,7 +67,10 @@ class AppBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final systemNavBottom = MediaQuery.paddingOf(context).bottom;
+    final double extraBottom = bottomInset > 0 ? bottomInset : systemNavBottom;
+    final insets = padding.resolve(Directionality.of(context));
     final maxHeight = MediaQuery.of(context).size.height * maxHeightFactor;
 
     return Container(
@@ -77,10 +80,10 @@ class AppBottomSheet extends StatelessWidget {
         borderRadius: AppRadius.sheetRadius,
       ),
       padding: EdgeInsets.fromLTRB(
-        (padding as EdgeInsets).left,
-        (padding as EdgeInsets).top,
-        (padding as EdgeInsets).right,
-        (padding as EdgeInsets).bottom + bottomInset,
+        insets.left,
+        insets.top,
+        insets.right,
+        insets.bottom + extraBottom,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

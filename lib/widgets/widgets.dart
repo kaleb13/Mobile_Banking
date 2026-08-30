@@ -33,3 +33,5 @@ export 'counterparty_insight_sheet.dart';
 export 'app_menu_button.dart';
 export 'app_modal_dialog.dart';
 export 'app_date_picker_drawer.dart';
+export 'app_svg_icon.dart';
+export 'app_icon_badge.dart';

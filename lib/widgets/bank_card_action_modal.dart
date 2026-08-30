@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/sender.dart';
 import '../presentation/viewmodels/transactions_view_model.dart';
 import '../presentation/viewmodels/cash_wallet_view_model.dart';
+import '../presentation/viewmodels/settings_view_model.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_badges.dart';
 import '../widgets/bank_card_widget.dart';
@@ -123,10 +124,20 @@ class _BankCardActionModalState extends State<BankCardActionModal>
   Widget build(BuildContext context) {
     final txVM = Provider.of<TransactionsViewModel>(context);
     final cashVM = Provider.of<CashWalletViewModel>(context);
+    final settingsVM = Provider.of<SettingsViewModel>(context);
+
+    final bool isBankHidden = settingsVM.isBankBalanceHidden(widget.senderName);
+    final bool effectiveBalanceVisible =
+        widget.isBalanceVisible && !isBankHidden;
     final bool currentPaused = txVM.isTrackingPaused(widget.senderName);
     final double liveBalance = txVM.balanceForSender(widget.senderName, cashBalance: cashVM.cashBalance);
     final int liveTxCount = txVM.txCountForSender(widget.senderName, cashTxCount: cashVM.cashTransactions.length);
     final sender = _findSender(txVM);
+
+    final accounts = txVM.accountsForBank(widget.senderName);
+    final bool hasMultipleAccounts = accounts.length > 1;
+    final int activeAccountCount =
+        accounts.where((slot) => !txVM.isAccountPaused(widget.senderName, slot)).length;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -179,8 +190,9 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                               senderName: widget.senderName,
                               balance: liveBalance,
                               txCount: liveTxCount,
-                              isBalanceVisible: widget.isBalanceVisible,
+                              isBalanceVisible: effectiveBalanceVisible,
                               isPaused: currentPaused,
+                              accountCount: activeAccountCount,
                               animationFactor: 1.0,
                               showMoreButton: false, // Don't show nested 3-dot inside modal
                             ),
@@ -202,66 +214,185 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 1. Pause / Resume Tracking Action Pill (Fires first)
+                        // 1. Pause / Resume Tracking Action(s)
+                        if (!hasMultipleAccounts)
+                          _StaggeredRevealPill(
+                            controller: _animController,
+                            startInterval: 0.12,
+                            endInterval: 0.54,
+                            child: _FocusActionPill(
+                              icon: currentPaused
+                                  ? Icons.play_circle_rounded
+                                  : Icons.pause_circle_rounded,
+                              title: currentPaused
+                                  ? 'Resume Tracking'
+                                  : 'Pause Tracking',
+                              subtitle: currentPaused
+                                  ? 'Resume automated SMS sync & alerts'
+                                  : 'Silence SMS detection & updates',
+                              trailing: currentPaused
+                                  ? const AppBadge.warning(
+                                      text: 'PAUSED',
+                                      icon: Icons.pause_rounded,
+                                      size: AppBadgeSize.small,
+                                    )
+                                  : const AppBadge.success(
+                                      text: 'ACTIVE',
+                                      icon: Icons.check_circle_rounded,
+                                      size: AppBadgeSize.small,
+                                    ),
+                              onTap: () async {
+                                HapticFeedback.lightImpact();
+                                final nav = Navigator.of(context);
+                                final name = widget.senderName;
+                                final wasPaused = currentPaused;
+
+                                nav.pop();
+
+                                if (wasPaused) {
+                                  await txVM.resumeTracking(name);
+                                  if (context.mounted) {
+                                    AppToast.success(
+                                      context,
+                                      message: '$name Tracking Resumed',
+                                      subtitle: 'SMS auto-detection & balance updates are active',
+                                      details: 'Automated SMS parsing and balance sync for $name have been re-enabled in real time.',
+                                      metadata: {
+                                        'Account': name,
+                                        'Status': 'Active',
+                                      },
+                                    );
+                                  }
+                                } else {
+                                  await txVM.pauseTracking(name);
+                                  if (context.mounted) {
+                                    AppToast.warning(
+                                      context,
+                                      message: '$name Tracking Paused',
+                                      subtitle: 'SMS auto-detection & notifications are silenced',
+                                      details: 'Tracking and transaction alerts for $name are temporarily paused. Existing transactions remain untouched.',
+                                      metadata: {
+                                        'Account': name,
+                                        'Status': 'Paused',
+                                      },
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          )
+                        else
+                          ...accounts.asMap().entries.map((entry) {
+                            final int idx = entry.key;
+                            final int slot = entry.value;
+                            final bool isSlotPaused =
+                                txVM.isAccountPaused(widget.senderName, slot);
+                            final String accountTitle = 'Account ${idx + 1}';
+
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: idx < accounts.length - 1 ? 10 : 0),
+                              child: _StaggeredRevealPill(
+                                controller: _animController,
+                                startInterval: 0.10 + (idx * 0.08),
+                                endInterval: 0.50 + (idx * 0.08),
+                                child: _FocusActionPill(
+                                  icon: isSlotPaused
+                                      ? Icons.play_circle_rounded
+                                      : Icons.pause_circle_rounded,
+                                  title: isSlotPaused
+                                      ? 'Resume $accountTitle'
+                                      : 'Pause $accountTitle',
+                                  subtitle: isSlotPaused
+                                      ? 'Resume automated SMS sync for $accountTitle'
+                                      : 'Silence SMS detection for $accountTitle',
+                                  trailing: isSlotPaused
+                                      ? const AppBadge.warning(
+                                          text: 'PAUSED',
+                                          icon: Icons.pause_rounded,
+                                          size: AppBadgeSize.small,
+                                        )
+                                      : const AppBadge.success(
+                                          text: 'ACTIVE',
+                                          icon: Icons.check_circle_rounded,
+                                          size: AppBadgeSize.small,
+                                        ),
+                                  onTap: () async {
+                                    HapticFeedback.lightImpact();
+                                    final nav = Navigator.of(context);
+                                    final name = widget.senderName;
+                                    final wasPaused = isSlotPaused;
+
+                                    nav.pop();
+                                    await txVM.toggleAccountPause(name, slot);
+
+                                    if (context.mounted) {
+                                      if (wasPaused) {
+                                        AppToast.success(
+                                          context,
+                                          message: '$name $accountTitle Resumed',
+                                          subtitle: 'SMS auto-detection is active for $accountTitle',
+                                        );
+                                      } else {
+                                        AppToast.warning(
+                                          context,
+                                          message: '$name $accountTitle Paused',
+                                          subtitle: 'SMS auto-detection silenced for $accountTitle',
+                                        );
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          }),
+
+                        const SizedBox(height: 10),
+
+                        // 2. Hide / Show Bank Balance Action Pill (Replaces Bank Details & Credentials)
                         _StaggeredRevealPill(
                           controller: _animController,
-                          startInterval: 0.12,
-                          endInterval: 0.54,
+                          startInterval: 0.28,
+                          endInterval: 0.70,
                           child: _FocusActionPill(
-                            icon: currentPaused
-                                ? Icons.play_circle_rounded
-                                : Icons.pause_circle_rounded,
-                            title: currentPaused
-                                ? 'Resume Tracking'
-                                : 'Pause Tracking',
-                            subtitle: currentPaused
-                                ? 'Resume automated SMS sync & alerts'
-                                : 'Silence SMS detection & updates',
-                            trailing: currentPaused
-                                ? const AppBadge.warning(
-                                    text: 'PAUSED',
-                                    icon: Icons.pause_rounded,
+                            icon: isBankHidden
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            title: isBankHidden
+                                ? 'Show Balance'
+                                : 'Hide Balance',
+                            subtitle: isBankHidden
+                                ? 'Reveal balance for this wallet in manager'
+                                : 'Mask balance for this wallet in manager',
+                            trailing: isBankHidden
+                                ? const AppBadge.neutral(
+                                    text: 'HIDDEN',
                                     size: AppBadgeSize.small,
                                   )
-                                : const AppBadge.success(
-                                    text: 'ACTIVE',
-                                    icon: Icons.check_circle_rounded,
+                                : const AppBadge.neutral(
+                                    text: 'VISIBLE',
                                     size: AppBadgeSize.small,
                                   ),
                             onTap: () async {
                               HapticFeedback.lightImpact();
                               final nav = Navigator.of(context);
                               final name = widget.senderName;
-                              final wasPaused = currentPaused;
+                              final wasHidden = isBankHidden;
 
                               nav.pop();
+                              await settingsVM.toggleBankBalanceVisibility(name);
 
-                              if (wasPaused) {
-                                await txVM.resumeTracking(name);
-                                if (context.mounted) {
+                              if (context.mounted) {
+                                if (wasHidden) {
                                   AppToast.success(
                                     context,
-                                    message: '$name Tracking Resumed',
-                                    subtitle: 'SMS auto-detection & balance updates are active',
-                                    details: 'Automated SMS parsing and balance sync for $name have been re-enabled in real time.',
-                                    metadata: {
-                                      'Account': name,
-                                      'Status': 'Active',
-                                    },
+                                    message: '$name Balance Visible',
+                                    subtitle: 'Card balance is now displayed in wallet manager',
                                   );
-                                }
-                              } else {
-                                await txVM.pauseTracking(name);
-                                if (context.mounted) {
-                                  AppToast.warning(
+                                } else {
+                                  AppToast.info(
                                     context,
-                                    message: '$name Tracking Paused',
-                                    subtitle: 'SMS auto-detection & notifications are silenced',
-                                    details: 'Tracking and transaction alerts for $name are temporarily paused. Existing transactions remain untouched.',
-                                    metadata: {
-                                      'Account': name,
-                                      'Status': 'Paused',
-                                    },
+                                    message: '$name Balance Hidden',
+                                    subtitle: 'Card balance is now masked in wallet manager',
                                   );
                                 }
                               }
@@ -269,96 +400,67 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                           ),
                         ),
 
-                        if (!currentPaused) ...[
-                          const SizedBox(height: 10),
+                        const SizedBox(height: 10),
 
-                          // 2. Bank Details & Credentials Action Pill (Fires second)
-                          _StaggeredRevealPill(
-                            controller: _animController,
-                            startInterval: 0.26,
-                            endInterval: 0.68,
-                            child: _FocusActionPill(
-                              icon: Icons.account_balance_rounded,
-                              title: 'Bank Details & Credentials',
-                              subtitle: 'Account number & SIM card linkage',
-                              trailing: const AppBadge.neutral(
-                                text: 'Soon',
-                                size: AppBadgeSize.small,
-                              ),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                AppToast.info(
-                                  context,
-                                  message: 'Coming Soon',
-                                  subtitle:
-                                      'Bank credentials and SIM card linkage are coming soon!',
-                                );
-                              },
+                        // 3. Transaction History Action Pill (Fires third)
+                        _StaggeredRevealPill(
+                          controller: _animController,
+                          startInterval: 0.40,
+                          endInterval: 0.82,
+                          child: _FocusActionPill(
+                            icon: Icons.receipt_long_rounded,
+                            title: 'Transaction History',
+                            subtitle: 'View statement & $liveTxCount transactions',
+                            trailing: AppBadge.neutral(
+                              text: '$liveTxCount tx',
+                              size: AppBadgeSize.small,
                             ),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          // 3. Transaction History Action Pill (Fires third)
-                          _StaggeredRevealPill(
-                            controller: _animController,
-                            startInterval: 0.40,
-                            endInterval: 0.82,
-                            child: _FocusActionPill(
-                              icon: Icons.receipt_long_rounded,
-                              title: 'Transaction History',
-                              subtitle: 'View statement & $liveTxCount transactions',
-                              trailing: AppBadge.neutral(
-                                text: '$liveTxCount tx',
-                                size: AppBadgeSize.small,
-                              ),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                final nav = Navigator.of(context);
-                                nav.pop();
-                                if (sender != null) {
-                                  nav.push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          SenderDetailScreen(sender: sender),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          // 4. Spending Analytics & Insights Action Pill (Fires fourth)
-                          _StaggeredRevealPill(
-                            controller: _animController,
-                            startInterval: 0.54,
-                            endInterval: 0.96,
-                            child: _FocusActionPill(
-                              icon: Icons.insights_rounded,
-                              title: 'Spending Analytics & Insights',
-                              subtitle: 'Category breakdown, cashflow & net trends',
-                              trailing: const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 13,
-                                color: AppColors.textDisabled,
-                              ),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                final nav = Navigator.of(context);
-                                nav.pop();
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              final nav = Navigator.of(context);
+                              nav.pop();
+                              if (sender != null) {
                                 nav.push(
                                   MaterialPageRoute(
-                                    builder: (_) => AnalysisScreen(
-                                      initialBankFilter: widget.senderName,
-                                    ),
+                                    builder: (_) =>
+                                        SenderDetailScreen(sender: sender),
                                   ),
                                 );
-                              },
-                            ),
+                              }
+                            },
                           ),
-                        ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // 4. Spending Analytics & Insights Action Pill (Fires fourth)
+                        _StaggeredRevealPill(
+                          controller: _animController,
+                          startInterval: 0.54,
+                          endInterval: 0.96,
+                          child: _FocusActionPill(
+                            icon: Icons.insights_rounded,
+                            title: 'Spending Analytics & Insights',
+                            subtitle: 'Category breakdown, cashflow & net trends',
+                            trailing: const Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 13,
+                              color: AppColors.textDisabled,
+                            ),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              final nav = Navigator.of(context);
+                              nav.pop();
+                              nav.push(
+                                MaterialPageRoute(
+                                  builder: (_) => AnalysisScreen(
+                                    initialBankFilter: widget.senderName,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ],
                     ),
                   ],

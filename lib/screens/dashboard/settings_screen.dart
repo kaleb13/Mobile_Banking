@@ -85,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const AppHeader(
                       title: 'Settings',
                       showBackButton: true,
-                      padding: EdgeInsets.fromLTRB(8, 12, 16, 8),
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
                     ),
 
                     const SizedBox(height: 4),
@@ -383,8 +383,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _settingsTile(
     BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
+    IconData? icon,
+    Color? iconColor,
     required String label,
     required String subtitle,
     required VoidCallback onTap,

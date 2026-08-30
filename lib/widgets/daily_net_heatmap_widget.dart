@@ -28,6 +28,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
   final ValueChanged<int>? onMonthSelected;
   final bool isBalanceVisible;
   final int userLevel;
+  final String analysisType;
 
   const DailyNetHeatmapWidget({
     super.key,
@@ -43,6 +44,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     this.onMonthSelected,
     this.isBalanceVisible = true,
     this.userLevel = 1,
+    this.analysisType = 'All',
   });
 
   /// Formats amount into ultra-compact representation (e.g. +70K, -94K, +2.4K, -833)
@@ -109,14 +111,28 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     for (final tx in bankTransactions) {
       if (tx.date.year == selectedDate.year &&
           tx.date.month == selectedDate.month) {
-        final d = tx.date.day;
-        dailyHasTxMap[d] = true;
         final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
         final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
             tx.resolvedReason?.toLowerCase() == 'internal transfer';
         if (!isCash && !isBounce) {
-          final amt = tx.type == 'income' ? tx.amount : -tx.amount;
-          dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
+          if (analysisType == 'Expenses') {
+            if (tx.type == 'expense') {
+              final d = tx.date.day;
+              dailyHasTxMap[d] = true;
+              dailyNetMap[d] = (dailyNetMap[d] ?? 0) - tx.amount;
+            }
+          } else if (analysisType == 'Income') {
+            if (tx.type == 'income') {
+              final d = tx.date.day;
+              dailyHasTxMap[d] = true;
+              dailyNetMap[d] = (dailyNetMap[d] ?? 0) + tx.amount;
+            }
+          } else {
+            final d = tx.date.day;
+            dailyHasTxMap[d] = true;
+            final amt = tx.type == 'income' ? tx.amount : -tx.amount;
+            dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
+          }
         }
       }
     }
@@ -124,22 +140,39 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     for (final ctx in cashTransactions) {
       if (ctx.date.year == selectedDate.year &&
           ctx.date.month == selectedDate.month) {
-        final d = ctx.date.day;
-        dailyHasTxMap[d] = true;
         final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-        final amt = isAddition ? ctx.amount : -ctx.amount;
-        dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
+        if (analysisType == 'Expenses') {
+          if (!isAddition) {
+            final d = ctx.date.day;
+            dailyHasTxMap[d] = true;
+            dailyNetMap[d] = (dailyNetMap[d] ?? 0) - ctx.amount;
+          }
+        } else if (analysisType == 'Income') {
+          if (isAddition) {
+            final d = ctx.date.day;
+            dailyHasTxMap[d] = true;
+            dailyNetMap[d] = (dailyNetMap[d] ?? 0) + ctx.amount;
+          }
+        } else {
+          final d = ctx.date.day;
+          dailyHasTxMap[d] = true;
+          final amt = isAddition ? ctx.amount : -ctx.amount;
+          dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
+        }
       }
     }
 
-    String headerLabel = 'Daily Net · $monthName';
+    final String typeTitle = analysisType == 'Expenses'
+        ? 'Daily Expense'
+        : (analysisType == 'Income' ? 'Daily Income' : 'Daily Net');
+    String headerLabel = '$typeTitle · $monthName';
     if (periodType == HeatmapPeriodType.day) {
-      headerLabel = 'Daily Net · ${DateFormat('MMM d').format(selectedDate)}';
+      headerLabel = '$typeTitle · ${DateFormat('MMM d').format(selectedDate)}';
     } else if (periodType == HeatmapPeriodType.week &&
         highlightedWeekRange != null) {
       final startFmt = DateFormat('MMM d').format(highlightedWeekRange!.start);
       final endFmt = DateFormat('MMM d').format(highlightedWeekRange!.end);
-      headerLabel = 'Daily Net · $startFmt - $endFmt';
+      headerLabel = '$typeTitle · $startFmt - $endFmt';
     }
 
     return Column(
@@ -186,57 +219,64 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                 final hasTx = dailyHasTxMap[dayNum] ?? false;
 
                 // Selection / highlight logic
-                final isSelectedDay = selectedDay != null &&
+                final bool isAnyDaySelected = selectedDay != null;
+
+                final isSelectedDay = isAnyDaySelected &&
                     selectedDay!.year == date.year &&
                     selectedDay!.month == date.month &&
                     selectedDay!.day == date.day;
 
-                final isDayModeActive = periodType == HeatmapPeriodType.day &&
+                final isDayModeActive = !isAnyDaySelected &&
+                    periodType == HeatmapPeriodType.day &&
                     selectedDate.year == date.year &&
                     selectedDate.month == date.month &&
                     selectedDate.day == date.day;
 
-                final isWeekHighlighted =
+                final isWeekHighlighted = !isAnyDaySelected &&
                     periodType == HeatmapPeriodType.week &&
-                        highlightedWeekRange != null &&
-                        !date.isBefore(DateTime(
-                          highlightedWeekRange!.start.year,
-                          highlightedWeekRange!.start.month,
-                          highlightedWeekRange!.start.day,
-                        )) &&
-                        !date.isAfter(DateTime(
-                          highlightedWeekRange!.end.year,
-                          highlightedWeekRange!.end.month,
-                          highlightedWeekRange!.end.day,
-                          23,
-                          59,
-                          59,
-                        ));
-
-                final isHighlighted =
-                    isSelectedDay || isDayModeActive || isWeekHighlighted;
+                    highlightedWeekRange != null &&
+                    !date.isBefore(DateTime(
+                      highlightedWeekRange!.start.year,
+                      highlightedWeekRange!.start.month,
+                      highlightedWeekRange!.start.day,
+                    )) &&
+                    !date.isAfter(DateTime(
+                      highlightedWeekRange!.end.year,
+                      highlightedWeekRange!.end.month,
+                      highlightedWeekRange!.end.day,
+                      23,
+                      59,
+                      59,
+                    ));
 
                 Color tileBg;
                 Color textColor;
 
-                if (!hasTx || net == 0) {
+                // When a day is clicked/selected, all other days are grayed out (grayscale)
+                // while the clicked day maintains its original vivid color.
+                if (isAnyDaySelected && !isSelectedDay) {
                   tileBg = AppColors.heatmapNeutral;
-                  textColor = AppColors.textSecondary;
-                } else if (net > 0) {
-                  if (net >= highThreshold) {
-                    tileBg = AppColors.heatmapHeavyGreen;
-                    textColor = AppColors.background;
-                  } else {
-                    tileBg = AppColors.heatmapSubtleGreen;
-                    textColor = AppColors.textPrimary;
-                  }
+                  textColor = AppColors.textSecondary.withValues(alpha: 0.30);
                 } else {
-                  if (net.abs() >= highThreshold) {
-                    tileBg = AppColors.heatmapHeavyRed;
-                    textColor = AppColors.background;
+                  if (!hasTx || net == 0) {
+                    tileBg = AppColors.heatmapNeutral;
+                    textColor = AppColors.textSecondary;
+                  } else if (net > 0) {
+                    if (net >= highThreshold) {
+                      tileBg = AppColors.heatmapHeavyGreen;
+                      textColor = AppColors.background;
+                    } else {
+                      tileBg = AppColors.heatmapSubtleGreen;
+                      textColor = AppColors.textPrimary;
+                    }
                   } else {
-                    tileBg = AppColors.heatmapSubtleRed;
-                    textColor = AppColors.textPrimary;
+                    if (net.abs() >= highThreshold) {
+                      tileBg = AppColors.heatmapHeavyRed;
+                      textColor = AppColors.background;
+                    } else {
+                      tileBg = AppColors.heatmapSubtleRed;
+                      textColor = AppColors.textPrimary;
+                    }
                   }
                 }
 
@@ -296,16 +336,14 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (isHighlighted)
+                      if (isWeekHighlighted || isDayModeActive)
                         Positioned.fill(
                           child: IgnorePointer(
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 180),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(8),
-                                color: isSelectedDay || isDayModeActive
-                                    ? AppColors.buttonGlass
-                                    : AppColors.glassSurfaceSubtle,
+                                color: AppColors.glassSurfaceSubtle,
                               ),
                             ),
                           ),
@@ -325,6 +363,9 @@ class DailyNetHeatmapWidget extends StatelessWidget {
   Widget _buildQuarterlyHeatmap(BuildContext context) {
     final startMonth = (selectedQuarter * 3) + 1;
     final quarterName = 'Q${selectedQuarter + 1} ($selectedYear)';
+    final String typeTitle = analysisType == 'Expenses'
+        ? 'Quarterly Expense'
+        : (analysisType == 'Income' ? 'Quarterly Income' : 'Quarterly Net');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,7 +375,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Quarterly Net · $quarterName',
+                '$typeTitle · $quarterName',
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12.5,
@@ -378,14 +419,28 @@ class DailyNetHeatmapWidget extends StatelessWidget {
 
     for (final tx in bankTransactions) {
       if (tx.date.year == monthDate.year && tx.date.month == monthDate.month) {
-        final d = tx.date.day;
         final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
         final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
             tx.resolvedReason?.toLowerCase() == 'internal transfer';
         if (!isCash && !isBounce) {
-          final amt = tx.type == 'income' ? tx.amount : -tx.amount;
-          dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
-          monthTotalNet += amt;
+          if (analysisType == 'Expenses') {
+            if (tx.type == 'expense') {
+              final d = tx.date.day;
+              dailyNetMap[d] = (dailyNetMap[d] ?? 0) - tx.amount;
+              monthTotalNet -= tx.amount;
+            }
+          } else if (analysisType == 'Income') {
+            if (tx.type == 'income') {
+              final d = tx.date.day;
+              dailyNetMap[d] = (dailyNetMap[d] ?? 0) + tx.amount;
+              monthTotalNet += tx.amount;
+            }
+          } else {
+            final d = tx.date.day;
+            final amt = tx.type == 'income' ? tx.amount : -tx.amount;
+            dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
+            monthTotalNet += amt;
+          }
         }
       }
     }
@@ -393,11 +448,25 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     for (final ctx in cashTransactions) {
       if (ctx.date.year == monthDate.year &&
           ctx.date.month == monthDate.month) {
-        final d = ctx.date.day;
         final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-        final amt = isAddition ? ctx.amount : -ctx.amount;
-        dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
-        monthTotalNet += amt;
+        if (analysisType == 'Expenses') {
+          if (!isAddition) {
+            final d = ctx.date.day;
+            dailyNetMap[d] = (dailyNetMap[d] ?? 0) - ctx.amount;
+            monthTotalNet -= ctx.amount;
+          }
+        } else if (analysisType == 'Income') {
+          if (isAddition) {
+            final d = ctx.date.day;
+            dailyNetMap[d] = (dailyNetMap[d] ?? 0) + ctx.amount;
+            monthTotalNet += ctx.amount;
+          }
+        } else {
+          final d = ctx.date.day;
+          final amt = isAddition ? ctx.amount : -ctx.amount;
+          dailyNetMap[d] = (dailyNetMap[d] ?? 0) + amt;
+          monthTotalNet += amt;
+        }
       }
     }
 
@@ -486,6 +555,9 @@ class DailyNetHeatmapWidget extends StatelessWidget {
   // ── 3. Annual 12-Month Contribution Matrix ────────────────────────────────
   Widget _buildAnnualMatrix(BuildContext context) {
     final highThreshold = _getHighThreshold() * 10; // monthly threshold
+    final String typeTitle = analysisType == 'Expenses'
+        ? 'Annual Expense Matrix'
+        : (analysisType == 'Income' ? 'Annual Income Matrix' : 'Annual Net Matrix');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -495,7 +567,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Annual Net Matrix · $selectedYear',
+                '$typeTitle · $selectedYear',
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 12.5,
@@ -531,13 +603,25 @@ class DailyNetHeatmapWidget extends StatelessWidget {
             for (final tx in bankTransactions) {
               if (tx.date.year == selectedYear &&
                   tx.date.month == monthIndex + 1) {
-                hasTx = true;
                 final isCash = tx.resolvedReason?.toLowerCase() == 'cash';
                 final isBounce = tx.resolvedReason?.toLowerCase() == 'bounce' ||
                     tx.resolvedReason?.toLowerCase() == 'internal transfer';
                 if (!isCash && !isBounce) {
-                  final amt = tx.type == 'income' ? tx.amount : -tx.amount;
-                  monthNet += amt;
+                  if (analysisType == 'Expenses') {
+                    if (tx.type == 'expense') {
+                      hasTx = true;
+                      monthNet -= tx.amount;
+                    }
+                  } else if (analysisType == 'Income') {
+                    if (tx.type == 'income') {
+                      hasTx = true;
+                      monthNet += tx.amount;
+                    }
+                  } else {
+                    hasTx = true;
+                    final amt = tx.type == 'income' ? tx.amount : -tx.amount;
+                    monthNet += amt;
+                  }
                 }
               }
             }
@@ -545,11 +629,23 @@ class DailyNetHeatmapWidget extends StatelessWidget {
             for (final ctx in cashTransactions) {
               if (ctx.date.year == selectedYear &&
                   ctx.date.month == monthIndex + 1) {
-                hasTx = true;
                 final isAddition =
                     ctx.type == 'addition' || ctx.type == 'income';
-                final amt = isAddition ? ctx.amount : -ctx.amount;
-                monthNet += amt;
+                if (analysisType == 'Expenses') {
+                  if (!isAddition) {
+                    hasTx = true;
+                    monthNet -= ctx.amount;
+                  }
+                } else if (analysisType == 'Income') {
+                  if (isAddition) {
+                    hasTx = true;
+                    monthNet += ctx.amount;
+                  }
+                } else {
+                  hasTx = true;
+                  final amt = isAddition ? ctx.amount : -ctx.amount;
+                  monthNet += amt;
+                }
               }
             }
 
@@ -630,6 +726,50 @@ class DailyNetHeatmapWidget extends StatelessWidget {
 
   // ── Legend Widget ─────────────────────────────────────────────────────────
   Widget _buildLegend() {
+    if (analysisType == 'Expenses') {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Low',
+              style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(width: 5),
+          _buildLegendDot(AppColors.heatmapSubtleRed),
+          const SizedBox(width: 3),
+          _buildLegendDot(AppColors.heatmapHeavyRed),
+          const SizedBox(width: 5),
+          const Text('High',
+              style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+        ],
+      );
+    }
+    if (analysisType == 'Income') {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Low',
+              style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(width: 5),
+          _buildLegendDot(AppColors.heatmapSubtleGreen),
+          const SizedBox(width: 3),
+          _buildLegendDot(AppColors.heatmapHeavyGreen),
+          const SizedBox(width: 5),
+          const Text('High',
+              style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+        ],
+      );
+    }
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

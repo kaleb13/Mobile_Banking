@@ -50,7 +50,7 @@ class SmsService {
 
   /// Queries active hardware SIM subscriptions on the device (Android SubscriptionManager).
   Future<List<SimCardInfo>> getSimCards() async {
-    bool hasPermission = await requestPermission();
+    final bool hasPermission = await Permission.sms.status.isGranted;
     if (!hasPermission) return [];
 
     try {
@@ -71,14 +71,7 @@ class SmsService {
       await Permission.sms.request();
     }
 
-    // Request phone state permission for dual-SIM slot resolution
-    // (SubscriptionManager.getActiveSubscriptionInfoList requires READ_PHONE_STATE)
-    var phonePermission = await Permission.phone.status;
-    if (!phonePermission.isGranted) {
-      await Permission.phone.request();
-    }
-
-    // Also explicitly request notification permission for Android 13+
+    // Explicitly request notification permission for Android 13+
     // so the persistent status bar service stays visible and doesn't get suppressed
     var notificationPermission = await Permission.notification.status;
     if (!notificationPermission.isGranted) {
@@ -88,21 +81,42 @@ class SmsService {
     return await Permission.sms.isGranted;
   }
 
+  /// Opens the device's native SMS app focused on the specific sender or thread
+  Future<bool> openSmsInNativeApp({
+    required String sender,
+    String body = '',
+    DateTime? date,
+  }) async {
+    try {
+      final res = await _smsScannerChannel.invokeMethod('openSmsInNativeApp', {
+        'sender': sender,
+        'body': body,
+        'date': date?.millisecondsSinceEpoch,
+      });
+      return res == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// High-speed native Android query that filters by bank senders and anchor date
   /// on a background thread in native code before crossing to Dart.
   Future<List<RawSmsData>> getBankMessagesFast({
     DateTime? since,
     List<String> customSenders = const [],
+    List<String>? overrideSenders,
   }) async {
     bool hasPermission = await requestPermission();
     if (!hasPermission) return [];
 
     try {
       final sinceMs = since?.millisecondsSinceEpoch;
-      final List<String> allBankSenders = {
-        ...BankSenders.standardBankKeywords,
-        ...customSenders.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty),
-      }.toList();
+      final List<String> allBankSenders = (overrideSenders != null && overrideSenders.isNotEmpty)
+          ? overrideSenders.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty).toList()
+          : {
+              ...BankSenders.standardBankKeywords,
+              ...customSenders.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty),
+            }.toList();
 
       final List<dynamic>? res =
           await _smsScannerChannel.invokeMethod('getBankSmsFast', {
@@ -136,8 +150,15 @@ class SmsService {
     }
 
     final fallbackMessages = await getAllMessages(since: since);
-    return fallbackMessages
-        .where((m) => m.sender != null && m.body != null && m.date != null)
+    var filtered = fallbackMessages.where((m) => m.sender != null && m.body != null && m.date != null);
+    if (overrideSenders != null && overrideSenders.isNotEmpty) {
+      final lowerSenders = overrideSenders.map((s) => s.trim().toLowerCase()).toSet();
+      filtered = filtered.where((m) {
+        final s = m.sender!.toLowerCase();
+        return lowerSenders.contains(s) || lowerSenders.any((k) => s.contains(k));
+      });
+    }
+    return filtered
         .map((m) => RawSmsData(
               sender: m.sender!,
               body: m.body!,

@@ -267,11 +267,14 @@ class _MainShellState extends State<MainShell> {
       final double balance = txVM.balanceForSender(cardName);
       final int txCount = txVM.txCountForSender(cardName);
 
+      final bool cardBalanceVisible =
+          settingsVM.isBalanceVisible && !settingsVM.isBankBalanceHidden(cardName);
+
       final Widget card = BankCardWidget(
         senderName: cardName,
         balance: balance,
         txCount: txCount,
-        isBalanceVisible: settingsVM.isBalanceVisible,
+        isBalanceVisible: cardBalanceVisible,
         isPaused: isPaused,
         animationFactor: t,
       );

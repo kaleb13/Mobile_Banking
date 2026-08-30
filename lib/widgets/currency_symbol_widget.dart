@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/app_currency.dart';
 import '../presentation/viewmodels/settings_view_model.dart';
+import '../theme/app_theme.dart';
 
 class CurrencySymbolWidget extends StatelessWidget {
   final AppCurrency? currency;
@@ -23,14 +23,13 @@ class CurrencySymbolWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeCurrency = currency ??
         Provider.of<SettingsViewModel>(context, listen: true).currentCurrency;
-    final iconColor = color ?? IconTheme.of(context).color ?? Colors.white;
+    final iconColor = color ?? IconTheme.of(context).color ?? context.themeIconPrimary;
 
     if (activeCurrency.isSvg) {
-      return SvgPicture.asset(
+      return AppSvgIcon(
         activeCurrency.svgAsset!,
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+        size: size,
+        color: iconColor,
       );
     }
 

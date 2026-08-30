@@ -77,7 +77,7 @@ class DashenParser {
 
     // ── Helper: Extract Reference Number ───────────────────────────────────
     final refMatch = RegExp(
-            r'(?:Ref\s*No|Reference|Ref|Txn\s*ID|Txn\s*No)[:\s]*([A-Za-z0-9]+)',
+            r'(?:transaction\s*reference|ref\s*no|reference|ref|txn\s*id|txn\s*no)[:\s]*([A-Za-z0-9]+)',
             caseSensitive: false)
         .firstMatch(message);
     if (refMatch != null) {
@@ -90,8 +90,8 @@ class DashenParser {
         lowerMsg.contains('withdrawn') ||
         lowerMsg.contains('withdrawal') ||
         lowerMsg.contains('paid') ||
-        lowerMsg.contains('transfer to') ||
-        lowerMsg.contains('transferred to')) {
+        lowerMsg.contains('transfer') ||
+        lowerMsg.contains('transferred')) {
       type = 'expense';
 
       // Amount extraction for debits / withdrawals
@@ -110,14 +110,22 @@ class DashenParser {
       } else {
         // Look for "to <recipient>"
         final toMatch = RegExp(
-                r'to\s+([A-Za-z0-9\s().-]+?)(?:\s+on|\s+at|\.|\n)',
+                r"to\s+([A-Za-z0-9\s().+'’*:\/\\#-]+?)(?:\s+on\s+\d|\s+at\s+\d|\.\s*|\n|$)",
                 caseSensitive: false)
             .firstMatch(message);
         if (toMatch != null) {
-          final toTarget = toMatch.group(1)?.trim() ?? '';
+          String toTarget = toMatch.group(1)?.trim() ?? '';
           if (!toTarget.toLowerCase().startsWith('your account') &&
               !toTarget.toLowerCase().startsWith('account')) {
-            recipientOrSender = toTarget;
+            toTarget = toTarget
+                .replaceAll(
+                    RegExp(r"(?:'s|’s)?\s+(?:tele\s*birr\s+|telebirr\s+)?account(?:\s+number)?(?:\s*[:.\s]*[0-9+*]+)?.*$",
+                        caseSensitive: false),
+                    '')
+                .trim();
+            if (toTarget.isNotEmpty) {
+              recipientOrSender = toTarget;
+            }
           }
         }
         if (recipientOrSender.isEmpty) {
@@ -210,9 +218,9 @@ class DashenParser {
     }
 
     // ── 3. Extract Date & Time ─────────────────────────────────────────────
-    // Format A: "on 05/03/2026 at 04:44:08 PM"
+    // Format A: "on 2026-08-14 at 08:52:25" or "on 05/03/2026 at 04:44:08 PM"
     final dateTimeMatch = RegExp(
-            r'on\s+(\d{1,2}/\d{1,2}/\d{2,4})\s+(?:at\s+)?(\d{1,2}:\d{1,2}(?::\d{1,2})?\s*(?:[AP]M)?)',
+            r'on\s+(\d{1,4}[-/]\d{1,2}[-/]\d{2,4})\s+(?:at\s+)?(\d{1,2}:\d{1,2}(?::\d{1,2})?\s*(?:[AP]M)?)',
             caseSensitive: false)
         .firstMatch(message);
 
@@ -222,12 +230,17 @@ class DashenParser {
       try {
         final fullStr = '$dStr $tStr';
         final formats = [
+          'yyyy-MM-dd HH:mm:ss',
+          'yyyy-MM-dd hh:mm:ss a',
+          'yyyy-MM-dd HH:mm',
+          'yyyy-MM-dd hh:mm a',
           'dd/MM/yyyy hh:mm:ss a',
           'dd/MM/yyyy h:mm:ss a',
           'dd/MM/yyyy hh:mm a',
           'dd/MM/yyyy h:mm a',
           'dd/MM/yyyy HH:mm:ss',
           'dd/MM/yyyy HH:mm',
+          'dd-MM-yyyy HH:mm:ss',
           'd/M/yyyy h:mm:ss a',
           'd/M/yyyy HH:mm:ss',
         ];
@@ -239,15 +252,15 @@ class DashenParser {
         }
       } catch (_) {}
     } else {
-      // Format B: "on 29/01/2024"
+      // Format B: "on 2026-08-14" or "on 29/01/2024"
       final dateOnlyMatch = RegExp(
-              r'on\s+(\d{1,2}/\d{1,2}/\d{2,4})',
+              r'on\s+(\d{1,4}[-/]\d{1,2}[-/]\d{2,4})',
               caseSensitive: false)
           .firstMatch(message);
       if (dateOnlyMatch != null) {
         final dStr = dateOnlyMatch.group(1)!.trim();
         try {
-          final formats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd/MM/yy', 'd/M/yy'];
+          final formats = ['yyyy-MM-dd', 'dd/MM/yyyy', 'd/M/yyyy', 'dd/MM/yy', 'd/M/yy', 'dd-MM-yyyy'];
           for (final fmt in formats) {
             try {
               final parsed = DateFormat(fmt).parseLoose(dStr);

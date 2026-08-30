@@ -20,7 +20,6 @@ import '../../widgets/bank_card_widget.dart';
 import '../../widgets/carousel_page_indicator.dart';
 import '../../widgets/interactive_3d_badge.dart';
 import '../../widgets/custom_progress_bar.dart';
-import '../../widgets/app_toast.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -47,13 +46,18 @@ Color _levelGlowColor(int level) {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final PageController _pageController = PageController();
   final ScrollController _termsScrollController = ScrollController();
   int _currentPage = 0;
   bool _isTermsAccepted = false;
   bool _bgInitStarted = false;
   ScanWindowOption _selectedScanOption = ScanWindowOption.sevenDays;
+
+  // Permission states
+  bool _isSmsGranted = false;
+  bool _isNotificationGranted = false;
+  bool _hasPromptedPermissionsOnEntry = false;
 
   // Scan progress animation
   late AnimationController _scanProgressController;
@@ -68,6 +72,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkPermissionStatuses();
 
     _scanProgressController = AnimationController(
       vsync: this,
@@ -88,6 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _termsScrollController.dispose();
     _scanProgressController.dispose();
@@ -95,8 +102,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissionStatuses();
+    }
+  }
+
+  Future<void> _checkPermissionStatuses() async {
+    final sms = await Permission.sms.status;
+    final notif = await Permission.notification.status;
+    if (mounted) {
+      setState(() {
+        _isSmsGranted = sms.isGranted;
+        _isNotificationGranted = notif.isGranted;
+      });
+    }
+  }
+
   void _nextPage() {
-    if (_currentPage < 4) {
+    if (_currentPage < 5) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeInOutCubic,
@@ -105,11 +130,60 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _previousPage() {
-    if (_currentPage > 0 && _currentPage < 4) {
+    if (_currentPage > 0 && _currentPage < 5) {
       _pageController.previousPage(
         duration: const Duration(milliseconds: 420),
         curve: Curves.easeInOutCubic,
       );
+    }
+  }
+
+  Future<void> _onPageChanged(int index) async {
+    setState(() => _currentPage = index);
+    if (index == 4) {
+      await _checkPermissionStatuses();
+      if (!_hasPromptedPermissionsOnEntry) {
+        _hasPromptedPermissionsOnEntry = true;
+        _requestPermissionsSequentially();
+      }
+    } else if (index == 5) {
+      _kickOffBackgroundInit();
+    }
+  }
+
+  Future<void> _requestPermissionsSequentially() async {
+    if (!_isSmsGranted) {
+      final smsStatus = await Permission.sms.request();
+      if (mounted) {
+        setState(() => _isSmsGranted = smsStatus.isGranted);
+      }
+    }
+    if (!_isNotificationGranted) {
+      final notifStatus = await Permission.notification.request();
+      if (mounted) {
+        setState(() => _isNotificationGranted = notifStatus.isGranted);
+      }
+    }
+    await _checkPermissionStatuses();
+  }
+
+  Future<void> _requestSmsPermission() async {
+    HapticFeedback.lightImpact();
+    final status = await Permission.sms.request();
+    if (status.isPermanentlyDenied) {
+      await openAppSettings();
+    } else {
+      await _checkPermissionStatuses();
+    }
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    HapticFeedback.lightImpact();
+    final status = await Permission.notification.request();
+    if (status.isPermanentlyDenied) {
+      await openAppSettings();
+    } else {
+      await _checkPermissionStatuses();
     }
   }
 
@@ -136,33 +210,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _balanceCountController.forward(from: 0.0);
   }
 
-  Future<void> _handleSmsPermissionAndProceed() async {
-    HapticFeedback.lightImpact();
-    final status = await Permission.sms.request();
-    await Permission.notification.request();
-
-    _kickOffBackgroundInit();
-    _nextPage();
-
-    if (!status.isGranted && mounted) {
-      _showError('SMS permission is required to analyze your transactions automatically.');
-    }
-  }
-
-  void _showError(String message) {
-    AppToast.error(
-      context,
-      message: 'Permission required',
-      subtitle: message,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: _currentPage == 0,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _currentPage > 0 && _currentPage < 4) {
+        if (!didPop && _currentPage > 0 && _currentPage < 5) {
           _previousPage();
         }
       },
@@ -174,21 +227,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             // 1. Background Graphics (Shown on Page 0)
             _buildBackgroundStack(),
 
-            // 2. PageView for 5 Onboarding Pages
+            // 2. PageView for 6 Onboarding Pages
             PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (index) {
-                setState(() => _currentPage = index);
-                if (index == 4) {
-                  _kickOffBackgroundInit();
-                }
-              },
+              onPageChanged: _onPageChanged,
               children: [
                 _buildWelcomePageBody(),
                 _buildSupportedBanksPageBody(),
                 _buildScanWindowPageBody(),
                 _buildTermsPageBody(),
+                _buildPermissionsPageBody(),
                 _buildLevelRevealPageBody(),
               ],
             ),
@@ -872,7 +921,305 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  // --- PAGE 4: LEVEL REVEAL & DISCOVERY SCREEN ---
+  // --- PAGE 4: DEDICATED PERMISSIONS PAGE ---
+  Widget _buildPermissionsPageBody() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(0, 8, 0, 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header with back arrow and title (16px screen padding)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppBackButton(onPressed: _previousPage),
+                      const SizedBox(width: 12),
+                      Text(
+                        'App Permissions',
+                        style: AppTypography.heading1.copyWith(
+                          color: context.themeTextPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Grant access so Shibre can calculate your financial level and track expenses automatically.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.themeTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Card 1: Bank SMS Access (Required)
+            AppCard(
+              padding: const EdgeInsets.all(18),
+              customColor: AppColors.surface,
+              borderRadius: AppRadius.card,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandGreen.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.sms_outlined,
+                          color: AppColors.brandGreen,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Bank SMS Access',
+                                  style: AppTypography.heading2.copyWith(
+                                    color: context.themeTextPrimary,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const AppBadge.success(
+                                  text: 'REQUIRED',
+                                  size: AppBadgeSize.small,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Reads official bank transactions',
+                              style: AppTypography.caption.copyWith(
+                                color: context.themeTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Shibre reads transaction messages from supported Ethiopian banks to track balances, calculate your financial level, and classify expenses.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.themeTextSecondary,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_isSmsGranted)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: AppColors.brandGreen.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: AppColors.brandGreen, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Permission Granted',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.brandGreen,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        AppButton.primary(
+                          text: 'Allow SMS Access',
+                          icon: Icons.security_rounded,
+                          height: 38,
+                          fontSize: 12.5,
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          onPressed: _requestSmsPermission,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Card 2: Notifications (Optional)
+            AppCard(
+              padding: const EdgeInsets.all(18),
+              customColor: AppColors.surface,
+              borderRadius: AppRadius.card,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_active_outlined,
+                          color: AppColors.gold,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Transaction Alerts',
+                                  style: AppTypography.heading2.copyWith(
+                                    color: context.themeTextPrimary,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const AppBadge.neutral(
+                                  text: 'OPTIONAL',
+                                  size: AppBadgeSize.small,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Instant notifications & reports',
+                              style: AppTypography.caption.copyWith(
+                                color: context.themeTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Receive instant alerts when new bank messages arrive, quick category shortcuts, and scheduled spending summaries.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: context.themeTextSecondary,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_isNotificationGranted)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: AppColors.brandGreen.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: AppColors.brandGreen, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Permission Granted',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.brandGreen,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        AppButton.secondary(
+                          text: 'Allow Notifications',
+                          icon: Icons.notifications_none_rounded,
+                          height: 38,
+                          fontSize: 12.5,
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          onPressed: _requestNotificationPermission,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Card 3: Security & Privacy Guarantee
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              customColor: AppColors.surfaceElevated,
+              borderRadius: AppRadius.cardSm,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.shield_outlined,
+                    color: AppColors.brandGreen,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '100% Private & On-Device',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: context.themeTextPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Your SMS messages and financial records stay exclusively on your phone. Shibre operates completely offline without remote servers.',
+                          style: AppTypography.caption.copyWith(
+                            color: context.themeTextSecondary,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- PAGE 5: LEVEL REVEAL & DISCOVERY SCREEN ---
   Widget _buildLevelRevealPageBody() {
     return Consumer4<SettingsViewModel, TransactionsViewModel, AnalyticsViewModel, CashWalletViewModel>(
       builder: (context, settingsVM, txVM, analyticsVM, cashVM, _) {
@@ -1189,8 +1536,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildFixedBottomSection() {
     return Consumer2<SettingsViewModel, TransactionsViewModel>(
       builder: (context, settingsVM, txVM, _) {
-        final bool isCalculatingPage4 =
-            _currentPage == 4 && (txVM.isLoading || (!settingsVM.scanProgress.isComplete && txVM.transactions.isEmpty));
+        final bool isCalculatingPage5 =
+            _currentPage == 5 && (txVM.isLoading || (!settingsVM.scanProgress.isComplete && txVM.transactions.isEmpty));
 
         return SafeArea(
           top: false,
@@ -1199,17 +1546,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 5-dot Morphing Carousel Indicator
+                // 6-dot Morphing Carousel Indicator
                 Center(
                   child: CarouselPageIndicator(
                     controller: _pageController,
-                    pageCount: 5,
+                    pageCount: 6,
                   ),
                 ),
                 const SizedBox(height: 18),
 
                 // Action Button
-                if (!isCalculatingPage4) ...[
+                if (!isCalculatingPage5) ...[
                   _buildPillButton(
                     label: _getButtonLabelForPage(_currentPage),
                     enabled: _isButtonEnabledForPage(_currentPage),
@@ -1221,8 +1568,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       } else if (_currentPage == 2) {
                         _nextPage();
                       } else if (_currentPage == 3) {
-                        _handleSmsPermissionAndProceed();
+                        _nextPage();
                       } else if (_currentPage == 4) {
+                        HapticFeedback.lightImpact();
+                        _kickOffBackgroundInit();
+                        _nextPage();
+                      } else if (_currentPage == 5) {
                         HapticFeedback.mediumImpact();
                         settingsVM.completeOnboarding();
                       }
@@ -1277,8 +1628,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 2:
         return 'Continue to Terms';
       case 3:
-        return 'Grant SMS permission';
+        return 'Continue to Permissions';
       case 4:
+        return 'See Your Level';
+      case 5:
         return 'Open App';
       default:
         return 'Continue';
@@ -1296,6 +1649,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 3:
         return _isTermsAccepted;
       case 4:
+        return _isSmsGranted;
+      case 5:
         return true;
       default:
         return false;

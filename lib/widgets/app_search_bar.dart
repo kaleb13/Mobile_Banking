@@ -282,6 +282,9 @@ class _AppSearchBarState extends State<AppSearchBar> {
                   autofocus: widget.autofocus,
                   onChanged: widget.onChanged,
                   onSubmitted: widget.onSubmitted,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(80),
+                  ],
                   style: TextStyle(
                     color: txtColor,
                     fontSize: 13.5,

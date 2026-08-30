@@ -231,8 +231,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
 
   Widget _tile(
     BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
+    IconData? icon,
+    Color? iconColor,
     required String label,
     required String subtitle,
     VoidCallback? onTap,
@@ -251,16 +251,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: iconColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(icon, color: iconColor, size: 20),
-                  ),
-                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,8 +297,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
 
   Widget _toggleTile(
     BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
+    IconData? icon,
+    Color? iconColor,
     required String label,
     required String subtitle,
     required bool value,
@@ -324,16 +314,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
             opacity: disabled ? 0.4 : 1.0,
             child: Row(
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 20),
-                ),
-                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,10 +380,11 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                   children: [
                     // Header
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                       child: Row(
                         children: [
                           const AppBackButton(),
+                          const SizedBox(width: 10),
                           Text(
                             'Privacy & Security',
                             style: TextStyle(

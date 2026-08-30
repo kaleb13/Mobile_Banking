@@ -7,7 +7,9 @@ import '../../models/reason.dart';
 import '../../models/sender.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/notifications_view_model.dart';
+import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_badges.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_drawer.dart';
@@ -131,13 +133,18 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount <= 0) return;
 
-    setState(() => _isSaving = true);
-
     final txVM = widget.txVM ?? Provider.of<TransactionsViewModel>(context, listen: false);
     final notifVM = widget.notifVM ?? Provider.of<NotificationsViewModel>(context, listen: false);
 
     final double currentBankBalance =
         txVM.getLatestBalanceForBank(_selectedSender!.senderName);
+
+    if (_type == 'expense' && (currentBankBalance <= 0 || amount > currentBankBalance)) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
     final double calculatedPostBalance = _type == 'income'
         ? (currentBankBalance + amount)
         : (currentBankBalance - amount);
@@ -172,6 +179,33 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
   Widget build(BuildContext context) {
     final isIncome = _type == 'income';
     final Color activeColor = isIncome ? AppColors.telebirrGreen : AppColors.negative;
+    final txVM = widget.txVM ?? Provider.of<TransactionsViewModel>(context);
+    final double currentBankBalance = _selectedSender != null
+        ? txVM.getLatestBalanceForBank(_selectedSender!.senderName)
+        : 0.0;
+    final fmtShort = NumberFormat('#,##0.00');
+
+    final enteredAmt = double.tryParse(_amountController.text.trim());
+    String? limitError;
+    if (!isIncome && _selectedSender != null) {
+      if (currentBankBalance <= 0) {
+        limitError =
+            'No available balance in ${_selectedSender!.senderName} (0.00 ETB)';
+      } else if (enteredAmt != null && enteredAmt > currentBankBalance) {
+        limitError =
+            'Exceeds available balance of ${fmtShort.format(currentBankBalance)} ETB';
+      }
+    }
+
+    final bool isExceeded = limitError != null;
+    final bool isAmtValid = enteredAmt != null && enteredAmt > 0;
+    final bool canSave = isAmtValid && _selectedSender != null && !isExceeded;
+
+    final String buttonText = (!isIncome && _selectedSender != null && currentBankBalance <= 0)
+        ? 'Insufficient Balance'
+        : (isExceeded
+            ? 'Exceeds Available Balance'
+            : 'Save Transaction');
 
     return AppDrawer(
       heightFactor: 0.88,
@@ -182,12 +216,10 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
         subtitle: '${_selectedSender?.senderName ?? "Wallet"} · ${DateFormat("MMM d, HH:mm").format(_fixedDate)}',
       ),
       bottomAction: AppButton.primary(
-        text: 'Save Transaction',
+        text: buttonText,
         isLoading: _isSaving,
         height: 48,
-        onPressed: (_amountController.text.isEmpty || _selectedSender == null)
-            ? null
-            : _save,
+        onPressed: !canSave ? null : _save,
       ),
       child: ListView(
         physics: const BouncingScrollPhysics(),
@@ -204,60 +236,66 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
             },
           ),
           const SizedBox(height: 16),
-
           // Amount Field Card
-          Container(            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.drawerCard,
-              borderRadius: AppRadius.cardRadius,
-            ),
-            child: Row(
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      isIncome ? '+ ' : '- ',
-                      style: TextStyle(
-                        color: activeColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    CurrencySymbolWidget(
-                      size: 16,
+          AppTextField(
+            controller: _amountController,
+            maxLength: 14,
+            label:
+                'AMOUNT (${Provider.of<SettingsViewModel>(context, listen: false).currentCurrency.shortLabel})',
+            hint: '0.00',
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            prefix: Padding(
+              padding: const EdgeInsets.only(left: 14, right: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isIncome ? '+ ' : '- ',
+                    style: TextStyle(
                       color: activeColor,
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: AppTextField(
-                    controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    backgroundColor: Colors.transparent,
-                    contentPadding: EdgeInsets.zero,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 22,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
-                    hint: '0.00',
-                    hintColor: AppColors.textSecondary,
                   ),
-                ),
-              ],
+                  CurrencySymbolWidget(
+                    size: 16,
+                    color: activeColor,
+                  ),
+                ],
+              ),
             ),
+            style: TextStyle(
+              color: isExceeded ? AppColors.negative : AppColors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+            onChanged: (_) => setState(() {}),
           ),
+          if (isExceeded) ...[
+            const SizedBox(height: 6),
+            Center(
+              child: AppBadge.destructive(
+                text: limitError,
+                icon: Icons.error_outline_rounded,
+                size: AppBadgeSize.medium,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
 
           // Sender / Receiver Field Card
           AppTextField(
             controller: _receiverController,
+            maxLength: 70,
+            label: isIncome
+                ? 'SENDER / SOURCE NAME'
+                : 'RECIPIENT / MERCHANT NAME',
             prefixIcon: Icons.person_outline_rounded,
-            backgroundColor: AppColors.drawerCard,
-            borderRadius: AppRadius.cardRadius,
-            hint: isIncome ? 'Sender / Source Name' : 'Recipient / Merchant Name',
+            hint: isIncome
+                ? 'Sender / Source Name'
+                : 'Recipient / Merchant Name',
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
 

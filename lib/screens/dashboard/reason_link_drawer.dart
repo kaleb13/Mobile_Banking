@@ -95,8 +95,8 @@ class LinkReasonDrawer extends StatelessWidget {
             iconColor: AppColors.positive,
             title: 'All Transactions (Past & Future)',
             subtitle: matchingCount > 0
-                ? 'Update all $matchingCount past transactions and automatically categorize all future transactions from "$contactName".'
-                : 'Automatically categorize all future transactions and apply to any past records from "$contactName".',
+                ? 'Update all $matchingCount past transactions and automatically categorize all future ${linkType == 'sender' ? 'income transactions from' : 'expense transactions to'} "$contactName".'
+                : 'Automatically categorize all future ${linkType == 'sender' ? 'income transactions from' : 'expense transactions to'} and apply to any past records.',
             badgeText: 'Recommended',
             badgeVariant: AppBadgeVariant.success,
             onTap: () async {
@@ -111,7 +111,7 @@ class LinkReasonDrawer extends StatelessWidget {
               if (context.mounted) {
                 AppToast.success(
                   context,
-                  message: 'Linked "$reasonName" to all transactions from "$contactName"',
+                  message: 'Linked "$reasonName" to all transactions ${linkType == 'sender' ? 'from' : 'to'} "$contactName"',
                 );
               }
             },
@@ -125,7 +125,7 @@ class LinkReasonDrawer extends StatelessWidget {
             iconColor: AppColors.info,
             title: 'From Now On (Future Only)',
             subtitle:
-                'Keep past transactions unchanged, but automatically categorize all upcoming incoming transactions from "$contactName".',
+                'Keep past transactions unchanged, but automatically categorize all upcoming ${linkType == 'sender' ? 'income transactions from' : 'expense transactions to'} "$contactName".',
             badgeText: 'Future',
             badgeVariant: AppBadgeVariant.info,
             onTap: () async {

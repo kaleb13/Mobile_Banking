@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/app_theme.dart';
 
 /// Style variants for [AppBackButton].
@@ -82,9 +81,6 @@ class AppBackButton extends StatelessWidget {
     final Color effectiveBgColor = backgroundColor ??
         (isLight ? AppColors.lightGreyBackground : AppColors.surface);
 
-    final Color effectiveIconColor = color ??
-        (isLight ? AppColors.darkCharcoal : Colors.white);
-
     final Widget buttonContent = Semantics(
       button: true,
       label: MaterialLocalizations.of(context).backButtonTooltip,
@@ -106,11 +102,11 @@ class AppBackButton extends StatelessWidget {
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
-          child: SvgPicture.asset(
+          child: AppSvgIcon(
             'assets/images/BackForNav.svg',
-            width: iconSize,
-            height: iconSize,
-            colorFilter: ColorFilter.mode(effectiveIconColor, BlendMode.srcIn),
+            size: iconSize,
+            color: color,
+            surfaceColor: effectiveBgColor,
           ),
         ),
       ),

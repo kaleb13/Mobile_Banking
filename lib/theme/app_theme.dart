@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 export '../widgets/app_switch.dart';
+export '../widgets/app_svg_icon.dart';
+export '../widgets/app_icon_badge.dart';
 export 'app_typography.dart';
 
 class AppColors {
@@ -21,9 +23,10 @@ class AppColors {
   static const Color drawerCard     = Color(0x0AFFFFFF); // 4% subtle white translucent glass surface over surfaceElevated for modal & drawer cards/inputs
   static const Color modalCard      = drawerCard; // Alias for drawerCard
   static const Color overlay        = surfaceElevated; // Replaced legacy #2A2A34 with #141D28
-  static const Color bottomNavDark  = Color(0xFF08101C); // Deep navy-slate (between background #060B12 and surface #111821)
-  static const Color bottomNavBg    = Color(0xD908101C); // 85% translucent frosted deep dark glass (#08101C @ 85%)
-  static const Color bottomNavBgLight = Color(0xCCFFFFFF); // 80% translucent frosted white glass
+  static const Color bottomNavDark  = Color(0xFF141D28); // Elevated navy-slate surface
+  static const Color bottomNavBg    = Color(0xFC141D28); // 99% translucent frosted elevated dark glass (#141D28 @ 99%)
+  static const Color bottomNavBgLight = Color(0xFCFFFFFF); // 99% translucent frosted white glass
+  static const Color bottomNavBorder = Color(0x3DFFFFFF); // Subtle translucent white specular rim (24% opacity)
   static const Color surfaceLight   = Color(0xFFFFFFFF); // Light theme card surface
   static const Color cardTileLight  = Color(0xFFF1F5F9); // Light theme elevated tile
   static const Color glassSurface   = Color(0x59111821); // 35% dark surface glass
@@ -38,8 +41,12 @@ class AppColors {
   static const Color buttonPrimary          = Color(0xFFFFFFFF); // Primary button pure crisp white (#FFFFFF)
   static const Color buttonPrimaryText      = Color(0xFF0F172A); // Primary button dark contrast text (#0F172A)
   static const Color buttonPrimaryDisabled  = Color(0x66FFFFFF); // Primary button disabled state (40% white)
+  static const Color buttonPrimaryOnLight   = Color(0xFF0F172A); // Primary button solid dark slate on light backgrounds
+  static const Color buttonPrimaryTextOnLight = Color(0xFFFFFFFF); // Primary button clean white text on light backgrounds
   static const Color buttonSecondary        = Color(0x1FFFFFFF); // Glass-like translucent dark button (12% white)
   static const Color buttonSecondaryText    = Color(0xFFFFFFFF); // Secondary button clean white text
+  static const Color buttonSecondaryOnLight = Color(0x140F172A); // Translucent dark slate (8% opacity) for light backgrounds
+  static const Color buttonSecondaryTextOnLight = Color(0xFF0F172A); // Secondary button dark slate text on light backgrounds
   static const Color buttonDestructive      = Color(0xFFE11D48); // Destructive button red
   static const Color buttonDestructiveText  = Color(0xFFFFFFFF); // Destructive button text
   static const Color buttonGlass            = Color(0x1AFFFFFF); // Translucent glass action button
@@ -96,6 +103,26 @@ class AppColors {
   static const Color textPrimaryLight = Color(0xFF0F172A); // Dark slate text for light theme
   static const Color textSecondaryLight = Color(0xFF64748B); // Muted slate text for light theme
   static const Color textDisabledLight  = Color(0xFF94A3B8); // Faint slate text for light theme
+
+  // ── Icon Palette ──────────────────────────────────────────────────────────
+  static const Color iconLight            = Color(0xFFFFFFFF); // Clean crisp white icon for dark surfaces
+  static const Color iconDark             = Color(0xFF0F172A); // High-contrast dark charcoal icon for light surfaces
+  static const Color iconMuted            = Color(0xFF9CA3AF); // Muted grey icon on dark surfaces
+  static const Color iconMutedLight       = Color(0xFF64748B); // Muted slate icon on light surfaces
+
+  /// Returns high-contrast monochrome icon color based on background surface or light/dark mode.
+  static Color adaptiveIcon({
+    bool onLightSurface = false,
+    Color? surfaceColor,
+    Brightness? brightness,
+  }) {
+    if (onLightSurface) return iconDark;
+    if (surfaceColor != null) {
+      return surfaceColor.computeLuminance() > 0.35 ? iconDark : iconLight;
+    }
+    if (brightness == Brightness.light) return iconDark;
+    return iconLight;
+  }
 
   // ── UI Controls ───────────────────────────────────────────────────────────
   static const Color border                 = Color(0x33FFFFFF); // Borders / dividers
@@ -675,6 +702,20 @@ extension AppThemeContext on BuildContext {
   Color get themeBorder => themeColors.border;
   Color get themeTileBg => themeColors.cardTile;
 
+  Color get themeIconPrimary => isLightMode ? AppColors.iconDark : AppColors.iconLight;
+  Color get themeIconMuted => isLightMode ? AppColors.iconMutedLight : AppColors.iconMuted;
+
+  /// Dynamically resolves high-contrast icon color based on background surface or light/dark mode.
+  Color adaptiveIconColor({bool? onLightSurface, Color? surfaceColor}) {
+    if (onLightSurface != null) {
+      return onLightSurface ? AppColors.iconDark : AppColors.iconLight;
+    }
+    if (surfaceColor != null) {
+      return surfaceColor.onIconColor;
+    }
+    return themeIconPrimary;
+  }
+
   LinearGradient get themeScreenGradient => themeColors.screenGradient;
 
   SystemUiOverlayStyle get themeOverlayStyle => SystemUiOverlayStyle(
@@ -698,6 +739,17 @@ extension ColorContrast on Color {
   Color get onColorSecondary => computeLuminance() > 0.35
       ? AppColors.textSecondaryLight
       : AppColors.textSecondary;
+
+  /// High-contrast icon color based on the background's relative luminance:
+  /// - If background is light (luminance > 0.35) -> Dark Slate (#0F172A)
+  /// - If background is dark (luminance <= 0.35) -> Crisp White (#FFFFFF)
+  Color get onIconColor => computeLuminance() > 0.35
+      ? AppColors.iconDark
+      : AppColors.iconLight;
+
+  Color get onIconMuted => computeLuminance() > 0.35
+      ? AppColors.iconMutedLight
+      : AppColors.iconMuted;
 }
 
 class AppTheme {

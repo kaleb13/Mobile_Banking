@@ -7,6 +7,7 @@ import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
 import 'package:mobile_banking_app/services/telebirr_parser.dart';
 import 'package:mobile_banking_app/services/ahadu_parser.dart';
 import 'package:mobile_banking_app/services/boa_parser.dart';
+import 'package:mobile_banking_app/services/dashen_parser.dart';
 
 void main() {
   final now = DateTime.now();
@@ -64,6 +65,26 @@ void main() {
       const sms = "Your saving balance is ETB 1,500.00 in Sanduq.";
       expect(TelebirrParser.isSavingsMessage(sms), isTrue);
       expect(TelebirrParser.extractSavingBalance(sms), equals(1500.00));
+    });
+
+    test('correctly extracts checking account balance and does not confuse with 45k saving balance', () {
+      const sms =
+          "You have successfully deposited ETB 4000.00 to your Saving Account on 16/08/2026 19:35:27. Your telebirr transaction number is DHG6U8JEIM. Your current Saving balance is ETB 45000.00 and Your current telebirr Account balance is ETB 1800.00.";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(4000.00));
+      expect(tx.totalBalance, equals(1800.00));
+      expect(TelebirrParser.extractSavingBalance(sms), equals(45000.00));
+    });
+
+    test('correctly extracts e-money checking balance from saving withdraw message', () {
+      const sms =
+          "Dear Kaleb,\nYou have successfully Withdraw ETB 4000.00 from your saving account on 16/08/2026 17:14:05. Your transaction number is\nDHG4U3HNCE. Your current saving balance is ETB 7043.34 and Your current e-money account balance is ETB 4,683.32.";
+      final tx = TelebirrParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(4000.00));
+      expect(tx.totalBalance, equals(4683.32));
+      expect(TelebirrParser.extractSavingBalance(sms), equals(7043.34));
     });
 
     test('parses standard money received transaction', () {
@@ -315,6 +336,65 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
 
       expect(parsedCount, equals(59));
       expect(ignoredCount, equals(19));
+    });
+  });
+
+  group('DashenParser', () {
+    test('parses transfer to telebirr transaction', () {
+      const sms = """Dear Getasew, you have successfully transferred ETB 50.00 from your account  5822**011 to Getasew Adane Ambaw tele birr account +251945557122 on 2026-08-14 at 08:52:25 with transaction reference 822LTWS2622600WJ.  The service charge is 
+ETB 5, VAT (15%) ETB 0.75 and DRRF (5%) ETB 0.25. Your current balance is ETB 6,999.44.
+
+Download receipt:  = https://receipts.dashenbanksc.com/receipt/822LTWS2622600WJ.
+Share us your feedback:  https://forms.gle/mbzfguGEdytV5GKj6
+Contact us on: 6333
+Thank you for using Dashen Super app""";
+
+      final res = DashenParser.parse(sms, now);
+      expect(res, isNotNull);
+      expect(res!.id, equals('822LTWS2622600WJ'));
+      expect(res.bankName, equals('Dashen Bank'));
+      expect(res.amount, equals(50.00));
+      expect(res.type, equals('expense'));
+      expect(res.date, equals(DateTime(2026, 8, 14, 8, 52, 25)));
+      expect(res.counterparty, equals('Getasew Adane Ambaw'));
+      expect(res.totalBalance, equals(6999.44));
+      expect(res.patternType, equals(SmsPatternType.standardTransfer));
+    });
+
+    test('parses account to account transfer with apostrophe and masked account numbers', () {
+      const sms = """Dear GETASEW ADANE AMBAW, you have successfully transferred ETB 50,000.00 from your account number 5822**011 to BIRUK WORKU NEMTA's account number  5822**011 on 2026-08-12 at 02:07:46 with transaction reference: 822WDTS262240002. The service 
+charge is ETB 0.00, VAT (15%) ETB 0.00 and DRRF (5%) 
+ETB 0.00. Your current balance is ETB 6,055.44.
+
+Download receipt: = https://receipts.dashenbanksc.com/receipt/822WDTS262240002.
+Share us your feedback: https://forms.gle/mbzfguGEdytV5GKj6 Contact us on: 6333.
+Thank you for using Dashen Super app""";
+
+      final res = DashenParser.parse(sms, now);
+      expect(res, isNotNull);
+      expect(res!.id, equals('822WDTS262240002'));
+      expect(res.bankName, equals('Dashen Bank'));
+      expect(res.amount, equals(50000.00));
+      expect(res.type, equals('expense'));
+      expect(res.date, equals(DateTime(2026, 8, 12, 2, 7, 46)));
+      expect(res.counterparty, equals('BIRUK WORKU NEMTA'));
+      expect(res.totalBalance, equals(6055.44));
+      expect(res.patternType, equals(SmsPatternType.standardTransfer));
+    });
+
+    test('parses standard Dashen debit alert with 12-hour PM timestamp', () {
+      const sms = """Dear Customer, your account '5822**011' is debited with ETB 50,000.00 on 12/08/2026 at 02:07:46 PM. Your current balance is ETB 6,055.44.
+Dashen Bank - Always one step ahead!""";
+
+      final res = DashenParser.parse(sms, now);
+      expect(res, isNotNull);
+      expect(res!.bankName, equals('Dashen Bank'));
+      expect(res.amount, equals(50000.00));
+      expect(res.type, equals('expense'));
+      expect(res.date, equals(DateTime(2026, 8, 12, 14, 7, 46)));
+      expect(res.counterparty, equals('Dashen Bank'));
+      expect(res.totalBalance, equals(6055.44));
+      expect(res.patternType, equals(SmsPatternType.standardTransfer));
     });
   });
 }

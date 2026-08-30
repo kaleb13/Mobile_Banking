@@ -15,9 +15,9 @@ class CalculatePnlUseCase {
       final sorted = List<AppTransaction>.from(transactions)
         ..sort((a, b) => a.date.compareTo(b.date));
       for (final tx in sorted) {
-        final bankKey = tx.name.trim();
-        if (!earliestBalances.containsKey(bankKey) && tx.totalBalance > 0) {
-          earliestBalances[bankKey] = tx.totalBalance;
+        final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
+        if (!earliestBalances.containsKey(accountKey) && tx.totalBalance > 0) {
+          earliestBalances[accountKey] = tx.totalBalance;
         }
       }
       baseline = earliestBalances.values.fold(0.0, (s, v) => s + v);

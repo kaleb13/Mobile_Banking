@@ -8,8 +8,9 @@ class AppSender {
   });
 
   Map<String, dynamic> toMap() {
+    final parsedId = id != null ? int.tryParse(id!) : null;
     return {
-      if (id != null) 'id': int.tryParse(id!) ?? id,
+      if (parsedId != null) 'id': parsedId,
       'senderName': senderName,
     };
   }

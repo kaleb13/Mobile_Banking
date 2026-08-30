@@ -9,6 +9,7 @@ import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
@@ -47,6 +48,7 @@ class CategoryDetailScreen extends StatefulWidget {
   final List<AppTransaction> allBankTransactions;
   final List<CashTransaction> allCashTransactions;
   final List<SubcategoryAnalysisItem> subcategories;
+  final AppDateFilterValue? initialDateFilter;
 
   const CategoryDetailScreen({
     super.key,
@@ -55,6 +57,7 @@ class CategoryDetailScreen extends StatefulWidget {
     required this.categoryColor,
     required this.totalAmount,
     this.periodLabel,
+    this.initialDateFilter,
     required this.directBankTransactions,
     required this.directCashTransactions,
     required this.allBankTransactions,
@@ -72,15 +75,23 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   bool _isSearchActive = false;
   bool _isFilterExpanded = false;
   bool _isBookmarkedOnly = false;
-  String _typeFilter = 'All'; // 'All', 'Withdrawals', 'Deposits', 'Bookmarked'
+  String _typeFilter = 'All'; // 'All', 'Income', 'Expense', 'Bookmarked'
   String _sortBy = 'Date: Newest';
-  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.anyTime();
+  late AppDateFilterValue _dateFilterValue;
   String _bankFilter = 'All Banks';
   String _senderFilter = 'All Senders';
   String _selectedSubcategory = 'All'; // 'All', 'Direct', or specific subcategory name
+  int _displayLimit = 30;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _dateFilterValue =
+        widget.initialDateFilter ?? const AppDateFilterValue.anyTime();
+  }
 
   @override
   void dispose() {
@@ -142,11 +153,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     final fmt = NumberFormat('#,##0.00');
     final isBalanceVisible = settingsVM.isBalanceVisible;
 
-    // ── 1. Calculate Category Outflow, Inflow, and Net Totals ─────────────────
+    // ── 1. Calculate Category Outflow, Inflow, and Net Totals for Active Date Filter ──
     double totalOutflow = 0.0;
     double totalInflow = 0.0;
 
     for (final tx in widget.allBankTransactions) {
+      if (!_matchesDateFilter(tx.date, _dateFilterValue)) continue;
       if (tx.type == 'income') {
         totalInflow += tx.amount;
       } else {
@@ -155,6 +167,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     }
 
     for (final ctx in widget.allCashTransactions) {
+      if (!_matchesDateFilter(ctx.date, _dateFilterValue)) continue;
       if (ctx.type == 'addition' || ctx.type == 'income') {
         totalInflow += ctx.amount;
       } else {
@@ -185,28 +198,34 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     final allSendersList = senders.toList()..sort();
     if (!allSendersList.contains(_senderFilter)) _senderFilter = 'All Senders';
 
-    // ── 3. Filter Bank & Cash Transactions ───────────────────────────────────
+    // ── 3. Filter Bank & Cash Transactions with O(1) Set Lookups ──────────────
+    Set<AppTransaction>? activeSubBankTxSet;
+    Set<CashTransaction>? activeSubCashTxSet;
+    if (_selectedSubcategory != 'All') {
+      if (_selectedSubcategory == 'Direct') {
+        activeSubBankTxSet = widget.directBankTransactions.toSet();
+        activeSubCashTxSet = widget.directCashTransactions.toSet();
+      } else {
+        final matchedSub = widget.subcategories
+            .where((s) => s.name == _selectedSubcategory)
+            .firstOrNull;
+        activeSubBankTxSet = matchedSub?.bankTransactions.toSet() ?? const {};
+        activeSubCashTxSet = matchedSub?.cashTransactions.toSet() ?? const {};
+      }
+    }
+
     final filteredBankTxs = widget.allBankTransactions.where((tx) {
-      // Subcategory filter
-      if (_selectedSubcategory != 'All') {
-        if (_selectedSubcategory == 'Direct') {
-          if (!widget.directBankTransactions.contains(tx)) return false;
-        } else {
-          final matchedSub = widget.subcategories
-              .where((s) => s.name == _selectedSubcategory)
-              .firstOrNull;
-          if (matchedSub == null || !matchedSub.bankTransactions.contains(tx)) {
-            return false;
-          }
-        }
+      // Subcategory filter O(1)
+      if (activeSubBankTxSet != null && !activeSubBankTxSet.contains(tx)) {
+        return false;
       }
 
       // Bookmark filter
       if (_isBookmarkedOnly && !tx.isBookmarked) return false;
 
       // Type filter
-      if (_typeFilter == 'Withdrawals' && tx.type != 'expense') return false;
-      if (_typeFilter == 'Deposits' && tx.type != 'income') return false;
+      if (_typeFilter == 'Expense' && tx.type != 'expense') return false;
+      if (_typeFilter == 'Income' && tx.type != 'income') return false;
 
       // Bank filter
       if (_bankFilter != 'All Banks' &&
@@ -246,23 +265,13 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           return false;
         }
       }
-
       return true;
     }).toList();
 
     final filteredCashTxs = widget.allCashTransactions.where((ctx) {
-      // Subcategory filter
-      if (_selectedSubcategory != 'All') {
-        if (_selectedSubcategory == 'Direct') {
-          if (!widget.directCashTransactions.contains(ctx)) return false;
-        } else {
-          final matchedSub = widget.subcategories
-              .where((s) => s.name == _selectedSubcategory)
-              .firstOrNull;
-          if (matchedSub == null || !matchedSub.cashTransactions.contains(ctx)) {
-            return false;
-          }
-        }
+      // Subcategory filter O(1)
+      if (activeSubCashTxSet != null && !activeSubCashTxSet.contains(ctx)) {
+        return false;
       }
 
       // Bookmark filter (cash has no bookmark)
@@ -270,8 +279,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
       // Type filter
       final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-      if (_typeFilter == 'Withdrawals' && isAddition) return false;
-      if (_typeFilter == 'Deposits' && !isAddition) return false;
+      if (_typeFilter == 'Expense' && isAddition) return false;
+      if (_typeFilter == 'Income' && !isAddition) return false;
 
       // Bank filter
       if (_bankFilter != 'All Banks' && _bankFilter != 'Cash') return false;
@@ -456,11 +465,11 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                               ),
                               totalOutflow >= totalInflow
                                   ? const AppBadge.destructive(
-                                      text: 'Net Outflow',
+                                      text: 'Net Expense',
                                       size: AppBadgeSize.small,
                                     )
                                   : const AppBadge.success(
-                                      text: 'Net Inflow',
+                                      text: 'Net Income',
                                       size: AppBadgeSize.small,
                                     ),
                             ],
@@ -491,7 +500,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                           ),
                                           SizedBox(width: 4),
                                           Text(
-                                            'Outflow / Spent',
+                                            'Expense',
                                             style: TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 10,
@@ -540,7 +549,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                           ),
                                           SizedBox(width: 4),
                                           Text(
-                                            'Inflow / Received',
+                                            'Income',
                                             style: TextStyle(
                                               color: AppColors.textSecondary,
                                               fontSize: 10,
@@ -618,6 +627,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                               onTap: () {
                                 setState(() {
                                   _selectedSubcategory = 'All';
+                                  _displayLimit = 30;
                                 });
                               },
                             ),
@@ -634,6 +644,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                 onTap: () {
                                   setState(() {
                                     _selectedSubcategory = 'Direct';
+                                    _displayLimit = 30;
                                   });
                                 },
                               ),
@@ -652,6 +663,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                   onTap: () {
                                     setState(() {
                                       _selectedSubcategory = sub.name;
+                                      _displayLimit = 30;
                                     });
                                   },
                                 ),
@@ -776,13 +788,13 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                             ),
                             const SizedBox(width: 8),
 
-                            // ── Type Dropdown (All, Withdrawals, Deposits) ──
+                            // ── Type Dropdown (All, Expense, Income) ──
                             AppDropdown.simple(
                               value: _typeFilter,
                               items: const [
                                 'All',
-                                'Withdrawals',
-                                'Deposits',
+                                'Expense',
+                                'Income',
                               ],
                               variant: AppDropdownVariant.dark,
                               maxWidth: 120,
@@ -898,10 +910,27 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                           ),
                         ),
                       )
-                    else
-                      ...combinedItems.map((item) {
+                    else ...[
+                      ...combinedItems.take(_displayLimit).map((item) {
                         return _buildTransactionItem(item, fmt, isBalanceVisible);
                       }),
+                      if (combinedItems.length > _displayLimit)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Center(
+                            child: AppButton.secondary(
+                              text: 'Load More (+${(combinedItems.length - _displayLimit) > 30 ? 30 : (combinedItems.length - _displayLimit)} of ${combinedItems.length - _displayLimit})',
+                              icon: Icons.expand_more_rounded,
+                              height: 42,
+                              fullWidth: true,
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                setState(() => _displayLimit += 30);
+                              },
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -984,7 +1013,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   ) {
     final isIncome = item.isIncome;
     final amountStr = isBalanceVisible ? fmt.format(item.amount) : '••••••••';
-    final String label = isIncome ? 'Deposit' : 'Transferred';
+    final String label = isIncome ? 'Income' : 'Expense';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

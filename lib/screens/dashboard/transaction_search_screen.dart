@@ -36,6 +36,8 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   String _bankFilter = 'All Banks';
   String _sortBy = 'Date: Newest';
 
+  int? _selectedSimSlot; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +58,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       _searchQuery.isNotEmpty ||
       _isBookmarkedOnly ||
       _typeFilter != 'All' ||
+      _selectedSimSlot != null ||
       _sortBy != 'Date: Newest' ||
       !_dateFilterValue.isDefault ||
       _senderFilter != 'All Senders' ||
@@ -67,6 +70,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       _searchController.clear();
       _isBookmarkedOnly = false;
       _typeFilter = 'All';
+      _selectedSimSlot = null;
       _sortBy = 'Date: Newest';
       _dateFilterValue = const AppDateFilterValue.anyTime();
       _senderFilter = 'All Senders';
@@ -100,6 +104,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         bankFilter: _bankFilter,
         senderFilter: _senderFilter,
         typeFilter: _typeFilter,
+        simSlotFilter: _selectedSimSlot,
         dateFilter: _dateFilterValue,
         searchQuery: _searchQuery,
         sortBy: _sortBy,
@@ -120,7 +125,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           child: Column(
             children: [
               _buildSearchHeader(context),
-              _buildFilterRow(allSenders, allBanks),
+              _buildFilterRow(txVM, allSenders, allBanks),
               const SizedBox(height: 6),
               Expanded(
                 child: !_hasActiveFilters && filteredTransactions.isEmpty
@@ -193,7 +198,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     );
   }
 
-  Widget _buildFilterRow(List<String> senders, List<String> banks) {
+  Widget _buildFilterRow(TransactionsViewModel txVM, List<String> senders, List<String> banks) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: SingleChildScrollView(
@@ -266,7 +271,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
             const SizedBox(width: 8),
             _buildWhiteFilterDropdown(
               value: _typeFilter,
-              items: const ['All', 'Incoming', 'Outgoing'],
+              items: const ['All', 'Income', 'Expense'],
               onChanged: (val) {
                 if (val != null) setState(() => _typeFilter = val);
               },
@@ -296,8 +301,16 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                 if (val != null) setState(() => _senderFilter = val);
               },
             ),
+
+            // ── Dynamic SIM Dropdown (Dual-SIM only) ──
+            if (txVM.hasMultipleSims) ...[
+              const SizedBox(width: 8),
+              _buildWhiteSimDropdown(txVM),
+            ],
+
             if (_isBookmarkedOnly ||
                 _typeFilter != 'All' ||
+                _selectedSimSlot != null ||
                 !_dateFilterValue.isDefault ||
                 _bankFilter != 'All Banks' ||
                 _senderFilter != 'All Senders' ||
@@ -308,6 +321,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                   setState(() {
                     _isBookmarkedOnly = false;
                     _typeFilter = 'All';
+                    _selectedSimSlot = null;
                     _dateFilterValue = const AppDateFilterValue.anyTime();
                     _bankFilter = 'All Banks';
                     _senderFilter = 'All Senders';
@@ -319,6 +333,29 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildWhiteSimDropdown(TransactionsViewModel txVM) {
+    return AppDropdown<int?>.light(
+      value: _selectedSimSlot,
+      items: [
+        const AppDropdownItem(value: null, label: 'All SIMs'),
+        ...txVM.detectedSimSlots.map((slot) {
+          final sim = txVM.simCards.where((s) => s.simSlot == slot).firstOrNull;
+          final label = (sim != null && sim.displayName.isNotEmpty)
+              ? 'SIM ${slot + 1} (${sim.displayName})'
+              : 'SIM ${slot + 1}';
+          return AppDropdownItem<int?>(value: slot, label: label);
+        }),
+      ],
+      onChanged: (val) {
+        setState(() {
+          _selectedSimSlot = val;
+        });
+      },
+      maxWidth: 130,
+      isDefault: _selectedSimSlot == null,
     );
   }
 
@@ -425,7 +462,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
   Widget _buildWhiteTransactionItem(
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
-    final String label = isIncome ? 'Deposit' : 'Transferred';
+    final String label = isIncome ? 'Income' : 'Expense';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
     return InkWell(
@@ -559,24 +596,24 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       img = Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
       bgColor = AppColors.cbeBirrPink.withValues(alpha: 0.10);
     } else if (nameUp.contains('AHADU')) {
-      img = SvgPicture.asset('assets/images/Ahadu_Logo.svg',
-          width: 22, height: 22, fit: BoxFit.contain);
+      img = AppSvgIcon('assets/images/Ahadu_Logo.svg',
+          size: 22, surfaceColor: bgColor);
       bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.10);
     } else if (nameUp.contains('ABYSSINIA') ||
         nameUp == 'BOA' ||
         nameUp.contains('BOA')) {
-      img = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg',
-          width: 22, height: 22, fit: BoxFit.contain);
+      img = AppSvgIcon('assets/images/Bank_of_Abyssinia_Icon.svg',
+          size: 22, surfaceColor: bgColor);
       bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
-      img = SvgPicture.asset('assets/images/Dashen_Bank_Logo.svg',
-          width: 25, height: 25, fit: BoxFit.contain,
-          colorFilter: const ColorFilter.mode(AppColors.cardDashenDark, BlendMode.srcIn));
+      img = AppSvgIcon('assets/images/Dashen_Bank_Logo.svg',
+          size: 25,
+          color: AppColors.cardDashenDark);
       bgColor = AppColors.cardDashenLight.withValues(alpha: 0.15);
     } else if (nameUp.contains('CASH')) {
-      img = SvgPicture.asset('assets/images/Wallet Icon.svg',
-          width: 20, height: 20, fit: BoxFit.contain,
-          colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn));
+      img = AppSvgIcon('assets/images/Wallet Icon.svg',
+          size: 20,
+          color: AppColors.positive);
       bgColor = AppColors.positive.withValues(alpha: 0.12);
     } else {
       img = Text(

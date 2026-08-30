@@ -44,7 +44,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         val title: String,
         val isLocked: Boolean,
         val lockedReasonName: String?,
-        val txReference: String?
+        val txReference: String?,
+        val totalBalance: Double = 0.0
     )
 
     companion object {
@@ -91,9 +92,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (s != "127" && s.matches(Regex("^\\+?[0-9]{7,15}$"))) return null
 
             val upper = s.uppercase()
-            for ((key, bankName) in BANK_SENDERS) {
-                if (upper.contains(key)) return bankName
-            }
+            if (upper.contains("TELEBIRR") || s == "127") return "Telebirr"
+            if (upper.contains("CBE") && upper.contains("BIRR")) return "CBE Birr"
+            if (upper.contains("CBE")) return "CBE"
+            if (upper.contains("AHADU")) return "Ahadu Bank"
+            if (upper == "BOA" || upper.contains("ABYSSINIA") || upper.startsWith("BOA")) return "BOA"
+            if (upper.contains("DASHEN") || upper.contains("AMOLE")) return "Dashen Bank"
             return null
         }
 
@@ -305,6 +309,21 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
             when (bankName) {
                 "Telebirr" -> {
+                    var telebirrTotalBal = 0.0
+                    val balMatches = Regex("(?i)(?:(saving\\s+)?balance\\s+is\\s+ETB\\s*)([0-9,]+(?:\\.[0-9]+)?)").findAll(singleLine)
+                    for (m in balMatches) {
+                        val isSaving = m.groupValues[1].isNotBlank()
+                        if (!isSaving) {
+                            val raw = m.groupValues[2].replace(",", "")
+                            val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                            val v = clean.toDoubleOrNull() ?: 0.0
+                            if (v > 0) {
+                                telebirrTotalBal = v
+                                break
+                            }
+                        }
+                    }
+
                     // 1. Airtime pattern: outgoing recharge OR incoming airtime topup
                     if (lower.contains("airtime") || ((lower.contains("recharged") || lower.contains("bought") || lower.contains("recharge")) && (lower.contains("airtime") || lower.contains("ethio telecom")))) {
                         var amount = parseAmount(Regex("(?i)(?:recharged|bought|received)\\s+(?:(?:ETB|Br\\.?|Birr)\\s*)?([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
@@ -329,11 +348,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = formatEtb(amount),
                             isDebit = !isIncoming,
                             counterparty = phone,
-                            directionHeader = if (isIncoming) "From: $phone" else (if (phone != "Airtime") "To: $phone" else "Debit (Telebirr)"),
-                            title = "Banking SMS from Telebirr",
+                            directionHeader = if (isIncoming) "From: $phone" else (if (phone != "Airtime") "To: $phone" else "To: Airtime"),
+                            title = if (isIncoming) "Income" else "Expense",
                             isLocked = true,
                             lockedReasonName = "Airtime",
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -356,11 +376,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = formatEtb(amount),
                             isDebit = true,
                             counterparty = phone,
-                            directionHeader = if (phone != "Package") "To: $phone" else "Debit (Telebirr)",
-                            title = "Banking SMS from Telebirr",
+                            directionHeader = if (phone != "Package") "To: $phone" else "To: Package",
+                            title = "Expense",
                             isLocked = true,
                             lockedReasonName = "Package",
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -379,11 +400,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = if (amount > 0) formatEtb(amount) else "Internal Transfer",
                             isDebit = true,
                             counterparty = if (lower.contains("shamo")) "Shamo Account" else "Sanduq Savings",
-                            directionHeader = "Debit (Telebirr)",
-                            title = "Banking SMS from Telebirr",
+                            directionHeader = if (lower.contains("shamo")) "To: Shamo Account" else "To: Sanduq Savings",
+                            title = "Expense",
                             isLocked = true,
                             lockedReasonName = "Internal Transfer",
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -399,11 +421,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = formatEtb(amount),
                             isDebit = false,
                             counterparty = "Telebirr Loan",
-                            directionHeader = "Credit (Telebirr)",
-                            title = "Banking SMS from Telebirr",
+                            directionHeader = "From: Telebirr Loan",
+                            title = "Income",
                             isLocked = true,
                             lockedReasonName = "Loan",
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -426,10 +449,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = true,
                             counterparty = recipient,
                             directionHeader = "To: $recipient",
-                            title = if (recipient != "Transfer") "Transaction with $recipient" else "Banking SMS from Telebirr",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -450,10 +474,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = false,
                             counterparty = senderName,
                             directionHeader = "From: $senderName",
-                            title = if (senderName != "Sender") "Transaction with $senderName" else "Banking SMS from Telebirr",
+                            title = "Income",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -470,11 +495,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = formatEtb(amount),
                             isDebit = true,
                             counterparty = "Telebirr Debit",
-                            directionHeader = "Debit (Telebirr)",
-                            title = "Banking SMS from Telebirr",
+                            directionHeader = "To: Telebirr",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -501,10 +527,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = true,
                             counterparty = recipient,
                             directionHeader = "To: $recipient",
-                            title = if (recipient != "Merchant Deposit") "Transaction with $recipient" else "Banking SMS from Telebirr",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -525,10 +552,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = false,
                             counterparty = agentName,
                             directionHeader = "From: $agentName",
-                            title = if (agentName != "Telebirr Deposit") "Transaction with $agentName" else "Banking SMS from Telebirr",
+                            title = "Income",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
 
@@ -550,15 +578,23 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = true,
                             counterparty = rawDesc,
                             directionHeader = "To: $rawDesc",
-                            title = "Transaction with $rawDesc",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = telebirrTotalBal
                         )
                     }
                 }
 
                 "CBE" -> {
+                    val cbeBalMatch = Regex("(?i)[Cc]urrent\\s+[Bb]alance\\s+is\\s+ETB\\s*([0-9,]+\\.?\\d*)").find(singleLine)
+                    val cbeTotalBal = if (cbeBalMatch != null) {
+                        val raw = cbeBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
                     if (lower.contains("credited")) {
                         var amount = parseAmount(Regex("(?i)credited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
                         if (amount <= 0) {
@@ -585,10 +621,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = false,
                             counterparty = senderName,
                             directionHeader = "From: $senderName",
-                            title = if (senderName != "CBE Deposit") "Transaction with $senderName" else "Banking SMS from CBE",
+                            title = "Income",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = cbeTotalBal
                         )
                     }
 
@@ -614,10 +651,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                                 isDebit = true,
                                 counterparty = recipient,
                                 directionHeader = "To: $recipient",
-                                title = if (recipient != "CBE Transfer") "Transaction with $recipient" else "Banking SMS from CBE",
+                                title = "Expense",
                                 isLocked = false,
                                 lockedReasonName = null,
-                                txReference = ref
+                                txReference = ref,
+                                totalBalance = cbeTotalBal
                             )
                         }
                     }
@@ -639,15 +677,23 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = true,
                             counterparty = recipient,
                             directionHeader = "To: $recipient",
-                            title = if (recipient != "CBE Withdrawal") "Transaction with $recipient" else "Banking SMS from CBE",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = cbeTotalBal
                         )
                     }
                 }
 
                 "BOA" -> {
+                    val boaBalMatch = Regex("(?i)(?:Available\\s+Balance|Current\\s+Balance|Balance)\\s*(?:is|:)?\\s*(?:ETB|Birr|Br\\.?)?\\s*([0-9,.]+)").find(singleLine)
+                    val boaTotalBal = if (boaBalMatch != null) {
+                        val raw = boaBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
                     if (lower.contains("credited")) {
                         val amount = parseAmount(Regex("(?i)credited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
                         if (amount <= 0) return null
@@ -663,10 +709,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = false,
                             counterparty = senderName,
                             directionHeader = "From: $senderName",
-                            title = if (senderName != "BOA Deposit") "Transaction with $senderName" else "Banking SMS from BOA",
+                            title = "Income",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = boaTotalBal
                         )
                     }
 
@@ -682,16 +729,24 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = formatEtb(amount),
                             isDebit = true,
                             counterparty = "BOA Transfer",
-                            directionHeader = "Debit (BOA)",
-                            title = "Banking SMS from BOA",
+                            directionHeader = "To: BOA",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = boaTotalBal
                         )
                     }
                 }
 
                 "Ahadu Bank" -> {
+                    val ahaduBalMatch = Regex("(?i)(?:balance\\s+is\\s+(?:ETB\\s*)?|current\\s+balance\\s*(?:is|:)?\\s*(?:ETB\\s*)?|available\\s+balance\\s*(?:is|:)?\\s*(?:ETB\\s*)?|ቀሪ\\s+ሂሳብዎ\\s*(?:ETB|ብር)?\\s*)([0-9,.]+)").find(singleLine)
+                    val ahaduTotalBal = if (ahaduBalMatch != null) {
+                        val raw = ahaduBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
                     if (lower.contains("credited") || lower.contains("received") || lower.contains("deposit")) {
                         val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
                         if (amount <= 0) return null
@@ -708,10 +763,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             isDebit = false,
                             counterparty = "Ahadu Deposit",
                             directionHeader = "From: Ahadu Deposit",
-                            title = "Banking SMS from Ahadu Bank",
+                            title = "Income",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = ahaduTotalBal
                         )
                     }
 
@@ -730,39 +786,73 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             formattedAmount = formatEtb(amount),
                             isDebit = true,
                             counterparty = "Ahadu Transfer",
-                            directionHeader = "Debit (Ahadu Bank)",
-                            title = "Banking SMS from Ahadu Bank",
+                            directionHeader = "To: Ahadu Bank",
+                            title = "Expense",
                             isLocked = false,
                             lockedReasonName = null,
-                            txReference = ref
+                            txReference = ref,
+                            totalBalance = ahaduTotalBal
                         )
                     }
                 }
 
                 "Dashen Bank" -> {
-                    val amount = parseAmount(Regex("(?i)ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                    val dashenBalMatch = Regex("(?i)(?:balance\\s+is\\s+(?:ETB\\s*)?|a/c\\s+balance\\s+is\\s*(?:ETB)?\\s*|current\\s+balance\\s*is\\s*(?:ETB)?\\s*)([0-9,.]+)").find(singleLine)
+                    val dashenTotalBal = if (dashenBalMatch != null) {
+                        val raw = dashenBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
+                    var amount = parseAmount(Regex("(?i)(?:debited\\s+with|withdrawn|debit|paid|transferred)\\s+(?:ETB|Birr|USD)?\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                    if (amount <= 0) {
+                        amount = parseAmount(Regex("(?i)(?:credited\\s+with|has\\s+deposited|deposited|received)\\s+(?:ETB|Birr|USD)?\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                    }
+                    if (amount <= 0) {
+                        amount = parseAmount(Regex("(?i)(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                    }
                     if (amount <= 0) return null
-                    val isDebit = lower.contains("debited") || lower.contains("transfer") || lower.contains("paid")
+                    val isDebit = lower.contains("debited") || lower.contains("transfer") || lower.contains("transferred") || lower.contains("paid") || lower.contains("withdrawn")
+
+                    val refMatch = Regex("(?i)(?:transaction\\s*reference|ref\\s*no|reference|ref|txn\\s*id|txn\\s*no)[:\\s]*([A-Za-z0-9]+)").find(singleLine)
+                    val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                    val toMatch = Regex("(?i)to\\s+([A-Za-z0-9\\s().+'’*:/\\\\#-]+?)(?:\\s+on\\s+\\d|\\s+at\\s+\\d|\\.\\s*|\\n|$)").find(singleLine)
+                    val counterparty = if (isDebit) {
+                        val raw = toMatch?.groupValues?.get(1)?.trim() ?: ""
+                        if (raw.isNotEmpty() && !raw.startsWith("your account", ignoreCase = true) && !raw.startsWith("account", ignoreCase = true)) {
+                            val cleanName = raw.replace(Regex("(?i)(?:'s|’s)?\\s+(?:tele\\s*birr\\s+|telebirr\\s+)?account(?:\\s+number)?(?:\\s*[:.\\s]*[0-9+*]+)?.*$"), "").trim()
+                            if (cleanName.isNotEmpty()) cleanName else "Dashen Transfer"
+                        } else "Dashen Transfer"
+                    } else "Dashen Deposit"
 
                     return NativeParsedSms(
                         bankName = "Dashen Bank",
                         amount = amount,
                         formattedAmount = formatEtb(amount),
                         isDebit = isDebit,
-                        counterparty = if (isDebit) "Dashen Transfer" else "Dashen Deposit",
-                        directionHeader = if (isDebit) "Debit (Dashen Bank)" else "Credit (Dashen Bank)",
-                        title = "Banking SMS from Dashen Bank",
+                        counterparty = counterparty,
+                        directionHeader = if (isDebit) "To: $counterparty" else "From: $counterparty",
+                        title = if (isDebit) "Expense" else "Income",
                         isLocked = false,
                         lockedReasonName = null,
-                        txReference = null
+                        txReference = ref,
+                        totalBalance = dashenTotalBal
                     )
                 }
 
                 "CBE Birr" -> {
+                    val cbeBirrBalMatch = Regex("(?i)(?:current\\s+balance\\s+is\\s*(?:ETB|Br\\.?)?\\s*|balance\\s+is\\s*(?:ETB|Br\\.?)?\\s*)([0-9,]+(?:\\.[0-9]+)?)").find(singleLine)
+                    val cbeBirrTotalBal = if (cbeBirrBalMatch != null) {
+                        val raw = cbeBirrBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
                     val amount = parseAmount(Regex("(?i)([0-9,]+(?:\\.[0-9]+)?)\\s*Br\\.?"), singleLine)
                     if (amount <= 0) return null
                     val isDebit = lower.contains("paid") || lower.contains("transferred") || lower.contains("debited")
-                    val refMatch = Regex("(?i)(?:txn\\s+id|transaction\\s+id\\s+is)\\s+([A-Za-z0-9]+)").find(singleLine)
+                    val refMatch = Regex("(?i)(?:txn\\s*id|transaction\\s*id(?:\\s*is)?|ref(?:erence)?(?:\\s*id)?|eqn)\\s*[:.]?\\s*([A-Za-z0-9]+)").find(singleLine)
                     val ref = refMatch?.groupValues?.get(1)?.trim()
 
                     val fromMatch = Regex("(?i)from\\s+(.*?)(?:\\s+on\\s+|\\s*,|\\s*\\.)").find(singleLine)
@@ -782,11 +872,12 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         formattedAmount = formatEtb(amount),
                         isDebit = isDebit,
                         counterparty = senderOrRecip,
-                        directionHeader = if (isDebit) "Debit (CBE Birr)" else "Credit (CBE Birr)",
-                        title = "Banking SMS from CBE Birr",
+                        directionHeader = if (isDebit) "To: $senderOrRecip" else "From: $senderOrRecip",
+                        title = if (isDebit) "Expense" else "Income",
                         isLocked = false,
                         lockedReasonName = null,
-                        txReference = ref
+                        txReference = ref,
+                        totalBalance = cbeBirrTotalBal
                     )
                 }
             }
@@ -914,7 +1005,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         showNotification(context, txId, parsed, resolvedReason?.name, body)
 
         try {
-            MainActivity.smsEventSink?.success("newTransaction")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                MainActivity.smsEventSink?.success("newTransaction")
+            }
         } catch (_: Exception) {}
     }
 
@@ -1042,13 +1135,30 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             val txType = if (parsed.isDebit) "expense" else "income"
             val idToUse = if (rawId.contains("_slot")) rawId else "${rawId}_slot${simSlot}_$txType"
 
+            var effectiveTotalBalance = parsed.totalBalance
+            if (effectiveTotalBalance <= 0.0) {
+                try {
+                    val cursorBal = db.rawQuery(
+                        "SELECT totalBalance FROM transactions WHERE name = ? AND simSlot = ? AND totalBalance > 0 ORDER BY date DESC, rowid DESC LIMIT 1",
+                        arrayOf(parsed.bankName, simSlot.toString())
+                    )
+                    if (cursorBal.moveToFirst()) {
+                        val prevBal = cursorBal.getDouble(0)
+                        if (prevBal > 0.0) {
+                            effectiveTotalBalance = if (parsed.isDebit) (prevBal - parsed.amount).coerceAtLeast(0.0) else (prevBal + parsed.amount)
+                        }
+                    }
+                    cursorBal.close()
+                } catch (_: Exception) {}
+            }
+
             val sql = """
                 INSERT OR IGNORE INTO transactions (
                     id, name, amount, type, date, sender, category, rawMessage,
                     isAutoDetected, totalBalance, reason, reasonId, categoryId,
                     subcategoryId, customReasonText, note, linkedTransactionId,
                     bankReference, isBookmarked, simSlot, accountIdentifier
-                ) VALUES (?, ?, ?, ?, ?, ?, 'Auto', ?, 1, 0.0, ?, ?, ?, ?, NULL, NULL, ?, ?, 0, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, 'Auto', ?, 1, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, 0, ?, ?)
             """.trimIndent()
 
             val statement = db.compileStatement(sql)
@@ -1059,48 +1169,49 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             statement.bindString(5, dateIso)
             statement.bindString(6, parsed.counterparty)
             statement.bindString(7, body)
+            statement.bindDouble(8, effectiveTotalBalance)
 
             if (resolvedReason?.name != null) {
-                statement.bindString(8, resolvedReason.name)
-            } else {
-                statement.bindNull(8)
-            }
-
-            if (resolvedReason?.id != null) {
-                statement.bindLong(9, resolvedReason.id.toLong())
+                statement.bindString(9, resolvedReason.name)
             } else {
                 statement.bindNull(9)
             }
 
-            if (resolvedReason?.categoryId != null) {
-                statement.bindLong(10, resolvedReason.categoryId.toLong())
+            if (resolvedReason?.id != null) {
+                statement.bindLong(10, resolvedReason.id.toLong())
             } else {
                 statement.bindNull(10)
             }
 
-            if (resolvedReason?.subcategoryId != null) {
-                statement.bindLong(11, resolvedReason.subcategoryId.toLong())
+            if (resolvedReason?.categoryId != null) {
+                statement.bindLong(11, resolvedReason.categoryId.toLong())
             } else {
                 statement.bindNull(11)
             }
 
-            if (counterpartId != null) {
-                statement.bindString(12, counterpartId)
+            if (resolvedReason?.subcategoryId != null) {
+                statement.bindLong(12, resolvedReason.subcategoryId.toLong())
             } else {
                 statement.bindNull(12)
             }
 
-            if (parsed.txReference != null) {
-                statement.bindString(13, parsed.txReference)
+            if (counterpartId != null) {
+                statement.bindString(13, counterpartId)
             } else {
                 statement.bindNull(13)
             }
 
-            statement.bindLong(14, simSlot.toLong())
-            if (accountIdentifier != null) {
-                statement.bindString(15, accountIdentifier)
+            if (parsed.txReference != null) {
+                statement.bindString(14, parsed.txReference)
             } else {
-                statement.bindNull(15)
+                statement.bindNull(14)
+            }
+
+            statement.bindLong(15, simSlot.toLong())
+            if (accountIdentifier != null) {
+                statement.bindString(16, accountIdentifier)
+            } else {
+                statement.bindNull(16)
             }
 
             statement.executeInsert()

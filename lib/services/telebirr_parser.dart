@@ -268,24 +268,31 @@ class TelebirrParser {
       id = 'TB-${hash.substring(0, 16)}';
     }
 
-    // 4. Extract Post Balance
+    // 4. Extract Post Balance (Telebirr Checking / E-Money account balance)
     // Supports:
-    //   OLD: "Your current balance is ETB 123.45"
-    //   OLD (double space): "Your current  balance is  ETB 123.45"
-    //   NEW: "Your current balance is ETB 123.45."
-    //   E-Money: "Your current telebirr E-Money Account balance is ETB 123.45."
-    //   Saving: "your current saving balance is ETB 123.45"
+    //   - "Your current balance is ETB 123.45"
+    //   - "Your current  balance is  ETB 123.45"
+    //   - "Your current balance is ETB 123.45."
+    //   - "Your current telebirr Account balance is ETB 1800.00"
+    //   - "Your current telebirr E-Money Account balance is ETB 123.45."
+    //   - "Your current e-money account balance is ETB 4,683.32."
+    // Note: NEVER match "saving balance is ETB ..." for the checking account balance.
     double totalBalance = 0.0;
-    final balanceRegex = RegExp(
-        r'(?:current\s+(?:telebirr\s+)?(?:E-Money\s+Account\s+|saving\s+)?balance\s+is\s+ETB\s+|balance\s+is\s+ETB\s+)([0-9,]+(?:\.[0-9]+)?)',
-        caseSensitive: false);
-    final balanceMatch = balanceRegex.firstMatch(singleLineMsg);
-    if (balanceMatch != null) {
-      String rawBalance = balanceMatch.group(1)?.replaceAll(',', '') ?? '0';
-      if (rawBalance.endsWith('.')) {
-        rawBalance = rawBalance.substring(0, rawBalance.length - 1);
+    final allBalanceMatches = RegExp(
+        r'(?:(saving\s+)?balance\s+is\s+ETB\s*)([0-9,]+(?:\.[0-9]+)?)',
+        caseSensitive: false).allMatches(singleLineMsg);
+
+    for (final m in allBalanceMatches) {
+      final isSaving = m.group(1) != null && m.group(1)!.trim().isNotEmpty;
+      if (!isSaving) {
+        String raw = m.group(2)?.replaceAll(',', '') ?? '0';
+        if (raw.endsWith('.')) raw = raw.substring(0, raw.length - 1);
+        final parsedVal = double.tryParse(raw) ?? 0.0;
+        if (parsedVal > 0) {
+          totalBalance = parsedVal;
+          break;
+        }
       }
-      totalBalance = double.tryParse(rawBalance) ?? 0.0;
     }
 
     // 5. Extract Date

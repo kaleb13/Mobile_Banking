@@ -1,10 +1,13 @@
 import '../../../models/transaction.dart';
 import '../../../widgets/app_date_filter.dart';
+import '../../../utils/counterparty_matcher.dart';
 
 class FilterTransactionsParams {
   final String? bankFilter; // Matches tx.name
   final String? senderFilter; // Matches tx.sender
+  final String? categoryFilter; // Matches tx.resolvedReason / tx.category
   final String? typeFilter; // 'All', 'Income', 'Expense', 'Incoming', 'Outgoing', 'Bookmarked'
+  final int? simSlotFilter; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
   final String? searchQuery;
   final AppDateFilterValue? dateFilter;
   final bool onlyUncategorized;
@@ -14,7 +17,9 @@ class FilterTransactionsParams {
   const FilterTransactionsParams({
     this.bankFilter,
     this.senderFilter,
+    this.categoryFilter,
     this.typeFilter,
+    this.simSlotFilter,
     this.searchQuery,
     this.dateFilter,
     this.onlyUncategorized = false,
@@ -33,6 +38,11 @@ class FilterTransactionsUseCase {
     final filtered = transactions.where((tx) {
       // 0. Bookmarked Only Filter
       if (params.onlyBookmarked && !tx.isBookmarked) {
+        return false;
+      }
+
+      // SIM Slot Filter
+      if (params.simSlotFilter != null && tx.simSlot != params.simSlotFilter) {
         return false;
       }
 
@@ -65,9 +75,23 @@ class FilterTransactionsUseCase {
           params.senderFilter != 'All Senders' &&
           params.senderFilter != 'All' &&
           params.senderFilter!.isNotEmpty) {
-        final sf = params.senderFilter!.trim().toUpperCase();
-        final txs = tx.sender.trim().toUpperCase();
-        if (txs != sf && !txs.contains(sf) && !sf.contains(txs)) {
+        if (!CounterpartyMatcher.matches(tx.sender, params.senderFilter!)) {
+          return false;
+        }
+      }
+
+      // 3.5 Category / Reason Filter
+      if (params.categoryFilter != null &&
+          params.categoryFilter != 'All' &&
+          params.categoryFilter!.isNotEmpty) {
+        final cat = params.categoryFilter!.trim().toLowerCase();
+        final txReason = (tx.resolvedReason ?? tx.category).trim().toLowerCase();
+        final isMatch = txReason == cat ||
+            txReason.contains(cat) ||
+            cat.contains(txReason) ||
+            (tx.reason?.toLowerCase().contains(cat) ?? false) ||
+            (tx.customReasonText?.toLowerCase().contains(cat) ?? false);
+        if (!isMatch) {
           return false;
         }
       }

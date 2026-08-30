@@ -1,13 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../models/transaction.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/counterparty_matcher.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
@@ -16,17 +16,21 @@ import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_reset_filter_button.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/currency_symbol_widget.dart';
+import '../../widgets/custom_progress_bar.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import 'transaction_detail_screen.dart';
 
 class AllTransactionsScreen extends StatefulWidget {
   final String? initialSearchQuery;
   final String? initialSenderFilter;
+  final AppDateFilterValue? initialDateFilter;
 
   const AllTransactionsScreen({
     super.key,
     this.initialSearchQuery,
     this.initialSenderFilter,
+    this.initialDateFilter,
   });
 
   @override
@@ -37,8 +41,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   late TextEditingController _searchController;
   String _searchQuery = '';
   late String _selectedSender;
-  AppDateFilterValue _dateFilterValue = const AppDateFilterValue.thisMonth();
+  int? _selectedSimSlot; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
+  late AppDateFilterValue _dateFilterValue;
   String _selectedType = 'All';
+  String _selectedCategory = 'All';
   bool _isBookmarkedOnly = false;
   String _sortBy = 'Date: Newest';
   int _displayLimit = 30;
@@ -48,6 +54,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     super.initState();
     _searchQuery = widget.initialSearchQuery ?? '';
     _selectedSender = widget.initialSenderFilter ?? 'All';
+    _dateFilterValue =
+        widget.initialDateFilter ?? const AppDateFilterValue.anyTime();
     _searchController = TextEditingController(text: _searchQuery);
   }
 
@@ -62,6 +70,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final txVM = Provider.of<TransactionsViewModel>(context);
     final settingsVM = Provider.of<SettingsViewModel>(context);
     final allTransactions = txVM.transactions;
+    final fmt = NumberFormat('#,##0.00');
 
     // Unique sender / bank names for the dropdown
     final Set<String> senderNamesSet = {
@@ -74,16 +83,48 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final senderNames = senderNamesSet.toList();
 
     final isBank = txVM.senders.any(
-      (s) => s.senderName.trim().toUpperCase() == _selectedSender.trim().toUpperCase(),
+      (s) =>
+          s.senderName.trim().toUpperCase() ==
+          _selectedSender.trim().toUpperCase(),
     );
 
-    // Filter logic using domain usecase
+    final bool isCounterpartyView = !isBank && _selectedSender != 'All';
+
+    // 1. Compute full category inventory for this counterparty across active date & search
+    final counterpartyTxs = isCounterpartyView
+        ? const FilterTransactionsUseCase().execute(
+            transactions: allTransactions,
+            params: FilterTransactionsParams(
+              senderFilter: _selectedSender,
+              simSlotFilter: _selectedSimSlot,
+              dateFilter: _dateFilterValue,
+              searchQuery: _searchQuery,
+              onlyBookmarked: _isBookmarkedOnly,
+            ),
+          )
+        : const <AppTransaction>[];
+
+    final Map<String, int> categoryCounts = {};
+    if (isCounterpartyView) {
+      for (final tx in counterpartyTxs) {
+        final rawCat =
+            (tx.resolvedReason ?? tx.reason ?? tx.category).trim();
+        final cat = rawCat.isNotEmpty ? rawCat : 'General';
+        categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+      }
+    }
+
+    // 2. Filter logic using domain usecase
     final filteredTransactions = const FilterTransactionsUseCase().execute(
       transactions: allTransactions,
       params: FilterTransactionsParams(
         bankFilter: isBank ? _selectedSender : null,
-        senderFilter: !isBank && _selectedSender != 'All' ? _selectedSender : null,
+        senderFilter:
+            !isBank && _selectedSender != 'All' ? _selectedSender : null,
+        categoryFilter:
+            _selectedCategory != 'All' ? _selectedCategory : null,
         typeFilter: _selectedType,
+        simSlotFilter: _selectedSimSlot,
         dateFilter: _dateFilterValue,
         searchQuery: _searchQuery,
         sortBy: _sortBy,
@@ -104,8 +145,15 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           children: [
             _buildTopHeaderAndSearch(
               context,
+              txVM,
               senderNames,
               filteredTransactions.length,
+              isCounterpartyView: isCounterpartyView,
+              counterpartyTxs: counterpartyTxs,
+              categoryCounts: categoryCounts,
+              filteredTransactions: filteredTransactions,
+              isBalanceVisible: settingsVM.isBalanceVisible,
+              fmt: fmt,
             ),
             Expanded(
               child: _buildTransactionList(filteredTransactions, settingsVM),
@@ -119,23 +167,38 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   // ── Seamless Top Header & Search/Filter Section ────────────────────────────
   Widget _buildTopHeaderAndSearch(
     BuildContext context,
+    TransactionsViewModel txVM,
     List<String> senderNames,
-    int count,
-  ) {
+    int count, {
+    required bool isCounterpartyView,
+    required List<AppTransaction> counterpartyTxs,
+    required Map<String, int> categoryCounts,
+    required List<AppTransaction> filteredTransactions,
+    required bool isBalanceVisible,
+    required NumberFormat fmt,
+  }) {
     final bool isReasonFilter =
         widget.initialSearchQuery != null && widget.initialSearchQuery!.isNotEmpty;
     final bool isFiltered = _searchQuery.isNotEmpty ||
         _selectedSender != 'All' ||
         _selectedType != 'All' ||
+        _selectedCategory != 'All' ||
+        _selectedSimSlot != null ||
         !_dateFilterValue.isDefault ||
         _isBookmarkedOnly ||
         _sortBy != 'Date: Newest';
+
+    final cleanSenderName = isCounterpartyView
+        ? (CounterpartyMatcher.normalize(_selectedSender).isNotEmpty
+            ? CounterpartyMatcher.normalize(_selectedSender)
+            : _selectedSender)
+        : _selectedSender;
 
     return Container(
       color: AppColors.background,
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 12,
-        bottom: 12,
+        bottom: 10,
         left: 14,
         right: 16,
       ),
@@ -152,7 +215,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isReasonFilter ? widget.initialSearchQuery! : 'Transactions',
+                      isCounterpartyView
+                          ? cleanSenderName
+                          : isReasonFilter
+                              ? widget.initialSearchQuery!
+                              : 'Transactions',
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 20,
@@ -164,9 +231,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      isReasonFilter
-                          ? 'Reason Analysis Detail'
-                          : '$count transactions recorded',
+                      isCounterpartyView
+                          ? '$count transactions with this person'
+                          : isReasonFilter
+                              ? 'Reason Analysis Detail'
+                              : '$count transactions recorded',
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
@@ -182,13 +251,15 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                   fullWidth: false,
                   height: 28,
                   fontSize: 11,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   onPressed: () {
                     setState(() {
                       _searchQuery = '';
                       _searchController.clear();
                       _selectedSender = 'All';
                       _selectedType = 'All';
+                      _selectedCategory = 'All';
                       _sortBy = 'Date: Newest';
                       _isBookmarkedOnly = false;
                       _dateFilterValue = const AppDateFilterValue.anyTime();
@@ -197,7 +268,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // ── Standard Search Bar (100% Fully Rounded Pill) ───────────────────
           AppSearchBar(
@@ -213,7 +284,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             hintColor: AppColors.textSecondary,
             iconColor: AppColors.textSecondary,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // ── Selection Filter Chips Horizontal Scroll ────────────────────────
           SingleChildScrollView(
@@ -292,6 +363,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 _buildSenderDropdown(senderNames),
                 const SizedBox(width: 8),
 
+                // ── Dynamic SIM Dropdown (Dual-SIM only) ──
+                if (txVM.hasMultipleSims) ...[
+                  _buildSimDropdown(txVM),
+                  const SizedBox(width: 8),
+                ],
+
                 // ── Type Dropdown (Income / Expense) ──
                 _buildTypeDropdown(),
 
@@ -304,7 +381,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       setState(() {
                         _isBookmarkedOnly = false;
                         _selectedType = 'All';
-                        _dateFilterValue = const AppDateFilterValue.thisMonth();
+                        _selectedCategory = 'All';
+                        _selectedSimSlot = null;
+                        _dateFilterValue =
+                            const AppDateFilterValue.anyTime();
                         _selectedSender = 'All';
                         _sortBy = 'Date: Newest';
                         _searchQuery = '';
@@ -317,7 +397,260 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
               ],
             ),
           ),
+
+          // ── Counterparty Net Flow Summary Card (When Sender Selected) ───────
+          if (isCounterpartyView) ...[
+            const SizedBox(height: 12),
+            _buildCounterpartyNetFlowCard(
+              filteredTransactions,
+              cleanSenderName,
+              isBalanceVisible,
+              fmt,
+            ),
+          ],
+
+          // ── Counterparty Categories Horizontal Filter Pills ─────────────────
+          if (isCounterpartyView && categoryCounts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildCounterpartyCategoryPills(
+              categoryCounts,
+              counterpartyTxs.length,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  // ── Dynamic Counterparty Net Flow Summary Card ─────────────────────────────
+  Widget _buildCounterpartyNetFlowCard(
+    List<AppTransaction> txs,
+    String senderName,
+    bool isBalanceVisible,
+    NumberFormat fmt,
+  ) {
+    final double totalSent = txs
+        .where((t) => t.type == 'expense')
+        .fold(0.0, (sum, t) => sum + t.amount);
+    final double totalReceived = txs
+        .where((t) => t.type == 'income')
+        .fold(0.0, (sum, t) => sum + t.amount);
+    final double netStanding = totalReceived - totalSent;
+    final double totalTurnover = totalSent + totalReceived;
+    final double sentRatio = totalTurnover > 0
+        ? (totalSent / totalTurnover).clamp(0.0, 1.0)
+        : 0.5;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.drawerCard,
+        borderRadius: AppRadius.cardRadius,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 14,
+                    color: AppColors.textSoft,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Net Standing (${_dateFilterValue.label})',
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              if (netStanding > 0)
+                const AppBadge.success(
+                  text: 'Net From',
+                  size: AppBadgeSize.micro,
+                )
+              else if (netStanding < 0)
+                const AppBadge.destructive(
+                  text: 'Net To',
+                  size: AppBadgeSize.micro,
+                )
+              else
+                const AppBadge.neutral(
+                  text: 'Even',
+                  size: AppBadgeSize.micro,
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          isBalanceVisible
+              ? CurrencyTextWidget(
+                  amount: netStanding,
+                  showSign: true,
+                  style: TextStyle(
+                    color: netStanding >= 0
+                        ? AppColors.positive
+                        : AppColors.negative,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
+                  customFormattedStr: fmt.format(netStanding.abs()),
+                )
+              : const Text(
+                  'ETB ••••••••',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+          const SizedBox(height: 8),
+
+          // Distribution Ratio Bar
+          CustomProgressBar(
+            progress: sentRatio,
+            height: 6,
+            backgroundColor: AppColors.positive.withValues(alpha: 0.3),
+            progressColor: AppColors.negative,
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'To: ${isBalanceVisible ? 'ETB ${fmt.format(totalSent)}' : '••••••••'} (${(sentRatio * 100).toStringAsFixed(0)}%)',
+                style: const TextStyle(
+                  color: AppColors.negative,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                'From: ${isBalanceVisible ? 'ETB ${fmt.format(totalReceived)}' : '••••••••'} (${((1.0 - sentRatio) * 100).toStringAsFixed(0)}%)',
+                style: const TextStyle(
+                  color: AppColors.positive,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Counterparty Category Filter Pills ─────────────────────────────────────
+  Widget _buildCounterpartyCategoryPills(
+    Map<String, int> categoryCounts,
+    int totalCount,
+  ) {
+    final sortedCategories = categoryCounts.keys.toList()
+      ..sort((a, b) =>
+          (categoryCounts[b] ?? 0).compareTo(categoryCounts[a] ?? 0));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          // "All" Pill
+          _buildCategoryPill(
+            label: 'All Categories',
+            count: totalCount,
+            isSelected: _selectedCategory == 'All',
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _selectedCategory = 'All';
+                _displayLimit = 30;
+              });
+            },
+          ),
+          const SizedBox(width: 6),
+
+          // Category Pills
+          for (final cat in sortedCategories) ...[
+            _buildCategoryPill(
+              label: cat,
+              count: categoryCounts[cat] ?? 0,
+              isSelected: _selectedCategory == cat,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _selectedCategory = _selectedCategory == cat ? 'All' : cat;
+                  _displayLimit = 30;
+                });
+              },
+            ),
+            const SizedBox(width: 6),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryPill({
+    required String label,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.buttonPrimary
+              : AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected
+                    ? AppColors.buttonPrimaryText
+                    : AppColors.textPrimary,
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.buttonPrimaryText.withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  color: isSelected
+                      ? AppColors.buttonPrimaryText
+                      : AppColors.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -346,7 +679,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       prefix: Icon(
         Icons.sort_rounded,
         size: 14,
-        color: _sortBy != 'Date: Newest' ? Colors.white : AppColors.textSecondary,
+        color:
+            _sortBy != 'Date: Newest' ? Colors.white : AppColors.textSecondary,
       ),
     );
   }
@@ -359,6 +693,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         if (name != null) {
           setState(() {
             _selectedSender = name;
+            _selectedCategory = 'All';
             _displayLimit = 30;
           });
         }
@@ -369,7 +704,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       prefix: Icon(
         Icons.account_balance_wallet_rounded,
         size: 14,
-        color: _selectedSender != 'All' ? Colors.white : AppColors.textSecondary,
+        color:
+            _selectedSender != 'All' ? Colors.white : AppColors.textSecondary,
       ),
     );
   }
@@ -392,8 +728,34 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       prefix: Icon(
         Icons.swap_vert_rounded,
         size: 14,
-        color: _selectedType != 'All' ? Colors.white : AppColors.textSecondary,
+        color:
+            _selectedType != 'All' ? Colors.white : AppColors.textSecondary,
       ),
+    );
+  }
+
+  Widget _buildSimDropdown(TransactionsViewModel txVM) {
+    return AppDropdown<int?>.dark(
+      value: _selectedSimSlot,
+      items: [
+        const AppDropdownItem(value: null, label: 'All SIMs'),
+        ...txVM.detectedSimSlots.map((slot) {
+          final sim =
+              txVM.simCards.where((s) => s.simSlot == slot).firstOrNull;
+          final label = (sim != null && sim.displayName.isNotEmpty)
+              ? 'SIM ${slot + 1} (${sim.displayName})'
+              : 'SIM ${slot + 1}';
+          return AppDropdownItem<int?>(value: slot, label: label);
+        }),
+      ],
+      onChanged: (val) {
+        setState(() {
+          _selectedSimSlot = val;
+          _displayLimit = 30;
+        });
+      },
+      maxWidth: 130,
+      isDefault: _selectedSimSlot == null,
     );
   }
 
@@ -408,52 +770,51 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           parent: BouncingScrollPhysics(),
         ),
         child: Padding(
-          padding: const EdgeInsets.only(top: 80, bottom: 40),
+          padding: const EdgeInsets.only(top: 60, bottom: 40),
           child: AppEmptyState(
-            icon: Icons.search_off_rounded,
-            title: 'No transactions found',
-            subtitle: 'Try adjusting your filters or search query',
+            icon: Icons.receipt_long_outlined,
+            title: 'No Transactions Found',
+            subtitle: _searchQuery.isNotEmpty ||
+                    _selectedSender != 'All' ||
+                    _selectedCategory != 'All' ||
+                    _selectedType != 'All' ||
+                    !_dateFilterValue.isDefault ||
+                    _isBookmarkedOnly
+                ? 'Try adjusting your filters or search terms to see matching records.'
+                : 'No transactions recorded yet.',
           ),
         ),
       );
     }
 
+    final hasMore = transactions.length > _displayLimit;
     final displayedTransactions = transactions.take(_displayLimit).toList();
-    final bool hasMore = transactions.length > _displayLimit;
-    final int count = displayedTransactions.length + (hasMore ? 1 : 0);
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      padding: const EdgeInsets.only(top: 4, bottom: 24),
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
-      itemCount: count,
-      separatorBuilder: (context, index) {
-        if (index >= displayedTransactions.length - 1 && hasMore) {
-          return const SizedBox(height: 8);
-        }
-        return Divider(
-          height: 1,
-          thickness: 0.5,
-          indent: 66,
-          endIndent: 16,
-          color: Colors.white.withValues(alpha: 0.05),
-        );
-      },
+      itemCount: displayedTransactions.length + (hasMore ? 1 : 0),
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: Colors.white.withValues(alpha: 0.04),
+        indent: 68,
+      ),
       itemBuilder: (context, index) {
-        if (index == displayedTransactions.length && hasMore) {
-          final remaining = transactions.length - _displayLimit;
-          final nextBatch = remaining > 30 ? 30 : remaining;
+        if (index == displayedTransactions.length) {
           return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: AppButton.secondary(
-              text: 'Load More (+$nextBatch of $remaining)',
+              text:
+                  'Load More (+${min(30, transactions.length - _displayLimit)})',
               icon: Icons.expand_more_rounded,
-              height: 42,
-              fullWidth: true,
+              height: 44,
               onPressed: () {
-                HapticFeedback.lightImpact();
-                setState(() => _displayLimit += 30);
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _displayLimit += 30;
+                });
               },
             ),
           );
@@ -470,8 +831,9 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     SettingsViewModel settingsVM,
   ) {
     final bool isIncome = tx.type == 'income';
-    final String label = isIncome ? 'Deposit' : 'Transferred';
-    final String subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
+    final String label = isIncome ? 'Income' : 'Expense';
+    final String subLabel =
+        isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
 
     return Material(
       color: Colors.transparent,
@@ -538,11 +900,18 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                       subLabel,
                       style: const TextStyle(
                         color: AppColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
+                        fontSize: 12,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('MMM d, yyyy • h:mm a').format(tx.date),
+                      style: const TextStyle(
+                        color: AppColors.textDisabled,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -552,16 +921,29 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildAmountText(tx, settingsVM),
-                  const SizedBox(height: 4),
                   Text(
-                    DateFormat('MMM d, HH:mm').format(tx.date),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w400,
+                    settingsVM.isBalanceVisible
+                        ? '${isIncome ? '+' : '-'} ETB ${NumberFormat('#,##0.00').format(tx.amount)}'
+                        : 'ETB ••••••••',
+                    style: TextStyle(
+                      color: isIncome ? AppColors.positive : Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
                     ),
                   ),
+                  if (tx.totalBalance > 0) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      settingsVM.isBalanceVisible
+                          ? 'Bal: ETB ${NumberFormat('#,##0.00').format(tx.totalBalance)}'
+                          : 'Bal: ••••••••',
+                      style: const TextStyle(
+                        color: AppColors.textDisabled,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -573,124 +955,57 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
   Widget _buildDarkBankAvatar(String bankName) {
     final nameUp = bankName.toUpperCase();
-    Widget img;
-    Color bgColor = AppColors.buttonSecondary;
+    String? assetPath;
+    bool isSvg = false;
 
-    if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL')) {
-      img = SvgPicture.asset(
-        'assets/images/CBE logo.svg',
-        width: 20,
-        height: 20,
-        fit: BoxFit.contain,
-      );
-      bgColor = AppColors.cbePurple.withValues(alpha: 0.20);
+    if (nameUp == 'CBE' ||
+        nameUp.contains('COMMERCIAL BANK') ||
+        nameUp.contains('COMMERCIAL')) {
+      assetPath = 'assets/images/CBE logo.svg';
+      isSvg = true;
     } else if (nameUp == 'TELEBIRR') {
-      img = Image.asset(
-        'assets/images/Telebirr Logo.png',
-        width: 20,
-        height: 20,
-        fit: BoxFit.contain,
-      );
-      bgColor = AppColors.telebirrGreen.withValues(alpha: 0.20);
+      assetPath = 'assets/images/Telebirr Logo.png';
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      img = Image.asset(
-        'assets/images/CBEBirr Logo.png',
-        width: 20,
-        height: 20,
-        fit: BoxFit.contain,
-      );
-      bgColor = AppColors.cbeBirrMagenta.withValues(alpha: 0.20);
+      assetPath = 'assets/images/CBEBirr Logo.png';
     } else if (nameUp.contains('AHADU')) {
-      img = SvgPicture.asset(
-        'assets/images/Ahadu_Logo.svg',
-        width: 20,
-        height: 20,
-        fit: BoxFit.contain,
-      );
-      bgColor = AppColors.cardAhaduRed.withValues(alpha: 0.20);
-    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
-      img = SvgPicture.asset(
-        'assets/images/Bank_of_Abyssinia_Icon.svg',
-        width: 20,
-        height: 20,
-        fit: BoxFit.contain,
-      );
-      bgColor = AppColors.cardBoaBg.withValues(alpha: 0.18);
-    } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
-      img = SvgPicture.asset(
-        'assets/images/Dashen_Bank_Logo.svg',
-        width: 24,
-        height: 24,
-        fit: BoxFit.contain,
-        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-      );
-      bgColor = AppColors.cardDashenDark.withValues(alpha: 0.35);
-    } else if (nameUp.contains('CASH')) {
-      img = SvgPicture.asset(
-        'assets/images/Wallet Icon.svg',
-        width: 18,
-        height: 18,
-        fit: BoxFit.contain,
-        colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn),
-      );
-      bgColor = AppColors.positive.withValues(alpha: 0.15);
-    } else {
-      img = Text(
-        bankName.substring(0, min(1, bankName.length)).toUpperCase(),
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      );
+      assetPath = 'assets/images/Ahadu_Logo.svg';
+      isSvg = true;
+    } else if (nameUp.contains('DASHEN')) {
+      assetPath = 'assets/images/Dashen_Bank_logo.svg';
+      isSvg = true;
+    } else if (nameUp.contains('BOA') ||
+        nameUp.contains('ABYSSINIA') ||
+        nameUp.contains('BANK OF ABYSSINIA')) {
+      assetPath = 'assets/images/Bank_of_Abyssinia_logo.svg';
+      isSvg = true;
     }
 
     return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: bgColor,
+      width: 42,
+      height: 42,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceElevated,
         shape: BoxShape.circle,
       ),
-      child: Center(child: img),
-    );
-  }
-
-  Widget _buildAmountText(AppTransaction tx, SettingsViewModel settingsVM) {
-    if (!settingsVM.isBalanceVisible) {
-      return const Text(
-        '••••••••',
-        style: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-
-    final String amountStr = NumberFormat('#,##0.00').format(tx.amount);
-    final amountParts = amountStr.split('.');
-
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '${tx.type == 'income' ? '+' : '-'}${amountParts[0]}',
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          TextSpan(
-            text: '.${amountParts[1]}',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
+      child: Center(
+        child: assetPath != null
+            ? (isSvg
+                ? AppSvgIcon(
+                    assetPath,
+                    size: 22,
+                    surfaceColor: AppColors.surfaceElevated,
+                  )
+                : Image.asset(
+                    assetPath,
+                    width: 22,
+                    height: 22,
+                    fit: BoxFit.contain,
+                  ))
+            : const Icon(
+                Icons.account_balance_rounded,
+                color: Colors.white70,
+                size: 20,
+              ),
       ),
     );
   }

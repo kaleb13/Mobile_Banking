@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import '../models/parsed_sms_result.dart';
 import 'package:intl/intl.dart';
 
@@ -172,14 +174,15 @@ class CbeBirrParser {
     // 3. Extract Txn ID
     String? id;
     final idMatch = RegExp(
-            r'(?:txn id|transaction id is)\s+([A-Z0-9]+)',
+            r'(?:txn\s*id|transaction\s*id(?:\s*is)?|ref(?:erence)?(?:\s*id)?|eqn)\s*[:.]?\s*([A-Za-z0-9]+)',
             caseSensitive: false)
         .firstMatch(message);
     if (idMatch != null) {
       id = idMatch.group(1);
     } else {
-      // Revert if Txn ID is required for CBEBirr
-      return null;
+      // Fallback deterministic ID if explicit Txn ID keyword is absent
+      final bytes = utf8.encode('$senderOrRecipient-$amount-$fallbackDate-$message');
+      id = sha256.convert(bytes).toString().substring(0, 16).toUpperCase();
     }
 
     // 4. Extract Total Balance

@@ -66,7 +66,10 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final systemNavBottom = MediaQuery.paddingOf(context).bottom;
+    final double extraBottom = bottomInset > 0 ? bottomInset : systemNavBottom;
+    final insets = padding.resolve(Directionality.of(context));
     final screenHeight = MediaQuery.of(context).size.height;
     final double? targetHeight = heightFactor != null ? screenHeight * heightFactor! : null;
     final double maxHeight = screenHeight * maxHeightFactor;
@@ -96,10 +99,10 @@ class AppDrawer extends StatelessWidget {
         height: targetHeight,
         constraints: BoxConstraints(maxHeight: maxHeight),
         padding: EdgeInsets.fromLTRB(
-          (padding as EdgeInsets).left,
-          (padding as EdgeInsets).top,
-          (padding as EdgeInsets).right,
-          (padding as EdgeInsets).bottom + bottomInset,
+          insets.left,
+          insets.top,
+          insets.right,
+          insets.bottom + extraBottom,
         ),
         decoration: BoxDecoration(
           color: backgroundColor,

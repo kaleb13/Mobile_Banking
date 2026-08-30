@@ -49,6 +49,21 @@ class MaintenanceProgressController extends ChangeNotifier {
     }
   }
 
+  /// Sets step [index] as running, marks all preceding steps as done,
+  /// and marks all subsequent steps as pending.
+  void activateStep(int index) {
+    for (int i = 0; i < _steps.length; i++) {
+      if (i < index) {
+        _steps[i] = _steps[i].copyWith(status: MaintenanceStepStatus.done);
+      } else if (i == index) {
+        _steps[i] = _steps[i].copyWith(status: MaintenanceStepStatus.running);
+      } else {
+        _steps[i] = _steps[i].copyWith(status: MaintenanceStepStatus.pending);
+      }
+    }
+    notifyListeners();
+  }
+
   void setProgress(double progress, String statusText) {
     _progress = progress.clamp(0.0, 1.0);
     _statusText = statusText;
@@ -66,6 +81,9 @@ class MaintenanceProgressController extends ChangeNotifier {
     _isComplete = true;
     _progress = 1.0;
     _statusText = 'Completed successfully';
+    for (int i = 0; i < _steps.length; i++) {
+      _steps[i] = _steps[i].copyWith(status: MaintenanceStepStatus.done);
+    }
     notifyListeners();
   }
 }

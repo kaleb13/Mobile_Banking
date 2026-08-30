@@ -230,7 +230,7 @@ class _AppNoteCardState extends State<AppNoteCard> {
           controller: pathController,
           autofocus: true,
           hint: 'https://...',
-          borderRadius: AppRadius.cardRadiusSm,
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
     );
@@ -446,6 +446,8 @@ class _AppNoteCardState extends State<AppNoteCard> {
           controller: widget.controller,
           hint: widget.hintText,
           maxLines: 3,
+          maxLength: 300,
+          showCounter: true,
           backgroundColor: Colors.transparent,
           contentPadding: EdgeInsets.zero,
           onChanged: widget.onChanged,

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../data/repositories/cash_wallet_repository.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/expense_definition.dart';
+import '../../models/transaction.dart';
 
 /// CashWalletViewModel — owns all cash wallet and expense definition state.
 ///
@@ -12,6 +13,9 @@ class CashWalletViewModel extends ChangeNotifier {
 
   CashWalletViewModel({required CashWalletRepository repository})
       : _repository = repository;
+
+  /// Callback supplied by TransactionsViewModel to access bank transactions.
+  List<AppTransaction> Function()? getTransactions;
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -53,6 +57,27 @@ class CashWalletViewModel extends ChangeNotifier {
 
   void _recalcBalance() {
     double balance = 0;
+
+    // 1. Bank transactions categorized as Cash (Cash Withdrawal / Cash Deposit)
+    if (getTransactions != null) {
+      final bankTxs = getTransactions!();
+      for (final tx in bankTxs) {
+        final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
+            .toLowerCase()
+            .trim();
+        if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
+          if (tx.type == 'expense') {
+            // Bank withdrawal: physical cash IN to wallet (+)
+            balance += tx.amount.abs();
+          } else if (tx.type == 'income') {
+            // Bank deposit: physical cash OUT to bank (-)
+            balance -= tx.amount.abs();
+          }
+        }
+      }
+    }
+
+    // 2. Manual cash additions and deductions
     for (final tx in _cashTransactions) {
       if (tx.type == 'addition') {
         balance += tx.amount;
@@ -60,18 +85,47 @@ class CashWalletViewModel extends ChangeNotifier {
         balance -= tx.amount;
       }
     }
-    _cashBalance = balance;
+    _cashBalance = balance < 0.0 ? 0.0 : balance;
+  }
+
+  /// Recalculates balance and notifies listeners when bank transactions change.
+  void recalcBalance() {
+    _recalcBalance();
+    notifyListeners();
   }
 
   // ── Cash Transactions ─────────────────────────────────────────────────────
 
   Future<void> addCashTransaction(CashTransaction transaction) async {
-    if (transaction.type == 'expense' &&
-        (transaction.reasonName == null ||
-            transaction.reasonName!.trim().isEmpty) &&
-        transaction.reasonId == null) {
-      throw ArgumentError(
-          'Cash expense deductions must have an assigned reason.');
+    if (transaction.type == 'expense') {
+      if ((transaction.reasonName == null ||
+              transaction.reasonName!.trim().isEmpty) &&
+          transaction.reasonId == null) {
+        throw ArgumentError(
+            'Cash expense deductions must have an assigned reason.');
+      }
+
+      if (transaction.linkedTransactionId != null) {
+        // Linked to specific bank withdrawal
+        if (getTransactions != null) {
+          final bankTxs = getTransactions!();
+          final withdrawal = bankTxs.cast<AppTransaction?>().firstWhere(
+                (t) => t?.id == transaction.linkedTransactionId,
+                orElse: () => null,
+              );
+          if (withdrawal != null) {
+            final rem = getCashWithdrawalRemainingAmount(
+                withdrawal.id!, withdrawal.amount);
+            if (transaction.amount > rem) {
+              throw ArgumentError(
+                  'Expense amount (${transaction.amount}) exceeds remaining withdrawal balance ($rem).');
+            }
+          }
+        }
+      } else if (_cashBalance <= 0 || transaction.amount > _cashBalance) {
+        throw ArgumentError(
+            'Expense amount (${transaction.amount}) cannot exceed available cash balance ($_cashBalance).');
+      }
     }
 
     // Optimistically insert into memory and notify listeners instantly

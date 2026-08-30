@@ -70,7 +70,7 @@ class AppTransaction {
     // Generate an authoritative unique primary key combining bank ref, slot, and transaction direction
     // so internal transfers between SIM 1 (outflow) and SIM 2 (inflow) never collide or overwrite each other.
     final rawId = result.id;
-    final String uniqueId = (rawId != null && rawId.isNotEmpty)
+    final String uniqueId = rawId.isNotEmpty
         ? (rawId.contains('_slot') ? rawId : '${rawId}_slot${simSlot}_${result.type}')
         : '${result.bankName}_slot${simSlot}_${result.date.millisecondsSinceEpoch}_${result.amount}_${result.type}';
 
@@ -205,6 +205,7 @@ class AppTransaction {
   }
 
   AppTransaction copyWith({
+    String? name,
     DateTime? date,
     int? reasonId,
     bool clearReasonId = false,
@@ -231,7 +232,7 @@ class AppTransaction {
   }) {
     return AppTransaction(
       id: id,
-      name: name,
+      name: name ?? this.name,
       amount: amount,
       type: type,
       date: date ?? this.date,

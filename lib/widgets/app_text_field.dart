@@ -56,6 +56,9 @@ class AppTextField extends StatefulWidget {
   final Color? hintColor;
   final bool obscureText;
   final EdgeInsetsGeometry? contentPadding;
+  final int? maxLength;
+  final MaxLengthEnforcement? maxLengthEnforcement;
+  final bool showCounter;
 
   const AppTextField({
     super.key,
@@ -93,6 +96,9 @@ class AppTextField extends StatefulWidget {
     this.textColor,
     this.hintColor,
     this.contentPadding,
+    this.maxLength,
+    this.maxLengthEnforcement,
+    this.showCounter = false,
   });
 
   /// Factory helper for light / onWhite background surfaces (e.g. homepage hero section).
@@ -131,6 +137,9 @@ class AppTextField extends StatefulWidget {
     this.textColor,
     this.hintColor,
     this.contentPadding,
+    this.maxLength,
+    this.maxLengthEnforcement,
+    this.showCounter = false,
   }) : variant = AppTextFieldVariant.light;
 
   /// Factory helper for modal dialogs and bottom drawers.
@@ -169,6 +178,9 @@ class AppTextField extends StatefulWidget {
     this.textColor,
     this.hintColor,
     this.contentPadding,
+    this.maxLength,
+    this.maxLengthEnforcement,
+    this.showCounter = false,
   }) : variant = AppTextFieldVariant.modal;
 
   @override
@@ -307,6 +319,35 @@ class _AppTextFieldState extends State<AppTextField> {
       onTap: widget.onTap,
       maxLines: widget.maxLines,
       minLines: widget.minLines,
+      maxLength: widget.maxLength,
+      maxLengthEnforcement: widget.maxLengthEnforcement ??
+          (widget.maxLength != null ? MaxLengthEnforcement.enforced : null),
+      buildCounter: widget.maxLength == null
+          ? null
+          : (widget.showCounter
+              ? (context,
+                  {required currentLength,
+                  required isFocused,
+                  maxLength}) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 4),
+                    child: Text(
+                      '$currentLength / $maxLength',
+                      style: AppTypography.caption.copyWith(
+                        color: widget.variant == AppTextFieldVariant.light
+                            ? AppColors.textSecondaryLight
+                            : AppColors.textSecondary.withValues(alpha: 0.6),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }
+              : (context,
+                      {required currentLength,
+                      required isFocused,
+                      maxLength}) =>
+                  null),
       textInputAction: widget.textInputAction,
       textAlign: widget.textAlign,
       onChanged: widget.onChanged,

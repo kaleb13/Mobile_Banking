@@ -1884,6 +1884,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
           const SizedBox(height: 6),
           _SheetField(
             controller: _nameCtrl,
+            maxLength: 70,
             hint: _loanType == 'lent' ? 'Select or type borrower\'s name…' : 'Select or type lender\'s name…',
             icon: Icons.person_outline_rounded,
             onTap: allPersonNames.isNotEmpty ? () => _pickPersonName(context, allPersonNames) : null,
@@ -1951,6 +1952,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
           const SizedBox(height: 6),
           _SheetField(
             controller: _amountCtrl,
+            maxLength: 14,
             hint: 'Amount…',
             prefixWidget: const CurrencySymbolWidget(
               size: 16,
@@ -2351,6 +2353,8 @@ class _SheetField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final VoidCallback? onTap;
   final Widget? suffixIcon;
+  final int? maxLength;
+  final bool showCounter;
 
   const _SheetField({
     required this.controller,
@@ -2361,6 +2365,8 @@ class _SheetField extends StatelessWidget {
     this.onChanged,
     this.onTap,
     this.suffixIcon,
+    this.maxLength,
+    this.showCounter = false,
   });
 
   @override
@@ -2374,6 +2380,8 @@ class _SheetField extends StatelessWidget {
       prefixIcon: icon,
       suffix: suffixIcon,
       hint: hint,
+      maxLength: maxLength,
+      showCounter: showCounter,
       backgroundColor: AppColors.previewCardBg,
       borderRadius: BorderRadius.circular(16),
     );
@@ -2454,6 +2462,7 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
         children: [
           _SheetField(
             controller: _amountCtrl,
+            maxLength: 14,
             hint: 'Amount paid…',
             prefixWidget: const CurrencySymbolWidget(
               size: 16,
@@ -2465,6 +2474,8 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
           const SizedBox(height: 12),
           _SheetField(
             controller: _noteCtrl,
+            maxLength: 250,
+            showCounter: true,
             hint: 'Note (optional)…',
             icon: Icons.notes_rounded,
           ),

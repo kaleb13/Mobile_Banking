@@ -15,6 +15,7 @@ import '../../presentation/viewmodels/loans_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/link_extractor.dart';
+import '../../utils/counterparty_matcher.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_menu_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
@@ -32,6 +33,7 @@ import '../loans/loan_management_screen.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
 import 'reason_link_drawer.dart';
+import '../../services/sms_service.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final AppTransaction transaction;
@@ -223,12 +225,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             'Impact': 'Neutral (No PnL change)',
           };
         } else if (rLower == 'bounce' || rLower.contains('reversal')) {
-          toastSubtitle = 'Categorized as Transaction Reversal';
+          toastSubtitle = 'Categorized as Bounce (Pass-Through)';
           toastDetails =
-              'This transaction is recorded as a bounce, failed transaction, or bank refund. It offsets previous failed transfers and prevents distorted spending metrics.';
+              'This transaction is for transit or pass-through money that does not belong to you. It is completely excluded from expense analysis and financial calculations.';
           toastMetadata = {
             'Reason': 'Bounce',
-            'Type': 'Bank Reversal / Offset',
+            'Impact': 'Excluded from analytics & expenses',
           };
         } else {
           toastSubtitle = 'Assigned to $reasonName';
@@ -258,16 +260,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
   }
 
-  Future<void> _confirmDeleteTransaction(
+  Future<void> _confirmDeleteFromApp(
       BuildContext context, TransactionsViewModel txVM) async {
     if (widget.transaction.id == null) return;
+
     final shouldDelete = await AppConfirmDialog.show(
       context: context,
-      title: 'Delete Transaction?',
-      icon: Icons.delete_outline_rounded,
-      iconColor: AppColors.negative,
+      title: 'Delete from Shibre?',
       message:
-          'Are you sure you want to delete this transaction? This action cannot be undone.',
+          'Are you sure you want to delete this transaction from Shibre? Your wallet balances and charts will update immediately.',
+      details:
+          'The original SMS will remain safely in your phone\'s inbox.',
       confirmText: 'Delete',
       cancelText: 'Cancel',
       isDestructive: true,
@@ -277,7 +280,48 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (shouldDelete == true && context.mounted) {
       await txVM.deleteTransaction(widget.transaction.id!);
       if (context.mounted) {
-        AppToast.info(context, message: 'Transaction deleted');
+        AppToast.info(
+          context,
+          message: 'Deleted from Shibre',
+          subtitle: 'Original SMS remains safe in your phone.',
+        );
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteFromPhone(
+      BuildContext context, TransactionsViewModel txVM) async {
+    if (widget.transaction.id == null) return;
+
+    final shouldDelete = await AppConfirmDialog.show(
+      context: context,
+      title: 'Delete SMS from Phone?',
+      message:
+          'This will delete the transaction from Shibre and open your SMS app so you can delete the SMS directly from your device.',
+      details:
+          'Android security rules require opening the SMS app to delete messages from the phone.',
+      confirmText: 'Open & Delete',
+      cancelText: 'Cancel',
+      isDestructive: false,
+      onConfirm: () {},
+    );
+
+    if (shouldDelete == true && context.mounted) {
+      await txVM.deleteTransaction(widget.transaction.id!);
+      await SmsService().openSmsInNativeApp(
+        sender: widget.transaction.sender.isNotEmpty
+            ? widget.transaction.sender
+            : widget.transaction.name,
+        body: widget.transaction.rawMessage,
+        date: widget.transaction.date,
+      );
+      if (context.mounted) {
+        AppToast.info(
+          context,
+          message: 'Opened in SMS App',
+          subtitle: 'Long press the message in your SMS app to delete from phone.',
+        );
         Navigator.of(context).pop();
       }
     }
@@ -426,16 +470,28 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               const SizedBox(width: 6),
             ],
             AppMenuButton<String>.dark(
+              minWidth: 200,
               items: const [
                 AppMenuItem<String>(
-                  value: 'delete',
-                  label: 'Delete',
+                  value: 'delete_app',
+                  label: 'Delete from Shibre',
+                  subtitle: 'App data only',
                   icon: Icons.delete_outline_rounded,
+                  iconColor: AppColors.negative,
+                ),
+                AppMenuItem<String>(
+                  value: 'delete_phone',
+                  label: 'Delete SMS from Phone',
+                  subtitle: 'Opens SMS app',
+                  icon: Icons.phone_android_rounded,
+                  iconColor: AppColors.brandGreen,
                 ),
               ],
               onSelected: (value) {
-                if (value == 'delete') {
-                  _confirmDeleteTransaction(context, txVM);
+                if (value == 'delete_app') {
+                  _confirmDeleteFromApp(context, txVM);
+                } else if (value == 'delete_phone') {
+                  _confirmDeleteFromPhone(context, txVM);
                 }
               },
             ),
@@ -590,7 +646,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 ],
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
+                padding: EdgeInsets.fromLTRB(0, 14, 0, 24 + MediaQuery.paddingOf(context).bottom),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -652,42 +708,34 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       shortName = 'Telebirr';
       bg = AppColors.telebirrGreenSoft;
     } else if (combined.contains('AHADU')) {
-      iconWidget = SvgPicture.asset('assets/images/Ahadu_Logo.svg', width: 24, height: 24, fit: BoxFit.contain);
+      bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
+      iconWidget = AppSvgIcon('assets/images/Ahadu_Logo.svg', size: 24, surfaceColor: bg);
       bankName = 'Ahadu Bank';
       shortName = 'Ahadu';
-      bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
     } else if (combined.contains('ABYSSINIA') || combined.contains('BOA')) {
-      iconWidget = SvgPicture.asset('assets/images/Bank_of_Abyssinia_Icon.svg', width: 24, height: 24, fit: BoxFit.contain);
+      bg = AppColors.cardBoaBg.withValues(alpha: 0.18);
+      iconWidget = AppSvgIcon('assets/images/Bank_of_Abyssinia_Icon.svg', size: 24, surfaceColor: bg);
       bankName = 'Bank of Abyssinia S.C.';
       shortName = 'BOA';
-      bg = AppColors.cardBoaBg.withValues(alpha: 0.18);
     } else if (combined.contains('DASHEN')) {
-      iconWidget = SvgPicture.asset(
-        'assets/images/Dashen_Bank_Logo.svg',
-        width: 24,
-        height: 24,
-        fit: BoxFit.contain,
-        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-      );
+      bg = AppColors.cardDashenLight.withValues(alpha: 0.18);
+      iconWidget = AppSvgIcon('assets/images/Dashen_Bank_Logo.svg', size: 24, surfaceColor: bg);
       bankName = 'Dashen Bank S.C.';
       shortName = 'Dashen';
-      bg = AppColors.cardDashenLight.withValues(alpha: 0.18);
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
+      bg = AppColors.slackPurple.withValues(alpha: 0.15);
       iconWidget = SvgPicture.asset('assets/images/CBE logo.svg', width: 24, height: 24, fit: BoxFit.contain);
       bankName = 'Commercial Bank of Ethiopia';
       shortName = 'CBE';
-      bg = AppColors.slackPurple.withValues(alpha: 0.15);
     } else if (combined.contains('CASH')) {
-      iconWidget = SvgPicture.asset(
+      bg = AppColors.positive.withValues(alpha: 0.15);
+      iconWidget = const AppSvgIcon(
         'assets/images/Wallet Icon.svg',
-        width: 22,
-        height: 22,
-        fit: BoxFit.contain,
-        colorFilter: const ColorFilter.mode(AppColors.positive, BlendMode.srcIn),
+        size: 22,
+        color: AppColors.positive,
       );
       bankName = 'Cash Wallet';
       shortName = 'Cash';
-      bg = AppColors.positive.withValues(alpha: 0.15);
     } else {
       iconWidget = const Icon(Icons.account_balance_outlined, color: AppColors.positive, size: 22);
       bankName = senderStr.isNotEmpty ? senderStr : 'Mobile Banking';
@@ -782,8 +830,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           // Details List (Person/Counterparty, Transaction ID, Category, Date & Balance)
           _buildCollapsibleInfoRow(
             isIncome ? Icons.call_received_rounded : Icons.call_made_rounded,
-            isIncome ? 'From (Sender)' : 'For (Recipient)',
-            _limitWords(counterparty, maxWords: 2),
+            isIncome ? 'From (Sender)' : 'To (Recipient)',
+            _limitWords(
+              CounterpartyMatcher.normalize(counterparty).isNotEmpty
+                  ? CounterpartyMatcher.normalize(counterparty)
+                  : counterparty,
+              maxWords: 3,
+            ),
             onTap: widget.transaction.sender.isNotEmpty &&
                     widget.transaction.sender != 'Manual Entry' &&
                     widget.transaction.sender != 'Cash'
@@ -1060,18 +1113,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               children: [
                 AppTextField(
                   controller: amountController,
+                  maxLength: 14,
+                  label:
+                      'AMOUNT (${settingsVM.currentCurrency.shortLabel})',
+                  hint: '0.00',
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  textAlign: TextAlign.center,
-                  variant: AppTextFieldVariant.modal,
-                  backgroundColor: Colors.transparent,
+                  prefixIcon: Icons.account_balance_wallet_outlined,
+                  backgroundColor: AppColors.previewCardBg,
+                  borderRadius: BorderRadius.circular(16),
                   style: TextStyle(
                     color: isExceeded ? AppColors.negative : Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
-                  hint: '0.00',
-                  hintColor: Colors.white.withValues(alpha: 0.15),
-                  prefixText: '${settingsVM.currentCurrency.shortLabel} ',
                   onChanged: (_) => setModalState(() {}),
                 ),
                 if (isExceeded) ...[
@@ -2328,7 +2381,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           .firstOrNull;
     }
 
-    final bool isDualSim = currentTx.simSlot != null || (linkedTx != null && linkedTx.simSlot != null);
+    final bool isDualSim = linkedTx != null && currentTx.simSlot != linkedTx.simSlot;
     final String title = isDualSim ? 'Dual-SIM Internal Transfer' : 'Linked Internal Transfer';
     final String subtitle = isDualSim
         ? 'Transferred between SIM 1 & SIM 2'
@@ -2425,9 +2478,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             Row(
                               children: [
                                 AppBadge(
-                                  text: '${linkedTx.name}${linkedTx.simSlot != null ? ' • SIM ${(linkedTx.simSlot ?? 0) + 1}' : ''}',
+                                  text: '${linkedTx.name} • SIM ${linkedTx.simSlot + 1}',
                                   size: AppBadgeSize.small,
-                                  customBgColor: (linkedTx.simSlot ?? 0) == 0
+                                  customBgColor: linkedTx.simSlot == 0
                                       ? AppColors.sim1BadgeBg
                                       : AppColors.sim2BadgeBg,
                                   customTextColor: Colors.white,

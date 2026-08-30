@@ -55,7 +55,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     'loan': 'Track loans, credit lines & debt repayments',
     'internal transfer': 'Transfer money between your accounts',
     'cash': 'Cash wallet & manual cash expenses',
-    'bounce': 'Bounced, reversed & failed transactions',
+    'bounce': "Pass through money that doesn't belong to you",
   };
 
   @override
@@ -129,11 +129,12 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
               children: [
                 AppTextField.modal(
                   controller: ctrl,
+                  maxLength: 40,
                   autofocus: true,
                   hint: isSubcategory
                       ? 'Subcategory name...'
                       : 'Category name...',
-                  borderRadius: AppRadius.cardRadiusSm,
+                  borderRadius: BorderRadius.circular(16),
                   onChanged: (_) {
                     if (errorMsg != null) setInner(() => errorMsg = null);
                   },
@@ -190,6 +191,10 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
     }
     final topCategories = topCategoriesMap.values.toList();
 
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final systemNavBottom = MediaQuery.paddingOf(context).bottom;
+    final double extraBottom = bottomInset > 0 ? bottomInset : systemNavBottom;
+
     final targetHeight = (_isSearchExpanded || _isScrolledToTop)
         ? MediaQuery.of(context).size.height * 0.95
         : MediaQuery.of(context).size.height * 0.82;
@@ -201,7 +206,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         height: targetHeight,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + extraBottom),
         decoration: BoxDecoration(
           color: AppColors.surfaceElevated,
           borderRadius: AppRadius.sheetRadius,
@@ -244,7 +249,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                 _searchQuery = '';
               });
             },
-            backgroundColor: AppColors.drawerCard,
+            backgroundColor: AppColors.surfaceElevated,
             iconColor: AppColors.positive,
             textColor: Colors.white,
             hintColor: AppColors.textSoft,

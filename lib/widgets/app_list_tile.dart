@@ -42,25 +42,17 @@ class AppListTile extends StatelessWidget {
     if (leadingWidget != null) {
       leadingContent = leadingWidget;
     } else if (leadingIcon != null) {
-      final iconColor = isDestructive
+      final Color badgeColor = isDestructive
           ? AppColors.destructiveRed
           : (isSelected
               ? AppColors.positive
-              : (leadingColor ?? context.themeTextPrimary));
-      final boxBg = isDestructive
-          ? AppColors.destructiveRed.withValues(alpha: 0.12)
-          : (isSelected
-              ? AppColors.positive.withValues(alpha: 0.20)
-              : context.themeTileBg);
+              : (leadingColor ?? AppColors.brandGreen));
 
-      leadingContent = Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: boxBg,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(leadingIcon, color: iconColor, size: 20),
+      leadingContent = AppIconBadge.fromColor(
+        icon: leadingIcon,
+        color: badgeColor,
+        size: 34,
+        iconSize: 18,
       );
     }
 
