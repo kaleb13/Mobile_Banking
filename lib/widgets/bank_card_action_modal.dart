@@ -402,11 +402,33 @@ class _BankCardActionModalState extends State<BankCardActionModal>
 
                         const SizedBox(height: 10),
 
-                        // 3. Transaction History Action Pill (Fires third)
+                        // 3. Change Order Action Pill
                         _StaggeredRevealPill(
                           controller: _animController,
-                          startInterval: 0.40,
-                          endInterval: 0.82,
+                          startInterval: 0.36,
+                          endInterval: 0.78,
+                          child: _FocusActionPill(
+                            icon: Icons.swap_vert_rounded,
+                            title: 'Change Order',
+                            subtitle: 'Rearrange position of wallet cards',
+                            trailing: const AppBadge.neutral(
+                              text: 'REORDER',
+                              size: AppBadgeSize.small,
+                            ),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              Navigator.of(context).pop('changeOrder');
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // 4. Transaction History Action Pill
+                        _StaggeredRevealPill(
+                          controller: _animController,
+                          startInterval: 0.46,
+                          endInterval: 0.88,
                           child: _FocusActionPill(
                             icon: Icons.receipt_long_rounded,
                             title: 'Transaction History',
@@ -433,11 +455,11 @@ class _BankCardActionModalState extends State<BankCardActionModal>
 
                         const SizedBox(height: 10),
 
-                        // 4. Spending Analytics & Insights Action Pill (Fires fourth)
+                        // 5. Spending Analytics & Insights Action Pill
                         _StaggeredRevealPill(
                           controller: _animController,
-                          startInterval: 0.54,
-                          endInterval: 0.96,
+                          startInterval: 0.56,
+                          endInterval: 0.98,
                           child: _FocusActionPill(
                             icon: Icons.insights_rounded,
                             title: 'Spending Analytics & Insights',

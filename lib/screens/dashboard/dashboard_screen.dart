@@ -647,8 +647,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final activeSenders = txVM.activeSenders;
     final List<Widget> cardWidgets = [];
+    final int stackCount = activeSenders.length.clamp(0, 3);
 
-    for (int i = 0; i < activeSenders.length && i < 3; i++) {
+    for (int i = 0; i < stackCount; i++) {
       final sender = activeSenders[i];
       final String cardName = sender.senderName;
 
@@ -661,12 +662,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final bool cardBalanceVisible =
           settingsVM.isBalanceVisible && !settingsVM.isBankBalanceHidden(cardName);
 
+      // Top-most card in the rendered stack dynamically takes the White version
+      final bool isTop = (i == stackCount - 1);
+
       final Widget card = BankCardWidget(
         senderName: cardName,
         balance: balance,
         txCount: txCount,
         isBalanceVisible: cardBalanceVisible,
         isPaused: false,
+        isTopCard: isTop,
         animationFactor: 0.0,
         onTap: () => settingsVM.tabNavigationNotifier.value = 1,
       );

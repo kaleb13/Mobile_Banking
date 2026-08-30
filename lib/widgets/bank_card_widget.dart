@@ -24,6 +24,13 @@ class BankCardWidget extends StatelessWidget {
   final bool showMoreButton;
   /// Number of distinct accounts / SIMs attached to this bank.
   final int accountCount;
+  /// Callback when user selects Change Order from the 3-dot action modal.
+  final VoidCallback? onEnterReorderMode;
+  /// Whether this card is rendered at the top of the homepage stack (Dynamic White Version).
+  /// Whether this card is rendered at the top of the homepage stack (Dynamic White Version).
+  final bool isTopCard;
+  /// Optional drag handle action widget (e.g. for reordering list).
+  final Widget? dragHandle;
 
   const BankCardWidget({
     super.key,
@@ -36,13 +43,15 @@ class BankCardWidget extends StatelessWidget {
     this.animationFactor = 1.0,
     this.showMoreButton = true,
     this.accountCount = 1,
+    this.onEnterReorderMode,
+    this.isTopCard = false,
+    this.dragHandle,
   });
 
   static Widget bankLogo(String name, [double size = 34.0, Color? iconColor, bool onLightSurface = false]) {
     final nameUp = name.toUpperCase();
-    String imagePath = '';
-    final Color effectiveMonoColor = iconColor ?? (onLightSurface ? AppColors.iconDark : AppColors.iconLight);
 
+    // 1. CBE: ALWAYS the original full-color CBE logo SVG regardless of background
     if (nameUp == 'CBE' || nameUp.contains('COMMERCIAL BANK') || nameUp.contains('COMMERCIAL')) {
       return SvgPicture.asset(
         'assets/images/CBE logo.svg',
@@ -50,60 +59,178 @@ class BankCardWidget extends StatelessWidget {
         height: size,
         fit: BoxFit.contain,
       );
-    } else if (nameUp == 'TELEBIRR') {
-      imagePath = 'assets/images/Telebirr Logo.png';
-    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      imagePath = 'assets/images/CBEBirr Logo.png';
-    } else if (nameUp.contains('AHADU')) {
-      return AppSvgIcon(
-        'assets/images/Ahadu_Logo.svg',
-        size: size,
-        color: iconColor,
-        onLightSurface: onLightSurface,
-      );
-    } else if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
-      return AppSvgIcon(
-        'assets/images/Bank_of_Abyssinia_Icon.svg',
-        size: size,
-        color: iconColor,
-        onLightSurface: onLightSurface,
-      );
-    } else if (nameUp.contains('DASHEN')) {
-      return AppSvgIcon(
-        'assets/images/Dashen_Bank_Logo.svg',
-        size: size,
-        color: iconColor,
-        onLightSurface: onLightSurface,
-      );
     }
 
-    if (imagePath.isNotEmpty) {
-      return Image.asset(
-        imagePath,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-      );
+    // 2. Telebirr: White version on gradient background, original multi-color PNG on white background
+    if (nameUp == 'TELEBIRR') {
+      if (iconColor != null) {
+        return Image.asset(
+          'assets/images/Telebirr Logo.png',
+          width: size,
+          height: size,
+          color: iconColor,
+          colorBlendMode: BlendMode.srcIn,
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return Image.asset(
+          'assets/images/Telebirr Logo.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return Image.asset(
+          'assets/images/Telebirr Logo.png',
+          width: size,
+          height: size,
+          color: Colors.white,
+          colorBlendMode: BlendMode.srcIn,
+          fit: BoxFit.contain,
+        );
+      }
     }
 
-    if (nameUp == 'CASH WALLET') {
+    // 3. CBE Birr: White version on gradient background, original multi-color PNG on white background
+    if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
+      if (iconColor != null) {
+        return Image.asset(
+          'assets/images/CBEBirr Logo.png',
+          width: size,
+          height: size,
+          color: iconColor,
+          colorBlendMode: BlendMode.srcIn,
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return Image.asset(
+          'assets/images/CBEBirr Logo.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return Image.asset(
+          'assets/images/CBEBirr Logo.png',
+          width: size,
+          height: size,
+          color: Colors.white,
+          colorBlendMode: BlendMode.srcIn,
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 4. Ahadu Bank: White version on gradient background, original crimson brand fill on white
+    if (nameUp.contains('AHADU')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/Ahadu_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/Ahadu_Logo.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/Ahadu_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 5. Bank of Abyssinia (BOA): White version on gradient background, original amber gold brand fill on white
+    if (nameUp.contains('ABYSSINIA') || nameUp == 'BOA' || nameUp.contains('BOA')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/Bank_of_Abyssinia_Icon.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/Bank_of_Abyssinia_Icon.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/Bank_of_Abyssinia_Icon.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 6. Dashen Bank: White version on gradient background, original navy brand fill on white
+    if (nameUp.contains('DASHEN')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/Dashen_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/Dashen_Bank_Logo.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/Dashen_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 7. Cash Wallet
+    if (nameUp == 'CASH WALLET' || nameUp == 'CASH') {
       return AppSvgIcon(
         'assets/images/Wallet Icon.svg',
         size: size,
-        color: iconColor,
-        onLightSurface: onLightSurface,
+        color: iconColor ?? (onLightSurface ? AppColors.iconDark : Colors.white),
       );
-    } else if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
+    }
+
+    // 8. Loan Tracker
+    if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
       return Icon(
         Icons.handshake_rounded,
-        color: effectiveMonoColor,
+        color: iconColor ?? (onLightSurface ? AppColors.iconDark : Colors.white),
         size: size,
       );
     }
 
     return Icon(
       Icons.account_balance,
-      color: effectiveMonoColor,
+      color: iconColor ?? (onLightSurface ? AppColors.iconDark : Colors.white),
       size: size,
     );
   }
@@ -121,7 +248,13 @@ class BankCardWidget extends StatelessWidget {
     return 'Bank Account';
   }
 
-  static List<Color> getCardGradient(String name) {
+  static List<Color> getCardGradient(String name, {bool isTopCard = false}) {
+    if (isTopCard) {
+      return const [
+        AppColors.cardCbeBirrSilver,
+        AppColors.cardCbeBirrWhite,
+      ];
+    }
     final nameUp = name.toUpperCase();
     if (nameUp == 'TELEBIRR') {
       return [
@@ -135,8 +268,8 @@ class BankCardWidget extends StatelessWidget {
       ];
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       return [
-        AppColors.cardCbeBirrSilver,
-        AppColors.cardCbeBirrWhite,
+        AppColors.cardCbeBirrDark,
+        AppColors.cardCbeBirrLight,
       ];
     } else if (nameUp.contains('AHADU')) {
       return [
@@ -175,10 +308,9 @@ class BankCardWidget extends StatelessWidget {
     ];
   }
 
-  static bool isDarkTextTheme(String name, {bool isPaused = false}) {
+  static bool isDarkTextTheme(String name, {bool isPaused = false, bool isTopCard = false}) {
     if (isPaused) return false;
-    final nameUp = name.toUpperCase();
-    return nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR';
+    return isTopCard;
   }
 
   @override
@@ -188,13 +320,13 @@ class BankCardWidget extends StatelessWidget {
     final balStr = (isBalanceVisible && !isPaused) ? fmt.format(balance) : '••••••••';
     final parts = balStr.contains('.') ? balStr.split('.') : [balStr, ''];
 
-    // When paused: use defined greyscale palette; otherwise use brand gradient
+    // When paused: use defined greyscale palette; otherwise use brand/dynamic gradient
     final List<Color> cardGradient = isPaused
         ? [AppColors.pausedCardDark, AppColors.pausedCardMid]
-        : getCardGradient(senderName);
+        : getCardGradient(senderName, isTopCard: isTopCard);
 
     final bool isDarkTextTheme =
-        BankCardWidget.isDarkTextTheme(senderName, isPaused: isPaused);
+        BankCardWidget.isDarkTextTheme(senderName, isPaused: isPaused, isTopCard: isTopCard);
     final Color textColorPrimary =
         isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
     final Color textColorSub = isDarkTextTheme
@@ -233,7 +365,9 @@ class BankCardWidget extends StatelessWidget {
               ]
             : [
                 BoxShadow(
-                  color: cardGradient.first.withValues(alpha: 0.35),
+                  color: isTopCard
+                      ? Colors.black.withValues(alpha: 0.22)
+                      : cardGradient.first.withValues(alpha: 0.35),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -241,7 +375,8 @@ class BankCardWidget extends StatelessWidget {
         : const [];
 
     return GestureDetector(
-      onTap: isPaused ? null : onTap,
+      onTap: (isPaused || onTap == null) ? null : onTap,
+      behavior: (onTap == null) ? HitTestBehavior.deferToChild : HitTestBehavior.opaque,
       child: Stack(
         children: [
           Container(
@@ -266,7 +401,7 @@ class BankCardWidget extends StatelessWidget {
                   children: [
                     Opacity(
                       opacity: logoOpacity,
-                      child: bankLogo(senderName, logoSize, isDarkTextTheme ? AppColors.darkCharcoal : Colors.white),
+                      child: bankLogo(senderName, logoSize, null, isDarkTextTheme),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -413,7 +548,7 @@ class BankCardWidget extends StatelessWidget {
             ),
           ),
 
-          // ── Three-Dot Action Menu in top-right corner ────────────
+          // ── Actions in top-right corner (Drag Handle & Three-Dot Menu) ────────────
           if (showMoreButton && senderName.toUpperCase() != 'CASH WALLET')
             Positioned(
               top: 10,
@@ -422,18 +557,64 @@ class BankCardWidget extends StatelessWidget {
                 opacity: buttonOpacity,
                 child: IgnorePointer(
                   ignoring: buttonProgress < 0.8,
-                  child: _CardMoreActionButton(
-                    senderName: senderName,
-                    balance: balance,
-                    txCount: txCount,
-                    isBalanceVisible: isBalanceVisible,
-                    isPaused: isPaused,
-                    isDarkTextTheme: isDarkTextTheme,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (dragHandle != null) ...[
+                        dragHandle!,
+                        const SizedBox(width: 8),
+                      ],
+                      _CardMoreActionButton(
+                        senderName: senderName,
+                        balance: balance,
+                        txCount: txCount,
+                        isBalanceVisible: isBalanceVisible,
+                        isPaused: isPaused,
+                        isDarkTextTheme: isDarkTextTheme,
+                        onEnterReorderMode: onEnterReorderMode,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Standalone Glass Drag Handle Icon for list reordering
+class BankCardDragHandle extends StatelessWidget {
+  final bool isDarkTextTheme;
+
+  const BankCardDragHandle({
+    super.key,
+    required this.isDarkTextTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bgColor = isDarkTextTheme
+        ? AppColors.darkCharcoal.withValues(alpha: 0.09)
+        : Colors.white.withValues(alpha: 0.18);
+
+    final Color iconColor = isDarkTextTheme
+        ? AppColors.darkCharcoal
+        : Colors.white;
+
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bgColor,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.drag_indicator_rounded,
+        color: iconColor,
+        size: 20,
       ),
     );
   }
@@ -447,6 +628,7 @@ class _CardMoreActionButton extends StatelessWidget {
   final bool isBalanceVisible;
   final bool isPaused;
   final bool isDarkTextTheme;
+  final VoidCallback? onEnterReorderMode;
 
   const _CardMoreActionButton({
     required this.senderName,
@@ -455,6 +637,7 @@ class _CardMoreActionButton extends StatelessWidget {
     required this.isBalanceVisible,
     required this.isPaused,
     required this.isDarkTextTheme,
+    this.onEnterReorderMode,
   });
 
   @override
@@ -469,9 +652,9 @@ class _CardMoreActionButton extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
+      onTap: () async {
         HapticFeedback.lightImpact();
-        BankCardActionModal.show(
+        final result = await BankCardActionModal.show(
           context,
           senderName: senderName,
           balance: balance,
@@ -479,6 +662,9 @@ class _CardMoreActionButton extends StatelessWidget {
           isBalanceVisible: isBalanceVisible,
           isPaused: isPaused,
         );
+        if (result == 'changeOrder') {
+          onEnterReorderMode?.call();
+        }
       },
       child: Container(
         width: 32,

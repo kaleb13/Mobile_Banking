@@ -266,9 +266,12 @@ class _MainShellState extends State<MainShell> {
       // ── Build card widget ─────────────────────────────────────────
       final double balance = txVM.balanceForSender(cardName);
       final int txCount = txVM.txCountForSender(cardName);
-
       final bool cardBalanceVisible =
           settingsVM.isBalanceVisible && !settingsVM.isBankBalanceHidden(cardName);
+
+      final int homeDeckTopIndex =
+          activeCount > 0 ? (activeCount.clamp(1, 3) - 1) : -1;
+      final bool isTopCard = (i == homeDeckTopIndex);
 
       final Widget card = BankCardWidget(
         senderName: cardName,
@@ -276,6 +279,7 @@ class _MainShellState extends State<MainShell> {
         txCount: txCount,
         isBalanceVisible: cardBalanceVisible,
         isPaused: isPaused,
+        isTopCard: isTopCard,
         animationFactor: t,
       );
 

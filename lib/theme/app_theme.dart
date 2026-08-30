@@ -153,10 +153,13 @@ class AppColors {
   static const Color cardGrayLight  = Color(0xFF3E3E4A); // Wallet — gray light
 
   // ── CBE & CBE Birr Palette ────────────────────────────────────────────────
-  static const Color cbePurple         = Color(0xFF6B4C9A); // Commercial Bank of Ethiopia Purple
-  static const Color cbeBirrMagenta    = Color(0xFFE91E63); // CBE Birr Magenta
-  static const Color cardCbeBirrWhite  = Color(0xFFFFFFFF); // Pure white
-  static const Color cardCbeBirrSilver = Color(0xFFE2E8F0); // Sleek white-gray contrast
+  static const Color cbePurple            = Color(0xFF6B4C9A); // Commercial Bank of Ethiopia Purple
+  static const Color cbeBirrMagenta       = Color(0xFFE91E63); // CBE Birr Magenta
+  static const Color cardCbeBirrDark      = Color(0xFF5E1268); // Deep CBE Birr Brand Violet
+  static const Color cardCbeBirrLight     = Color(0xFF9C27B0); // Vibrant CBE Birr Magenta/Purple
+  static const Color cardCbeBirrDarkIcon  = Color(0xFF4A0E52); // CBE Birr Dark Accent
+  static const Color cardCbeBirrWhite     = Color(0xFFFFFFFF); // Pure white
+  static const Color cardCbeBirrSilver    = Color(0xFFE2E8F0); // Sleek white-gray contrast
 
   // ── Ahadu Bank Palette ───────────────────────────────────────────────────
   static const Color cardAhaduRedDark  = Color(0xFF6B031F); // Deep burgundy / dark crimson base (#6B031F)

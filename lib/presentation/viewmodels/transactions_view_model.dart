@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../models/transaction.dart';
 import '../../models/sender.dart';
@@ -281,6 +282,86 @@ class TransactionsViewModel extends ChangeNotifier {
     ];
   }
 
+  /// Reorders active bank cards and persists the new order across the app.
+  Future<void> reorderActiveSenders(int oldIndex, int newIndex) async {
+    final active = activeSenders;
+    if (oldIndex < 0 || oldIndex >= active.length) return;
+    if (newIndex < 0 || newIndex > active.length) return;
+
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final movedSender = active.removeAt(oldIndex);
+    active.insert(newIndex, movedSender);
+
+    final paused = pausedSenders;
+    _senders = [...active, ...paused];
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'custom_senders_order',
+        _senders.map((s) => s.senderName).toList(),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _applySavedSendersOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedOrder = prefs.getStringList('custom_senders_order');
+      if (savedOrder != null && savedOrder.isNotEmpty) {
+        final orderMap = <String, int>{};
+        for (int i = 0; i < savedOrder.length; i++) {
+          orderMap[savedOrder[i].trim().toUpperCase()] = i;
+        }
+        _senders.sort((a, b) {
+          final aKey = a.senderName.trim().toUpperCase();
+          final bKey = b.senderName.trim().toUpperCase();
+          final aPos = orderMap[aKey] ?? 9999;
+          final bPos = orderMap[bKey] ?? 9999;
+          if (aPos != bPos) return aPos.compareTo(bPos);
+          return _defaultBankComparator(a, b);
+        });
+      } else {
+        _senders.sort(_defaultBankComparator);
+      }
+    } catch (_) {
+      _senders.sort(_defaultBankComparator);
+    }
+  }
+
+  int _defaultBankComparator(AppSender a, AppSender b) {
+    final aName = a.senderName.trim().toUpperCase();
+    final bName = b.senderName.trim().toUpperCase();
+    if (aName == bName) return 0;
+
+    final aIsTelebirr = aName == 'TELEBIRR';
+    final bIsTelebirr = bName == 'TELEBIRR';
+    if (aIsTelebirr && !bIsTelebirr) return -1;
+    if (!aIsTelebirr && bIsTelebirr) return 1;
+
+    final aIsCbe = aName == 'CBE' || aName.contains('COMMERCIAL');
+    final bIsCbe = bName == 'CBE' || bName.contains('COMMERCIAL');
+    if (aIsCbe && !bIsCbe) return -1;
+    if (!aIsCbe && bIsCbe) return 1;
+
+    final aIsCbeBirr = aName == 'CBE BIRR' || aName == 'CBEBIRR';
+    final bIsCbeBirr = bName == 'CBE BIRR' || bName == 'CBEBIRR';
+    if (aIsCbeBirr && !bIsCbeBirr) return -1;
+    if (!aIsCbeBirr && bIsCbeBirr) return 1;
+
+    // Place based on total balance (higher balance first)
+    final balA = balanceForSender(a.senderName);
+    final balB = balanceForSender(b.senderName);
+    if (balA != balB) {
+      return balB.compareTo(balA);
+    }
+
+    return 0;
+  }
+
   /// Returns true if the top 3 active unpaused wallets are Telebirr, CBE, and CBE Birr in order.
   bool get hasClassicTopThreeDeck {
     final active = activeSenders;
@@ -557,6 +638,7 @@ class TransactionsViewModel extends ChangeNotifier {
       ]);
       _transactions = results[0] as List<AppTransaction>;
       _senders = results[1] as List<AppSender>;
+      await _applySavedSendersOrder();
       _reasons = results[2] as List<AppReason>;
       _reasonLinks = results[3] as List<AppReasonLink>;
       _pausedBanks = results[4] as Set<String>;

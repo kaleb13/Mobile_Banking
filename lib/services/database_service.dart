@@ -707,23 +707,6 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     final maps = await db.query('senders');
     final rawList = maps.map((map) => AppSender.fromMap(map)).toList();
 
-    // Top 3 default banks that always appear on every phone
-    const defaultBanks = [
-      'Telebirr',
-      'CBE',
-      'CBE Birr',
-    ];
-
-    // All standard supported banks
-    const supportedBanks = [
-      'Telebirr',
-      'CBE',
-      'CBE Birr',
-      'Ahadu Bank',
-      'BOA',
-      'Dashen Bank',
-    ];
-
     // Check which banks actually have recorded transactions in the database
     final txMaps = await db.rawQuery(
       'SELECT DISTINCT name FROM transactions WHERE name IS NOT NULL AND TRIM(name) != ""',
@@ -754,19 +737,18 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     for (final s in rawList) {
       final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
       final key = canonical.toUpperCase();
-      final isSupported = supportedBanks.any((d) => d.toUpperCase() == key);
       final isPaused = pausedCanonicalUpper.contains(key);
       final hasTxs = activeTxBankNames.contains(key);
 
-      // Keep if it is a supported bank, paused bank, OR has actual transactions recorded
-      if (isSupported || isPaused || hasTxs) {
+      // Keep only if it has actual transactions recorded OR is a paused bank
+      if (isPaused || hasTxs) {
         if (!uniqueMap.containsKey(key)) {
           uniqueMap[key] = AppSender(id: s.id, senderName: canonical);
         } else {
           if (s.id != null) toDeleteIds.add(s.id!);
         }
       } else {
-        // Unused custom bank with no transactions — clean up
+        // Bank with no transactions and not paused — clean up
         if (s.id != null) toDeleteIds.add(s.id!);
       }
     }
@@ -777,24 +759,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       } catch (_) {}
     }
 
-    // Ensure default top 3 banks exist
-    for (final bank in defaultBanks) {
-      final key = bank.toUpperCase();
-      if (!uniqueMap.containsKey(key)) {
-        try {
-          final id = await db.insert(
-            'senders',
-            {'senderName': bank},
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-          uniqueMap[key] = AppSender(id: id.toString(), senderName: bank);
-        } catch (_) {
-          uniqueMap[key] = AppSender(senderName: bank);
-        }
-      }
-    }
-
-    // Ensure banks with transactions OR paused banks exist in senders
+    // Ensure all banks with active transactions or in paused list exist in senders
     final criticalBanks = {...activeTxBankNames, ...pausedCanonicalUpper};
     for (final key in criticalBanks) {
       if (!uniqueMap.containsKey(key)) {

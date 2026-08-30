@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../models/sender.dart';
 import '../../../models/bank_account_item.dart';
 import '../../../presentation/viewmodels/settings_view_model.dart';
+import '../../../presentation/viewmodels/transactions_view_model.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/app_back_button.dart';
 import '../../../widgets/app_button.dart';
@@ -137,12 +138,26 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
 
   @override
   Widget build(BuildContext context) {
+    final txVM = context.watch<TransactionsViewModel>();
     final settingsVM = context.watch<SettingsViewModel>();
     final fmt = NumberFormat('#,##0.00');
     final senderName = widget.sender.senderName;
-    final cardColors = BankCardWidget.getCardGradient(senderName);
+
+    // Check if this bank is the top card (white version) in the active bank deck:
+    final activeSenders = txVM.activeSenders;
+    final int topDeckIndex = activeSenders.isNotEmpty
+        ? (activeSenders.length.clamp(1, 3) - 1)
+        : -1;
+    final int senderIndex = activeSenders.indexWhere(
+        (s) => s.senderName.toUpperCase() == senderName.toUpperCase());
+    final bool isTopCard =
+        (senderIndex >= 0 && senderIndex == topDeckIndex);
+
+    final cardColors =
+        BankCardWidget.getCardGradient(senderName, isTopCard: isTopCard);
     final infoData = BankInfoData.forBank(senderName);
-    final bool isDarkTextTheme = infoData.isDarkTextTheme;
+    final bool isDarkTextTheme =
+        BankCardWidget.isDarkTextTheme(senderName, isTopCard: isTopCard);
 
     final Color textColorPrimary =
         isDarkTextTheme ? AppColors.darkCharcoal : Colors.white;
@@ -217,7 +232,11 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                       height: 54,
                       child: Row(
                         children: [
-                          const AppBackButton(),
+                          AppBackButton(
+                            variant: isDarkTextTheme
+                                ? AppBackButtonVariant.light
+                                : AppBackButtonVariant.auto,
+                          ),
                           Opacity(
                             opacity:
                                 (widget.collapseRatio * 2.0).clamp(0.0, 1.0),

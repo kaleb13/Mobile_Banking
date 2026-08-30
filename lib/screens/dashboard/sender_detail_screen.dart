@@ -19,6 +19,7 @@ import '../../widgets/app_toast.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_reset_filter_button.dart';
+import '../../widgets/bank_card_widget.dart';
 import 'bank_detail/bank_detail_header.dart';
 import 'transaction_detail_screen.dart';
 import 'analysis_screen.dart';
@@ -211,11 +212,29 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         : null;
     final double telebirrSavings = txVM.telebirrSavingBalanceForAccount(activeSimSlot);
 
+    final String senderName = widget.sender.senderName;
+    final activeSenders = txVM.activeSenders;
+    final int topDeckIndex = activeSenders.isNotEmpty
+        ? (activeSenders.length.clamp(1, 3) - 1)
+        : -1;
+    final int senderIndex = activeSenders.indexWhere(
+        (s) => s.senderName.toUpperCase() == senderName.toUpperCase());
+    final bool isTopCard =
+        (senderIndex >= 0 && senderIndex == topDeckIndex);
+    final bool isDarkTextTheme =
+        BankCardWidget.isDarkTextTheme(senderName, isTopCard: isTopCard);
+
+    final Brightness iconBrightness =
+        isDarkTextTheme ? Brightness.dark : Brightness.light;
+    final Brightness iosBrightness =
+        isDarkTextTheme ? Brightness.light : Brightness.dark;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: iosBrightness,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,8 +18,63 @@ class WalletsScreen extends StatefulWidget {
   State<WalletsScreen> createState() => _WalletsScreenState();
 }
 
-class _WalletsScreenState extends State<WalletsScreen> {
+class _WalletsScreenState extends State<WalletsScreen>
+    with SingleTickerProviderStateMixin {
   bool _isPausedSectionExpanded = false;
+  bool _isReorderMode = false;
+  late AnimationController _jiggleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _jiggleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+  }
+
+  @override
+  void dispose() {
+    _jiggleController.dispose();
+    super.dispose();
+  }
+
+  void _enterReorderMode() {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isReorderMode = true;
+    });
+    _jiggleController.forward(from: 0.0);
+  }
+
+  void _exitReorderMode() {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _isReorderMode = false;
+    });
+    _jiggleController.stop();
+    _jiggleController.reset();
+  }
+
+  Widget _buildJiggleCard({required Widget child, required int index}) {
+    return AnimatedBuilder(
+      animation: _jiggleController,
+      builder: (context, _) {
+        if (_jiggleController.value == 0.0 || _jiggleController.value == 1.0) {
+          return child;
+        }
+        final double phase = (index % 2 == 0) ? 1.0 : -1.0;
+        final double rotation =
+            math.sin(_jiggleController.value * 2 * math.pi) * 0.015 * phase;
+
+        return Transform.rotate(
+          angle: rotation,
+          alignment: Alignment.center,
+          child: child,
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,109 +114,250 @@ class _WalletsScreenState extends State<WalletsScreen> {
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-              // ── Header Title & Add New Button ─────────────────────────────
+              // ── Header Title & Add New / Done Button ───────────────────────
               SliverToBoxAdapter(
                 child: SafeArea(
                   bottom: false,
                   child: AppHeader(
                     title: 'Wallet Manager',
                     showBackButton: false,
-                    trailing: AppButton.primary(
-                      text: 'Add New',
-                      icon: Icons.add,
-                      fullWidth: false,
-                      height: 28,
-                      fontSize: 11.5,
-                      iconSize: 13,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      onPressed: () {
-                        AppToast.info(
-                          context,
-                          message: 'Add New Wallet',
-                          subtitle: 'Multi-bank linking feature is coming soon!',
-                        );
-                      },
-                    ),
+                    trailing: _isReorderMode
+                        ? AppButton.primary(
+                            text: 'Done',
+                            icon: Icons.check_rounded,
+                            fullWidth: false,
+                            height: 28,
+                            fontSize: 11.5,
+                            iconSize: 14,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            onPressed: _exitReorderMode,
+                          )
+                        : AppButton.primary(
+                            text: 'Add New',
+                            icon: Icons.add,
+                            fullWidth: false,
+                            height: 28,
+                            fontSize: 11.5,
+                            iconSize: 13,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            onPressed: () {
+                              AppToast.info(
+                                context,
+                                message: 'Add New Wallet',
+                                subtitle:
+                                    'Multi-bank linking feature is coming soon!',
+                              );
+                            },
+                          ),
                   ),
                 ),
               ),
 
-              // ── Wallet Cards List ─────────────────────────────────────────
-              senders.isEmpty
-                  ? const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: AppEmptyState(
-                        icon: Icons.account_balance_wallet_outlined,
-                        title: 'No wallets connected yet',
-                        subtitle: 'Set up senders in Settings to get started',
-                      ),
-                    )
-                  : SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(0, 8, 0, 140),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final activeSenders = txVM.activeSenders;
-                            final pausedSenders = txVM.pausedSenders;
-                            final int activeCount = activeSenders.length;
-
-                            // 1. Active Bank Cards
-                            if (index < activeCount) {
-                              final sender = activeSenders[index];
-                              final double balance =
-                                  txVM.balanceForSender(sender.senderName, cashBalance: cashVM.cashBalance);
-                              final int txCount =
-                                  txVM.txCountForSender(sender.senderName, cashTxCount: cashVM.cashTransactions.length);
-                              final allAccounts = txVM.accountsForBank(sender.senderName);
-                              final activeAccounts = allAccounts
-                                  .where((slot) => !txVM.isAccountPaused(sender.senderName, slot))
-                                  .toList();
-                              final int activeAccountCount = activeAccounts.length;
-                              final bool cardBalanceVisible =
-                                  settingsVM.isBalanceVisible &&
-                                  !settingsVM.isBankBalanceHidden(sender.senderName);
-
-                              return _WalletCard(
-                                senderName: sender.senderName,
-                                balance: balance,
-                                txCount: txCount,
-                                isBalanceVisible: cardBalanceVisible,
-                                isPaused: false,
-                                accountCount: activeAccountCount,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        SenderDetailScreen(sender: sender),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            // 2. Cash Wallet (Directly below active bank cards)
-                            if (index == activeCount) {
-                              return _buildCashWalletRow(context, txVM, cashVM, settingsVM);
-                            }
-
-                            // 3. Paused Tracking Section Card (Fits screen width and contains paused cards inside)
-                            if (index == activeCount + 1 &&
-                                pausedSenders.isNotEmpty) {
-                              return _buildPausedSection(
-                                context,
-                                txVM,
-                                cashVM,
-                                pausedSenders,
-                              );
-                            }
-
-                            return const SizedBox.shrink();
-                          },
-                          childCount: txVM.activeSenders.length +
-                              1 +
-                              (txVM.pausedSenders.isNotEmpty ? 1 : 0),
+              // ── Reorder Mode Instruction Pill ────────────────────────────
+              if (_isReorderMode)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.swap_vert_rounded,
+                                size: 14, color: AppColors.textSecondary),
+                            SizedBox(width: 6),
+                            Text(
+                              'Drag cards to change order',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                  ),
+                ),
+
+              // ── Wallet Cards List ─────────────────────────────────────────
+              if (senders.isEmpty)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: AppEmptyState(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'No wallets connected yet',
+                    subtitle: 'Set up senders in Settings to get started',
+                  ),
+                )
+              else ...[
+                // 1. Bank Cards List (Draggable with Jiggle in Reorder Mode, Normal Scroll otherwise)
+                if (_isReorderMode)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                    sliver: SliverReorderableList(
+                      itemCount: txVM.activeSenders.length,
+                      onReorderStart: (index) {
+                        HapticFeedback.heavyImpact();
+                      },
+                      onReorderEnd: (index) {
+                        HapticFeedback.mediumImpact();
+                      },
+                      onReorder: (oldIndex, newIndex) {
+                        HapticFeedback.selectionClick();
+                        txVM.reorderActiveSenders(oldIndex, newIndex);
+                      },
+                      proxyDecorator: (child, index, animation) {
+                        return AnimatedBuilder(
+                          animation: animation,
+                          builder: (context, child) {
+                            final double animVal =
+                                Curves.easeOutCubic.transform(animation.value);
+                            return Material(
+                              color: Colors.transparent,
+                              elevation: 0,
+                              child: Transform.scale(
+                                scale: 1.0 + (0.04 * animVal),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        final activeSenders = txVM.activeSenders;
+                        final sender = activeSenders[index];
+                        final double balance = txVM.balanceForSender(
+                            sender.senderName,
+                            cashBalance: cashVM.cashBalance);
+                        final int txCount = txVM.txCountForSender(
+                            sender.senderName,
+                            cashTxCount: cashVM.cashTransactions.length);
+                        final allAccounts =
+                            txVM.accountsForBank(sender.senderName);
+                        final activeAccounts = allAccounts
+                            .where((slot) => !txVM.isAccountPaused(
+                                sender.senderName, slot))
+                            .toList();
+                        final int activeAccountCount = activeAccounts.length;
+                        final bool cardBalanceVisible =
+                            settingsVM.isBalanceVisible &&
+                                !settingsVM
+                                    .isBankBalanceHidden(sender.senderName);
+
+                        final bool isDark = BankCardWidget.isDarkTextTheme(
+                            sender.senderName,
+                            isTopCard: false);
+
+                        return KeyedSubtree(
+                          key: ValueKey(sender.senderName),
+                          child: _buildJiggleCard(
+                            index: index,
+                            child: _WalletCard(
+                              senderName: sender.senderName,
+                              balance: balance,
+                              txCount: txCount,
+                              isBalanceVisible: cardBalanceVisible,
+                              isPaused: false,
+                              isTopCard: false,
+                              accountCount: activeAccountCount,
+                              dragHandle: ReorderableDragStartListener(
+                                index: index,
+                                child: BankCardDragHandle(
+                                  isDarkTextTheme: isDark,
+                                ),
+                              ),
+                              onTap: null,
+                              onEnterReorderMode: _enterReorderMode,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final activeSenders = txVM.activeSenders;
+                          final sender = activeSenders[index];
+                          final int topDeckIndex = activeSenders.isNotEmpty
+                              ? (activeSenders.length.clamp(1, 3) - 1)
+                              : -1;
+                          final bool isTop = (index == topDeckIndex);
+                          final double balance = txVM.balanceForSender(
+                              sender.senderName,
+                              cashBalance: cashVM.cashBalance);
+                          final int txCount = txVM.txCountForSender(
+                              sender.senderName,
+                              cashTxCount: cashVM.cashTransactions.length);
+                          final allAccounts =
+                              txVM.accountsForBank(sender.senderName);
+                          final activeAccounts = allAccounts
+                              .where((slot) => !txVM.isAccountPaused(
+                                  sender.senderName, slot))
+                              .toList();
+                          final int activeAccountCount = activeAccounts.length;
+                          final bool cardBalanceVisible =
+                              settingsVM.isBalanceVisible &&
+                                  !settingsVM
+                                      .isBankBalanceHidden(sender.senderName);
+
+                          return _WalletCard(
+                            key: ValueKey(sender.senderName),
+                            senderName: sender.senderName,
+                            balance: balance,
+                            txCount: txCount,
+                            isBalanceVisible: cardBalanceVisible,
+                            isPaused: false,
+                            isTopCard: isTop,
+                            accountCount: activeAccountCount,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    SenderDetailScreen(sender: sender),
+                              ),
+                            ),
+                            onEnterReorderMode: _enterReorderMode,
+                          );
+                        },
+                        childCount: txVM.activeSenders.length,
+                      ),
+                    ),
+                  ),
+
+                // 2. Cash Wallet & Paused Tracking Section
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 140),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildCashWalletRow(
+                            context, txVM, cashVM, settingsVM),
+                        if (txVM.pausedSenders.isNotEmpty)
+                          _buildPausedSection(
+                            context,
+                            txVM,
+                            cashVM,
+                            txVM.pausedSenders,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -322,16 +519,23 @@ class _WalletCard extends StatelessWidget {
   final bool isBalanceVisible;
   final bool isPaused;
   final int accountCount;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final VoidCallback? onEnterReorderMode;
+  final bool isTopCard;
+  final Widget? dragHandle;
 
   const _WalletCard({
+    super.key,
     required this.senderName,
     required this.balance,
     required this.txCount,
     required this.isBalanceVisible,
     required this.isPaused,
     this.accountCount = 1,
-    required this.onTap,
+    this.onTap,
+    this.onEnterReorderMode,
+    this.isTopCard = false,
+    this.dragHandle,
   });
 
   @override
@@ -363,6 +567,9 @@ class _WalletCard extends StatelessWidget {
       isPaused: isPaused,
       accountCount: accountCount,
       onTap: onTap,
+      onEnterReorderMode: onEnterReorderMode,
+      isTopCard: isTopCard,
+      dragHandle: dragHandle,
       animationFactor: 1.0,
     );
   }
