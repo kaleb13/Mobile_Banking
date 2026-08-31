@@ -280,11 +280,11 @@ class DashenParser {
     }
 
     // ── 4. Generate Unique Transaction ID ──────────────────────────────────
-    final String txId = referenceNumber ??
-        sha256
-            .convert(utf8.encode('DashenBank|${txDate.millisecondsSinceEpoch}|$amount|$totalBalance'))
-            .toString()
-            .substring(0, 16);
+    final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final hash = sha256.convert(utf8.encode('DASHEN BANK|$normalised')).toString();
+    final String txId = (referenceNumber != null && referenceNumber.isNotEmpty)
+        ? referenceNumber
+        : 'DASHEN-${hash.substring(0, 16).toUpperCase()}';
 
     return ParsedSmsResult(
       id: txId,

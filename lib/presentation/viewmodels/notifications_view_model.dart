@@ -2,6 +2,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -172,6 +173,33 @@ class NotificationsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Opens Telegram chat directly with developer @zkaleb.
+  Future<bool> openTelegramDeveloper({String username = 'zkaleb'}) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: '@$username'));
+    } catch (_) {}
+
+    final tgAppUri = Uri.parse('tg://resolve?domain=$username');
+    try {
+      if (await canLaunchUrl(tgAppUri)) {
+        return await launchUrl(
+          tgAppUri,
+          mode: LaunchMode.externalNonBrowserApplication,
+        );
+      }
+    } catch (_) {}
+
+    final tgWebUri = Uri.parse('https://t.me/$username');
+    try {
+      return await launchUrl(
+        tgWebUri,
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+
+    return false;
+  }
+
   /// Exports unread notification messages to a JSON file and presents the native
   /// share sheet (attaching the file) and opens Telegram for @zkaleb.
   Future<String?> exportUnreadSmsAndOpenTelegram({String? bankFilter}) async {
@@ -224,6 +252,11 @@ class NotificationsViewModel extends ChangeNotifier {
 
     if (savedPath != null) {
       try {
+        // Automatically copy developer username so user can easily paste it in Telegram search
+        await Clipboard.setData(const ClipboardData(text: '@zkaleb'));
+      } catch (_) {}
+
+      try {
         // Trigger native share sheet with file attached so user can choose Telegram / @zkaleb
         await SharePlus.instance.share(
           ShareParams(
@@ -235,11 +268,8 @@ class NotificationsViewModel extends ChangeNotifier {
       } catch (_) {}
     }
 
-    // Direct Telegram link fallback
-    final Uri tgUrl = Uri.parse('https://t.me/zkaleb');
-    try {
-      await launchUrl(tgUrl, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+    // Direct Telegram link
+    await openTelegramDeveloper(username: 'zkaleb');
 
     return savedPath;
   }

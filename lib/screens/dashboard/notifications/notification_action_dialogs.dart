@@ -188,6 +188,7 @@ class SendToDeveloperSheet extends StatelessWidget {
   final String bankFilter;
   final VoidCallback onClose;
   final VoidCallback onConfirmSend;
+  final VoidCallback? onOpenDirectChat;
   final bool isExporting;
 
   const SendToDeveloperSheet({
@@ -196,6 +197,7 @@ class SendToDeveloperSheet extends StatelessWidget {
     required this.bankFilter,
     required this.onClose,
     required this.onConfirmSend,
+    this.onOpenDirectChat,
     this.isExporting = false,
   });
 
@@ -279,11 +281,19 @@ class SendToDeveloperSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           AppButton.primary(
-            text: isExporting ? 'Preparing File...' : 'Export & Send via Telegram',
+            text: isExporting ? 'Preparing File...' : 'Export & Share Report',
             icon: Icons.send_rounded,
             isLoading: isExporting,
             onPressed: isExporting ? null : onConfirmSend,
           ),
+          if (onOpenDirectChat != null) ...[
+            const SizedBox(height: 10),
+            AppButton.secondary(
+              text: 'Open @zkaleb on Telegram',
+              icon: Icons.open_in_new_rounded,
+              onPressed: onOpenDirectChat,
+            ),
+          ],
         ],
       ),
     );

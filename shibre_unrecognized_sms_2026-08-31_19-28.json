@@ -1,0 +1,94 @@
+{
+  "app": "Shibre",
+  "exportType": "unrecognized_sms",
+  "developerContact": "@zkaleb",
+  "exportedAt": "2026-08-31T19:28:32.000899",
+  "bankFilter": "All",
+  "count": 12,
+  "messages": [
+    {
+      "id": "38ea7eef67a871dedd21648b3c3d2a53e20f6f6f1576c2109c9afffa2bd95870",
+      "sender": "BOA",
+      "displaySender": "BOA",
+      "body": "Your transaction request is received and waiting for approval.For any information Please call 8397",
+      "date": "2026-05-29T09:21:21.167"
+    },
+    {
+      "id": "acc71174de67d73f365424f054ba355fea7d27d62c35d73d3107d51ec0aed75d",
+      "sender": "CBE",
+      "displaySender": "CBE",
+      "body": "Dear Natnael your Account 1********1393 has been debited for NATIONAL BANK OF ETHIOPIA with ETB 195407.5 including Service charge ETB50.00ETB50.00 and VAT(15%) ETB7.50. Your Current Balance is ETB 12221.48. Thank you for Banking with CBE!. For feedback https://shorturl.at/auUX0 https://apps.cbe.com.et:100/BranchReceipt/FT252268TLGH&12501393",
+      "date": "2025-08-14T15:52:10.169"
+    },
+    {
+      "id": "22790eed1e9f7a5bc03c809abce9d3d4c20b7e75771874328c2fb4241335a1fd",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear NATNAEL\nSorry, you're not eligible for this package\nThank you for using telebirr Ethio telecom",
+      "date": "2025-06-18T19:24:14.781"
+    },
+    {
+      "id": "4926f3d6fe6d1ff23433bcdf48603a5ab6d3d10e23712f185a2ffdbaae6e446c",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear NATNAEL, \nCongratulations, you have won ETB 100.00  as the Eid al-Fitr gift!\nThank you for using telebirr. \nEthio telecom",
+      "date": "2025-03-29T18:41:59.080"
+    },
+    {
+      "id": "24f798869fd432e66ad6454c5663bc4254e33a4fb6d48a9d21075e97ccb6d048",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear NATNAEL\nYou`ve gotten all letters. Login to telebirr SuperApp to redeem your pocket money.\nThank you for using telebirr\nEthio telecom",
+      "date": "2025-03-29T18:41:42.503"
+    },
+    {
+      "id": "0ce715f607d1410b1905190800b35f95023a0bf4a6d5f1cd6aac6627c0fad1ea",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Sorry, Your telebirr account is not working and the service you requested could not be performed. For additional information please call 127. Thank you Ethiotelecom",
+      "date": "2024-07-26T04:30:35.364"
+    },
+    {
+      "id": "fc4dfa71ac776961f1a54e69c58f2aa46869f236ca0c923c50fb5085920a0dd4",
+      "sender": "CBEBirr",
+      "displaySender": "CBEBirr",
+      "body": "<#>CBEBirrApp: Your code is 921486 Yf9mxp4+Cps",
+      "date": "2024-07-25T14:48:45.413"
+    },
+    {
+      "id": "49ccad8ba4322fe2c34ba61480aa0464f182a58e997488bb8b6acfc09fd6d2ea",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Failed. The amount of each transaction should be less than 10000. Please try a smaller amount.",
+      "date": "2024-06-17T08:03:36.190"
+    },
+    {
+      "id": "d45fcd7122fc5bfe5c230546fc451b5ab9f750c6f7786ee12482262760200bab",
+      "sender": "CBEBirr",
+      "displaySender": "CBEBirr",
+      "body": "860421 is your CBEBirr App Verification Number.Thank You!",
+      "date": "2024-05-07T11:00:12.890"
+    },
+    {
+      "id": "dc3dd9eb2c005b53096d626e27ce81cacf3564e7ee13314a980692d07d09d458",
+      "sender": "CBEBirr",
+      "displaySender": "CBEBirr",
+      "body": "068412 is your CBEBirr App Verification Number.Thank You!",
+      "date": "2024-05-07T11:00:02.109"
+    },
+    {
+      "id": "98076e438e287080ac71abe99d0aec3ae9e86449b569ceba55fdc479e17fc144",
+      "sender": "CBE-Birr",
+      "displaySender": "CBE-Birr",
+      "body": "364820 is your CBEBirr App Verification Number.Thank You!",
+      "date": "2023-07-06T11:19:26.550"
+    },
+    {
+      "id": "62a23b7042490b6c39d5d04b0679d76431becfe51c670e928ce0a20bae2065d1",
+      "sender": "127",
+      "displaySender": "Telebirr",
+      "body": "Dear ABEBE\nYour transaction is successfully completed using endekise. You have used ETB 50.00 credit amount on this transaction. \nThe service fee is ETB 3.00. Your outstanding amount is ETB 53.00 with due date of 2023-06-05 00:00:00. Your Contract number is 1736756.   \nThank you for using telebirr\t\nEthio telecom in partnership with Dashen Bank",
+      "date": "2023-05-06T11:34:48.896"
+    }
+  ]
+}

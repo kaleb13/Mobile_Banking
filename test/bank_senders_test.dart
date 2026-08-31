@@ -69,6 +69,10 @@ Ethio telecom
     test('filters auth and verification codes', () {
       expect(BankSenders.isSecurityOrAuthMessage('Your auth code is 789012'), isTrue);
       expect(BankSenders.isSecurityOrAuthMessage('Verification code 4567 for login'), isTrue);
+      expect(BankSenders.isSecurityOrAuthMessage('<#>CBEBirrApp: Your code is 921486 Yf9mxp4+Cps'), isTrue);
+      expect(BankSenders.isSecurityOrAuthMessage('860421 is your CBEBirr App Verification Number.Thank You!'), isTrue);
+      expect(BankSenders.isSecurityOrAuthMessage('068412 is your CBEBirr App Verification Number.Thank You!'), isTrue);
+      expect(BankSenders.isSecurityOrAuthMessage('364820 is your CBEBirr App Verification Number.Thank You!'), isTrue);
     });
 
     test('allows legitimate banking transactions through security filter', () {

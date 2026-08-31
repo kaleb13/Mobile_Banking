@@ -159,7 +159,7 @@ void main() {
       print('   Throughput: ${(25000 / (stopwatch.elapsedMilliseconds / 1000)).toStringAsFixed(0)} SMS/sec');
       print('   Parsed Transactions: ${result.transactions.length}');
       print('----------------------------------------------------');
-    });
+    }, timeout: const Timeout(Duration(minutes: 2)));
 
     test('Benchmark: 50,000 SMS Isolate Parsing & Extraction', () async {
       final dataset = generateSyntheticSmsDataset(50000);
@@ -182,7 +182,7 @@ void main() {
       print('   Throughput: ${(50000 / (stopwatch.elapsedMilliseconds / 1000)).toStringAsFixed(0)} SMS/sec');
       print('   Parsed Transactions: ${result.transactions.length}');
       print('----------------------------------------------------');
-    });
+    }, timeout: const Timeout(Duration(minutes: 2)));
 
     test('Benchmark: Deduplication Idempotency on 10,000 SMS Scan', () async {
       final dataset = generateSyntheticSmsDataset(5000);
@@ -233,6 +233,6 @@ void main() {
       print('   Time to filter & sort: ${stopwatch.elapsedMilliseconds} ms');
       print('   Results in 30-day window: ${filtered30Days.length}');
       print('----------------------------------------------------');
-    });
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }

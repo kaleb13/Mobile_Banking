@@ -76,6 +76,17 @@ class SettingsViewModel extends ChangeNotifier {
   bool _isBalanceVisible = false;
   bool get isBalanceVisible => _isBalanceVisible;
 
+  int _lastCelebratedLevel = 1;
+  int get lastCelebratedLevel => _lastCelebratedLevel;
+
+  Future<void> setLastCelebratedLevel(int level) async {
+    if (_lastCelebratedLevel != level) {
+      _lastCelebratedLevel = level;
+      notifyListeners();
+      await _repository.setLastCelebratedLevel(level);
+    }
+  }
+
   Set<String> _hiddenBalanceBanks = {};
   Set<String> get hiddenBalanceBanks => Set.unmodifiable(_hiddenBalanceBanks);
 
@@ -175,6 +186,7 @@ class SettingsViewModel extends ChangeNotifier {
     _isBalanceVisible = await _repository.getIsBalanceVisible();
     _hiddenBalanceBanks = await _repository.getHiddenBalanceBanks();
     _scanWindowOption = await _repository.getScanWindow();
+    _lastCelebratedLevel = await _repository.getLastCelebratedLevel();
     _isInitialized = true;
     notifyListeners();
 

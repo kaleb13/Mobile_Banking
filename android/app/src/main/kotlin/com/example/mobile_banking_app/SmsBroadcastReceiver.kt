@@ -161,6 +161,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             }
 
             if (lower.contains("auth code")) return true
+            if (lower.contains("verification number")) return true
+            if (lower.contains("cbebirrapp")) return true
+            if (lower.contains("your code is") && Regex("\\d{4,8}").containsMatchIn(lower)) return true
             if (lower.contains("verification code") &&
                 Regex("\\d{4,8}").containsMatchIn(lower)) return true
             if ((lower.contains("access code") || lower.contains("security code")) &&
@@ -193,7 +196,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 lower.contains("credit request with") ||
                 lower.contains("credit limit") ||
                 lower.contains("credit service") ||
-                lower.contains("endekise service") ||
+                lower.contains("endekise") ||
+                lower.contains("credit amount") ||
+                lower.contains("outstanding amount") ||
+                lower.contains("contract number") ||
                 lower.contains("ethiotel credit") ||
                 lower.contains("telebirr mela") ||
                 lower.contains("rmelaservice") ||
@@ -230,7 +236,14 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 lower.contains("yegena chewata") ||
                 lower.contains("adey flowers") ||
                 lower.contains("enkutatesh gift") ||
-                lower.contains("enkutatash gift")) {
+                lower.contains("enkutatash gift") ||
+                lower.contains("not eligible for this package") ||
+                lower.contains("not eligible for") ||
+                lower.contains("eid al-fitr gift") ||
+                lower.contains("congratulations, you have won") ||
+                lower.contains("you have won etb") ||
+                lower.contains("gotten all letters") ||
+                lower.contains("redeem your pocket money")) {
                 return true
             }
 
@@ -253,7 +266,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             // Payment Requests
             if (lower.contains("payment request of") ||
                 lower.contains("is requesting money on") ||
-                lower.contains("please review and approve or reject")) {
+                lower.contains("please review and approve or reject") ||
+                lower.contains("waiting for approval") ||
+                lower.contains("request is received and waiting")) {
                 return true
             }
 
@@ -271,6 +286,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 lower.contains("account you try to transfer is not active") ||
                 lower.contains("account you try to pay is not active") ||
                 lower.contains("failed to authenticate the transaction") ||
+                lower.contains("account is not working") ||
+                lower.contains("service you requested could not be performed") ||
+                lower.contains("amount of each transaction should be less than") ||
+                lower.contains("please try a smaller amount") ||
                 lower.contains("limit rule")) {
                 return true
             }
@@ -312,6 +331,24 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             val digest = MessageDigest.getInstance("SHA-256")
             val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
             return hashBytes.joinToString("") { "%02x".format(it) }
+        }
+
+        fun computeFallbackId(bankName: String, body: String): String {
+            val normalised = body.replace(Regex("\\s+"), " ").trim()
+            val input = "${bankName.uppercase()}|$normalised"
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
+            val hash = hashBytes.joinToString("") { "%02x".format(it) }.take(16).uppercase()
+            val prefix = when (bankName.uppercase()) {
+                "TELEBIRR" -> "TB"
+                "CBE" -> "CBE"
+                "BOA" -> "BOA"
+                "AHADU BANK" -> "AHADU"
+                "DASHEN BANK" -> "DASHEN"
+                "CBE BIRR" -> "CBEBIRR"
+                else -> bankName.uppercase()
+            }
+            return "$prefix-$hash"
         }
 
         private fun formatEtb(amount: Double): String {
@@ -647,10 +684,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             ?: byMatch?.groupValues?.get(1)?.trim()
                             ?: "CBE Deposit"
 
-                        var refMatch = Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
-                        if (refMatch == null) {
-                            refMatch = Regex("(?i)(FT[0-9A-Z]+)").find(singleLine)
-                        }
+                        var refMatch = Regex("(?i)id=([A-Za-z0-9]+)").find(singleLine)
+                            ?: Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
+                            ?: Regex("(?i)(FT[0-9A-Z]+)").find(singleLine)
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 
                         return NativeParsedSms(
@@ -700,10 +736,17 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                     }
 
                     if (lower.contains("debited") || lower.contains("withdrawn")) {
-                        val amount = parseAmount(Regex("(?i)debited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        val forMatch = Regex("(?i)debited\\s+for\\s+(.*?)\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)").find(singleLine)
+                        val amount = if (forMatch != null) {
+                            forMatch.groupValues[2].replace(",", "").toDoubleOrNull() ?: 0.0
+                        } else {
+                            parseAmount(Regex("(?i)debited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
                         if (amount <= 0) return null
                         val toMatch = Regex("(?i)to\\s+(.*?)(?:,\\s*on|\\s+on\\s+\\d{2}/\\d{2})").find(singleLine)
-                        val recipient = toMatch?.groupValues?.get(1)?.trim() ?: "CBE Withdrawal"
+                        val recipient = forMatch?.groupValues?.get(1)?.trim()
+                            ?: toMatch?.groupValues?.get(1)?.trim()
+                            ?: "CBE Withdrawal"
                         val refMatch = Regex("(?i)id=([A-Za-z0-9]+)").find(singleLine)
                             ?: Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
                             ?: Regex("(FT[0-9A-Z]+)").find(singleLine)
@@ -1192,7 +1235,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             val dateIso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US)
                 .format(java.util.Date(timestampMs))
 
-            val rawId = parsed.txReference ?: txId
+            val rawId = if (!parsed.txReference.isNullOrBlank()) {
+                parsed.txReference
+            } else {
+                computeFallbackId(parsed.bankName, body)
+            }
             val txType = if (parsed.isDebit) "expense" else "income"
             val idToUse = if (rawId.contains("_slot")) rawId else "${rawId}_slot${simSlot}_$txType"
 

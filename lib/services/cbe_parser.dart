@@ -103,33 +103,49 @@ class CbeParser {
       senderOrRecipient =
           'ATM or Other'; // Default recipient for debited/withdrawal
 
-      // 'has been debited with ETB5.00' OR 'has been debited with ETB 5.00'
-      final startStr = 'has been debited with ETB';
-      final startIdx = message.toLowerCase().indexOf(startStr.toLowerCase());
-      if (startIdx != -1) {
-        final valStart = startIdx + startStr.length;
-        // Skip optional whitespace between ETB and number
-        int numStart = valStart;
-        while (numStart < message.length && message[numStart] == ' ') {
-          numStart++;
+      // Pattern 1: 'debited for NATIONAL BANK OF ETHIOPIA with ETB 195407.5'
+      final debitedForMatch = RegExp(
+              r'debited\s+for\s+(.*?)\s+with\s+ETB\s*([0-9,.]+)',
+              caseSensitive: false)
+          .firstMatch(message);
+      if (debitedForMatch != null) {
+        senderOrRecipient = debitedForMatch.group(1)?.trim() ?? 'ATM or Other';
+        String amtStr = debitedForMatch.group(2)?.replaceAll(',', '') ?? '0';
+        if (amtStr.endsWith('.')) {
+          amtStr = amtStr.substring(0, amtStr.length - 1);
         }
-        // End markers: ' including', '.Including', '.', ' '
-        int valEnd = -1;
-        for (final marker in [' .', '.Including', ' including', ' Including']) {
-          final idx = message.indexOf(marker, numStart);
-          if (idx != -1 && (valEnd == -1 || idx < valEnd)) {
-            valEnd = idx;
+        amount = double.tryParse(amtStr) ?? 0.0;
+      }
+
+      if (amount <= 0) {
+        // 'has been debited with ETB5.00' OR 'has been debited with ETB 5.00'
+        final startStr = 'has been debited with ETB';
+        final startIdx = message.toLowerCase().indexOf(startStr.toLowerCase());
+        if (startIdx != -1) {
+          final valStart = startIdx + startStr.length;
+          // Skip optional whitespace between ETB and number
+          int numStart = valStart;
+          while (numStart < message.length && message[numStart] == ' ') {
+            numStart++;
           }
-        }
-        if (valEnd == -1) valEnd = message.indexOf(' ', numStart);
-        if (valEnd != -1) {
-          String amtStr =
-              message.substring(numStart, valEnd).replaceAll(',', '').trim();
-          // Remove trailing period if it exists (e.g. "50.00.")
-          if (amtStr.endsWith('.')) {
-            amtStr = amtStr.substring(0, amtStr.length - 1);
+          // End markers: ' including', '.Including', '.', ' '
+          int valEnd = -1;
+          for (final marker in [' .', '.Including', ' including', ' Including']) {
+            final idx = message.indexOf(marker, numStart);
+            if (idx != -1 && (valEnd == -1 || idx < valEnd)) {
+              valEnd = idx;
+            }
           }
-          amount = double.tryParse(amtStr) ?? 0.0;
+          if (valEnd == -1) valEnd = message.indexOf(' ', numStart);
+          if (valEnd != -1) {
+            String amtStr =
+                message.substring(numStart, valEnd).replaceAll(',', '').trim();
+            // Remove trailing period if it exists (e.g. "50.00.")
+            if (amtStr.endsWith('.')) {
+              amtStr = amtStr.substring(0, amtStr.length - 1);
+            }
+            amount = double.tryParse(amtStr) ?? 0.0;
+          }
         }
       }
       // Regex fallback: ETB with optional whitespace before amount
@@ -179,10 +195,10 @@ class CbeParser {
     // hashing it.  This produces the SAME key regardless of whether the
     // SMS was read via the native BroadcastReceiver or flutter_sms_inbox,
     // preventing duplicate transactions.
-    if (id == null) {
+    if (id == null || id.isEmpty) {
       final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
-      final hash = sha256.convert(utf8.encode(normalised)).toString();
-      id = 'CBE-${hash.substring(0, 16)}';
+      final hash = sha256.convert(utf8.encode('CBE|$normalised')).toString();
+      id = 'CBE-${hash.substring(0, 16).toUpperCase()}';
     }
 
     // Extract Balance

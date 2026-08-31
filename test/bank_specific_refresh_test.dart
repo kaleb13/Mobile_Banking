@@ -97,6 +97,14 @@ class FakeSettingsRepo implements SettingsRepository {
   }
   @override
   Future<DateTime?> getEffectiveScanWindowAnchorDate() async => scanWindowStartDate ?? scanWindow.anchorDate;
+
+  int lastCelebratedLevel = 1;
+  @override
+  Future<int> getLastCelebratedLevel() async => lastCelebratedLevel;
+  @override
+  Future<void> setLastCelebratedLevel(int level) async {
+    lastCelebratedLevel = level;
+  }
 }
 
 class FakeTxRepo implements TransactionRepository {

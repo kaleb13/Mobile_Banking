@@ -11,34 +11,22 @@ import '../../widgets/app_toast.dart';
 class InternalTransferPickerSheet extends StatelessWidget {
   final AppTransaction sourceTransaction;
   final TransactionsViewModel? txVM;
+  final int daysRange;
 
   const InternalTransferPickerSheet({
     super.key,
     required this.sourceTransaction,
     this.txVM,
+    this.daysRange = 7,
   });
 
   @override
   Widget build(BuildContext context) {
     final effectiveVM = txVM ?? Provider.of<TransactionsViewModel>(context);
-    // Determine the opposite type
-    final targetType =
-        sourceTransaction.type == 'income' ? 'expense' : 'income';
-
-    // Find candidates within 3 days and unlinked
-    final cutoffDate = sourceTransaction.date.subtract(const Duration(days: 3));
-    final futureDate = sourceTransaction.date.add(const Duration(days: 3));
-
-    final candidates = effectiveVM.transactions.where((tx) {
-      if (tx.id == sourceTransaction.id) return false;
-      if (tx.type != targetType) return false;
-      if (tx.linkedTransactionId != null) return false;
-      if (tx.amount != sourceTransaction.amount) return false;
-      if (tx.date.isBefore(cutoffDate) || tx.date.isAfter(futureDate)) {
-        return false;
-      }
-      return true;
-    }).toList();
+    final candidates = effectiveVM.getInternalTransferCandidates(
+      sourceTransaction,
+      daysRange: daysRange,
+    );
 
     return AppDrawer(
       heightFactor: 0.85,
@@ -47,10 +35,10 @@ class InternalTransferPickerSheet extends StatelessWidget {
         title: 'Link Transfer',
       ),
       child: candidates.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
-                'No matching transactions found within 3 days.',
-                style: TextStyle(color: AppColors.textSoft, fontSize: 13),
+                'No matching transactions found within $daysRange days.',
+                style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
               ),
             )
           : ListView.builder(

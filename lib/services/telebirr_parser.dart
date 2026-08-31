@@ -273,10 +273,10 @@ class TelebirrParser {
         caseSensitive: false);
     final idMatch = idRegex.firstMatch(singleLineMsg);
     String? id = idMatch?.group(1)?.trim();
-    if (id == null) {
+    if (id == null || id.isEmpty) {
       final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
-      final hash = sha256.convert(utf8.encode(normalised)).toString();
-      id = 'TB-${hash.substring(0, 16)}';
+      final hash = sha256.convert(utf8.encode('TELEBIRR|$normalised')).toString();
+      id = 'TB-${hash.substring(0, 16).toUpperCase()}';
     }
 
     // 4. Extract Post Balance (Telebirr Checking / E-Money account balance)

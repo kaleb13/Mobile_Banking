@@ -27,6 +27,7 @@ class DatabaseService {
     await _ensureSendersTableSchema(_database!);
     await _createIndexes(_database!);
     await _seedHierarchicalCategories(_database!);
+    await deduplicateTransactions();
     return _database!;
   }
 
@@ -904,6 +905,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     if (insertedCount > 0) {
       await checkpointWal();
       await reconcilePendingNotificationReasons();
+      await deduplicateTransactions();
     }
 
     return insertedCount;
@@ -1214,6 +1216,149 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       }
     }
     return updatedCount;
+  }
+
+  /// Safely detects and merges duplicate transaction records in SQLite.
+  /// Deduplicates:
+  /// 1. Same bankReference on same bank & slot & type (e.g. 'FT123' vs 'boa_ref_FT123' vs 'ahadu_ref_...')
+  /// 2. Same rawMessage on same bank & slot & type & amount
+  /// Preserves any user-entered notes, bookmarks, custom reasons, or links.
+  Future<int> deduplicateTransactions() async {
+    final db = await instance.database;
+    int duplicatesRemoved = 0;
+
+    try {
+      await db.transaction((txn) async {
+        // 1. Deduplicate by bankReference
+        final refDups = await txn.rawQuery('''
+          SELECT name, bankReference, simSlot, type, COUNT(*) as cnt
+          FROM transactions
+          WHERE bankReference IS NOT NULL AND TRIM(bankReference) != ''
+          GROUP BY name, bankReference, simSlot, type
+          HAVING cnt > 1
+        ''');
+
+        for (final group in refDups) {
+          final bank = group['name'] as String;
+          final ref = group['bankReference'] as String;
+          final slot = group['simSlot'] as int;
+          final type = group['type'] as String;
+
+          final rows = await txn.query(
+            'transactions',
+            where: 'name = ? AND bankReference = ? AND simSlot = ? AND type = ?',
+            whereArgs: [bank, ref, slot, type],
+            orderBy: 'rowid ASC',
+          );
+
+          if (rows.length > 1) {
+            // Pick canonical keeper (prefer row without legacy prefixes like boa_ref_ or ahadu_ref_)
+            var keeper = rows.first;
+            for (final r in rows) {
+              final id = (r['id'] as String? ?? '');
+              final keeperId = (keeper['id'] as String? ?? '');
+              if (keeperId.startsWith('boa_ref_') || keeperId.startsWith('ahadu_ref_')) {
+                if (!id.startsWith('boa_ref_') && !id.startsWith('ahadu_ref_')) {
+                  keeper = r;
+                }
+              }
+            }
+
+            // Merge user-space data
+            String? mergedNote;
+            String? mergedCustomReason;
+            int? mergedReasonId;
+            String? mergedReason;
+            int? mergedCategoryId;
+            int? mergedSubcategoryId;
+            int mergedBookmarked = 0;
+            String? mergedLinkedTxId;
+
+            for (final r in rows) {
+              final note = r['note'] as String?;
+              if (note != null && note.isNotEmpty) mergedNote = note;
+              final cr = r['customReasonText'] as String?;
+              if (cr != null && cr.isNotEmpty) mergedCustomReason = cr;
+              final rId = r['reasonId'] as int?;
+              if (rId != null) mergedReasonId = rId;
+              final rName = r['reason'] as String?;
+              if (rName != null && rName.isNotEmpty) mergedReason = rName;
+              final cId = r['categoryId'] as int?;
+              if (cId != null) mergedCategoryId = cId;
+              final sId = r['subcategoryId'] as int?;
+              if (sId != null) mergedSubcategoryId = sId;
+              final bm = (r['isBookmarked'] as int?) ?? 0;
+              if (bm == 1) mergedBookmarked = 1;
+              final lId = r['linkedTransactionId'] as String?;
+              if (lId != null && lId.isNotEmpty) mergedLinkedTxId = lId;
+            }
+
+            final keeperId = keeper['id'] as String;
+
+            await txn.update(
+              'transactions',
+              {
+                if (mergedNote != null) 'note': mergedNote,
+                if (mergedCustomReason != null) 'customReasonText': mergedCustomReason,
+                if (mergedReasonId != null) 'reasonId': mergedReasonId,
+                if (mergedReason != null) 'reason': mergedReason,
+                if (mergedCategoryId != null) 'categoryId': mergedCategoryId,
+                if (mergedSubcategoryId != null) 'subcategoryId': mergedSubcategoryId,
+                'isBookmarked': mergedBookmarked,
+                if (mergedLinkedTxId != null) 'linkedTransactionId': mergedLinkedTxId,
+              },
+              where: 'id = ?',
+              whereArgs: [keeperId],
+            );
+
+            for (final r in rows) {
+              final rId = r['id'] as String;
+              if (rId != keeperId) {
+                await txn.delete('transactions', where: 'id = ?', whereArgs: [rId]);
+                duplicatesRemoved++;
+              }
+            }
+          }
+        }
+
+        // 2. Deduplicate by exact rawMessage + name + simSlot + type + amount
+        final msgDups = await txn.rawQuery('''
+          SELECT name, rawMessage, simSlot, type, amount, COUNT(*) as cnt
+          FROM transactions
+          WHERE rawMessage IS NOT NULL AND TRIM(rawMessage) != ''
+          GROUP BY name, rawMessage, simSlot, type, amount
+          HAVING cnt > 1
+        ''');
+
+        for (final group in msgDups) {
+          final bank = group['name'] as String;
+          final msg = group['rawMessage'] as String;
+          final slot = group['simSlot'] as int;
+          final type = group['type'] as String;
+          final amount = group['amount'] as num;
+
+          final rows = await txn.query(
+            'transactions',
+            where: 'name = ? AND rawMessage = ? AND simSlot = ? AND type = ? AND amount = ?',
+            whereArgs: [bank, msg, slot, type, amount],
+            orderBy: 'rowid ASC',
+          );
+
+          if (rows.length > 1) {
+            final keeper = rows.first;
+            final keeperId = keeper['id'] as String;
+
+            for (int i = 1; i < rows.length; i++) {
+              final rId = rows[i]['id'] as String;
+              await txn.delete('transactions', where: 'id = ?', whereArgs: [rId]);
+              duplicatesRemoved++;
+            }
+          }
+        }
+      });
+    } catch (_) {}
+
+    return duplicatesRemoved;
   }
 
   Future<DateTime?> getLastTransactionDate() async {

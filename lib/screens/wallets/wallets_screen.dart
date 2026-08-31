@@ -563,7 +563,7 @@ class _WalletCard extends StatelessWidget {
         if (isTransitioning) {
           return Container(
             margin: const EdgeInsets.only(bottom: 14),
-            height: isNoTx ? 220 : 172,
+            height: isNoTx ? 246 : 172,
             decoration: BoxDecoration(
               color: Colors.transparent,
               borderRadius: AppRadius.cardRadius,
@@ -571,49 +571,58 @@ class _WalletCard extends StatelessWidget {
           );
         }
 
-        // Fully expanded real card widget
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            BankCardWidget(
-              senderName: senderName,
-              balance: balance,
-              txCount: txCount,
-              isBalanceVisible: isBalanceVisible,
-              isPaused: isPaused,
-              accountCount: accountCount,
-              onTap: onTap,
-              onEnterReorderMode: onEnterReorderMode,
-              isTopCard: isTopCard,
-              dragHandle: dragHandle,
-              animationFactor: 1.0,
-            ),
-            if (isNoTx)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(6, 0, 6, 14),
+        if (!isNoTx) {
+          return BankCardWidget(
+            senderName: senderName,
+            balance: balance,
+            txCount: txCount,
+            isBalanceVisible: isBalanceVisible,
+            isPaused: isPaused,
+            accountCount: accountCount,
+            onTap: onTap,
+            onEnterReorderMode: onEnterReorderMode,
+            isTopCard: isTopCard,
+            dragHandle: dragHandle,
+            animationFactor: 1.0,
+          );
+        }
+
+        // Card with slided-out backplate effect for empty state info (peeking from bottom)
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Bottom backplate peeking out from behind the card (full width, flat top with NO roundness, rounded bottom)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
                 child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.fromLTRB(16, 44, 16, 20),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: AppRadius.cardRadius,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.zero,
+                      bottom: Radius.circular(AppRadius.card),
+                    ),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const Icon(
                         Icons.info_outline_rounded,
                         size: 15,
                         color: AppColors.textSoft,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Scanning from ${settingsVM.scanWindowOption.title}. No transactions found starting from this date. New transactions will appear automatically.',
                           style: const TextStyle(
                             color: AppColors.textSoft,
-                            fontSize: 11,
-                            height: 1.35,
+                            fontSize: 11.5,
+                            height: 1.4,
                           ),
                         ),
                       ),
@@ -621,7 +630,25 @@ class _WalletCard extends StatelessWidget {
                   ),
                 ),
               ),
-          ],
+              // Foreground Card sitting in front with increased bottom gap to text
+              Padding(
+                padding: const EdgeInsets.only(bottom: 74),
+                child: BankCardWidget(
+                  senderName: senderName,
+                  balance: balance,
+                  txCount: txCount,
+                  isBalanceVisible: isBalanceVisible,
+                  isPaused: isPaused,
+                  accountCount: accountCount,
+                  onTap: onTap,
+                  onEnterReorderMode: onEnterReorderMode,
+                  isTopCard: isTopCard,
+                  dragHandle: dragHandle,
+                  animationFactor: 1.0,
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

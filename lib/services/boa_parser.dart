@@ -186,12 +186,12 @@ class BoaParser {
     if (amount <= 0) return null;
 
     final String id;
-    if (refId != null) {
-      id = 'boa_ref_$refId';
+    if (refId != null && refId.isNotEmpty) {
+      id = refId;
     } else {
       final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
-      final hash = sha256.convert(utf8.encode(normalised)).toString();
-      id = 'BOA-${hash.substring(0, 16)}';
+      final hash = sha256.convert(utf8.encode('BOA|$normalised')).toString();
+      id = 'BOA-${hash.substring(0, 16).toUpperCase()}';
     }
 
     return ParsedSmsResult(

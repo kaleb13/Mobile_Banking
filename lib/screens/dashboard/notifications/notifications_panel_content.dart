@@ -225,6 +225,16 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
                     bankFilter: _selectedBankFilter,
                     isExporting: _isExporting,
                     onClose: () => setState(() => _isShowingSendModal = false),
+                    onOpenDirectChat: () async {
+                      await notifsVM.openTelegramDeveloper(username: 'zkaleb');
+                      if (context.mounted) {
+                        AppToast.info(
+                          context,
+                          message: 'Opening Telegram',
+                          subtitle: 'Copied @zkaleb to clipboard',
+                        );
+                      }
+                    },
                     onConfirmSend: () async {
                       setState(() => _isExporting = true);
                       final savedPath =
@@ -242,7 +252,7 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
                         AppToast.success(
                           context,
                           message: 'Report Ready',
-                          subtitle: 'Sharing file with developer (@zkaleb)...',
+                          subtitle: 'Copied @zkaleb • Select Telegram to send',
                         );
                       }
                     },

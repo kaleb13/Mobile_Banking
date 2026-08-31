@@ -57,6 +57,11 @@ class BankSenders {
     final s = sender.trim();
     if (s.isEmpty) return null;
 
+    // Reject compound bank:slot keys (internal pause identifiers, not sender IDs)
+    if (s.contains(':')) {
+      return null;
+    }
+
     // Reject ordinary phone-number senders outright (a person, not a bank).
     if (_phoneNumber.hasMatch(s) && s != TelebirrParser.senderNumber) {
       return null;
@@ -181,6 +186,9 @@ class BankSenders {
 
     // ── Auth codes — only when paired with OTP/auth context ──────────────────
     if (lower.contains('auth code')) return true;
+    if (lower.contains('verification number')) return true;
+    if (lower.contains('cbebirrapp')) return true;
+    if (lower.contains('your code is') && RegExp(r'\d{4,8}').hasMatch(lower)) return true;
     // "verification code" only when it looks like a code delivery (has digits nearby)
     if (lower.contains('verification code') &&
         RegExp(r'\d{4,8}').hasMatch(lower)) {
@@ -229,7 +237,10 @@ class BankSenders {
         lower.contains('credit request with') ||
         lower.contains('credit limit') ||
         lower.contains('credit service') ||
-        lower.contains('endekise service') ||
+        lower.contains('endekise') ||
+        lower.contains('credit amount') ||
+        lower.contains('outstanding amount') ||
+        lower.contains('contract number') ||
         lower.contains('ethiotel credit') ||
         lower.contains('telebirr mela') ||
         lower.contains('rmelaservice') ||
@@ -268,7 +279,14 @@ class BankSenders {
         lower.contains('yegena chewata') ||
         lower.contains('adey flowers') ||
         lower.contains('enkutatesh gift') ||
-        lower.contains('enkutatash gift')) {
+        lower.contains('enkutatash gift') ||
+        lower.contains('not eligible for this package') ||
+        lower.contains('not eligible for') ||
+        lower.contains('eid al-fitr gift') ||
+        lower.contains('congratulations, you have won') ||
+        lower.contains('you have won etb') ||
+        lower.contains('gotten all letters') ||
+        lower.contains('redeem your pocket money')) {
       return true;
     }
 
@@ -288,10 +306,12 @@ class BankSenders {
       return true;
     }
 
-    // 6. Payment Requests (Pending / Prompt to review)
+    // 6. Payment Requests (Pending / Prompt to review / Approvals)
     if (lower.contains('payment request of') ||
         lower.contains('is requesting money on') ||
-        lower.contains('please review and approve or reject')) {
+        lower.contains('please review and approve or reject') ||
+        lower.contains('waiting for approval') ||
+        lower.contains('request is received and waiting')) {
       return true;
     }
 
@@ -309,6 +329,10 @@ class BankSenders {
         lower.contains('account you try to transfer is not active') ||
         lower.contains('account you try to pay is not active') ||
         lower.contains('failed to authenticate the transaction') ||
+        lower.contains('account is not working') ||
+        lower.contains('service you requested could not be performed') ||
+        lower.contains('amount of each transaction should be less than') ||
+        lower.contains('please try a smaller amount') ||
         lower.contains('limit rule')) {
       return true;
     }

@@ -506,6 +506,16 @@ class FakeSettingsRepository implements SettingsRepository {
   Future<void> setHiddenBalanceBanks(Set<String> banks) async {
     hiddenBanks = banks;
   }
+
+  int lastCelebratedLevel = 1;
+
+  @override
+  Future<int> getLastCelebratedLevel() async => lastCelebratedLevel;
+
+  @override
+  Future<void> setLastCelebratedLevel(int level) async {
+    lastCelebratedLevel = level;
+  }
 }
 
 

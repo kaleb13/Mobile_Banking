@@ -181,8 +181,9 @@ class CbeBirrParser {
       id = idMatch.group(1);
     } else {
       // Fallback deterministic ID if explicit Txn ID keyword is absent
-      final bytes = utf8.encode('$senderOrRecipient-$amount-$fallbackDate-$message');
-      id = sha256.convert(bytes).toString().substring(0, 16).toUpperCase();
+      final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final hash = sha256.convert(utf8.encode('CBE BIRR|$normalised')).toString();
+      id = 'CBEBIRR-${hash.substring(0, 16).toUpperCase()}';
     }
 
     // 4. Extract Total Balance

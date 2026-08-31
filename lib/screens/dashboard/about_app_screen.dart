@@ -148,7 +148,6 @@ class AboutAppScreen extends StatelessWidget {
     );
   }
 
-
   Widget _buildAboutContent() {
     return Container(
       width: double.infinity,
@@ -169,9 +168,17 @@ class AboutAppScreen extends StatelessWidget {
   }
 
   Future<void> _launchTelegram() async {
+    final Uri tgAppUrl = Uri.parse('tg://resolve?domain=Shi_bre');
+    try {
+      if (await canLaunchUrl(tgAppUrl)) {
+        await launchUrl(tgAppUrl, mode: LaunchMode.externalNonBrowserApplication);
+        return;
+      }
+    } catch (_) {}
+
     final Uri url = Uri.parse('https://t.me/Shi_bre');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      // Fallback or log error
-    }
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 }

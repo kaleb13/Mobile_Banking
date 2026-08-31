@@ -191,7 +191,7 @@ class TransactionsViewModel extends ChangeNotifier {
       return true;
     }
     final accounts = accountsForBank(bankName);
-    if (accounts.length > 1 &&
+    if (accounts.isNotEmpty &&
         accounts.every((slot) => _pausedBanks.any((b) {
           if (!b.contains(':')) return false;
           final parts = b.split(':');
@@ -368,6 +368,8 @@ class TransactionsViewModel extends ChangeNotifier {
 
     final accounts = accountsForBank(senderName);
     if (accounts.length <= 1) {
+      final slot = accounts.isNotEmpty ? accounts.first : 0;
+      if (isAccountPaused(senderName, slot)) return 0.0;
       return _cachedSenderBalances[key] ?? 0.0;
     }
 
@@ -714,6 +716,7 @@ class TransactionsViewModel extends ChangeNotifier {
     try {
       try {
         await DatabaseService.instance.reconcileInternalTransfers();
+        await DatabaseService.instance.deduplicateTransactions();
       } catch (_) {}
 
       // Strictly enforce active historical scan window on every load/restart when configured
@@ -1408,6 +1411,34 @@ class TransactionsViewModel extends ChangeNotifier {
       notifyListeners();
       await _repository.updateTransaction(_transactions[idx]);
     }
+  }
+
+  /// Returns unlinked candidate transactions with matching amount and opposite type
+  /// within ±[daysRange] days (default 7 days before and 7 days after) of [sourceTransaction].
+  List<AppTransaction> getInternalTransferCandidates(
+    AppTransaction sourceTransaction, {
+    int daysRange = 7,
+  }) {
+    final targetType =
+        sourceTransaction.type == 'income' ? 'expense' : 'income';
+    final cutoffDate =
+        sourceTransaction.date.subtract(Duration(days: daysRange));
+    final futureDate =
+        sourceTransaction.date.add(Duration(days: daysRange));
+
+    return _transactions.where((tx) {
+      if (tx.id == sourceTransaction.id) return false;
+      if (tx.type != targetType) return false;
+      if (tx.linkedTransactionId != null &&
+          tx.linkedTransactionId!.isNotEmpty) {
+        return false;
+      }
+      if (tx.amount != sourceTransaction.amount) return false;
+      if (tx.date.isBefore(cutoffDate) || tx.date.isAfter(futureDate)) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 
   Future<void> linkAsInternalTransfer(String txId1, String txId2) async {

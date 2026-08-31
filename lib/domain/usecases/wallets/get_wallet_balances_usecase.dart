@@ -32,7 +32,8 @@ class GetWalletBalancesUseCase {
 
     // 1. Bank Accounts: Match latest transaction balance by bank name (tx.name)
     for (final sender in senders) {
-      if (pausedBanks.any((b) => BankSenders.isSameBank(b, sender.senderName))) {
+      // Check if whole bank is paused (i.e. 'CBE' without colon)
+      if (pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, sender.senderName))) {
         continue;
       }
 
@@ -42,10 +43,18 @@ class GetWalletBalancesUseCase {
       double bankTotal = 0.0;
 
       if (slots.length <= 1) {
-        final withBal = senderTxs.where((t) => t.totalBalance > 0);
-        bankTotal = withBal.isNotEmpty ? withBal.first.totalBalance : 0.0;
+        final slot = slots.isNotEmpty ? slots.first : 0;
+        final isSlotPaused = pausedBanks.any((b) {
+          if (!b.contains(':')) return false;
+          final parts = b.split(':');
+          return BankSenders.isSameBank(parts[0], sender.senderName) && parts[1] == '$slot';
+        });
+        if (!isSlotPaused) {
+          final withBal = senderTxs.where((t) => t.totalBalance > 0);
+          bankTotal = withBal.isNotEmpty ? withBal.first.totalBalance : 0.0;
+        }
       } else {
-        // Multi-account / Dual-SIM bank: sum the latest balance of each separate account
+        // Multi-account / Dual-SIM bank: sum the latest balance of each separate unpaused account
         for (final slot in slots) {
           final isSlotPaused = pausedBanks.any((b) {
             if (!b.contains(':')) return false;

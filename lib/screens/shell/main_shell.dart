@@ -10,9 +10,11 @@ import '../loans/loan_management_screen.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/loans_view_model.dart';
+import '../../presentation/viewmodels/analytics_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/level_up_modal.dart';
 import 'custom_bottom_nav_bar.dart';
 
 class MainShell extends StatefulWidget {
@@ -25,6 +27,8 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   DateTime? _lastBackPressTime;
   late final PageController _pageController;
+  int? _lastObservedLevel;
+  bool _isLevelModalShowing = false;
 
   // Page order: Home | Wallet | Analysis | Loans | Settings
   static const _pageCount = 5; // nav-visible pages
@@ -38,6 +42,58 @@ class _MainShellState extends State<MainShell> {
       if (mounted) {
         final settingsVM = context.read<SettingsViewModel>();
         settingsVM.tabNavigationNotifier.addListener(_onTabNavigationRequested);
+        _checkLevelChange();
+      }
+    });
+  }
+
+  void _checkLevelChange() {
+    if (!mounted || _isLevelModalShowing) return;
+    final settingsVM = context.read<SettingsViewModel>();
+    final analyticsVM = context.read<AnalyticsViewModel>();
+    if (!settingsVM.isOnboardingComplete || !settingsVM.isInitialized) return;
+
+    final currentLevel = analyticsVM.userLevel;
+    final lastCelebrated = settingsVM.lastCelebratedLevel;
+
+    if (_lastObservedLevel == null) {
+      _lastObservedLevel = currentLevel;
+      if (currentLevel > lastCelebrated) {
+        _triggerLevelUpCelebration(currentLevel, analyticsVM, settingsVM);
+      }
+    } else if (currentLevel != _lastObservedLevel) {
+      final prev = _lastObservedLevel!;
+      _lastObservedLevel = currentLevel;
+      if (currentLevel > prev && currentLevel > lastCelebrated) {
+        _triggerLevelUpCelebration(currentLevel, analyticsVM, settingsVM);
+      }
+    }
+  }
+
+  void _triggerLevelUpCelebration(
+    int newLevel,
+    AnalyticsViewModel analyticsVM,
+    SettingsViewModel settingsVM,
+  ) {
+    if (_isLevelModalShowing) return;
+    _isLevelModalShowing = true;
+    settingsVM.setLastCelebratedLevel(newLevel);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        await showLevelUpModal(
+          context,
+          newLevel: newLevel,
+          newLevelName: analyticsVM.userLevelName,
+          newLevelDescription: analyticsVM.userLevelDescription,
+          nextLevelName: analyticsVM.nextLevelName,
+          nextLevelProgress: analyticsVM.nextLevelProgress,
+          isBalanceVisible: settingsVM.isBalanceVisible,
+        );
+      } catch (_) {
+      } finally {
+        _isLevelModalShowing = false;
       }
     });
   }
@@ -174,6 +230,12 @@ class _MainShellState extends State<MainShell> {
                       LoanManagementScreen(),
                       ProfileHubScreen(),
                     ],
+                  ),
+                  Consumer<AnalyticsViewModel>(
+                    builder: (context, _, __) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _checkLevelChange());
+                      return const SizedBox.shrink();
+                    },
                   ),
                   Consumer2<TransactionsViewModel, LoansViewModel>(
                     builder: (context, txVM, loansVM, _) {

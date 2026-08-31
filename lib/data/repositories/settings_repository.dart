@@ -53,6 +53,9 @@ abstract class SettingsRepository {
 
   Future<Set<String>> getHiddenBalanceBanks();
   Future<void> setHiddenBalanceBanks(Set<String> banks);
+
+  Future<int> getLastCelebratedLevel();
+  Future<void> setLastCelebratedLevel(int level);
 }
 
 class SettingsRepositoryImpl implements SettingsRepository {
@@ -60,6 +63,18 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   SettingsRepositoryImpl({DatabaseService? dbService})
       : _dbService = dbService ?? DatabaseService.instance;
+
+  @override
+  Future<int> getLastCelebratedLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('last_celebrated_level') ?? 1;
+  }
+
+  @override
+  Future<void> setLastCelebratedLevel(int level) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('last_celebrated_level', level);
+  }
 
   @override
   Future<Set<String>> getHiddenBalanceBanks() async {

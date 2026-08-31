@@ -227,7 +227,7 @@ https://verifayda.ahadubank.com/
       expect(tx!.amount, equals(670.00));
       expect(tx.type, equals('expense'));
       expect(tx.totalBalance, equals(17332.54));
-      expect(tx.id, equals('ahadu_ref_1008700007948/05-AUG-26/5509'));
+      expect(tx.id, equals('1008700007948/05-AUG-26/5509'));
       expect(tx.date.year, equals(2026));
       expect(tx.date.month, equals(8));
       expect(tx.date.day, equals(5));
@@ -248,7 +248,7 @@ https://verifayda.ahadubank.com/
       expect(tx.bankName, equals('BOA'));
       expect(tx.counterparty, equals('Yohannes Bizuneh'));
       expect(tx.totalBalance, equals(31824.04));
-      expect(tx.id, equals('boa_ref_FT26215HWFDW10104'));
+      expect(tx.id, equals('FT26215HWFDW10104'));
       expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
@@ -265,7 +265,7 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
       expect(tx.bankName, equals('BOA'));
       expect(tx.counterparty, equals('Yohannes Bizuneh'));
       expect(tx.totalBalance, equals(34175.92));
-      expect(tx.id, equals('boa_ref_FT26157FZW7Y10104'));
+      expect(tx.id, equals('FT26157FZW7Y10104'));
       expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
@@ -279,7 +279,7 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
       expect(tx.bankName, equals('BOA'));
       expect(tx.counterparty, equals('BOA'));
       expect(tx.totalBalance, equals(21818.29));
-      expect(tx.id, equals('boa_ref_TT262259CCQC91836'));
+      expect(tx.id, equals('TT262259CCQC91836'));
       expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 

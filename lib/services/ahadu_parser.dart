@@ -169,12 +169,12 @@ class AhaduParser {
     // Build unique transaction ID: prefer reference number, fall back to
     // deterministic SHA-256 hash of normalized body for collision-free idempotency.
     final String txId;
-    if (refId != null) {
-      txId = 'ahadu_ref_$refId';
+    if (refId != null && refId.isNotEmpty) {
+      txId = refId;
     } else {
       final normalised = message.replaceAll(RegExp(r'\s+'), ' ').trim();
-      final hash = sha256.convert(utf8.encode(normalised)).toString();
-      txId = 'AHADU-${hash.substring(0, 16)}';
+      final hash = sha256.convert(utf8.encode('AHADU BANK|$normalised')).toString();
+      txId = 'AHADU-${hash.substring(0, 16).toUpperCase()}';
     }
 
     // Clean up recipient/sender label
