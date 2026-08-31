@@ -8,6 +8,7 @@ import 'package:mobile_banking_app/services/telebirr_parser.dart';
 import 'package:mobile_banking_app/services/ahadu_parser.dart';
 import 'package:mobile_banking_app/services/boa_parser.dart';
 import 'package:mobile_banking_app/services/dashen_parser.dart';
+import 'package:mobile_banking_app/services/awash_parser.dart';
 
 void main() {
   final now = DateTime.now();
@@ -410,6 +411,33 @@ Dashen Bank - Always one step ahead!""";
       expect(res.counterparty, equals('Dashen Bank'));
       expect(res.totalBalance, equals(6055.44));
       expect(res.patternType, equals(SmsPatternType.standardTransfer));
+    });
+  });
+
+  group('AwashParser', () {
+    test('parses Awash IPS credit transaction', () {
+      const sms =
+          'Dear Customer, your Account 01320xxxxxx7700 has been Credited with ETB 600.00 on 2026-03-21 07:17:06 by BISRAT TESFAYE ADEM via IPS Bank of Abyssinia. Your balance now is ETB 650.00. For any complaint or enquiry, please call 8980. Thank You. Awash Bank.';
+      final tx = AwashParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.bankName, equals('Awash Bank'));
+      expect(tx.amount, equals(600.00));
+      expect(tx.type, equals('income'));
+      expect(tx.counterparty, equals('BISRAT TESFAYE ADEM'));
+      expect(tx.totalBalance, equals(650.00));
+    });
+
+    test('parses Awash P2P outbound transfer', () {
+      const sms =
+          'Dear Customer, You have sent ETB 1,600 To (01335625418100) - BEREKET LIBIYOS BERGENE by Transaction ID: 260615193827946 charge- 2.00 VAT- 0.30 Date 2026-06-15 19:38:24 . Your Available Balance is 4,136.96. Download the receipt by link https://awashpay.awashbank.com:8225/-2KDOYTIQ96-4XHM84.';
+      final tx = AwashParser.parse(sms, now);
+      expect(tx, isNotNull);
+      expect(tx!.bankName, equals('Awash Bank'));
+      expect(tx.amount, equals(1600.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.counterparty, equals('BEREKET LIBIYOS BERGENE'));
+      expect(tx.id, equals('260615193827946'));
+      expect(tx.totalBalance, equals(4136.96));
     });
   });
 }

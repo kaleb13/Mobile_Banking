@@ -182,6 +182,9 @@ class AppColors {
   static const Color cardDashenBg       = Color(0xFF2563EB); // Dashen Primary Blue
   static const Color cardDashenDarkIcon = Color(0xFF162068); // Dashen Deep Blue Icon Tone
   static const Color cardDashenTitle    = Color(0xFF93C5FD); // Dashen Soft Sky Blue Text
+  static const Color cardAwashDark      = Color(0xFF010066); // Awash Deep Navy Blue (From Logo SVG #010066)
+  static const Color cardAwashLight     = Color(0xFF1E1B9A); // Awash Vibrant Contrast Navy Gradient Stop
+  static const Color cardAwashDarkIcon  = Color(0xFF010066); // Awash Deep Navy Icon Tone
   static const Color cardCoopBg       = Color(0xFF5E35B1);
   static const Color cardCoopDarkIcon = Color(0xFF2E175B);
   static const Color cardCoopTitle    = Color(0xFFD1C4E9);

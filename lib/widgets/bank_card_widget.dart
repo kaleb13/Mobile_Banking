@@ -61,64 +61,60 @@ class BankCardWidget extends StatelessWidget {
       );
     }
 
-    // 2. Telebirr: White version on gradient background, original multi-color PNG on white background
+    // 2. Telebirr: White version on gradient background, original green SVG on white background
     if (nameUp == 'TELEBIRR') {
       if (iconColor != null) {
-        return Image.asset(
-          'assets/images/Telebirr Logo.png',
+        return SvgPicture.asset(
+          'assets/images/Telebirr_Logo.svg',
           width: size,
           height: size,
-          color: iconColor,
-          colorBlendMode: BlendMode.srcIn,
           fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
         );
       }
       if (onLightSurface) {
-        return Image.asset(
-          'assets/images/Telebirr Logo.png',
+        return SvgPicture.asset(
+          'assets/images/Telebirr_Logo.svg',
           width: size,
           height: size,
           fit: BoxFit.contain,
         );
       } else {
-        return Image.asset(
-          'assets/images/Telebirr Logo.png',
+        return SvgPicture.asset(
+          'assets/images/Telebirr_Logo.svg',
           width: size,
           height: size,
-          color: Colors.white,
-          colorBlendMode: BlendMode.srcIn,
           fit: BoxFit.contain,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
         );
       }
     }
 
-    // 3. CBE Birr: White version on gradient background, original multi-color PNG on white background
+    // 3. CBE Birr: White version on gradient background, original SVG on white background
     if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
       if (iconColor != null) {
-        return Image.asset(
-          'assets/images/CBEBirr Logo.png',
+        return SvgPicture.asset(
+          'assets/images/CBEBirr_Logo.svg',
           width: size,
           height: size,
-          color: iconColor,
-          colorBlendMode: BlendMode.srcIn,
           fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
         );
       }
       if (onLightSurface) {
-        return Image.asset(
-          'assets/images/CBEBirr Logo.png',
+        return SvgPicture.asset(
+          'assets/images/CBEBirr_Logo.svg',
           width: size,
           height: size,
           fit: BoxFit.contain,
         );
       } else {
-        return Image.asset(
-          'assets/images/CBEBirr Logo.png',
+        return SvgPicture.asset(
+          'assets/images/CBEBirr_Logo.svg',
           width: size,
           height: size,
-          color: Colors.white,
-          colorBlendMode: BlendMode.srcIn,
           fit: BoxFit.contain,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
         );
       }
     }
@@ -210,7 +206,36 @@ class BankCardWidget extends StatelessWidget {
       }
     }
 
-    // 7. Cash Wallet
+    // 7. Awash Bank: White version on gradient background, original brand fill on white
+    if (nameUp.contains('AWASH')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/Awash_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/Awash_Bank_Logo.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/Awash_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 8. Cash Wallet
     if (nameUp == 'CASH WALLET' || nameUp == 'CASH') {
       return AppSvgIcon(
         'assets/images/Wallet Icon.svg',
@@ -219,7 +244,7 @@ class BankCardWidget extends StatelessWidget {
       );
     }
 
-    // 8. Loan Tracker
+    // 9. Loan Tracker
     if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
       return Icon(
         Icons.handshake_rounded,
@@ -243,6 +268,7 @@ class BankCardWidget extends StatelessWidget {
     if (n.contains('AHADU')) return 'Ahadu Bank S.C.';
     if (n.contains('ABYSSINIA') || n == 'BOA') return 'Bank of Abyssinia S.C.';
     if (n.contains('DASHEN')) return 'Dashen Bank S.C.';
+    if (n.contains('AWASH')) return 'Awash Bank S.C.';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     if (n == 'LOAN TRACKER' || n == 'LOANS' || n == 'LOAN') return 'Personal Debt & Loan Ledger';
     return 'Bank Account';
@@ -295,6 +321,11 @@ class BankCardWidget extends StatelessWidget {
       return [
         AppColors.cardDashenLight,
         AppColors.cardDashenDark,
+      ];
+    } else if (nameUp.contains('AWASH')) {
+      return [
+        AppColors.cardAwashLight,
+        AppColors.cardAwashDark,
       ];
     } else if (nameUp.contains('COOP')) {
       return [
@@ -374,6 +405,14 @@ class BankCardWidget extends StatelessWidget {
               ])
         : const [];
 
+    final double cardRadiusVal = AppRadius.card;
+    final BorderRadius dynamicBorderRadius = BorderRadius.only(
+      topLeft: Radius.circular(cardRadiusVal),
+      bottomLeft: Radius.circular(cardRadiusVal),
+      topRight: Radius.circular(lerpDouble(0, cardRadiusVal, t)!),
+      bottomRight: Radius.circular(lerpDouble(0, cardRadiusVal, t)!),
+    );
+
     return GestureDetector(
       onTap: (isPaused || onTap == null) ? null : onTap,
       behavior: (onTap == null) ? HitTestBehavior.deferToChild : HitTestBehavior.opaque,
@@ -383,7 +422,7 @@ class BankCardWidget extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 14),
             padding: EdgeInsets.all(cardPadding),
             decoration: BoxDecoration(
-              borderRadius: AppRadius.cardRadius,
+              borderRadius: dynamicBorderRadius,
               gradient: LinearGradient(
                 begin: Alignment.bottomLeft,
                 end: Alignment.topRight,

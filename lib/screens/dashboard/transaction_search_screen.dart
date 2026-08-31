@@ -623,16 +623,16 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
       img = SvgPicture.asset('assets/images/CBE logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
-      img = Image.asset(
-        'assets/images/Telebirr Logo.png',
+      img = SvgPicture.asset(
+        'assets/images/Telebirr_Logo.svg',
         width: 22,
         height: 22,
-        color: AppColors.telebirrGreen,
-        colorBlendMode: BlendMode.srcIn,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(AppColors.telebirrGreen, BlendMode.srcIn),
       );
       bgColor = AppColors.telebirrGreenSoft;
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      img = Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
+      img = SvgPicture.asset('assets/images/CBEBirr_Logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.cbeBirrPink.withValues(alpha: 0.10);
     } else if (nameUp.contains('AHADU')) {
       img = AppSvgIcon('assets/images/Ahadu_Logo.svg',
@@ -649,6 +649,14 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
           size: 25,
           color: AppColors.cardDashenDark);
       bgColor = AppColors.cardDashenLight.withValues(alpha: 0.15);
+    } else if (nameUp.contains('AWASH')) {
+      img = SvgPicture.asset(
+        'assets/images/Awash_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bgColor = AppColors.cardAwashDark.withValues(alpha: 0.12);
     } else if (nameUp.contains('CASH')) {
       img = AppSvgIcon('assets/images/Wallet Icon.svg',
           size: 20,

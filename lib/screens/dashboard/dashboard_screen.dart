@@ -600,24 +600,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       builder: (context, settingsData, _) {
         final txVM = Provider.of<TransactionsViewModel>(context);
+        final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
         final senders = txVM.senders;
+
+        const double baseLeftOffset = -36.0;
+        const double leftStep = 18.0;
+        const double homeW = 180.0;
+        const double homeH = 188.0;
+        const double deckWidth = 120.0;
+
+        final activeSenders = txVM.activeSenders;
 
         // If swiping page transition is active, let MainShell flying overlay handle it
         if (senders.isEmpty || !settingsData.isHomeResting) {
           return GestureDetector(
-            onTap: () => Provider.of<SettingsViewModel>(context, listen: false).tabNavigationNotifier.value = 1,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              settingsVM.animateToTab(1);
+            },
             behavior: HitTestBehavior.opaque,
-            child: const SizedBox(width: 108, height: 188),
+            child: const SizedBox(width: deckWidth, height: homeH),
           );
         }
 
         // Render native stacked cards in-tree on Home Page for 100% synchronous scroll/pull
-        const double baseLeftOffset = -42.0;
-        const double leftStep = 22.0;
-        const double homeW = 104.0;
-        const double homeH = 188.0;
-
-        final activeSenders = txVM.activeSenders;
         final List<Widget> cardWidgets = [];
         final int stackCount = activeSenders.length.clamp(0, 3);
 
@@ -648,12 +654,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             isPaused: false,
             isTopCard: isTop,
             animationFactor: 0.0,
-            onTap: () => Provider.of<SettingsViewModel>(context, listen: false).tabNavigationNotifier.value = 1,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              settingsVM.animateToTab(1);
+            },
           );
 
           cardWidgets.add(
             Positioned(
-              left: deckLeftOffset + 42.0,
+              left: deckLeftOffset + 36.0,
               top: 0,
               width: homeW,
               height: homeH,
@@ -663,11 +672,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         return GestureDetector(
-          onTap: () => Provider.of<SettingsViewModel>(context, listen: false).tabNavigationNotifier.value = 1,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            settingsVM.animateToTab(1);
+          },
           behavior: HitTestBehavior.opaque,
           child: SizedBox(
-            width: 108,
-            height: 188,
+            width: deckWidth,
+            height: homeH,
             child: Stack(
               clipBehavior: Clip.none,
               children: cardWidgets,
@@ -1645,16 +1657,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       img = SvgPicture.asset('assets/images/CBE logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.slackPurple.withValues(alpha: 0.12);
     } else if (nameUp == 'TELEBIRR') {
-      img = Image.asset(
-        'assets/images/Telebirr Logo.png',
+      img = SvgPicture.asset(
+        'assets/images/Telebirr_Logo.svg',
         width: 22,
         height: 22,
-        color: AppColors.telebirrGreen,
-        colorBlendMode: BlendMode.srcIn,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(AppColors.telebirrGreen, BlendMode.srcIn),
       );
       bgColor = AppColors.telebirrGreenSoft; // Visible Telebirr soft green background
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      img = Image.asset('assets/images/CBEBirr Logo.png', width: 22, height: 22);
+      img = SvgPicture.asset('assets/images/CBEBirr_Logo.svg', width: 22, height: 22, fit: BoxFit.contain);
       bgColor = AppColors.cbeBirrPink.withValues(alpha: 0.10);
     } else if (nameUp.contains('AHADU')) {
       img = SvgPicture.asset('assets/images/Ahadu_Logo.svg', width: 22, height: 22, fit: BoxFit.contain);
@@ -1671,6 +1683,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         colorFilter: const ColorFilter.mode(AppColors.cardDashenDark, BlendMode.srcIn),
       );
       bgColor = AppColors.cardDashenLight.withValues(alpha: 0.15);
+    } else if (nameUp.contains('AWASH')) {
+      img = SvgPicture.asset(
+        'assets/images/Awash_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bgColor = AppColors.cardAwashDark.withValues(alpha: 0.12);
     } else if (nameUp.contains('CASH')) {
       img = SvgPicture.asset(
         'assets/images/Wallet Icon.svg',
@@ -1714,22 +1734,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             : null,
       );
     } else if (nameUp == 'TELEBIRR') {
-      return Image.asset(
-        'assets/images/Telebirr Logo.png',
+      return SvgPicture.asset(
+        'assets/images/Telebirr_Logo.svg',
         width: size,
         height: size,
         fit: BoxFit.contain,
-        color: overrideColor,
-        colorBlendMode: overrideColor != null ? BlendMode.srcIn : null,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
       );
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      return Image.asset(
-        'assets/images/CBEBirr Logo.png',
+      return SvgPicture.asset(
+        'assets/images/CBEBirr_Logo.svg',
         width: size,
         height: size,
         fit: BoxFit.contain,
-        color: overrideColor,
-        colorBlendMode: overrideColor != null ? BlendMode.srcIn : null,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
       );
     } else if (nameUp.contains('AHADU')) {
       return SvgPicture.asset(
@@ -1754,6 +1776,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (nameUp.contains('DASHEN') || nameUp.contains('AMOLE')) {
       return SvgPicture.asset(
         'assets/images/Dashen_Bank_Logo.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
+      );
+    } else if (nameUp.contains('AWASH')) {
+      return SvgPicture.asset(
+        'assets/images/Awash_Bank_Logo.svg',
         width: size,
         height: size,
         fit: BoxFit.contain,

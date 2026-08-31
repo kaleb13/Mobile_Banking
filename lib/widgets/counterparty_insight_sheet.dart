@@ -16,6 +16,7 @@ import 'app_date_filter.dart';
 import 'bank_card_widget.dart';
 import 'currency_symbol_widget.dart';
 import 'custom_progress_bar.dart';
+import 'contact_avatar.dart';
 
 /// Modal bottom sheet displaying detailed person-to-person cashflow metrics,
 /// historical velocity, net standing, and direct transaction drilldown.
@@ -101,25 +102,9 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
           // ── Header: Avatar, Name & Overall Counts ──────────────────────────
           Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    cleanDisplayName.isNotEmpty
-                        ? cleanDisplayName.substring(0, 1).toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                      color: AppColors.buttonPrimaryText,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+              ContactAvatar(
+                name: cleanDisplayName,
+                size: 48,
               ),
               const SizedBox(width: 14),
               Expanded(

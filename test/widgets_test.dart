@@ -11,6 +11,9 @@ import 'package:mobile_banking_app/presentation/viewmodels/settings_view_model.d
 import 'package:mobile_banking_app/data/repositories/settings_repository.dart';
 import 'package:mobile_banking_app/models/app_currency.dart';
 import 'package:mobile_banking_app/models/scan_window_option.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:mobile_banking_app/widgets/bank_card_widget.dart';
+import 'package:mobile_banking_app/widgets/bank_avatar.dart';
 import 'package:mobile_banking_app/theme/app_theme.dart';
 
 void main() {
@@ -388,6 +391,83 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('+1,540.50'), findsOneWidget);
+    });
+  });
+
+  group('BankCardWidget Logo & BankAvatar Tests', () {
+    testWidgets('renders Telebirr SVG logo on dark card and light surface', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                BankCardWidget.bankLogo('TELEBIRR', 30, null, false),
+                BankCardWidget.bankLogo('TELEBIRR', 30, null, true),
+                const BankAvatar(bankName: 'Telebirr', size: 40),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final svgs = tester.widgetList<SvgPicture>(find.byType(SvgPicture));
+      expect(svgs.isNotEmpty, isTrue);
+      for (final svg in svgs) {
+        final loader = svg.bytesLoader;
+        if (loader is SvgAssetLoader) {
+          expect(loader.assetName, contains('Telebirr_Logo.svg'));
+        }
+      }
+    });
+
+    testWidgets('renders Awash Bank SVG logo on dark card and light surface', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                BankCardWidget.bankLogo('AWASH', 30, null, false),
+                BankCardWidget.bankLogo('AWASH', 30, null, true),
+                const BankAvatar(bankName: 'Awash Bank', size: 40),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final svgs = tester.widgetList<SvgPicture>(find.byType(SvgPicture));
+      expect(svgs.isNotEmpty, isTrue);
+      for (final svg in svgs) {
+        final loader = svg.bytesLoader;
+        if (loader is SvgAssetLoader) {
+          expect(loader.assetName, contains('Awash_Bank_Logo.svg'));
+        }
+      }
+    });
+
+    testWidgets('renders CBE Birr SVG logo on dark card and light surface', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                BankCardWidget.bankLogo('CBE BIRR', 30, null, false),
+                BankCardWidget.bankLogo('CBE BIRR', 30, null, true),
+                const BankAvatar(bankName: 'CBE Birr', size: 40),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final svgs = tester.widgetList<SvgPicture>(find.byType(SvgPicture));
+      expect(svgs.isNotEmpty, isTrue);
+      for (final svg in svgs) {
+        final loader = svg.bytesLoader;
+        if (loader is SvgAssetLoader) {
+          expect(loader.assetName, contains('CBEBirr_Logo.svg'));
+        }
+      }
     });
   });
 }

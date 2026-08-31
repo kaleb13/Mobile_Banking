@@ -298,8 +298,9 @@ class _MainShellState extends State<MainShell> {
     final bool hasPaused = txVM.pausedSenders.isNotEmpty;
 
     // Home deck (t=0.0) left-offset pattern matching DashboardScreen
-    const double baseLeftOffset = -42.0;
-    const double leftStep = 22.0;
+    const double baseLeftOffset = -36.0;
+    const double leftStep = 18.0;
+    const double deckWidth = 120.0;
 
     final List<Widget> cardWidgets = [];
 
@@ -324,8 +325,8 @@ class _MainShellState extends State<MainShell> {
       final int deckIndex =
           isVisibleOnHome ? i : 2.clamp(0, activeCount > 0 ? activeCount - 1 : 0);
       final double deckLeftOffset = baseLeftOffset + deckIndex * leftStep;
-      final double homeLeft = screenWidth - 105.0 + deckLeftOffset + 42.0;
-      const double homeW = 104.0;
+      final double homeLeft = screenWidth - deckWidth + deckLeftOffset + 36.0;
+      const double homeW = 180.0;
       const double homeH = 188.0;
 
       // Interpolate position
@@ -378,9 +379,8 @@ class _MainShellState extends State<MainShell> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
-                if (t <= 0.05) {
-                  settingsVM.animateToTab(1);
-                }
+                HapticFeedback.selectionClick();
+                settingsVM.animateToTab(1);
               },
               child: card,
             ),
@@ -389,14 +389,9 @@ class _MainShellState extends State<MainShell> {
       );
     }
 
-    final bool shouldIgnorePointer = t > 0.01;
-
-    return IgnorePointer(
-      ignoring: shouldIgnorePointer,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: cardWidgets,
-      ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: cardWidgets,
     );
   }
 }

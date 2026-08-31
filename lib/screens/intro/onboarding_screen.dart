@@ -401,6 +401,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       {'name': 'Telebirr', 'type': 'Ethio Telecom Mobile Money'},
       {'name': 'CBE', 'type': 'Commercial Bank of Ethiopia'},
       {'name': 'BOA', 'type': 'Bank of Abyssinia'},
+      {'name': 'Awash Bank', 'type': 'Awash Mobile & AwashBirr Pro'},
       {'name': 'CBE Birr', 'type': 'CBE Mobile Money Wallet'},
       {'name': 'Ahadu Bank', 'type': 'Ahadu Mobile Banking'},
       {'name': 'Dashen Bank', 'type': 'Dashen Mobile & Amole'},
@@ -808,7 +809,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         ),
                         _buildTermsSection(
                           'SMS Permission & Scan Window',
-                          'By granting SMS access, you allow Shibre to read banking messages from recognized senders (CBE, Telebirr, CBE Birr, Ahadu Bank, BOA, Dashen Bank) within your chosen window (${_selectedScanOption.title}). This permission is used exclusively for transaction detection, level estimation, and expense tracking.',
+                          'By granting SMS access, you allow Shibre to read banking messages from recognized senders (CBE, Telebirr, CBE Birr, Ahadu Bank, BOA, Dashen Bank, Awash Bank) within your chosen window (${_selectedScanOption.title}). This permission is used exclusively for transaction detection, level estimation, and expense tracking.',
                         ),
                         _buildTermsSection(
                           'Local Storage & Backups',

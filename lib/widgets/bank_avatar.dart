@@ -40,23 +40,25 @@ class BankAvatar extends StatelessWidget {
           ? AppColors.slackPurple.withValues(alpha: 0.12)
           : AppColors.cbePurple.withValues(alpha: 0.20);
     } else if (nameUp == 'TELEBIRR') {
-      img = Image.asset(
-        'assets/images/Telebirr Logo.png',
+      img = SvgPicture.asset(
+        'assets/images/Telebirr_Logo.svg',
         width: iconSize,
         height: iconSize,
         fit: BoxFit.contain,
-        color: isLight ? AppColors.telebirrGreen : null,
-        colorBlendMode: isLight ? BlendMode.srcIn : null,
+        colorFilter: isLight
+            ? const ColorFilter.mode(AppColors.telebirrGreen, BlendMode.srcIn)
+            : null,
       );
       bgColor = isLight
           ? AppColors.telebirrGreenSoft
           : AppColors.telebirrGreen.withValues(alpha: 0.20);
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      img = Image.asset(
-        'assets/images/CBEBirr Logo.png',
+      img = SvgPicture.asset(
+        'assets/images/CBEBirr_Logo.svg',
         width: iconSize,
         height: iconSize,
         fit: BoxFit.contain,
+        colorFilter: isLight ? null : const ColorFilter.mode(Colors.white, BlendMode.srcIn),
       );
       bgColor = isLight
           ? AppColors.cbeBirrPink.withValues(alpha: 0.10)
@@ -89,6 +91,17 @@ class BankAvatar extends StatelessWidget {
       bgColor = isLight
           ? AppColors.cardDashenLight.withValues(alpha: 0.15)
           : AppColors.cardDashenDark.withValues(alpha: 0.35);
+    } else if (nameUp.contains('AWASH')) {
+      img = SvgPicture.asset(
+        'assets/images/Awash_Bank_Logo.svg',
+        width: iconSize * 1.15,
+        height: iconSize * 1.15,
+        fit: BoxFit.contain,
+        colorFilter: isLight ? null : const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+      );
+      bgColor = isLight
+          ? AppColors.cardAwashDark.withValues(alpha: 0.12)
+          : AppColors.cardAwashDark.withValues(alpha: 0.35);
     } else if (nameUp.contains('CASH') || nameUp.contains('WALLET')) {
       img = AppSvgIcon(
         'assets/images/Wallet Icon.svg',

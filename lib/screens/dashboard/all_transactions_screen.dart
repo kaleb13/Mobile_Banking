@@ -967,9 +967,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
       assetPath = 'assets/images/CBE logo.svg';
       isSvg = true;
     } else if (nameUp == 'TELEBIRR') {
-      assetPath = 'assets/images/Telebirr Logo.png';
+      assetPath = 'assets/images/Telebirr_Logo.svg';
+      isSvg = true;
     } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      assetPath = 'assets/images/CBEBirr Logo.png';
+      assetPath = 'assets/images/CBEBirr_Logo.svg';
+      isSvg = true;
     } else if (nameUp.contains('AHADU')) {
       assetPath = 'assets/images/Ahadu_Logo.svg';
       isSvg = true;
@@ -980,6 +982,9 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         nameUp.contains('ABYSSINIA') ||
         nameUp.contains('BANK OF ABYSSINIA')) {
       assetPath = 'assets/images/Bank_of_Abyssinia_logo.svg';
+      isSvg = true;
+    } else if (nameUp.contains('AWASH')) {
+      assetPath = 'assets/images/Awash_Bank_Logo.svg';
       isSvg = true;
     }
 

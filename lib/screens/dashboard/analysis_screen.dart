@@ -28,6 +28,7 @@ import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_date_filter.dart';
+import '../../widgets/contact_avatar.dart';
 import 'category_detail_screen.dart';
 import 'all_transactions_screen.dart';
 
@@ -4086,35 +4087,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 ),
                                 child: ListTile(
                                   shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
+                                  leading: ContactAvatar(
+                                    name: item.name,
+                                    size: 32,
+                                  ),
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 14,
                                     vertical: 2,
-                                  ),
-                                  leading: Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppColors.buttonPrimary
-                                          : AppColors.surfaceElevated,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        item.name.isNotEmpty
-                                            ? item.name.substring(0, 1).toUpperCase()
-                                            : '?',
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? AppColors.buttonPrimaryText
-                                              : AppColors.textPrimary,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
                                   ),
                                   title: Text(
                                     item.name,

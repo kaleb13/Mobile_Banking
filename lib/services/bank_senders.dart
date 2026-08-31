@@ -50,7 +50,7 @@ class BankSenders {
   /// 3 digits, so it never matches this and stays valid below.
   static final RegExp _phoneNumber = RegExp(r'^\+?[0-9]{7,15}$');
 
-  /// Returns the canonical bank name ('Telebirr' | 'CBE' | 'CBE Birr' | 'Ahadu Bank' | 'BOA' | 'Dashen Bank') when
+  /// Returns the canonical bank name ('Telebirr' | 'CBE' | 'CBE Birr' | 'Ahadu Bank' | 'BOA' | 'Dashen Bank' | 'Awash Bank') when
   /// [sender] is a trusted bank sender ID, otherwise null.
   static String? match(String? sender) {
     if (sender == null) return null;
@@ -76,6 +76,7 @@ class BankSenders {
     if (up.contains('AHADU')) return 'Ahadu Bank';
     if (up == 'BOA' || up.contains('ABYSSINIA') || up.startsWith('BOA')) return 'BOA';
     if (up.contains('DASHEN') || up.contains('AMOLE')) return 'Dashen Bank';
+    if (up.contains('AWASH')) return 'Awash Bank';
     return null;
   }
 
@@ -94,6 +95,8 @@ class BankSenders {
       return ['boa', 'abyssinia'];
     } else if (up.contains('DASHEN') || up.contains('AMOLE')) {
       return ['dashen', 'amole'];
+    } else if (up.contains('AWASH')) {
+      return ['awash', 'awashbirr', 'awash bank'];
     } else {
       return [bankName.trim().toLowerCase()];
     }
@@ -354,7 +357,14 @@ class BankSenders {
         lower.contains('welcome! we are delighted') ||
         lower.contains('download cbe android application') ||
         lower.contains('start activation') ||
-        lower.contains('new login to your mobile')) {
+        lower.contains('new login to your mobile') ||
+        lower.contains('harmonization') ||
+        lower.contains('harmonize your bank account') ||
+        lower.contains('fayda.awashbank.com') ||
+        lower.contains('tatariwochu') ||
+        lower.contains('happy customer week') ||
+        lower.contains('sooramaa') ||
+        lower.contains('has been successfully linked to your awashbirr')) {
       return true;
     }
 

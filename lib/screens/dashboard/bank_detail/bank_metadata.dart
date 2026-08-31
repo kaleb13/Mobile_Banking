@@ -134,6 +134,19 @@ class BankInfoData {
         behindGradient: unifiedGradient,
         isDarkTextTheme: isDark,
       );
+    } else if (nameUp.contains('AWASH')) {
+      return BankInfoData(
+        bankName: name,
+        displayName: 'Awash Bank',
+        title: 'Awash Bank S.C.',
+        subtitle: 'Awash Bank S.C.',
+        badgeLabel: 'COMMERCIAL BANK · SMS PARSED',
+        badgeIcon: Icons.account_balance_rounded,
+        description:
+            'Automated financial ledger extraction from Awash Bank & AwashBirr Pro notifications. Tracks digital transfers, interbank debits, MPESA transfers, airtime purchases, and real-time account balances.',
+        behindGradient: unifiedGradient,
+        isDarkTextTheme: isDark,
+      );
     }
 
     // Generic fallback

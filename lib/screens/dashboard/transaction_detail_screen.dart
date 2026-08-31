@@ -657,21 +657,21 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     Color bg;
 
     if (combined.contains('CBE BIRR') || combined.contains('CBEBIRR')) {
-      iconWidget = Image.asset('assets/images/CBEBirr Logo.png', width: 24, height: 24);
+      iconWidget = SvgPicture.asset('assets/images/CBEBirr_Logo.svg', width: 24, height: 24, fit: BoxFit.contain);
       bankName = 'CBE Birr Mobile Banking';
       shortName = 'CbeBirr';
       bg = AppColors.cbeBirrPink.withValues(alpha: 0.15);
     } else if (combined.contains('TELEBIRR')) {
-      iconWidget = Image.asset(
-        'assets/images/Telebirr Logo.png',
+      bg = AppColors.telebirrGreenSoft;
+      iconWidget = SvgPicture.asset(
+        'assets/images/Telebirr_Logo.svg',
         width: 24,
         height: 24,
-        color: AppColors.telebirrGreen,
-        colorBlendMode: BlendMode.srcIn,
+        fit: BoxFit.contain,
+        colorFilter: const ColorFilter.mode(AppColors.telebirrGreen, BlendMode.srcIn),
       );
       bankName = 'Telebirr Digital Wallet';
       shortName = 'Telebirr';
-      bg = AppColors.telebirrGreenSoft;
     } else if (combined.contains('AHADU')) {
       bg = AppColors.cardAhaduRed.withValues(alpha: 0.15);
       iconWidget = AppSvgIcon('assets/images/Ahadu_Logo.svg', size: 24, surfaceColor: bg);
@@ -687,6 +687,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       iconWidget = AppSvgIcon('assets/images/Dashen_Bank_Logo.svg', size: 24, surfaceColor: bg);
       bankName = 'Dashen Bank S.C.';
       shortName = 'Dashen';
+    } else if (combined.contains('AWASH')) {
+      bg = AppColors.cardAwashDark.withValues(alpha: 0.15);
+      iconWidget = SvgPicture.asset(
+        'assets/images/Awash_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bankName = 'Awash Bank S.C.';
+      shortName = 'Awash';
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
       bg = AppColors.slackPurple.withValues(alpha: 0.15);
       iconWidget = SvgPicture.asset('assets/images/CBE logo.svg', width: 24, height: 24, fit: BoxFit.contain);
