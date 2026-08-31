@@ -743,11 +743,14 @@ class TransactionsViewModel extends ChangeNotifier {
       _senders = results[1] as List<AppSender>;
       if (_senders.isEmpty) {
         try {
-          final detected = await SmsService().detectBankingSendersInInbox();
-          for (final bankName in detected) {
-            await _repository.insertSender(AppSender(senderName: bankName));
+          final bool hasPermission = await Permission.sms.status.isGranted;
+          if (hasPermission) {
+            final detected = await SmsService().detectBankingSendersInInbox();
+            for (final bankName in detected) {
+              await _repository.insertSender(AppSender(senderName: bankName));
+            }
+            _senders = await _repository.getSenders();
           }
-          _senders = await _repository.getSenders();
         } catch (_) {}
       }
       await _applySavedSendersOrder();

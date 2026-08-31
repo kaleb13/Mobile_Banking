@@ -85,7 +85,7 @@ class SmsService {
   Future<List<String>> detectBankingSendersInInbox({
     List<String> customSenders = const [],
   }) async {
-    bool hasPermission = await requestPermission();
+    final bool hasPermission = await Permission.sms.status.isGranted;
     if (!hasPermission) return [];
 
     try {
@@ -126,7 +126,7 @@ class SmsService {
     List<String> customSenders = const [],
     List<String>? overrideSenders,
   }) async {
-    bool hasPermission = await requestPermission();
+    final bool hasPermission = await Permission.sms.status.isGranted;
     if (!hasPermission) return [];
 
     try {
@@ -188,7 +188,7 @@ class SmsService {
   }
 
   Future<List<SmsMessage>> getAllMessages({DateTime? since}) async {
-    bool hasPermission = await requestPermission();
+    final bool hasPermission = await Permission.sms.status.isGranted;
     if (!hasPermission) return [];
 
     List<SmsMessage> messages = await query.querySms(
