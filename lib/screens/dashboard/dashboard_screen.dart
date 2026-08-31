@@ -428,44 +428,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 6),
 
                       // Large Animated Balance Display (Auto-scales down for high amounts e.g. 1M+ so it never truncates)
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          settingsVM.toggleBalanceVisibility();
+                      Builder(
+                        builder: (context) {
+                          final bool isTotalUnknown = txVM.transactions.isEmpty && analyticsVM.totalBalance == 0.0;
+                          return GestureDetector(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              settingsVM.toggleBalanceVisibility();
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!isTotalUnknown) ...[
+                                    const CurrencySymbolWidget(
+                                      size: 26,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  AnimatedBalanceText(
+                                    value: analyticsVM.totalBalance,
+                                    isMasked: !settingsVM.isBalanceVisible,
+                                    isUnknown: isTotalUnknown,
+                                    integerStyle: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -1.0,
+                                      height: 1.05,
+                                    ),
+                                    decimalStyle: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.05,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
                         },
-                        behavior: HitTestBehavior.opaque,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CurrencySymbolWidget(
-                                size: 26,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 8),
-                              AnimatedBalanceText(
-                                value: analyticsVM.totalBalance,
-                                isMasked: !settingsVM.isBalanceVisible,
-                                integerStyle: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -1.0,
-                                  height: 1.05,
-                                ),
-                                decimalStyle: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.05,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 10),
 
@@ -857,9 +865,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     Text(
-                      settingsVM.isBalanceVisible
-                          ? '${fmt.format(analyticsVM.totalBalance)} ETB'
-                          : '••••••••',
+                      !settingsVM.isBalanceVisible
+                          ? '••••••••'
+                          : ((txVM.transactions.isEmpty && analyticsVM.totalBalance == 0.0)
+                              ? 'Unknown'
+                              : '${fmt.format(analyticsVM.totalBalance)} ETB'),
                       style: const TextStyle(
                         color: AppColors.brandGreen,
                         fontSize: 13.5,
@@ -1432,12 +1442,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 6),
               Expanded(
                 child: transactionsList.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No transactions found',
-                          style: TextStyle(
-                            color: AppColors.greyText,
-                            fontSize: 13,
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.lightGreyBackground,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.receipt_long_outlined,
+                                  color: AppColors.mediumGreyText,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'No transactions found',
+                                style: TextStyle(
+                                  color: AppColors.darkCharcoal,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'No activity recorded for ${_dateFilterValue.label}.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppColors.mediumGreyText,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -1553,7 +1595,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       if (tx.reasonId == null &&
                           (tx.customReasonText == null ||
                               tx.customReasonText!.isEmpty) &&
-                          (tx.reason == null || tx.reason!.isEmpty))
+                          (tx.reason == null || tx.reason!.isEmpty) &&
+                          !Provider.of<TransactionsViewModel>(context,
+                                  listen: false)
+                              .hasSplits(tx.id))
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),
                           child: ReasonBadge(),
@@ -1838,7 +1883,11 @@ class _CollapsibleSimAccountCardState extends State<_CollapsibleSimAccountCard> 
                     const Spacer(),
                   ],
                   Text(
-                    widget.isBalanceVisible ? '${fmt.format(widget.totalBalance)} ETB' : '••••••••',
+                    !widget.isBalanceVisible
+                        ? '••••••••'
+                        : (widget.totalBalance == 0.0 && !hasNonZeroBanks
+                            ? 'Unknown'
+                            : '${fmt.format(widget.totalBalance)} ETB'),
                     style: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 12.5,

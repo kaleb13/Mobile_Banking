@@ -781,7 +781,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     !_dateFilterValue.isDefault ||
                     _isBookmarkedOnly
                 ? 'Try adjusting your filters or search terms to see matching records.'
-                : 'No transactions recorded yet.',
+                : 'No transactions recorded within the active scan range (${settingsVM.scanWindowOption.title}).',
           ),
         ),
       );
@@ -888,7 +888,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                         if (tx.reasonId == null &&
                             (tx.customReasonText == null ||
                                 tx.customReasonText!.isEmpty) &&
-                            (tx.reason == null || tx.reason!.isEmpty))
+                            (tx.reason == null || tx.reason!.isEmpty) &&
+                            !Provider.of<TransactionsViewModel>(context,
+                                    listen: false)
+                                .hasSplits(tx.id))
                           const Padding(
                             padding: EdgeInsets.only(left: 6.0),
                             child: ReasonBadge(),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/repositories/transaction_repository.dart';
+import '../../data/repositories/settings_repository.dart';
 import '../../models/transaction.dart';
 import '../../models/sender.dart';
 import '../../models/reason.dart';
@@ -30,9 +31,13 @@ import '../../utils/counterparty_matcher.dart';
 /// All data access goes through TransactionRepository.
 class TransactionsViewModel extends ChangeNotifier {
   final TransactionRepository _repository;
+  final SettingsRepository? _settingsRepository;
 
-  TransactionsViewModel({required TransactionRepository repository})
-      : _repository = repository;
+  TransactionsViewModel({
+    required TransactionRepository repository,
+    SettingsRepository? settingsRepository,
+  })  : _repository = repository,
+        _settingsRepository = settingsRepository;
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -711,6 +716,18 @@ class TransactionsViewModel extends ChangeNotifier {
         await DatabaseService.instance.reconcileInternalTransfers();
       } catch (_) {}
 
+      // Strictly enforce active historical scan window on every load/restart when configured
+      if (_settingsRepository != null) {
+        final activeScanWindow = await _settingsRepository!.getScanWindow();
+        if (activeScanWindow != ScanWindowOption.allTime) {
+          final cutoff = await _settingsRepository!.getEffectiveScanWindowAnchorDate() ??
+              activeScanWindow.anchorDate;
+          try {
+            await _repository.deleteTransactionsOlderThan(cutoff);
+          } catch (_) {}
+        }
+      }
+
       final results = await Future.wait([
         _repository.getTransactions(),
         _repository.getSenders(),
@@ -721,6 +738,15 @@ class TransactionsViewModel extends ChangeNotifier {
       ]);
       _transactions = results[0] as List<AppTransaction>;
       _senders = results[1] as List<AppSender>;
+      if (_senders.isEmpty) {
+        try {
+          final detected = await SmsService().detectBankingSendersInInbox();
+          for (final bankName in detected) {
+            await _repository.insertSender(AppSender(senderName: bankName));
+          }
+          _senders = await _repository.getSenders();
+        } catch (_) {}
+      }
       await _applySavedSendersOrder();
       _reasons = results[2] as List<AppReason>;
       _reasonLinks = results[3] as List<AppReasonLink>;
@@ -746,7 +772,8 @@ class TransactionsViewModel extends ChangeNotifier {
           // Release the loading lock before scanning so the UI can render
           _isLoading = false;
           notifyListeners();
-          await scanSms();
+          final activeOption = await _settingsRepository?.getScanWindow() ?? ScanWindowOption.sevenDays;
+          await scanSms(scanWindowOption: activeOption);
           return; // scanSms() calls loadAll() at the end, so we're done
         }
       }
@@ -758,9 +785,27 @@ class TransactionsViewModel extends ChangeNotifier {
     }
   }
 
-  /// High-speed SMS batch scanner that parses all messages in a background isolate
+  /// Discovers bank senders physically present in the phone's SMS inbox across all time and syncs them to SQLite.
+  Future<void> discoverAndSyncPhoneSenders() async {
+    try {
+      final detected = await SmsService().detectBankingSendersInInbox(
+        customSenders: _senders.map((s) => s.senderName).toList(),
+      );
+      for (final bankName in detected) {
+        await _repository.insertSender(AppSender(senderName: bankName));
+      }
+      _senders = await _repository.getSenders();
+      _rebuildAggregateIndices();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Compatibility alias ensuring all present device bank senders are synced.
+  Future<void> ensureDefaultSenders() => discoverAndSyncPhoneSenders();
+
+  /// High-speed SMS batch scanner that parses messages within the active scan window in a background isolate
   Future<int> scanSms({
-    ScanWindowOption scanWindowOption = ScanWindowOption.thirtyDays,
+    ScanWindowOption? scanWindowOption,
     void Function(ScanProgressStatus)? onProgress,
     DateTime? since,
   }) async {
@@ -768,24 +813,43 @@ class TransactionsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final activeOption = scanWindowOption ??
+          await _settingsRepository?.getScanWindow() ??
+          ScanWindowOption.allTime;
+
       onProgress?.call(const ScanProgressStatus(
         progress: 0.05,
         stage: 'Connecting to secure SMS inbox…',
       ));
 
-      if (_senders.isEmpty) {
-        _senders = [
-          AppSender(id: '1', senderName: 'Telebirr'),
-          AppSender(id: '2', senderName: 'CBE'),
-          AppSender(id: '3', senderName: 'CBE Birr'),
-        ];
-        for (var s in _senders) {
-          await _repository.insertSender(s);
+      // Discover bank senders present on device across all time
+      try {
+        final detectedPhoneBanks = await SmsService().detectBankingSendersInInbox(
+          customSenders: _senders.map((s) => s.senderName).toList(),
+        );
+        for (final bankName in detectedPhoneBanks) {
+          await _repository.insertSender(AppSender(senderName: bankName));
         }
-      }
+        _senders = await _repository.getSenders();
+      } catch (_) {}
 
-      final anchorDate = since ?? scanWindowOption.anchorDate;
-      final cutoff = anchorDate.subtract(const Duration(minutes: 1));
+      // Strictly clamp since/anchorDate to never reach beyond active scan window fixed inception date
+      DateTime? boundaryAnchor;
+      if (activeOption != ScanWindowOption.allTime) {
+        boundaryAnchor = (await _settingsRepository?.getEffectiveScanWindowAnchorDate()) ??
+            activeOption.anchorDate;
+      }
+      DateTime? effectiveSince;
+      if (since != null) {
+        if (boundaryAnchor != null && since.isBefore(boundaryAnchor)) {
+          effectiveSince = boundaryAnchor;
+        } else {
+          effectiveSince = since;
+        }
+      } else {
+        effectiveSince = boundaryAnchor;
+      }
+      final cutoff = effectiveSince?.subtract(const Duration(minutes: 1));
 
       final customSenderNames = _senders.map((s) => s.senderName).toList();
       final rawMessages = await SmsService().getBankMessagesFast(
@@ -800,6 +864,7 @@ class TransactionsViewModel extends ChangeNotifier {
           scannedBanks: [],
           isComplete: true,
         ));
+        await loadAll();
         return 0;
       }
 
@@ -922,15 +987,23 @@ class TransactionsViewModel extends ChangeNotifier {
         stage: 'Adjusting historical scan window…',
       ));
 
-      // If narrowing the window, purge transactions older than the new anchor date
+      // If narrowing the window, purge transactions older than the new anchor date immediately
+      if (_settingsRepository != null) {
+        await _settingsRepository!.setScanWindow(newOption);
+      }
+
+      DateTime? cutoff;
       if (newOption != ScanWindowOption.allTime) {
-        final cutoff = newOption.anchorDate;
-        await _repository.deleteTransactionsOlderThan(cutoff);
+        cutoff = (await _settingsRepository?.getEffectiveScanWindowAnchorDate()) ?? newOption.anchorDate;
+        try {
+          await _repository.deleteTransactionsOlderThan(cutoff);
+        } catch (_) {}
       }
 
       // Ingest SMS within the updated window
       final count = await scanSms(
         scanWindowOption: newOption,
+        since: cutoff,
         onProgress: onProgress,
       );
 
@@ -941,11 +1014,28 @@ class TransactionsViewModel extends ChangeNotifier {
     }
   }
 
-  /// Reloads recent data by scanning SMS for the specified lookback days.
+  /// Reloads recent data by scanning SMS strictly bounded by the active scan window starting date.
   Future<void> refreshData({int? lastDays}) async {
-    final days = lastDays ?? 30;
+    final activeOption = await _settingsRepository?.getScanWindow() ??
+        ScanWindowOption.allTime;
+    final anchorDate = (activeOption != ScanWindowOption.allTime && _settingsRepository != null)
+        ? (await _settingsRepository!.getEffectiveScanWindowAnchorDate() ?? activeOption.anchorDate)
+        : (activeOption != ScanWindowOption.allTime ? activeOption.anchorDate : null);
+
+    DateTime? lookbackDate;
+    if (lastDays != null) {
+      final target = DateTime.now().subtract(Duration(days: lastDays));
+      if (anchorDate != null && target.isBefore(anchorDate)) {
+        lookbackDate = anchorDate;
+      } else {
+        lookbackDate = target;
+      }
+    } else {
+      lookbackDate = anchorDate;
+    }
     await scanSms(
-      since: DateTime.now().subtract(Duration(days: days)),
+      scanWindowOption: activeOption,
+      since: lookbackDate,
     );
   }
 
@@ -966,12 +1056,32 @@ class TransactionsViewModel extends ChangeNotifier {
         stage: 'Connecting to $bankName SMS records…',
       ));
 
-      // Calculate anchor date / cutoff
-      final DateTime? anchorDate = scanWindowOption != null
-          ? (scanWindowOption == ScanWindowOption.allTime ? null : scanWindowOption.anchorDate)
-          : (lastDays != null ? DateTime.now().subtract(Duration(days: lastDays)) : null);
+      final activeGlobal = await _settingsRepository?.getScanWindow() ??
+          ScanWindowOption.allTime;
+      final anchorDate = (activeGlobal != ScanWindowOption.allTime && _settingsRepository != null)
+          ? (await _settingsRepository!.getEffectiveScanWindowAnchorDate() ?? activeGlobal.anchorDate)
+          : (activeGlobal != ScanWindowOption.allTime ? activeGlobal.anchorDate : null);
 
-      final DateTime? cutoff = anchorDate?.subtract(const Duration(minutes: 1));
+      // Calculate anchor date / cutoff strictly bounded by active global scan window starting date
+      DateTime? effectiveAnchor;
+      if (scanWindowOption != null) {
+        effectiveAnchor = scanWindowOption == ScanWindowOption.allTime
+            ? null
+            : scanWindowOption.anchorDate;
+      } else if (lastDays != null) {
+        effectiveAnchor = DateTime.now().subtract(Duration(days: lastDays));
+      } else {
+        effectiveAnchor = anchorDate;
+      }
+
+      // Clamp against active global window starting date
+      if (anchorDate != null) {
+        if (effectiveAnchor == null || effectiveAnchor.isBefore(anchorDate)) {
+          effectiveAnchor = anchorDate;
+        }
+      }
+
+      final DateTime? cutoff = effectiveAnchor?.subtract(const Duration(minutes: 1));
 
       // Resolve targeted bank search keywords
       final targetKeywords = BankSenders.getKeywordsForBank(bankName);
@@ -988,6 +1098,7 @@ class TransactionsViewModel extends ChangeNotifier {
           scannedBanks: [],
           isComplete: true,
         ));
+        await loadAll();
         return 0;
       }
 
@@ -1057,24 +1168,52 @@ class TransactionsViewModel extends ChangeNotifier {
     }
   }
 
-  /// Smart refresh: re-scans the SMS inbox using the active scan window.
+  /// Smart refresh: re-scans all SMS starting from the initial inception anchor date forward to Today.
   Future<void> smartRefresh({
-    ScanWindowOption scanWindowOption = ScanWindowOption.thirtyDays,
+    ScanWindowOption? scanWindowOption,
     void Function(ScanProgressStatus)? onProgress,
   }) async {
-    await scanSms(scanWindowOption: scanWindowOption, onProgress: onProgress);
+    final activeOption = scanWindowOption ??
+        await _settingsRepository?.getScanWindow() ??
+        ScanWindowOption.allTime;
+    DateTime? startDate;
+    if (activeOption != ScanWindowOption.allTime && _settingsRepository != null) {
+      startDate = await _settingsRepository!.getEffectiveScanWindowAnchorDate();
+    } else if (activeOption != ScanWindowOption.allTime) {
+      startDate = activeOption.anchorDate;
+    }
+
+    await scanSms(
+      scanWindowOption: activeOption,
+      since: startDate,
+      onProgress: onProgress,
+    );
   }
 
-  /// Purges transactions and re-scans cleanly from the SMS inbox.
+  /// Purges transactions and re-scans cleanly from the initial inception anchor date.
   Future<void> purgeAndRescan({
-    ScanWindowOption scanWindowOption = ScanWindowOption.thirtyDays,
+    ScanWindowOption? scanWindowOption,
     void Function(ScanProgressStatus)? onProgress,
   }) async {
+    final activeOption = scanWindowOption ??
+        await _settingsRepository?.getScanWindow() ??
+        ScanWindowOption.allTime;
+    DateTime? startDate;
+    if (activeOption != ScanWindowOption.allTime && _settingsRepository != null) {
+      startDate = await _settingsRepository!.getEffectiveScanWindowAnchorDate();
+    } else if (activeOption != ScanWindowOption.allTime) {
+      startDate = activeOption.anchorDate;
+    }
+
     await _repository.deleteAllTransactions();
     _transactions = [];
     _rebuildAggregateIndices();
     notifyListeners();
-    await scanSms(scanWindowOption: scanWindowOption, onProgress: onProgress);
+    await scanSms(
+      scanWindowOption: activeOption,
+      since: startDate,
+      onProgress: onProgress,
+    );
   }
 
   /// Full reset: clears transactions, custom reasons, notifications, paused banks and re-scans all available history.
@@ -1511,12 +1650,14 @@ class TransactionsViewModel extends ChangeNotifier {
       }
     }
 
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
   Future<void> deleteReasonLink(int id) async {
     await _repository.deleteReasonLink(id);
     _reasonLinks.removeWhere((l) => l.id == id);
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1578,6 +1719,7 @@ class TransactionsViewModel extends ChangeNotifier {
         break;
     }
 
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1758,6 +1900,13 @@ class TransactionsViewModel extends ChangeNotifier {
     } else {
       _transactionSplits[txId] = splits;
     }
+    final idx = _transactions.indexWhere((t) => t.id == txId);
+    if (idx != -1) {
+      _transactions[idx] = _transactions[idx].copyWith(
+        reason: splits.isNotEmpty ? 'Split' : null,
+      );
+    }
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1765,6 +1914,13 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<void> deleteTransactionSplits(String txId) async {
     await _repository.deleteTransactionSplits(txId);
     _transactionSplits.remove(txId);
+    final idx = _transactions.indexWhere((t) => t.id == txId);
+    if (idx != -1) {
+      _transactions[idx] = _transactions[idx].copyWith(
+        reason: null,
+      );
+    }
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 

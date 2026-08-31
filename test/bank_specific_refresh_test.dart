@@ -87,6 +87,16 @@ class FakeSettingsRepo implements SettingsRepository {
   Future<void> setScanWindow(ScanWindowOption option) async {
     scanWindow = option;
   }
+
+  DateTime? scanWindowStartDate;
+  @override
+  Future<DateTime?> getScanWindowStartDate() async => scanWindowStartDate;
+  @override
+  Future<void> setScanWindowStartDate(DateTime? date) async {
+    scanWindowStartDate = date;
+  }
+  @override
+  Future<DateTime?> getEffectiveScanWindowAnchorDate() async => scanWindowStartDate ?? scanWindow.anchorDate;
 }
 
 class FakeTxRepo implements TransactionRepository {

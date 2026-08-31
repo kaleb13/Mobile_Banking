@@ -490,16 +490,20 @@ class BankCardWidget extends StatelessWidget {
                           TextSpan(
                             children: [
                               TextSpan(
-                                text: parts[0],
+                                text: (!isPaused && isBalanceVisible && txCount == 0 && balance == 0.0 && senderName.toUpperCase() != 'CASH WALLET')
+                                    ? 'Unknown Balance'
+                                    : parts[0],
                                 style: TextStyle(
                                   color: textColorPrimary,
-                                  fontSize: balanceFontSize,
+                                  fontSize: (!isPaused && isBalanceVisible && txCount == 0 && balance == 0.0 && senderName.toUpperCase() != 'CASH WALLET')
+                                      ? lerpDouble(17, 21, t)!
+                                      : balanceFontSize,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: isBalanceVisible ? -0.6 : 1.5,
                                   height: 1.0,
                                 ),
                               ),
-                              if (parts[1].isNotEmpty)
+                              if (parts[1].isNotEmpty && (txCount > 0 || balance > 0.0 || senderName.toUpperCase() == 'CASH WALLET'))
                                 TextSpan(
                                   text: '.${parts[1]}',
                                   style: TextStyle(
@@ -515,7 +519,7 @@ class BankCardWidget extends StatelessWidget {
                           ),
                           maxLines: 1,
                         ),
-                        if (isBalanceVisible && !isPaused) ...[
+                        if (isBalanceVisible && !isPaused && (txCount > 0 || balance > 0.0 || senderName.toUpperCase() == 'CASH WALLET')) ...[
                           const SizedBox(width: 5),
                           CurrencySymbolWidget(
                             color: textColorPrimary,
@@ -535,7 +539,9 @@ class BankCardWidget extends StatelessWidget {
                     child: Text(
                       isPaused
                           ? '$txCount saved Transactions'
-                          : '$txCount total Transactions',
+                          : (txCount == 0
+                              ? 'No transactions yet'
+                              : '$txCount total Transactions'),
                       style: TextStyle(
                         color: textColorSub,
                         fontSize: 11,

@@ -31,6 +31,12 @@ class _WalletsScreenState extends State<WalletsScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+      if (txVM.senders.isEmpty) {
+        txVM.ensureDefaultSenders();
+      }
+    });
   }
 
   @override
@@ -512,7 +518,6 @@ class _WalletsScreenState extends State<WalletsScreen>
     );
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Wallet Card – renders as a placeholder during page transition, since
 // main_shell's flying overlay handles 100% of the flight visuals for ALL cards.
@@ -545,6 +550,9 @@ class _WalletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
+    final bool isNoTx = (txCount == 0 && !isPaused && senderName.toUpperCase() != 'CASH WALLET');
+
     return Selector<SettingsViewModel, bool>(
       selector: (_, vm) => vm.pageOffset < 0.98,
       builder: (context, isTransitioning, _) {
@@ -555,7 +563,7 @@ class _WalletCard extends StatelessWidget {
         if (isTransitioning) {
           return Container(
             margin: const EdgeInsets.only(bottom: 14),
-            height: 172,
+            height: isNoTx ? 220 : 172,
             decoration: BoxDecoration(
               color: Colors.transparent,
               borderRadius: AppRadius.cardRadius,
@@ -564,18 +572,56 @@ class _WalletCard extends StatelessWidget {
         }
 
         // Fully expanded real card widget
-        return BankCardWidget(
-          senderName: senderName,
-          balance: balance,
-          txCount: txCount,
-          isBalanceVisible: isBalanceVisible,
-          isPaused: isPaused,
-          accountCount: accountCount,
-          onTap: onTap,
-          onEnterReorderMode: onEnterReorderMode,
-          isTopCard: isTopCard,
-          dragHandle: dragHandle,
-          animationFactor: 1.0,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BankCardWidget(
+              senderName: senderName,
+              balance: balance,
+              txCount: txCount,
+              isBalanceVisible: isBalanceVisible,
+              isPaused: isPaused,
+              accountCount: accountCount,
+              onTap: onTap,
+              onEnterReorderMode: onEnterReorderMode,
+              isTopCard: isTopCard,
+              dragHandle: dragHandle,
+              animationFactor: 1.0,
+            ),
+            if (isNoTx)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 14),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppRadius.cardRadius,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 15,
+                        color: AppColors.textSoft,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Scanning from ${settingsVM.scanWindowOption.title}. No transactions found starting from this date. New transactions will appear automatically.',
+                          style: const TextStyle(
+                            color: AppColors.textSoft,
+                            fontSize: 11,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );

@@ -535,88 +535,48 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
         final List<Widget> optionWidgets = [];
 
-        if (activeScanOption == ScanWindowOption.todayOnly) {
-          optionWidgets.add(optionWidget(
-            icon: Icons.today_rounded,
-            title: 'Today only',
-            subtitle: 'Recent 24 hours of $bankName messages',
-            option: ScanWindowOption.todayOnly,
-          ));
-          optionWidgets.add(optionWidget(
-            icon: Icons.history_rounded,
-            title: 'Past 7 days',
-            subtitle: 'Quick — recent $bankName messages',
-            option: ScanWindowOption.sevenDays,
-          ));
-        } else if (activeScanOption == ScanWindowOption.sevenDays) {
-          optionWidgets.add(optionWidget(
-            icon: Icons.today_rounded,
-            title: 'Today only',
-            subtitle: 'Recent 24 hours of $bankName messages',
-            option: ScanWindowOption.todayOnly,
-          ));
+        optionWidgets.add(optionWidget(
+          icon: Icons.today_rounded,
+          title: 'Today only',
+          subtitle: 'Recent 24 hours of $bankName messages',
+          option: ScanWindowOption.todayOnly,
+        ));
+
+        if (activeScanOption != ScanWindowOption.todayOnly) {
           optionWidgets.add(optionWidget(
             icon: Icons.history_rounded,
             title: 'Past 7 days',
-            subtitle: 'Standard — recent $bankName messages',
+            subtitle: 'Recent $bankName messages',
             option: ScanWindowOption.sevenDays,
           ));
-        } else if (activeScanOption == ScanWindowOption.thirtyDays) {
-          optionWidgets.add(optionWidget(
-            icon: Icons.history_rounded,
-            title: 'Past 7 days',
-            subtitle: 'Quick — recent $bankName messages only',
-            option: ScanWindowOption.sevenDays,
-          ));
+        }
+
+        if (activeScanOption == ScanWindowOption.thirtyDays ||
+            activeScanOption == ScanWindowOption.ninetyDays ||
+            activeScanOption == ScanWindowOption.allTime) {
           optionWidgets.add(optionWidget(
             icon: Icons.date_range_rounded,
             title: 'Last 30 days',
-            subtitle: 'Standard — 1-month $bankName catch-up',
+            subtitle: 'Past 1 month of $bankName records',
             option: ScanWindowOption.thirtyDays,
           ));
-        } else if (activeScanOption == ScanWindowOption.ninetyDays) {
-          optionWidgets.add(optionWidget(
-            icon: Icons.history_rounded,
-            title: 'Past 7 days',
-            subtitle: 'Quick — recent $bankName messages only',
-            option: ScanWindowOption.sevenDays,
-          ));
-          optionWidgets.add(optionWidget(
-            icon: Icons.date_range_rounded,
-            title: 'Last 30 days',
-            subtitle: 'Standard — 1-month $bankName catch-up',
-            option: ScanWindowOption.thirtyDays,
-          ));
+        }
+
+        if (activeScanOption == ScanWindowOption.ninetyDays ||
+            activeScanOption == ScanWindowOption.allTime) {
           optionWidgets.add(optionWidget(
             icon: Icons.calendar_month_rounded,
             title: 'Last 90 days',
-            subtitle: 'Extended — 3-month $bankName catch-up',
+            subtitle: 'Past 3 months of $bankName records',
             option: ScanWindowOption.ninetyDays,
           ));
-        } else {
-          // ScanWindowOption.allTime
-          optionWidgets.add(optionWidget(
-            icon: Icons.history_rounded,
-            title: 'Past 7 days',
-            subtitle: 'Quick — recent $bankName messages only',
-            option: ScanWindowOption.sevenDays,
-          ));
-          optionWidgets.add(optionWidget(
-            icon: Icons.date_range_rounded,
-            title: 'Last 30 days',
-            subtitle: 'Standard — 1-month $bankName catch-up',
-            option: ScanWindowOption.thirtyDays,
-          ));
-          optionWidgets.add(optionWidget(
-            icon: Icons.calendar_month_rounded,
-            title: 'Last 90 days',
-            subtitle: 'Extended — 3-month $bankName catch-up',
-            option: ScanWindowOption.ninetyDays,
-          ));
+        }
+
+        if (activeScanOption == ScanWindowOption.allTime) {
           optionWidgets.add(optionWidget(
             icon: Icons.all_inclusive_rounded,
             title: 'All Time',
-            subtitle: 'Complete — all historical $bankName records',
+            subtitle: 'Complete all historical $bankName records',
             option: ScanWindowOption.allTime,
           ));
         }
@@ -876,13 +836,64 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
   Widget _buildTransactionSliverList(List<AppTransaction> transactions) {
     if (transactions.isEmpty) {
-      return const SliverToBoxAdapter(
+      final settingsVM = context.read<SettingsViewModel>();
+      final scanOption = settingsVM.scanWindowOption;
+      final bankName = widget.sender.senderName;
+      final isFiltered = _isBookmarkedOnly ||
+          _typeFilter != 'All' ||
+          _senderFilter != 'All Senders' ||
+          _dateRangeFilter != 'All Time' ||
+          _searchQuery.isNotEmpty;
+
+      return SliverToBoxAdapter(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
-          child: Center(
-            child: Text(
-              'No matching transactions.',
-              style: TextStyle(color: AppColors.textSoft),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 36),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: AppRadius.cardRadius,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.receipt_long_outlined,
+                    color: AppColors.textSoft,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isFiltered
+                      ? 'No Matching Transactions'
+                      : 'No Transactions Yet',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isFiltered
+                      ? 'No $bankName transactions match your current search and filter settings.'
+                      : 'Scanning started from ${scanOption.title}. No transactions found for $bankName starting from this date. Whenever SMS or transactions appear after this date, they will be displayed here.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.textSoft,
+                    fontSize: 12.5,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

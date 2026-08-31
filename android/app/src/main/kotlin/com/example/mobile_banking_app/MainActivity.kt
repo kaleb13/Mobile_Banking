@@ -287,6 +287,68 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                     }.start()
                 }
+                "detectBankSenders" -> {
+                    val rawSenders = call.argument<List<String>>("senders") 
+                        ?: listOf()
+                    val targetKeywords = rawSenders.filter { it.isNotBlank() }.map { it.trim().lowercase() }.toSet()
+
+                    Thread {
+                        try {
+                            val smsUri = Uri.parse("content://sms")
+                            var cursor = try {
+                                contentResolver.query(
+                                    smsUri,
+                                    arrayOf(Telephony.Sms.ADDRESS),
+                                    null,
+                                    null,
+                                    null
+                                )
+                            } catch (_: Exception) {
+                                null
+                            }
+                            if (cursor == null) {
+                                cursor = try {
+                                    contentResolver.query(
+                                        Telephony.Sms.Inbox.CONTENT_URI,
+                                        arrayOf(Telephony.Sms.ADDRESS),
+                                        null,
+                                        null,
+                                        null
+                                    )
+                                } catch (_: Exception) {
+                                    null
+                                }
+                            }
+
+                            val matchedSenders = HashSet<String>()
+                            cursor?.use {
+                                val addrIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
+                                if (addrIdx >= 0) {
+                                    while (it.moveToNext()) {
+                                        val addr = it.getString(addrIdx)
+                                        if (!addr.isNullOrBlank()) {
+                                            val lowerAddr = addr.trim().lowercase()
+                                            val isBank = targetKeywords.isEmpty() ||
+                                                    targetKeywords.contains(lowerAddr) ||
+                                                    targetKeywords.any { k -> lowerAddr.contains(k) }
+                                            if (isBank) {
+                                                matchedSenders.add(addr.trim())
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(matchedSenders.toList())
+                            }
+                        } catch (e: Exception) {
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(emptyList<String>())
+                            }
+                        }
+                    }.start()
+                }
                 else -> result.notImplemented()
             }
         }

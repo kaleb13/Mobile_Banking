@@ -44,6 +44,10 @@ abstract class SettingsRepository {
   Future<ScanWindowOption> getScanWindow();
   Future<void> setScanWindow(ScanWindowOption option);
 
+  Future<DateTime?> getScanWindowStartDate();
+  Future<void> setScanWindowStartDate(DateTime? date);
+  Future<DateTime?> getEffectiveScanWindowAnchorDate();
+
   Future<bool> getIsBalanceVisible();
   Future<void> setIsBalanceVisible(bool value);
 
@@ -250,5 +254,57 @@ class SettingsRepositoryImpl implements SettingsRepository {
   Future<void> setScanWindow(ScanWindowOption option) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('scan_window_option_index', option.index);
+    if (option == ScanWindowOption.allTime) {
+      await prefs.remove('scan_window_start_date_ms');
+    } else {
+      final now = DateTime.now();
+      DateTime startDate;
+      switch (option) {
+        case ScanWindowOption.todayOnly:
+          startDate = DateTime(now.year, now.month, now.day);
+          break;
+        case ScanWindowOption.sevenDays:
+          startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 7));
+          break;
+        case ScanWindowOption.thirtyDays:
+          startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 30));
+          break;
+        case ScanWindowOption.ninetyDays:
+          startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 90));
+          break;
+        case ScanWindowOption.allTime:
+          startDate = DateTime(2000, 1, 1);
+          break;
+      }
+      await prefs.setInt('scan_window_start_date_ms', startDate.millisecondsSinceEpoch);
+    }
+  }
+
+  @override
+  Future<DateTime?> getScanWindowStartDate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ms = prefs.getInt('scan_window_start_date_ms');
+    return ms != null ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
+  }
+
+  @override
+  Future<void> setScanWindowStartDate(DateTime? date) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (date != null) {
+      await prefs.setInt('scan_window_start_date_ms', date.millisecondsSinceEpoch);
+    } else {
+      await prefs.remove('scan_window_start_date_ms');
+    }
+  }
+
+  @override
+  Future<DateTime?> getEffectiveScanWindowAnchorDate() async {
+    final option = await getScanWindow();
+    if (option == ScanWindowOption.allTime) return null;
+    final savedStart = await getScanWindowStartDate();
+    if (savedStart != null) return savedStart;
+    final fallback = option.anchorDate;
+    await setScanWindowStartDate(fallback);
+    return fallback;
   }
 }

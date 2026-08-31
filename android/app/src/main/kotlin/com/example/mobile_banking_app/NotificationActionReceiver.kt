@@ -165,12 +165,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 if (subcategoryId != null) {
                     put("subcategoryId", subcategoryId)
                 }
+                putNull("customReasonText")
             }
 
-            // 3a. Primary: match by rawMessage (normalized whitespace to bridge \r\n vs \n differences)
+            // 3a. Primary: match by rawMessage (normalized whitespace to bridge \r\n vs \n differences, newest first)
             if (!notifBody.isNullOrBlank()) {
                 val normalizedNotifBody = notifBody.replace(Regex("\\s+"), " ").trim()
-                val cursorTx = db.rawQuery("SELECT id, rawMessage FROM transactions", null)
+                val cursorTx = db.rawQuery("SELECT id, rawMessage FROM transactions ORDER BY date DESC, rowid DESC", null)
                 while (cursorTx.moveToNext()) {
                     val realId = cursorTx.getString(0)
                     val txRawMsg = cursorTx.getString(1) ?: ""
@@ -187,7 +188,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             // 3b. Fallback: try direct id or bankReference match
             if (!realTxFound) {
                 val cursorById = db.rawQuery(
-                    "SELECT id FROM transactions WHERE id = ? OR bankReference = ? LIMIT 1",
+                    "SELECT id FROM transactions WHERE id = ? OR bankReference = ? ORDER BY date DESC, rowid DESC LIMIT 1",
                     arrayOf(txId, txId)
                 )
                 if (cursorById.moveToFirst()) {

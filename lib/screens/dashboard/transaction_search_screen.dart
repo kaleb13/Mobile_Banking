@@ -558,7 +558,10 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                       if (tx.reasonId == null &&
                           (tx.customReasonText == null ||
                               tx.customReasonText!.isEmpty) &&
-                          (tx.reason == null || tx.reason!.isEmpty))
+                          (tx.reason == null || tx.reason!.isEmpty) &&
+                          !Provider.of<TransactionsViewModel>(context,
+                                  listen: false)
+                              .hasSplits(tx.id))
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),
                           child: ReasonBadge(),

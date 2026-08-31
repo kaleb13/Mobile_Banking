@@ -16,6 +16,7 @@ class AnimatedBalanceText extends StatelessWidget {
   final String suffix;
   final bool isMasked;
   final String maskText;
+  final bool isUnknown;
 
   const AnimatedBalanceText({
     super.key,
@@ -28,6 +29,7 @@ class AnimatedBalanceText extends StatelessWidget {
     this.suffix = '',
     this.isMasked = false,
     this.maskText = '••••••',
+    this.isUnknown = false,
   });
 
   @override
@@ -36,6 +38,17 @@ class AnimatedBalanceText extends StatelessWidget {
       return Text(
         '$prefix$maskText$suffix',
         style: integerStyle ?? AppTypography.displayLarge,
+      );
+    }
+
+    if (isUnknown) {
+      return Text(
+        'Unknown',
+        style: (integerStyle ?? AppTypography.displayLarge).copyWith(
+          fontSize: (integerStyle?.fontSize != null)
+              ? integerStyle!.fontSize! * 0.85
+              : 28,
+        ),
       );
     }
 

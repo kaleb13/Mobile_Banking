@@ -153,16 +153,18 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 }
 
                 "saveReasonWithRule" -> {
+                    val txIdArg = call.argument<String>("txId")?.takeIf { it.isNotBlank() } ?: txId
                     val reasonName = call.argument<String>("reasonName") ?: ""
                     val reasonId = call.argument<Int>("reasonId")
                     val contactName = call.argument<String>("contactName") ?: ""
                     if (reasonName.isNotBlank()) {
-                        val saved = saveReasonWithRule(txId, smsBody, reasonName, reasonId, contactName)
+                        val saved = saveReasonWithRule(txIdArg, smsBody, reasonName, reasonId, contactName)
                         if (saved) {
                             setReasonUpdatePending()
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
                             if (notifId != -1) notificationManager?.cancel(notifId)
                             if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
+                            if (txIdArg.isNotBlank()) notificationManager?.cancel(txIdArg.hashCode())
                             try {
                                 MainActivity.smsEventSink?.success("reasonUpdated")
                             } catch (_: Exception) {}
@@ -175,15 +177,17 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 }
 
                 "saveReason" -> {
+                    val txIdArg = call.argument<String>("txId")?.takeIf { it.isNotBlank() } ?: txId
                     val reasonName = call.argument<String>("reasonName") ?: ""
                     val reasonId = call.argument<Int>("reasonId")
                     if (reasonName.isNotBlank()) {
-                        val saved = saveReasonToTransaction(txId, smsBody, reasonName, reasonId)
+                        val saved = saveReasonToTransaction(txIdArg, smsBody, reasonName, reasonId)
                         if (saved) {
                             setReasonUpdatePending()
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
                             if (notifId != -1) notificationManager?.cancel(notifId)
                             if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
+                            if (txIdArg.isNotBlank()) notificationManager?.cancel(txIdArg.hashCode())
                             try {
                                 MainActivity.smsEventSink?.success("reasonUpdated")
                             } catch (_: Exception) {}
@@ -192,6 +196,18 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     } else {
                         result.error("INVALID", "Reason name is blank", null)
                     }
+                    finish()
+                }
+
+                "saveSplits" -> {
+                    setReasonUpdatePending()
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                    if (notifId != -1) notificationManager?.cancel(notifId)
+                    if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
+                    try {
+                        MainActivity.smsEventSink?.success("reasonUpdated")
+                    } catch (_: Exception) {}
+                    result.success(true)
                     finish()
                 }
 
@@ -304,34 +320,23 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 }
                 if (categoryId != null) {
                     put("categoryId", categoryId)
+                } else {
+                    putNull("categoryId")
                 }
                 if (subcategoryId != null) {
                     put("subcategoryId", subcategoryId)
+                } else {
+                    putNull("subcategoryId")
                 }
+                putNull("customReasonText")
             }
 
             var found = false
 
-            // Strategy 1: Match by rawMessage (primary — bridges SHA-256 vs bank-ref ID gap)
-            if (smsBody.isNotBlank()) {
-                val normalizedBody = smsBody.replace(Regex("\\s+"), " ").trim()
-                val cursor = db.rawQuery("SELECT id, rawMessage FROM transactions", null)
-                while (cursor.moveToNext()) {
-                    val realId = cursor.getString(0)
-                    val txRaw = cursor.getString(1) ?: ""
-                    if (txRaw.replace(Regex("\\s+"), " ").trim() == normalizedBody) {
-                        db.update("transactions", values, "id = ?", arrayOf(realId))
-                        found = true
-                        break
-                    }
-                }
-                cursor.close()
-            }
-
-            // Strategy 2: Direct ID or bankReference fallback
-            if (!found) {
+            // Strategy 1: Direct ID or bankReference match (if txId is valid)
+            if (txId.isNotBlank()) {
                 val cursor = db.rawQuery(
-                    "SELECT id FROM transactions WHERE id = ? OR bankReference = ? LIMIT 1",
+                    "SELECT id FROM transactions WHERE id = ? OR bankReference = ? ORDER BY date DESC, rowid DESC LIMIT 1",
                     arrayOf(txId, txId)
                 )
                 if (cursor.moveToFirst()) {
@@ -342,6 +347,22 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 } else {
                     cursor.close()
                 }
+            }
+
+            // Strategy 2: Match by rawMessage (newest first)
+            if (!found && smsBody.isNotBlank()) {
+                val normalizedBody = smsBody.replace(Regex("\\s+"), " ").trim()
+                val cursor = db.rawQuery("SELECT id, rawMessage FROM transactions ORDER BY date DESC, rowid DESC", null)
+                while (cursor.moveToNext()) {
+                    val realId = cursor.getString(0)
+                    val txRaw = cursor.getString(1) ?: ""
+                    if (txRaw.replace(Regex("\\s+"), " ").trim() == normalizedBody) {
+                        db.update("transactions", values, "id = ?", arrayOf(realId))
+                        found = true
+                        break
+                    }
+                }
+                cursor.close()
             }
 
             // Also update the notifications table (both by direct ID and by matching body)
@@ -399,7 +420,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
 
             if (smsBody.isNotBlank()) {
                 val normalizedBody = smsBody.replace(Regex("\\s+"), " ").trim()
-                val cursor = db.rawQuery("SELECT id, name, amount, type, date, sender, category, rawMessage FROM transactions", null)
+                val cursor = db.rawQuery("SELECT id, name, amount, type, date, sender, category, rawMessage FROM transactions ORDER BY date DESC, rowid DESC", null)
                 while (cursor.moveToNext()) {
                     val txRaw = cursor.getString(7) ?: ""
                     if (txRaw.replace(Regex("\\s+"), " ").trim() == normalizedBody) {
@@ -422,7 +443,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
 
             if (result.isEmpty() && txId.isNotBlank()) {
                 val cursor = db.rawQuery(
-                    "SELECT id, name, amount, type, date, sender, category, rawMessage FROM transactions WHERE id = ? OR bankReference = ? LIMIT 1",
+                    "SELECT id, name, amount, type, date, sender, category, rawMessage FROM transactions WHERE id = ? OR bankReference = ? ORDER BY date DESC, rowid DESC LIMIT 1",
                     arrayOf(txId, txId)
                 )
                 if (cursor.moveToFirst()) {
@@ -599,6 +620,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
             val txValues = ContentValues().apply {
                 put("reason", "Loan")
                 if (loanReasonId != null) put("reasonId", loanReasonId)
+                putNull("customReasonText")
             }
             db.update("transactions", txValues, "id = ?", arrayOf(sourceRealId))
 

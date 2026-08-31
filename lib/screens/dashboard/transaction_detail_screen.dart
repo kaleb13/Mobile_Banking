@@ -109,6 +109,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     // Save the reason to the DB first.
     await _save(txVM);
 
+    if (mounted) {
+      setState(() {
+        _selectedReason = null;
+      });
+    }
+
     if (!mounted || !context.mounted) return;
 
     final latestTx = txVM.transactions

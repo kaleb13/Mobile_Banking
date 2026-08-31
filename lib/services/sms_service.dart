@@ -81,6 +81,44 @@ class SmsService {
     return await Permission.sms.isGranted;
   }
 
+  /// Queries the device for distinct bank senders present in the SMS inbox across all-time history.
+  Future<List<String>> detectBankingSendersInInbox({
+    List<String> customSenders = const [],
+  }) async {
+    bool hasPermission = await requestPermission();
+    if (!hasPermission) return [];
+
+    try {
+      final List<String> allKeywords = {
+        ...BankSenders.standardBankKeywords,
+        ...customSenders.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty),
+      }.toList();
+
+      final List<dynamic>? res = await _smsScannerChannel.invokeMethod('detectBankSenders', {
+        'senders': allKeywords,
+      });
+
+      if (res != null) {
+        final rawAddresses = res.map((e) => e.toString()).toList();
+        final Set<String> detectedBanks = {};
+        for (final addr in rawAddresses) {
+          final matched = BankSenders.match(addr);
+          if (matched != null) {
+            detectedBanks.add(matched);
+          } else {
+            for (final cs in customSenders) {
+              if (cs.trim().toLowerCase() == addr.trim().toLowerCase()) {
+                detectedBanks.add(cs.trim());
+              }
+            }
+          }
+        }
+        return detectedBanks.toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   /// High-speed native Android query that filters by bank senders and anchor date
   /// on a background thread in native code before crossing to Dart.
   Future<List<RawSmsData>> getBankMessagesFast({

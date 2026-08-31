@@ -787,18 +787,10 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     for (final s in rawList) {
       final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
       final key = canonical.toUpperCase();
-      final isPaused = pausedCanonicalUpper.contains(key);
-      final hasTxs = activeTxBankNames.contains(key);
 
-      // Keep only if it has actual transactions recorded OR is a paused bank
-      if (isPaused || hasTxs) {
-        if (!uniqueMap.containsKey(key)) {
-          uniqueMap[key] = AppSender(id: s.id, senderName: canonical);
-        } else {
-          if (s.id != null) toDeleteIds.add(s.id!);
-        }
+      if (!uniqueMap.containsKey(key)) {
+        uniqueMap[key] = AppSender(id: s.id, senderName: canonical);
       } else {
-        // Bank with no transactions and not paused — clean up
         if (s.id != null) toDeleteIds.add(s.id!);
       }
     }
@@ -955,7 +947,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
         final resolvedReasonName = matchedReason?.name ?? reasonName;
 
         final txRows = await db.rawQuery(
-          "SELECT id, rawMessage, reason FROM transactions WHERE reason IS NULL OR TRIM(reason) = '' OR LOWER(TRIM(reason)) = 'uncategorized'",
+          "SELECT id, rawMessage, reason FROM transactions ORDER BY date DESC, rowid DESC",
         );
 
         bool matched = false;
@@ -971,6 +963,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
                 'reasonId': reasonId,
                 'categoryId': categoryId,
                 'subcategoryId': subcategoryId,
+                'customReasonText': null,
               },
               where: 'id = ?',
               whereArgs: [tx['id']],
@@ -1961,17 +1954,39 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       for (final s in splits) {
         await txn.insert('transaction_splits', s.toMap());
       }
+      if (splits.isNotEmpty) {
+        await txn.update(
+          'transactions',
+          {'reason': 'Split'},
+          where: 'id = ?',
+          whereArgs: [transactionId],
+        );
+      } else {
+        await txn.update(
+          'transactions',
+          {'reason': null, 'reasonId': null, 'customReasonText': null},
+          where: 'id = ?',
+          whereArgs: [transactionId],
+        );
+      }
     });
   }
 
   /// Deletes all split allocations for a specific transaction.
   Future<int> deleteTransactionSplits(String transactionId) async {
     final db = await instance.database;
-    return await db.delete(
+    final count = await db.delete(
       'transaction_splits',
       where: 'transactionId = ?',
       whereArgs: [transactionId],
     );
+    await db.update(
+      'transactions',
+      {'reason': null, 'reasonId': null, 'customReasonText': null},
+      where: 'id = ?',
+      whereArgs: [transactionId],
+    );
+    return count;
   }
 }
 

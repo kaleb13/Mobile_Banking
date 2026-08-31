@@ -428,21 +428,26 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                                   CrossAxisAlignment.center,
                                               children: [
                                                 Text(
-                                                  fmt.format(
-                                                      widget.currentBalance),
+                                                  (widget.txCount == 0 && widget.currentBalance == 0.0)
+                                                      ? 'Unknown Balance'
+                                                      : fmt.format(widget.currentBalance),
                                                   style: TextStyle(
                                                     color: textColorPrimary,
-                                                    fontSize: 28,
+                                                    fontSize: (widget.txCount == 0 && widget.currentBalance == 0.0)
+                                                        ? 22
+                                                        : 28,
                                                     fontWeight: FontWeight.w800,
                                                     letterSpacing: -0.5,
                                                   ),
                                                   maxLines: 1,
                                                 ),
-                                                const SizedBox(width: 6),
-                                                CurrencySymbolWidget(
-                                                  color: textColorPrimary,
-                                                  size: 19,
-                                                ),
+                                                if (widget.txCount > 0 || widget.currentBalance > 0.0) ...[
+                                                  const SizedBox(width: 6),
+                                                  CurrencySymbolWidget(
+                                                    color: textColorPrimary,
+                                                    size: 19,
+                                                  ),
+                                                ],
                                                 const SizedBox(width: 6),
                                                 IconButton(
                                                   icon: Icon(
@@ -602,6 +607,26 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
     required bool isDarkTheme,
     required VoidCallback onTap,
   }) {
+    if (widget.txCount == 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDarkTheme
+              ? Colors.black.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: Text(
+          'No activity yet',
+          style: TextStyle(
+            color: textColor,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
     final isPositive = change >= 0;
     final fmt = NumberFormat('#,##0.00');
     final formattedChange =

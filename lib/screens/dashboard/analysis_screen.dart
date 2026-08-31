@@ -12,6 +12,7 @@ import '../../models/transaction.dart';
 import '../../models/transaction_split.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
+import '../../models/scan_window_option.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_header.dart';
@@ -74,24 +75,55 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   dynamic _cachedAnalyticsData;
   String _lastAnalyticsCacheKey = '';
 
+  ScanWindowOption _getActiveScanWindow() {
+    try {
+      final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
+      return settingsVM.scanWindowOption;
+    } catch (_) {
+      return ScanWindowOption.sevenDays;
+    }
+  }
+
+  int _getLookbackDays() {
+    final option = _getActiveScanWindow();
+    if (option == ScanWindowOption.allTime) return -1;
+    try {
+      final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+      if (txVM.transactions.isNotEmpty) {
+        final oldest = txVM.transactions.map((t) => t.date).reduce((a, b) => a.isBefore(b) ? a : b);
+        final spanDays = DateTime.now().difference(oldest).inDays + 1;
+        return max(option.days, spanDays);
+      }
+    } catch (_) {}
+    return option.days;
+  }
+
   DateTime _getSynchronizedTargetDate() {
     final now = DateTime.now();
+    final subItems = _getSubPeriodItemsFormatted();
+    final int safeIndex = _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
+
     switch (_selectedPeriod) {
       case PeriodFilter.day:
-        return now.subtract(Duration(days: 13 - _selectedSubPeriodIndex));
+        final int daysOffset = (subItems.length - 1) - safeIndex;
+        return now.subtract(Duration(days: daysOffset));
       case PeriodFilter.week:
-        final subItems = _getSubPeriodItems();
-        final int weeksOffset = (subItems.length - 1) - _selectedSubPeriodIndex;
+        final int weeksOffset = (subItems.length - 1) - safeIndex;
         final currentMonday = now.subtract(Duration(days: now.weekday - 1));
         return DateTime(currentMonday.year, currentMonday.month, currentMonday.day)
             .subtract(Duration(days: 7 * weeksOffset));
       case PeriodFilter.month:
-        return DateTime(_selectedYear, _selectedSubPeriodIndex + 1, 1);
+        final months = _getMonthsInWindow(now, _getLookbackDays());
+        final targetMonth = safeIndex < months.length ? months[safeIndex] : now.month;
+        return DateTime(_selectedYear, targetMonth, 1);
       case PeriodFilter.quarter:
-        final startMonth = (_selectedSubPeriodIndex * 3) + 1;
+        final quarters = _getQuartersInWindow(now, _getLookbackDays());
+        final targetQ = safeIndex < quarters.length ? quarters[safeIndex] : ((now.month - 1) ~/ 3);
+        final startMonth = (targetQ * 3) + 1;
         return DateTime(_selectedYear, startMonth, 1);
       case PeriodFilter.year:
-        final targetYear = now.year - (2 - _selectedSubPeriodIndex);
+        final years = _getYearsInWindow(now, _getLookbackDays());
+        final targetYear = safeIndex < years.length ? years[safeIndex] : now.year;
         return DateTime(targetYear, 1, 1);
       case PeriodFilter.allTime:
         return now;
@@ -101,8 +133,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   DateTimeRange? _getSynchronizedWeekRange() {
     if (_selectedPeriod != PeriodFilter.week) return null;
     final now = DateTime.now();
-    final subItems = _getSubPeriodItems();
-    final int weeksOffset = (subItems.length - 1) - _selectedSubPeriodIndex;
+    final subItems = _getSubPeriodItemsFormatted();
+    final int safeIndex = _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
+    final int weeksOffset = (subItems.length - 1) - safeIndex;
     final currentMonday = now.subtract(Duration(days: now.weekday - 1));
     final targetMonday = DateTime(currentMonday.year, currentMonday.month, currentMonday.day)
         .subtract(Duration(days: 7 * weeksOffset));
@@ -112,6 +145,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
   AppDateFilterValue _getActiveDateFilterValue() {
     final now = DateTime.now();
+    final subItems = _getSubPeriodItemsFormatted();
+    final int safeIndex = _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
+
     switch (_selectedPeriod) {
       case PeriodFilter.allTime:
         return const AppDateFilterValue.anyTime();
@@ -133,7 +169,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         }
         return const AppDateFilterValue.thisWeek();
       case PeriodFilter.month:
-        final targetMonth = _selectedSubPeriodIndex + 1;
+        final months = _getMonthsInWindow(now, _getLookbackDays());
+        final targetMonth = safeIndex < months.length ? months[safeIndex] : now.month;
         if (_selectedYear == now.year && targetMonth == now.month) {
           return const AppDateFilterValue.thisMonth();
         }
@@ -141,12 +178,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final endOfMonth = DateTime(_selectedYear, targetMonth + 1, 0, 23, 59, 59);
         return AppDateFilterValue.dateRange(DateTimeRange(start: startOfMonth, end: endOfMonth));
       case PeriodFilter.quarter:
-        final startMonth = (_selectedSubPeriodIndex * 3) + 1;
+        final quarters = _getQuartersInWindow(now, _getLookbackDays());
+        final targetQ = safeIndex < quarters.length ? quarters[safeIndex] : ((now.month - 1) ~/ 3);
+        final startMonth = (targetQ * 3) + 1;
         final startOfQ = DateTime(_selectedYear, startMonth, 1);
         final endOfQ = DateTime(_selectedYear, startMonth + 3, 0, 23, 59, 59);
         return AppDateFilterValue.dateRange(DateTimeRange(start: startOfQ, end: endOfQ));
       case PeriodFilter.year:
-        final targetYear = now.year - (2 - _selectedSubPeriodIndex);
+        final years = _getYearsInWindow(now, _getLookbackDays());
+        final targetYear = safeIndex < years.length ? years[safeIndex] : now.year;
         if (targetYear == now.year) {
           return const AppDateFilterValue.thisYear();
         }
@@ -258,14 +298,94 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     super.dispose();
   }
 
+  List<int> _getMonthsInWindow(DateTime now, int lookback) {
+    if (lookback == 0) {
+      return [now.month];
+    }
+    if (lookback > 0) {
+      final startDt = now.subtract(Duration(days: lookback));
+      if (_selectedYear == now.year) {
+        final startMonth = startDt.year == now.year ? startDt.month : 1;
+        final list = <int>[];
+        for (int m = startMonth; m <= now.month; m++) {
+          list.add(m);
+        }
+        return list.isEmpty ? [now.month] : list;
+      } else if (_selectedYear == startDt.year) {
+        final list = <int>[];
+        for (int m = startDt.month; m <= 12; m++) {
+          list.add(m);
+        }
+        return list.isEmpty ? [12] : list;
+      } else {
+        return [now.month];
+      }
+    }
+    // lookback == -1 (allTime)
+    final maxMonth = (_selectedYear == now.year) ? now.month : 12;
+    return List.generate(maxMonth, (i) => i + 1);
+  }
+
+  List<int> _getQuartersInWindow(DateTime now, int lookback) {
+    final currentQ = (now.month - 1) ~/ 3;
+    if (lookback == 0) {
+      return [currentQ];
+    }
+    if (lookback > 0) {
+      final startDt = now.subtract(Duration(days: lookback));
+      if (_selectedYear == now.year) {
+        final startQ = startDt.year == now.year ? ((startDt.month - 1) ~/ 3) : 0;
+        final list = <int>[];
+        for (int q = startQ; q <= currentQ; q++) {
+          list.add(q);
+        }
+        return list.isEmpty ? [currentQ] : list;
+      } else if (_selectedYear == startDt.year) {
+        final startQ = (startDt.month - 1) ~/ 3;
+        final list = <int>[];
+        for (int q = startQ; q <= 3; q++) {
+          list.add(q);
+        }
+        return list.isEmpty ? [3] : list;
+      } else {
+        return [currentQ];
+      }
+    }
+    // allTime
+    final maxQ = (_selectedYear == now.year) ? currentQ : 3;
+    return List.generate(maxQ + 1, (i) => i);
+  }
+
+  List<int> _getYearsInWindow(DateTime now, int lookback) {
+    if (lookback == 0) {
+      return [now.year];
+    }
+    if (lookback > 0) {
+      final earliestYear = now.subtract(Duration(days: lookback)).year;
+      if (earliestYear == now.year) {
+        return [now.year];
+      }
+      final list = <int>[];
+      for (int y = earliestYear; y <= now.year; y++) {
+        list.add(y);
+      }
+      return list;
+    }
+    return [now.year - 2, now.year - 1, now.year];
+  }
+
   List<({String label, String shortLabel})> _getSubPeriodItemsFormatted() {
     final now = DateTime.now();
+    final lookback = _getLookbackDays();
+
     switch (_selectedPeriod) {
       case PeriodFilter.day:
         final DateFormat dayFmt = DateFormat('E, MMM d');
         final DateFormat shortFmt = DateFormat('MMM d');
-        return List.generate(14, (i) {
-          final d = now.subtract(Duration(days: 13 - i));
+        final int dayCount = lookback == 0 ? 1 : (lookback > 0 ? (lookback + 1) : 90);
+
+        return List.generate(dayCount, (i) {
+          final d = now.subtract(Duration(days: (dayCount - 1) - i));
           if (d.year == now.year && d.month == now.month && d.day == now.day) {
             return (label: 'Today', shortLabel: 'Today');
           }
@@ -277,68 +397,62 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           }
           return (label: dayFmt.format(d), shortLabel: shortFmt.format(d));
         });
+
       case PeriodFilter.week:
-        return [
-          (label: '4 Wks Ago', shortLabel: '4 Wks Ago'),
-          (label: '3 Wks Ago', shortLabel: '3 Wks Ago'),
-          (label: '2 Wks Ago', shortLabel: '2 Wks Ago'),
-          (label: 'Last Week', shortLabel: 'Last Week'),
-          (label: 'This Week', shortLabel: 'This Week'),
-        ];
+        if (lookback == 0) {
+          return const [(label: 'This Week', shortLabel: 'This Week')];
+        }
+        final int maxWeeks = lookback == 7 ? 2 : (lookback == 30 ? 5 : (lookback == 90 ? 13 : 26));
+        final List<({String label, String shortLabel})> weeks = [];
+        for (int i = maxWeeks - 1; i >= 0; i--) {
+          if (i == 0) {
+            weeks.add((label: 'This Week', shortLabel: 'This Week'));
+          } else if (i == 1) {
+            weeks.add((label: 'Last Week', shortLabel: 'Last Week'));
+          } else {
+            weeks.add((label: '$i Wks Ago', shortLabel: '$i Wks Ago'));
+          }
+        }
+        return weeks;
+
       case PeriodFilter.month:
         const allMonths = [
-          'January',
-          'February',
-          'March',
-          'April',
-          'May',
-          'June',
-          'July',
-          'August',
-          'September',
-          'October',
-          'November',
-          'December',
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
         ];
         const shortMonths = [
-          'Jan',
-          'Feb',
-          'Mar',
-          'Apr',
-          'May',
-          'Jun',
-          'Jul',
-          'Aug',
-          'Sep',
-          'Oct',
-          'Nov',
-          'Dec',
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
         ];
-        final maxMonth = (_selectedYear == now.year) ? now.month : 12;
+
+        final List<int> monthNumbers = _getMonthsInWindow(now, lookback);
         final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
-        return List.generate(maxMonth, (i) {
-          return (label: '${allMonths[i]}$yearSuffix', shortLabel: '${shortMonths[i]}$yearSuffix');
-        });
+        return monthNumbers.map((m) {
+          final idx = m - 1;
+          return (
+            label: '${allMonths[idx]}$yearSuffix',
+            shortLabel: '${shortMonths[idx]}$yearSuffix',
+          );
+        }).toList();
+
       case PeriodFilter.quarter:
+        final List<int> quarterNumbers = _getQuartersInWindow(now, lookback);
         final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
-        return [
+        final List<({String label, String shortLabel})> quarters = [
           (label: 'Q1 (Jan - Mar)$yearSuffix', shortLabel: 'Q1$yearSuffix'),
           (label: 'Q2 (Apr - Jun)$yearSuffix', shortLabel: 'Q2$yearSuffix'),
           (label: 'Q3 (Jul - Sep)$yearSuffix', shortLabel: 'Q3$yearSuffix'),
           (label: 'Q4 (Oct - Dec)$yearSuffix', shortLabel: 'Q4$yearSuffix'),
         ];
+        return quarterNumbers.map((q) => quarters[q]).toList();
+
       case PeriodFilter.year:
-        return [
-          (
-            label: (now.year - 2).toString(),
-            shortLabel: (now.year - 2).toString()
-          ),
-          (
-            label: (now.year - 1).toString(),
-            shortLabel: (now.year - 1).toString()
-          ),
-          (label: now.year.toString(), shortLabel: now.year.toString()),
-        ];
+        final List<int> yearNumbers = _getYearsInWindow(now, lookback);
+        return yearNumbers.map((y) {
+          final s = y.toString();
+          return (label: s, shortLabel: s);
+        }).toList();
+
       case PeriodFilter.allTime:
         return const [];
     }
@@ -369,85 +483,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   List<String> _getSubPeriodItems() {
-    final now = DateTime.now();
-    switch (_selectedPeriod) {
-      case PeriodFilter.day:
-        final DateFormat dayFmt = DateFormat('E, MMM d');
-        return List.generate(14, (i) {
-          final d = now.subtract(Duration(days: 13 - i));
-          if (d.year == now.year && d.month == now.month && d.day == now.day) {
-            return 'Today';
-          }
-          final yesterday = now.subtract(const Duration(days: 1));
-          if (d.year == yesterday.year &&
-              d.month == yesterday.month &&
-              d.day == yesterday.day) {
-            return 'Yesterday';
-          }
-          return dayFmt.format(d);
-        });
-      case PeriodFilter.week:
-        return [
-          '4 Wks Ago',
-          '3 Wks Ago',
-          '2 Wks Ago',
-          'Last Week',
-          'This Week'
-        ];
-      case PeriodFilter.month:
-        const allMonths = [
-          'January',
-          'February',
-          'March',
-          'April',
-          'May',
-          'June',
-          'July',
-          'August',
-          'September',
-          'October',
-          'November',
-          'December',
-        ];
-        final maxMonth = (_selectedYear == now.year) ? now.month : 12;
-        final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
-        return List.generate(maxMonth, (i) => '${allMonths[i]}$yearSuffix');
-      case PeriodFilter.quarter:
-        final String yearSuffix = (_selectedYear != now.year) ? " '${_selectedYear % 100}" : "";
-        return [
-          'Q1 (Jan-Mar)$yearSuffix',
-          'Q2 (Apr-Jun)$yearSuffix',
-          'Q3 (Jul-Sep)$yearSuffix',
-          'Q4 (Oct-Dec)$yearSuffix'
-        ];
-      case PeriodFilter.year:
-        return [
-          (now.year - 2).toString(),
-          (now.year - 1).toString(),
-          now.year.toString(),
-        ];
-      case PeriodFilter.allTime:
-        return const [];
-    }
+    return _getSubPeriodItemsFormatted().map((item) => item.label).toList();
   }
 
   int _getDefaultSubPeriodIndex(PeriodFilter period) {
-    final now = DateTime.now();
-    switch (period) {
-      case PeriodFilter.day:
-        return 13; // 'Today'
-      case PeriodFilter.week:
-        return 4; // 'This Week'
-      case PeriodFilter.month:
-        final maxMonth = (_selectedYear == now.year) ? now.month : 12;
-        return (maxMonth - 1).clamp(0, maxMonth - 1);
-      case PeriodFilter.quarter:
-        return ((now.month - 1) ~/ 3).clamp(0, 3);
-      case PeriodFilter.year:
-        return 2; // current year
-      case PeriodFilter.allTime:
-        return 0;
-    }
+    final items = _getSubPeriodItemsFormatted();
+    if (items.isEmpty) return 0;
+    return items.length - 1;
   }
 
   void _changeFilter(VoidCallback updateState) {
@@ -937,12 +979,13 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           date.day == _selectedHeatmapDay!.day;
     }
 
-    final subItems = _getSubPeriodItems();
+    final subItems = _getSubPeriodItemsFormatted();
     final int subIndex = _selectedSubPeriodIndex.clamp(0, max(0, subItems.length - 1)).toInt();
 
     switch (_selectedPeriod) {
       case PeriodFilter.day:
-        final targetDay = now.subtract(Duration(days: 13 - subIndex));
+        final daysOffset = (subItems.length - 1) - subIndex;
+        final targetDay = now.subtract(Duration(days: daysOffset));
         return date.year == targetDay.year &&
             date.month == targetDay.month &&
             date.day == targetDay.day;
@@ -956,14 +999,19 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         return !date.isBefore(targetMonday) && !date.isAfter(targetSunday);
 
       case PeriodFilter.month:
-        return date.month == (subIndex + 1) && date.year == _selectedYear;
+        final months = _getMonthsInWindow(now, _getLookbackDays());
+        final targetMonth = subIndex < months.length ? months[subIndex] : now.month;
+        return date.month == targetMonth && date.year == _selectedYear;
 
       case PeriodFilter.quarter:
+        final quarters = _getQuartersInWindow(now, _getLookbackDays());
+        final targetQ = subIndex < quarters.length ? quarters[subIndex] : ((now.month - 1) ~/ 3);
         final txQuarter = ((date.month - 1) ~/ 3);
-        return txQuarter == subIndex && date.year == _selectedYear;
+        return txQuarter == targetQ && date.year == _selectedYear;
 
       case PeriodFilter.year:
-        final targetYear = now.year - ((subItems.length - 1) - subIndex);
+        final years = _getYearsInWindow(now, _getLookbackDays());
+        final targetYear = subIndex < years.length ? years[subIndex] : now.year;
         return date.year == targetYear;
 
       case PeriodFilter.allTime:
@@ -1264,8 +1312,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                             highlightedWeekRange: _getSynchronizedWeekRange(),
                             selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
                             selectedYear: _selectedPeriod == PeriodFilter.year
-                                ? (DateTime.now().year -
-                                    (2 - _selectedSubPeriodIndex))
+                                ? () {
+                                    final years = _getYearsInWindow(DateTime.now(), _getLookbackDays());
+                                    final int safeIdx = _selectedSubPeriodIndex.clamp(0, max(0, years.length - 1)).toInt();
+                                    return years[safeIdx];
+                                  }()
                                 : _selectedYear,
                             selectedDay: _selectedHeatmapDay,
                             onDaySelected: (day) {
@@ -1280,8 +1331,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                   final diff = todayMidnight
                                       .difference(dayMidnight)
                                       .inDays;
-                                  if (diff >= 0 && diff < 14) {
-                                    _selectedSubPeriodIndex = 13 - diff;
+                                  final subItems = _getSubPeriodItemsFormatted();
+                                  if (diff >= 0 && diff < subItems.length) {
+                                    _selectedSubPeriodIndex = (subItems.length - 1) - diff;
                                     if (_subPeriodScrollController.hasClients) {
                                       _subPeriodScrollController
                                           .jumpToPage(_selectedSubPeriodIndex);
@@ -1296,7 +1348,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               _changeFilter(() {
                                 final now = DateTime.now();
                                 if (_selectedPeriod == PeriodFilter.year) {
-                                  _selectedYear = now.year - (2 - _selectedSubPeriodIndex);
+                                  final years = _getYearsInWindow(now, _getLookbackDays());
+                                  final int safeIdx = _selectedSubPeriodIndex.clamp(0, max(0, years.length - 1)).toInt();
+                                  _selectedYear = years[safeIdx];
                                 }
                                 _selectedPeriod = PeriodFilter.month;
                                 _selectedSubPeriodIndex = monthIndex;

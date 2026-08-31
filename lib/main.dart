@@ -79,7 +79,10 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (context) {
-            final txVM = TransactionsViewModel(repository: transactionRepo)
+            final txVM = TransactionsViewModel(
+              repository: transactionRepo,
+              settingsRepository: settingsRepo,
+            )
               ..loadAll()
               ..initEventListener();
             return txVM;

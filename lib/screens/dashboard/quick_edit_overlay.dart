@@ -143,7 +143,10 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
       final reasonsList = (data['reasons'] as List?)?.cast<Map>() ?? [];
 
       setState(() {
-        _transactionId = data['transactionId'] as String? ?? data['id'] as String? ?? '';
+        _transactionId = data['txId'] as String? ??
+            data['transactionId'] as String? ??
+            data['id'] as String? ??
+            '';
         _bankName = data['bankName'] as String? ?? '';
         _amount = data['amount'] as String? ?? '';
         _rawAmount = (data['rawAmount'] as num?)?.toDouble() ?? 0.0;
@@ -420,12 +423,14 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
     try {
       if (_linkReasonRule && _sender.isNotEmpty && _sender != 'Unknown') {
         await _channel.invokeMethod('saveReasonWithRule', {
+          'txId': _transactionId,
           'reasonName': _selectedReasonName,
           'reasonId': _selectedReasonId,
           'contactName': _sender,
         });
       } else {
         await _channel.invokeMethod('saveReason', {
+          'txId': _transactionId,
           'reasonName': _selectedReasonName,
           'reasonId': _selectedReasonId,
         });
@@ -1145,7 +1150,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
         await DatabaseService.instance
             .saveTransactionSplits(_transactionId, splits);
       }
-      await _channel.invokeMethod('dismiss');
+      await _channel.invokeMethod('saveSplits');
     } catch (e) {
       debugPrint('QuickEditOverlay: saveQuickSplits failed: $e');
     }
