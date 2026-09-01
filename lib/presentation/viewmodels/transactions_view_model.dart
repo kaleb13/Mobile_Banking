@@ -1584,6 +1584,9 @@ class TransactionsViewModel extends ChangeNotifier {
     _reasons.add(AppReason(
       id: id,
       name: reason.name,
+      parentId: reason.parentId,
+      isSystem: reason.isSystem,
+      isSpecial: reason.isSpecial,
       icon: reason.icon,
       color: reason.color,
     ));
@@ -1599,7 +1602,7 @@ class TransactionsViewModel extends ChangeNotifier {
 
   Future<void> deleteReason(int id) async {
     await _repository.deleteReason(id);
-    _reasons.removeWhere((r) => r.id == id);
+    _reasons.removeWhere((r) => r.id == id || r.parentId == id);
     notifyListeners();
   }
 

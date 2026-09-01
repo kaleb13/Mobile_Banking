@@ -56,7 +56,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 29, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 30, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -180,6 +180,16 @@ CREATE TABLE IF NOT EXISTS transaction_splits (
 CREATE TABLE IF NOT EXISTS app_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+)
+''');
+
+    // Deleted default categories / subcategories tombstone table
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS deleted_default_reasons (
+  name TEXT NOT NULL,
+  parentName TEXT NOT NULL,
+  deletedAt TEXT NOT NULL,
+  PRIMARY KEY (name, parentName)
 )
 ''');
 
@@ -474,6 +484,22 @@ CREATE TABLE IF NOT EXISTS app_settings (
     if (oldVersion < 29) {
       await _upgradeToVersion29(db);
     }
+    if (oldVersion < 30) {
+      await _upgradeToVersion30(db);
+    }
+  }
+
+  Future<void> _upgradeToVersion30(Database db) async {
+    try {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS deleted_default_reasons (
+  name TEXT NOT NULL,
+  parentName TEXT NOT NULL,
+  deletedAt TEXT NOT NULL,
+  PRIMARY KEY (name, parentName)
+);
+''');
+    } catch (_) {}
   }
 
   Future<void> _upgradeToVersion29(Database db) async {
@@ -629,7 +655,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
     // Delete legacy unparented flat system reasons (Gift, Investment, Fuel, Medical, Rent, Shopping, Transport, etc.)
     await db.delete('reasons',
-        where: '(parentId IS NULL OR parentId = 0) AND (isSpecial IS NULL OR isSpecial = 0) AND LOWER(name) NOT IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        where: '(parentId IS NULL OR parentId = 0) AND (isSpecial IS NULL OR isSpecial = 0) AND isSystem = 1 AND LOWER(name) NOT IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         whereArgs: [
           'food',
           'drink',
@@ -645,12 +671,29 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
           'salary',
         ]);
 
+    final Set<String> tombstoned = {};
+    try {
+      final tombstoneRows = await db.query('deleted_default_reasons');
+      for (final row in tombstoneRows) {
+        final n = (row['name'] as String? ?? '').toLowerCase().trim();
+        final p = (row['parentName'] as String? ?? '').toLowerCase().trim();
+        tombstoned.add('$n::$p');
+      }
+    } catch (_) {}
+
     for (final entry in topLevel.entries) {
       final catName = entry.key;
+      final catNameLower = catName.toLowerCase().trim();
       final info = entry.value;
+
+      // Skip top-level category if explicitly deleted by user
+      if (tombstoned.contains('$catNameLower::')) {
+        continue;
+      }
+
       int catId;
 
-      final existing = await db.query('reasons', where: 'LOWER(name) = ?', whereArgs: [catName.toLowerCase()]);
+      final existing = await db.query('reasons', where: 'LOWER(name) = ?', whereArgs: [catNameLower]);
       if (existing.isNotEmpty) {
         catId = existing.first['id'] as int;
         await db.update('reasons', {
@@ -671,9 +714,15 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
       final List<String> subs = List<String>.from(info['subs']);
       for (final subName in subs) {
+        final subNameLower = subName.toLowerCase().trim();
+        // Skip subcategory if explicitly deleted by user
+        if (tombstoned.contains('$subNameLower::$catNameLower')) {
+          continue;
+        }
+
         final existingSub = await db.query('reasons',
             where: 'LOWER(name) = ? AND parentId = ?',
-            whereArgs: [subName.toLowerCase(), catId]);
+            whereArgs: [subNameLower, catId]);
         if (existingSub.isEmpty) {
           await db.insert('reasons', {
             'name': subName,
@@ -1485,6 +1534,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       DELETE FROM reasons 
       WHERE (parentId IS NULL OR parentId = 0) 
         AND (isSpecial IS NULL OR isSpecial = 0) 
+        AND isSystem = 1
         AND LOWER(TRIM(name)) IN ('transport', 'rent', 'shopping', 'internet', 'fuel', 'medical', 'gift', 'investment', 'airtime');
     ''');
 
@@ -1538,6 +1588,20 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
   Future<int> insertReason(AppReason reason) async {
     final db = await instance.database;
+    // Untombstone if user re-creates this category or subcategory
+    try {
+      String parentName = '';
+      if (reason.parentId != null) {
+        final pQuery = await db.query('reasons',
+            columns: ['name'], where: 'id = ?', whereArgs: [reason.parentId]);
+        if (pQuery.isNotEmpty) {
+          parentName = (pQuery.first['name'] as String? ?? '').toLowerCase().trim();
+        }
+      }
+      await db.delete('deleted_default_reasons',
+          where: 'LOWER(name) = ? AND LOWER(parentName) = ?',
+          whereArgs: [reason.name.toLowerCase().trim(), parentName]);
+    } catch (_) {}
     return await db.insert('reasons', reason.toMap());
   }
 
@@ -1584,6 +1648,43 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
           (nameLower == 'airtime' || nameLower == 'package')) {
         return 0;
       }
+
+      // Record tombstone so _seedHierarchicalCategories will not resurrect deleted default items
+      try {
+        if (parentId != null) {
+          String parentName = '';
+          final pQuery = await db.query('reasons',
+              columns: ['name'], where: 'id = ?', whereArgs: [parentId]);
+          if (pQuery.isNotEmpty) {
+            parentName = (pQuery.first['name'] as String? ?? '').toLowerCase().trim();
+          }
+          await db.insert('deleted_default_reasons', {
+            'name': nameLower,
+            'parentName': parentName,
+            'deletedAt': DateTime.now().toIso8601String(),
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        } else {
+          // Top-level category deletion: tombstone category itself and all its child subcategories
+          await db.insert('deleted_default_reasons', {
+            'name': nameLower,
+            'parentName': '',
+            'deletedAt': DateTime.now().toIso8601String(),
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+          final childRows = await db.query('reasons',
+              columns: ['name'], where: 'parentId = ?', whereArgs: [id]);
+          for (final c in childRows) {
+            final cName = (c['name'] as String? ?? '').toLowerCase().trim();
+            if (cName.isNotEmpty) {
+              await db.insert('deleted_default_reasons', {
+                'name': cName,
+                'parentName': nameLower,
+                'deletedAt': DateTime.now().toIso8601String(),
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          }
+        }
+      } catch (_) {}
     }
 
     // Also delete links and subcategories
