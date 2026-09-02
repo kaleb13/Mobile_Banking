@@ -19,6 +19,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
+import '../../widgets/bank_avatar.dart';
 import 'transaction_detail_screen.dart';
 
 class AllTransactionsScreen extends StatefulWidget {
@@ -820,7 +821,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           );
         }
         final tx = displayedTransactions[index];
-        return _buildTransactionRowItem(context, tx, settingsVM);
+        final bool isLatest = index == 0;
+        return _buildTransactionRowItem(context, tx, settingsVM, isLatest);
       },
     );
   }
@@ -829,11 +831,18 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     BuildContext context,
     AppTransaction tx,
     SettingsViewModel settingsVM,
+    bool isLatest,
   ) {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Income' : 'Expense';
     final String subLabel =
         isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+    final bool hasReason = tx.reasonId != null ||
+        (tx.customReasonText != null &&
+            tx.customReasonText!.trim().isNotEmpty) ||
+        (tx.reason != null && tx.reason!.trim().isNotEmpty) ||
+        txVM.hasSplits(tx.id);
 
     return Material(
       color: Colors.transparent,
@@ -876,22 +885,17 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             padding: EdgeInsets.only(left: 6.0),
                             child: BookmarkBadge(),
                           ),
-                        if (Provider.of<TransactionsViewModel>(context,
-                                    listen: false)
-                                .accountsForBank(tx.name)
-                                .length >
-                            1)
+                        if (txVM.accountsForBank(tx.name).length > 1)
                           Padding(
                             padding: const EdgeInsets.only(left: 6.0),
                             child: SimBadge(simSlot: tx.simSlot),
                           ),
-                        if (tx.reasonId == null &&
-                            (tx.customReasonText == null ||
-                                tx.customReasonText!.isEmpty) &&
-                            (tx.reason == null || tx.reason!.isEmpty) &&
-                            !Provider.of<TransactionsViewModel>(context,
-                                    listen: false)
-                                .hasSplits(tx.id))
+                        if (tx.isAutoDetected && isLatest && !hasReason)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6.0),
+                            child: NewBadge(),
+                          ),
+                        if (!hasReason)
                           const Padding(
                             padding: EdgeInsets.only(left: 6.0),
                             child: ReasonBadge(),
@@ -957,64 +961,6 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   }
 
   Widget _buildDarkBankAvatar(String bankName) {
-    final nameUp = bankName.toUpperCase();
-    String? assetPath;
-    bool isSvg = false;
-
-    if (nameUp == 'CBE' ||
-        nameUp.contains('COMMERCIAL BANK') ||
-        nameUp.contains('COMMERCIAL')) {
-      assetPath = 'assets/images/CBE logo.svg';
-      isSvg = true;
-    } else if (nameUp == 'TELEBIRR') {
-      assetPath = 'assets/images/Telebirr_Logo.svg';
-      isSvg = true;
-    } else if (nameUp == 'CBE BIRR' || nameUp == 'CBEBIRR') {
-      assetPath = 'assets/images/CBEBirr_Logo.svg';
-      isSvg = true;
-    } else if (nameUp.contains('AHADU')) {
-      assetPath = 'assets/images/Ahadu_Logo.svg';
-      isSvg = true;
-    } else if (nameUp.contains('DASHEN')) {
-      assetPath = 'assets/images/Dashen_Bank_logo.svg';
-      isSvg = true;
-    } else if (nameUp.contains('BOA') ||
-        nameUp.contains('ABYSSINIA') ||
-        nameUp.contains('BANK OF ABYSSINIA')) {
-      assetPath = 'assets/images/Bank_of_Abyssinia_logo.svg';
-      isSvg = true;
-    } else if (nameUp.contains('AWASH')) {
-      assetPath = 'assets/images/Awash_Bank_Logo.svg';
-      isSvg = true;
-    }
-
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceElevated,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: assetPath != null
-            ? (isSvg
-                ? AppSvgIcon(
-                    assetPath,
-                    size: 22,
-                    surfaceColor: AppColors.surfaceElevated,
-                  )
-                : Image.asset(
-                    assetPath,
-                    width: 22,
-                    height: 22,
-                    fit: BoxFit.contain,
-                  ))
-            : const Icon(
-                Icons.account_balance_rounded,
-                color: Colors.white70,
-                size: 20,
-              ),
-      ),
-    );
+    return BankAvatar(bankName: bankName, size: 42, iconSize: 22);
   }
 }

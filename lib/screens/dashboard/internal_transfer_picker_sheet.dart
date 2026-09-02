@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_toast.dart';
+import '../../widgets/bank_avatar.dart';
 
 class InternalTransferPickerSheet extends StatelessWidget {
   final AppTransaction sourceTransaction;
@@ -47,7 +48,12 @@ class InternalTransferPickerSheet extends StatelessWidget {
               itemCount: candidates.length,
               itemBuilder: (ctx, i) {
                 final tx = candidates[i];
-                final isExactMatch = tx.amount == sourceTransaction.amount;
+                final diff = (tx.amount - sourceTransaction.amount).abs();
+                final isExactMatch = diff < 0.01;
+                final isCloseMatch = !isExactMatch &&
+                    (diff <= 50.0 ||
+                        (sourceTransaction.amount > 0 &&
+                            (diff / sourceTransaction.amount) <= 0.05));
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -56,51 +62,60 @@ class InternalTransferPickerSheet extends StatelessWidget {
                     borderRadius: AppRadius.cardRadius,
                   ),
                   child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.cardRadius),
                     contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     onTap: () async {
                       await effectiveVM.linkAsInternalTransfer(
                           sourceTransaction.id!, tx.id!);
                       if (context.mounted) {
                         Navigator.pop(context); // close sheet
-                        AppToast.success(context, message: 'Internal transfer linked');
+                        AppToast.success(context,
+                            message: 'Internal transfer linked');
                       }
                     },
-                    leading: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: (tx.type == 'income'
-                                ? AppColors.positive
-                                : AppColors.warning)
-                            .withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        tx.type == 'income'
-                            ? Icons.arrow_downward_rounded
-                            : Icons.arrow_upward_rounded,
-                        color: tx.type == 'income'
-                            ? AppColors.positive
-                            : AppColors.warning,
-                        size: 18,
-                      ),
+                    leading: BankAvatar(
+                      bankName: tx.name,
+                      size: 38,
+                      iconSize: 20,
                     ),
                     title: Text(
-                      tx.sender,
+                      tx.name,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text(
-                      DateFormat('MMM dd, HH:mm').format(tx.date),
-                      style: const TextStyle(
-                        color: AppColors.textSoft,
-                        fontSize: 11,
-                      ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (tx.sender.trim().isNotEmpty &&
+                            tx.sender.trim().toLowerCase() !=
+                                tx.name.trim().toLowerCase()) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            tx.sender,
+                            style: const TextStyle(
+                              color: AppColors.textSoft,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 2),
+                        Text(
+                          DateFormat('MMM dd, yyyy • HH:mm').format(tx.date),
+                          style: TextStyle(
+                            color: AppColors.textSoft.withValues(alpha: 0.75),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                     trailing: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -118,8 +133,14 @@ class InternalTransferPickerSheet extends StatelessWidget {
                         ),
                         if (isExactMatch) ...[
                           const SizedBox(height: 4),
+                          const AppBadge.success(
+                            text: 'EXACT MATCH',
+                            size: AppBadgeSize.micro,
+                          ),
+                        ] else if (isCloseMatch) ...[
+                          const SizedBox(height: 4),
                           const AppBadge.warning(
-                            text: 'EXACT AMOUNT',
+                            text: 'CLOSE MATCH',
                             size: AppBadgeSize.micro,
                           ),
                         ],

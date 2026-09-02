@@ -1416,8 +1416,9 @@ class TransactionsViewModel extends ChangeNotifier {
     }
   }
 
-  /// Returns unlinked candidate transactions with matching amount and opposite type
-  /// within ±[daysRange] days (default 7 days before and 7 days after) of [sourceTransaction].
+  /// Returns unlinked candidate transactions with opposite type within ±[daysRange] days
+  /// (default 7 days before and 7 days after) of [sourceTransaction], ordered by their
+  /// closeness in amount to [sourceTransaction.amount].
   List<AppTransaction> getInternalTransferCandidates(
     AppTransaction sourceTransaction, {
     int daysRange = 7,
@@ -1429,19 +1430,33 @@ class TransactionsViewModel extends ChangeNotifier {
     final futureDate =
         sourceTransaction.date.add(Duration(days: daysRange));
 
-    return _transactions.where((tx) {
+    final candidates = _transactions.where((tx) {
       if (tx.id == sourceTransaction.id) return false;
       if (tx.type != targetType) return false;
       if (tx.linkedTransactionId != null &&
           tx.linkedTransactionId!.isNotEmpty) {
         return false;
       }
-      if (tx.amount != sourceTransaction.amount) return false;
       if (tx.date.isBefore(cutoffDate) || tx.date.isAfter(futureDate)) {
         return false;
       }
       return true;
     }).toList();
+
+    // Sort based on closeness of amount to sourceTransaction.amount
+    candidates.sort((a, b) {
+      final diffA = (a.amount - sourceTransaction.amount).abs();
+      final diffB = (b.amount - sourceTransaction.amount).abs();
+      final diffCmp = diffA.compareTo(diffB);
+      if (diffCmp != 0) return diffCmp;
+
+      // Tie-breaker: closeness of date to sourceTransaction.date
+      final dateDiffA = (a.date.difference(sourceTransaction.date)).abs();
+      final dateDiffB = (b.date.difference(sourceTransaction.date)).abs();
+      return dateDiffA.compareTo(dateDiffB);
+    });
+
+    return candidates;
   }
 
   Future<void> linkAsInternalTransfer(String txId1, String txId2) async {

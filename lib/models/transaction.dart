@@ -108,7 +108,7 @@ class AppTransaction {
   bool get hasLinks => extractedLinks.isNotEmpty;
 
   /// True when this transaction was auto-created with an immutable system reason from SMS
-  /// (Telebirr Airtime, Telebirr Package, Telebirr Sanduq/Savings, or actively linked transaction).
+  /// (Telebirr Sanduq/Savings, or actively linked transaction).
   bool get isReasonLocked {
     // 1. Actively linked to another transaction (e.g. linked internal transfer pair)
     if (linkedTransactionId != null && linkedTransactionId!.isNotEmpty) {
@@ -116,25 +116,13 @@ class AppTransaction {
     }
 
     final lower = rawMessage.toLowerCase();
+
     final isTelebirr = name.toLowerCase().contains('telebirr') ||
         sender.toLowerCase().contains('127') ||
         sender.toLowerCase().contains('telebirr');
     if (!isTelebirr) return false;
 
-    // 1. Airtime recharge outflow
-    if (lower.contains('airtime') &&
-        (lower.contains('recharged') || lower.contains('bought'))) {
-      return true;
-    }
-    // 2. Package subscription outflow
-    if (lower.contains('package') &&
-        (lower.contains('paid') ||
-            lower.contains('bought') ||
-            lower.contains('package subscription') ||
-            lower.contains('monthly voice'))) {
-      return true;
-    }
-    // 3. Sanduq / Savings account transfer
+    // 2. Sanduq / Savings account transfer
     if (lower.contains('saving account') ||
         lower.contains('saving balance') ||
         lower.contains('sanduq')) {

@@ -238,6 +238,14 @@ class CbeParser {
       }
     }
 
+    SmsPatternType patternType = SmsPatternType.standardTransfer;
+    if (lowerMsg.contains('airtime') || lowerMsg.contains('air time')) {
+      patternType = SmsPatternType.telebirrAirtime;
+      if (senderOrRecipient == 'ATM or Other' || senderOrRecipient.isEmpty) {
+        senderOrRecipient = 'Airtime';
+      }
+    }
+
     return ParsedSmsResult(
       id: id,
       bankName: senderName,
@@ -247,7 +255,7 @@ class CbeParser {
       counterparty: senderOrRecipient.isNotEmpty ? senderOrRecipient : senderName,
       totalBalance: totalBalance,
       rawMessage: message,
-      patternType: SmsPatternType.standardTransfer,
+      patternType: patternType,
     );
   }
 

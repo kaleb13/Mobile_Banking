@@ -85,7 +85,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     _buildSection(
                       title: 'SMS Data & Processing',
                       body:
-                          'Shibre reads incoming SMS messages exclusively from your supported banks (Telebirr, Commercial Bank of Ethiopia, CBE Birr, Ahadu Bank, Bank of Abyssinia, Dashen Bank, Awash Bank, and any custom senders you configure). These messages are parsed locally on your device in real-time to extract transaction details (amount, date, balance, and reference). Your raw SMS content is stored in the app\'s private local database and is never transmitted, uploaded, or shared with any external server or third party.',
+                          'Shibre reads incoming SMS messages exclusively from your supported banks (Telebirr, Commercial Bank of Ethiopia, CBE Birr, Ahadu Bank, Bank of Abyssinia, Dashen Bank, Awash Bank, Zemen Bank, and any custom senders you configure). These messages are parsed locally on your device in real-time to extract transaction details (amount, date, balance, and reference). Your raw SMS content is stored in the app\'s private local database and is never transmitted, uploaded, or shared with any external server or third party.',
                     ),
 
                     _buildSection(

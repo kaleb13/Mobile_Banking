@@ -185,6 +185,9 @@ class AppColors {
   static const Color cardAwashDark      = Color(0xFF010066); // Awash Deep Navy Blue (From Logo SVG #010066)
   static const Color cardAwashLight     = Color(0xFF1E1B9A); // Awash Vibrant Contrast Navy Gradient Stop
   static const Color cardAwashDarkIcon  = Color(0xFF010066); // Awash Deep Navy Icon Tone
+  static const Color cardZemenDark      = Color(0xFFD12048); // Zemen Ruby Crimson (From Logo SVG #D12048)
+  static const Color cardZemenLight     = Color(0xFFF43F5E); // Zemen Vibrant Rose Gradient Stop (#F43F5E)
+  static const Color cardZemenDarkIcon  = Color(0xFF9E1030); // Zemen Deep Crimson Icon Tone
   static const Color cardCoopBg       = Color(0xFF5E35B1);
   static const Color cardCoopDarkIcon = Color(0xFF2E175B);
   static const Color cardCoopTitle    = Color(0xFFD1C4E9);

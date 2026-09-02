@@ -235,7 +235,36 @@ class BankCardWidget extends StatelessWidget {
       }
     }
 
-    // 8. Cash Wallet
+    // 8. Zemen Bank: White version on gradient background, original crimson brand fill on white
+    if (nameUp.contains('ZEMEN')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/ZemenBank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/ZemenBank_Logo.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/ZemenBank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 9. Cash Wallet
     if (nameUp == 'CASH WALLET' || nameUp == 'CASH') {
       return AppSvgIcon(
         'assets/images/Wallet Icon.svg',
@@ -244,7 +273,7 @@ class BankCardWidget extends StatelessWidget {
       );
     }
 
-    // 9. Loan Tracker
+    // 10. Loan Tracker
     if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
       return Icon(
         Icons.handshake_rounded,
@@ -269,6 +298,7 @@ class BankCardWidget extends StatelessWidget {
     if (n.contains('ABYSSINIA') || n == 'BOA') return 'Bank of Abyssinia S.C.';
     if (n.contains('DASHEN')) return 'Dashen Bank S.C.';
     if (n.contains('AWASH')) return 'Awash Bank S.C.';
+    if (n.contains('ZEMEN')) return 'Zemen Bank S.C.';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     if (n == 'LOAN TRACKER' || n == 'LOANS' || n == 'LOAN') return 'Personal Debt & Loan Ledger';
     return 'Bank Account';
@@ -326,6 +356,11 @@ class BankCardWidget extends StatelessWidget {
       return [
         AppColors.cardAwashLight,
         AppColors.cardAwashDark,
+      ];
+    } else if (nameUp.contains('ZEMEN')) {
+      return [
+        AppColors.cardZemenLight,
+        AppColors.cardZemenDark,
       ];
     } else if (nameUp.contains('COOP')) {
       return [

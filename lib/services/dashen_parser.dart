@@ -286,6 +286,12 @@ class DashenParser {
         ? referenceNumber
         : 'DASHEN-${hash.substring(0, 16).toUpperCase()}';
 
+    SmsPatternType patternType = SmsPatternType.standardTransfer;
+    if (lowerMsg.contains('airtime') || lowerMsg.contains('air time')) {
+      patternType = SmsPatternType.telebirrAirtime;
+      recipientOrSender = 'Airtime';
+    }
+
     return ParsedSmsResult(
       id: txId,
       bankName: senderName,
@@ -295,7 +301,7 @@ class DashenParser {
       counterparty: recipientOrSender.isNotEmpty ? recipientOrSender : senderName,
       totalBalance: totalBalance,
       rawMessage: message,
-      patternType: SmsPatternType.standardTransfer,
+      patternType: patternType,
     );
   }
 }

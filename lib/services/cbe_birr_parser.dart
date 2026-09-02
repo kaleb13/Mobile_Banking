@@ -32,6 +32,7 @@ class CbeBirrParser {
     double amount = 0.0;
     String senderOrRecipient = 'From your CBE or unknown';
     String dateStr = '';
+    SmsPatternType patternType = SmsPatternType.standardTransfer;
 
     double parseAmt(String str) {
       return double.tryParse(str.replaceAll(',', '').trim()) ?? 0.0;
@@ -57,6 +58,7 @@ class CbeBirrParser {
     else if (lowerMsg.contains("bought") ||
         (lowerMsg.contains("airtime") && lowerMsg.contains("for"))) {
       type = "expense";
+      patternType = SmsPatternType.telebirrAirtime;
       final amountMatch =
           RegExp(r'bought\s+([0-9.,]+)\s*br\.?', caseSensitive: false)
               .firstMatch(message);
@@ -227,7 +229,7 @@ class CbeBirrParser {
       counterparty: senderOrRecipient,
       totalBalance: totalBalance,
       rawMessage: message,
-      patternType: SmsPatternType.standardTransfer,
+      patternType: patternType,
     );
   }
 }

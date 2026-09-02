@@ -178,7 +178,11 @@ class AhaduParser {
     }
 
     // Clean up recipient/sender label
-    if (recipientOrSender.isEmpty) {
+    SmsPatternType patternType = SmsPatternType.standardTransfer;
+    if (lowerMsg.contains('airtime') || lowerMsg.contains('air time')) {
+      patternType = SmsPatternType.telebirrAirtime;
+      recipientOrSender = 'Airtime';
+    } else if (recipientOrSender.isEmpty) {
       recipientOrSender = type == 'income' ? 'Ahadu Deposit' : 'Ahadu Transfer';
     }
 
@@ -191,7 +195,7 @@ class AhaduParser {
       counterparty: recipientOrSender,
       totalBalance: totalBalance,
       rawMessage: message,
-      patternType: SmsPatternType.standardTransfer,
+      patternType: patternType,
     );
   }
 

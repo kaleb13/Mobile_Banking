@@ -59,6 +59,19 @@ void main() {
 
       expect(tx, isNull);
     });
+
+    test('parses outgoing sent transfer as expense with recipient', () {
+      const sms =
+          "Dear NAHOM, you have sent 28.00Br. to NATNAEL ABEBE on 31/08/26 20:45,Txn ID DHV51MWWIJ1. Your CBE Birr account balance is 63.30Br.Thank you! For invoice https://cbepay1.cbe.com.et/aureceipt?TID=DHV51MWWIJ1&PH=251921607264 For your feedback please click the link https://shorturl.at/gy3A0";
+      final tx = CbeBirrParser.parse(sms, now);
+
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(28.00));
+      expect(tx.type, equals('expense'));
+      expect(tx.counterparty, equals('NATNAEL ABEBE'));
+      expect(tx.id, equals('DHV51MWWIJ1'));
+      expect(tx.totalBalance, equals(63.30));
+    });
   });
 
   group('TelebirrParser', () {
@@ -140,7 +153,7 @@ void main() {
       expect(tx.id, equals('BDK7PQVAMX'));
       expect(tx.counterparty, equals('972665987'));
       expect(tx.patternType, equals(SmsPatternType.telebirrPackage));
-      expect(tx.isSystemLocked, isTrue);
+      expect(tx.isSystemLocked, isFalse);
       expect(tx.lockedReasonName, equals('Package'));
       expect(tx.totalBalance, equals(24.61));
 
@@ -149,10 +162,10 @@ void main() {
       expect(entity.reason, equals('Package'));
       expect(entity.customReasonText, isNull);
       expect(entity.note, isNull);
-      expect(entity.isReasonLocked, isTrue);
+      expect(entity.isReasonLocked, isFalse);
     });
 
-    test('parses detailed package purchase and extracts phone number with locked Package pattern', () {
+    test('parses detailed package purchase and extracts phone number with unlocked Package pattern', () {
       const sms =
           "Dear KALEB\nYou have paid ETB 130.00 for package Monthly Voice plus Data Package: 1.2 GB and 168Min purchase made for 972665987 on 15/08/2026 20:48:44. Your transaction number is  DHF1TGBPYB. Your current balance is ETB 774.32.To download your payment information please click this link: https://transactioninfo.ethiotelecom.et/receipt/DHF1TGBPYB\nThank you for using telebirr\nEthio telecom";
       final tx = TelebirrParser.parse(sms, now);
@@ -163,7 +176,7 @@ void main() {
       expect(tx.id, equals('DHF1TGBPYB'));
       expect(tx.counterparty, equals('972665987'));
       expect(tx.patternType, equals(SmsPatternType.telebirrPackage));
-      expect(tx.isSystemLocked, isTrue);
+      expect(tx.isSystemLocked, isFalse);
       expect(tx.lockedReasonName, equals('Package'));
       expect(tx.totalBalance, equals(774.32));
 
@@ -172,10 +185,10 @@ void main() {
       expect(entity.reason, equals('Package'));
       expect(entity.customReasonText, isNull);
       expect(entity.note, isNull);
-      expect(entity.isReasonLocked, isTrue);
+      expect(entity.isReasonLocked, isFalse);
     });
 
-    test('parses airtime recharge outflow and extracts phone number with locked Airtime pattern', () {
+    test('parses airtime recharge outflow and extracts phone number with unlocked Airtime pattern', () {
       const sms =
           "Dear KALEB \nYou have recharged ETB 50.00 airtime for 251972665987 on 04/04/2024 14:26:46. Your transaction number is BD45KRON6P. Your current  balance is  ETB 39.69. \nFor any support and information related to telebirr service\nThank you for using telebirr\nEthio telecom";
       final tx = TelebirrParser.parse(sms, now);
@@ -186,7 +199,7 @@ void main() {
       expect(tx.id, equals('BD45KRON6P'));
       expect(tx.counterparty, equals('251972665987'));
       expect(tx.patternType, equals(SmsPatternType.telebirrAirtime));
-      expect(tx.isSystemLocked, isTrue);
+      expect(tx.isSystemLocked, isFalse);
       expect(tx.lockedReasonName, equals('Airtime'));
       expect(tx.totalBalance, equals(39.69));
 
@@ -195,7 +208,7 @@ void main() {
       expect(entity.reason, equals('Airtime'));
       expect(entity.customReasonText, isNull);
       expect(entity.note, isNull);
-      expect(entity.isReasonLocked, isTrue);
+      expect(entity.isReasonLocked, isFalse);
     });
   });
 

@@ -500,6 +500,12 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Income' : 'Expense';
     final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
+    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+    final bool hasReason = tx.reasonId != null ||
+        (tx.customReasonText != null &&
+            tx.customReasonText!.trim().isNotEmpty) ||
+        (tx.reason != null && tx.reason!.trim().isNotEmpty) ||
+        txVM.hasSplits(tx.id);
 
     return InkWell(
       onTap: () {
@@ -537,10 +543,7 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                         ),
                       ),
                       const SizedBox(width: 5),
-                      if (Provider.of<TransactionsViewModel>(context, listen: false)
-                              .accountsForBank(tx.name)
-                              .length >
-                          1)
+                      if (txVM.accountsForBank(tx.name).length > 1)
                         Padding(
                           padding: const EdgeInsets.only(left: 4.0),
                           child: SimBadge(simSlot: tx.simSlot),
@@ -550,18 +553,12 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
                           padding: EdgeInsets.only(left: 4.0),
                           child: BookmarkBadge(),
                         ),
-                      if (tx.isAutoDetected && isLatest)
+                      if (tx.isAutoDetected && isLatest && !hasReason)
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),
                           child: NewBadge(),
                         ),
-                      if (tx.reasonId == null &&
-                          (tx.customReasonText == null ||
-                              tx.customReasonText!.isEmpty) &&
-                          (tx.reason == null || tx.reason!.isEmpty) &&
-                          !Provider.of<TransactionsViewModel>(context,
-                                  listen: false)
-                              .hasSplits(tx.id))
+                      if (!hasReason)
                         const Padding(
                           padding: EdgeInsets.only(left: 4.0),
                           child: ReasonBadge(),
@@ -657,6 +654,14 @@ class _TransactionSearchScreenState extends State<TransactionSearchScreen> {
         fit: BoxFit.contain,
       );
       bgColor = AppColors.cardAwashDark.withValues(alpha: 0.12);
+    } else if (nameUp.contains('ZEMEN')) {
+      img = SvgPicture.asset(
+        'assets/images/ZemenBank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bgColor = AppColors.cardZemenDark.withValues(alpha: 0.12);
     } else if (nameUp.contains('CASH')) {
       img = AppSvgIcon('assets/images/Wallet Icon.svg',
           size: 20,

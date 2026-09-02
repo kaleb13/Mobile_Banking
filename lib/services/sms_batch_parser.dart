@@ -15,6 +15,7 @@ import 'ahadu_parser.dart';
 import 'boa_parser.dart';
 import 'dashen_parser.dart';
 import 'awash_parser.dart';
+import 'zemen_parser.dart';
 
 class AutoReasonRule {
   final int id;
@@ -165,7 +166,8 @@ class SmsBatchParser {
           AhaduParser.extractOwnerName(body) ??
           BoaParser.extractOwnerName(body) ??
           DashenParser.extractOwnerName(body) ??
-          AwashParser.extractOwnerName(body);
+          AwashParser.extractOwnerName(body) ??
+          ZemenParser.extractOwnerName(body);
 
       final bank = BankSenders.match(sender);
 
@@ -192,6 +194,8 @@ class SmsBatchParser {
         parsed = DashenParser.parse(body, date);
       } else if (bank == 'Awash Bank') {
         parsed = AwashParser.parse(body, date);
+      } else if (bank == 'Zemen Bank') {
+        parsed = ZemenParser.parse(body, date);
       } else {
         // Custom sender check
         final customSender = params.customSenders.firstWhere(
@@ -222,7 +226,7 @@ class SmsBatchParser {
         String? resolvedReasonName;
 
         // Apply reason linking based on pattern or counterparty
-        if (parsed.isSystemLocked) {
+        if (parsed.lockedReasonName != null) {
           final lockedName = parsed.lockedReasonName;
           if (lockedName != null) {
             resolvedReasonName = lockedName;

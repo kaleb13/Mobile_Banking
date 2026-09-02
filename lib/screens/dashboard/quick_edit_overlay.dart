@@ -1503,6 +1503,12 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                         final isSelected = _selectedCandidateId == cId;
                         final isExpense = cType == 'expense';
 
+                        final diff = (_rawAmount > 0 ? (cAmt - _rawAmount).abs() : 0.0);
+                        final isExactMatch = _rawAmount > 0 && diff < 0.01;
+                        final isCloseMatch = !isExactMatch &&
+                            _rawAmount > 0 &&
+                            (diff <= 50.0 || (diff / _rawAmount) <= 0.05);
+
                         return GestureDetector(
                           onTap: () => setState(() => _selectedCandidateId = cId),
                           behavior: HitTestBehavior.opaque,
@@ -1563,13 +1569,31 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                                     ],
                                   ),
                                 ),
-                                Text(
-                                  '${fmt.format(cAmt)} ETB',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${fmt.format(cAmt)} ETB',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    if (isExactMatch) ...[
+                                      const SizedBox(height: 2),
+                                      const AppBadge.success(
+                                        text: 'EXACT MATCH',
+                                        size: AppBadgeSize.micro,
+                                      ),
+                                    ] else if (isCloseMatch) ...[
+                                      const SizedBox(height: 2),
+                                      const AppBadge.warning(
+                                        text: 'CLOSE MATCH',
+                                        size: AppBadgeSize.micro,
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 const SizedBox(width: 8),
                                 Icon(

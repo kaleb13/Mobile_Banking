@@ -123,7 +123,7 @@ class SmsBroadcastReceiverTest {
         assertTrue(parsed.isDebit)
         assertEquals("972665987", parsed.counterparty)
         assertEquals("To: 972665987", parsed.directionHeader)
-        assertTrue(parsed.isLocked)
+        assertFalse(parsed.isLocked)
         assertEquals("Airtime", parsed.lockedReasonName)
         assertEquals("DHJ9WSTUPZ", parsed.txReference)
         assertEquals(485.32, parsed.totalBalance, 0.001)
@@ -138,13 +138,13 @@ class SmsBroadcastReceiverTest {
         assertEquals(50.0, parsed!!.amount, 0.001)
         assertEquals("251972665987", parsed.counterparty)
         assertEquals("To: 251972665987", parsed.directionHeader)
-        assertTrue(parsed.isLocked)
+        assertFalse(parsed.isLocked)
         assertEquals("Airtime", parsed.lockedReasonName)
         assertEquals(39.69, parsed.totalBalance, 0.001)
     }
 
     @Test
-    fun `parses Telebirr Package subscription with locked Package pattern`() {
+    fun `parses Telebirr Package subscription with unlocked Package pattern`() {
         val msg = "Dear KALEB\n You have paid ETB 50.00 for package subscription to 972665987 on 20/04/2024 07:10:41. Your transaction number is BDK7PQVAMX. Your current balance is ETB 24.61."
         val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
 
@@ -152,7 +152,7 @@ class SmsBroadcastReceiverTest {
         assertEquals(50.0, parsed!!.amount, 0.001)
         assertTrue(parsed.isDebit)
         assertEquals("972665987", parsed.counterparty)
-        assertTrue(parsed.isLocked)
+        assertFalse(parsed.isLocked)
         assertEquals("Package", parsed.lockedReasonName)
         assertEquals(24.61, parsed.totalBalance, 0.001)
     }
@@ -300,6 +300,19 @@ Dashen Bank - Always one step ahead!"""
         assertEquals(200.0, parsed!!.amount, 0.001)
         assertTrue(parsed.isDebit)
         assertEquals(1500.25, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses CBE Birr outgoing sent transfer as expense with recipient`() {
+        val msg = "Dear NAHOM, you have sent 28.00Br. to NATNAEL ABEBE on 31/08/26 20:45,Txn ID DHV51MWWIJ1. Your CBE Birr account balance is 63.30Br.Thank you! For invoice https://cbepay1.cbe.com.et/aureceipt?TID=DHV51MWWIJ1&PH=251921607264 For your feedback please click the link https://shorturl.at/gy3A0"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("CBE Birr", msg)
+
+        assertNotNull(parsed)
+        assertEquals(28.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("NATNAEL ABEBE", parsed.counterparty)
+        assertEquals("DHV51MWWIJ1", parsed.txReference)
+        assertEquals(63.30, parsed.totalBalance, 0.001)
     }
 
     @Test

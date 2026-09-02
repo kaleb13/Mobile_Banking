@@ -697,6 +697,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       );
       bankName = 'Awash Bank S.C.';
       shortName = 'Awash';
+    } else if (combined.contains('ZEMEN')) {
+      bg = AppColors.cardZemenDark.withValues(alpha: 0.15);
+      iconWidget = SvgPicture.asset(
+        'assets/images/ZemenBank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bankName = 'Zemen Bank S.C.';
+      shortName = 'Zemen';
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
       bg = AppColors.slackPurple.withValues(alpha: 0.15);
       iconWidget = SvgPicture.asset('assets/images/CBE logo.svg', width: 24, height: 24, fit: BoxFit.contain);

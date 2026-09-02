@@ -232,6 +232,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     if (up.contains('AHADU')) return 'Ahadu';
     if (up.contains('DASHEN')) return 'Dashen';
     if (up.contains('BOA') || up.contains('ABYSSINIA')) return 'BOA';
+    if (up.contains('AWASH')) return 'Awash';
+    if (up.contains('ZEMEN')) return 'Zemen';
     if (up.contains('CASH')) return 'Cash Wallet';
     if (up == 'ALL' || up == 'ALL BANKS' || up == 'ALL WALLETS') return 'All Wallets';
     return raw.trim();
@@ -265,6 +267,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           tSenderUp.contains('BOA') ||
           tNameUp.contains('ABYSSINIA') ||
           tSenderUp.contains('ABYSSINIA');
+    } else if (bUp.contains('AWASH')) {
+      return tNameUp.contains('AWASH') || tSenderUp.contains('AWASH');
+    } else if (bUp.contains('ZEMEN')) {
+      return tNameUp.contains('ZEMEN') || tSenderUp.contains('ZEMEN');
     }
     return tNameUp.contains(bUp) || tSenderUp.contains(bUp);
   }
@@ -904,6 +910,8 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       'Ahadu': (inVal: 0.0, outVal: 0.0),
       'Dashen': (inVal: 0.0, outVal: 0.0),
       'BOA': (inVal: 0.0, outVal: 0.0),
+      'Awash': (inVal: 0.0, outVal: 0.0),
+      'Zemen': (inVal: 0.0, outVal: 0.0),
       'Cash Wallet': (inVal: 0.0, outVal: 0.0),
     };
 
@@ -927,6 +935,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           senderUpper.contains('BOA') ||
           senderUpper.contains('ABYSSINIA')) {
         key = 'BOA';
+      } else if (nameUpper.contains('AWASH') || senderUpper.contains('AWASH')) {
+        key = 'Awash';
+      } else if (nameUpper.contains('ZEMEN') || senderUpper.contains('ZEMEN')) {
+        key = 'Zemen';
       }
 
       final curr = bankMap[key] ?? (inVal: 0.0, outVal: 0.0);

@@ -147,6 +147,19 @@ class BankInfoData {
         behindGradient: unifiedGradient,
         isDarkTextTheme: isDark,
       );
+    } else if (nameUp.contains('ZEMEN')) {
+      return BankInfoData(
+        bankName: name,
+        displayName: 'Zemen Bank',
+        title: 'Zemen Bank S.C.',
+        subtitle: 'Zemen Bank S.C.',
+        badgeLabel: 'COMMERCIAL BANK · SMS PARSED',
+        badgeIcon: Icons.account_balance_rounded,
+        description:
+            'Automated financial ledger tracking for Zemen Bank notifications. Captures RTGS transfers, ATM cash withdrawals, POS purchases, digital transfers, and real-time account balances.',
+        behindGradient: unifiedGradient,
+        isDarkTextTheme: isDark,
+      );
     }
 
     // Generic fallback

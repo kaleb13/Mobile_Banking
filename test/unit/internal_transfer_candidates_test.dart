@@ -176,7 +176,7 @@ void main() {
           type: 'expense',
           date: baseDate.subtract(const Duration(days: 2)),
         ),
-        // 8. Opposite type & date inside, but different amount (should be excluded)
+        // 8. Opposite type & date inside, different amount (should be included, ranked by closeness)
         _createTx(
           id: 'tx_diff_amount',
           name: 'Telebirr',
@@ -201,7 +201,7 @@ void main() {
       await viewModel.loadAll();
     });
 
-    test('retrieves candidates strictly within 7 days before and after source transaction', () {
+    test('retrieves candidates within 7 days before and after source transaction ordered by closeness', () {
       final candidates = viewModel.getInternalTransferCandidates(sourceExpense);
 
       final ids = candidates.map((c) => c.id).toList();
@@ -211,18 +211,26 @@ void main() {
       expect(ids, contains('tx_income_3d_before'));
       expect(ids, contains('tx_income_5d_after'));
       expect(ids, contains('tx_income_7d_after'));
+      expect(ids, contains('tx_diff_amount'));
 
       // Should NOT include outside the 7-day range
       expect(ids, isNot(contains('tx_income_8d_before')));
       expect(ids, isNot(contains('tx_income_8d_after')));
 
-      // Should NOT include same type, different amount, or already linked
+      // Should NOT include same type, or already linked, or self
       expect(ids, isNot(contains('tx_expense_same_type')));
-      expect(ids, isNot(contains('tx_diff_amount')));
       expect(ids, isNot(contains('tx_already_linked')));
       expect(ids, isNot(contains(sourceExpense.id)));
 
-      expect(candidates.length, equals(4));
+      // Total 5 candidates within 7 days
+      expect(candidates.length, equals(5));
+
+      // Exact matches (amount = 1500.0) must come before different amount (2000.0)
+      for (int i = 0; i < 4; i++) {
+        expect(candidates[i].amount, equals(1500.0));
+      }
+      expect(candidates.last.id, equals('tx_diff_amount'));
+      expect(candidates.last.amount, equals(2000.0));
     });
 
     test('supports custom daysRange parameter override', () {
@@ -234,10 +242,50 @@ void main() {
       final ids3Days = candidates3Days.map((c) => c.id).toList();
 
       expect(ids3Days, contains('tx_income_3d_before'));
+      expect(ids3Days, contains('tx_diff_amount')); // 2 days before
       expect(ids3Days, isNot(contains('tx_income_7d_before')));
       expect(ids3Days, isNot(contains('tx_income_5d_after')));
       expect(ids3Days, isNot(contains('tx_income_7d_after')));
-      expect(candidates3Days.length, equals(1));
+      expect(candidates3Days.length, equals(2));
+      // First must be exact match (1500.0)
+      expect(candidates3Days.first.id, equals('tx_income_3d_before'));
+    });
+
+    test('ranks candidates with fee discrepancies (e.g. 2,000 vs 2,004) closest to target', () async {
+      repo.transactions = [
+        sourceExpense, // 1500.0
+        _createTx(
+          id: 'tx_far',
+          name: 'Telebirr',
+          sender: 'Telebirr',
+          amount: 5.0,
+          type: 'income',
+          date: baseDate,
+        ),
+        _createTx(
+          id: 'tx_fee_diff',
+          name: 'Telebirr',
+          sender: 'Telebirr',
+          amount: 1504.0, // only 4 ETB fee difference
+          type: 'income',
+          date: baseDate,
+        ),
+        _createTx(
+          id: 'tx_exact',
+          name: 'Telebirr',
+          sender: 'Telebirr',
+          amount: 1500.0, // exact match
+          type: 'income',
+          date: baseDate,
+        ),
+      ];
+      await viewModel.loadAll();
+
+      final candidates = viewModel.getInternalTransferCandidates(sourceExpense);
+      expect(candidates.length, equals(3));
+      expect(candidates[0].id, equals('tx_exact')); // diff 0
+      expect(candidates[1].id, equals('tx_fee_diff')); // diff 4
+      expect(candidates[2].id, equals('tx_far')); // diff 1495
     });
 
     test('works for source income matching target expense', () {

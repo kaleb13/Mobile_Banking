@@ -485,12 +485,12 @@ class TransactionQuickEditActivity : FlutterActivity() {
             val candidates = mutableListOf<Map<String, Any?>>()
             val cursor = if (currentRawAmount > 0.0) {
                 db.rawQuery(
-                    "SELECT id, name, amount, type, date, sender, rawMessage FROM transactions WHERE (linkedTransactionId IS NULL OR linkedTransactionId = '') AND id != ? AND LOWER(type) = LOWER(?) AND ABS(amount - ?) < 0.01 ORDER BY date DESC LIMIT 25",
+                    "SELECT id, name, amount, type, date, sender, rawMessage FROM transactions WHERE (linkedTransactionId IS NULL OR linkedTransactionId = '') AND id != ? AND LOWER(type) = LOWER(?) ORDER BY ABS(amount - ?) ASC, date DESC LIMIT 30",
                     arrayOf(currentRealId, targetType, currentRawAmount.toString())
                 )
             } else {
                 db.rawQuery(
-                    "SELECT id, name, amount, type, date, sender, rawMessage FROM transactions WHERE (linkedTransactionId IS NULL OR linkedTransactionId = '') AND id != ? AND LOWER(type) = LOWER(?) ORDER BY date DESC LIMIT 25",
+                    "SELECT id, name, amount, type, date, sender, rawMessage FROM transactions WHERE (linkedTransactionId IS NULL OR linkedTransactionId = '') AND id != ? AND LOWER(type) = LOWER(?) ORDER BY date DESC LIMIT 30",
                     arrayOf(currentRealId, targetType)
                 )
             }

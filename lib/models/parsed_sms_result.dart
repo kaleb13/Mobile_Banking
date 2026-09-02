@@ -20,8 +20,6 @@ enum SmsPatternType {
 
   /// True if this pattern corresponds to an immutable, locked system reason.
   bool get isLocked =>
-      this == SmsPatternType.telebirrAirtime ||
-      this == SmsPatternType.telebirrPackage ||
       this == SmsPatternType.telebirrSanduq ||
       this == SmsPatternType.internalTransfer;
 }

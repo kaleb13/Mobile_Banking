@@ -102,6 +102,17 @@ class BankAvatar extends StatelessWidget {
       bgColor = isLight
           ? AppColors.cardAwashDark.withValues(alpha: 0.12)
           : AppColors.cardAwashDark.withValues(alpha: 0.35);
+    } else if (nameUp.contains('ZEMEN')) {
+      img = SvgPicture.asset(
+        'assets/images/ZemenBank_Logo.svg',
+        width: iconSize * 1.15,
+        height: iconSize * 1.15,
+        fit: BoxFit.contain,
+        colorFilter: isLight ? null : const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+      );
+      bgColor = isLight
+          ? AppColors.cardZemenDark.withValues(alpha: 0.12)
+          : AppColors.cardZemenDark.withValues(alpha: 0.35);
     } else if (nameUp.contains('CASH') || nameUp.contains('WALLET')) {
       img = AppSvgIcon(
         'assets/images/Wallet Icon.svg',

@@ -194,6 +194,12 @@ class BoaParser {
       id = 'BOA-${hash.substring(0, 16).toUpperCase()}';
     }
 
+    SmsPatternType patternType = SmsPatternType.standardTransfer;
+    if (lowerMsg.contains('airtime') || lowerMsg.contains('air time')) {
+      patternType = SmsPatternType.telebirrAirtime;
+      recipientOrSender = 'Airtime';
+    }
+
     return ParsedSmsResult(
       id: id,
       bankName: senderName,
@@ -203,7 +209,7 @@ class BoaParser {
       counterparty: recipientOrSender.isNotEmpty ? recipientOrSender : senderName,
       totalBalance: totalBalance,
       rawMessage: message,
-      patternType: SmsPatternType.standardTransfer,
+      patternType: patternType,
     );
   }
 }

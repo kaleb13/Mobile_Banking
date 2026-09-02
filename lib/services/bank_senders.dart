@@ -77,6 +77,7 @@ class BankSenders {
     if (up == 'BOA' || up.contains('ABYSSINIA') || up.startsWith('BOA')) return 'BOA';
     if (up.contains('DASHEN') || up.contains('AMOLE')) return 'Dashen Bank';
     if (up.contains('AWASH')) return 'Awash Bank';
+    if (up.contains('ZEMEN')) return 'Zemen Bank';
     return null;
   }
 
@@ -97,6 +98,8 @@ class BankSenders {
       return ['dashen', 'amole'];
     } else if (up.contains('AWASH')) {
       return ['awash', 'awashbirr', 'awash bank'];
+    } else if (up.contains('ZEMEN')) {
+      return ['zemen', 'zemen bank'];
     } else {
       return [bankName.trim().toLowerCase()];
     }
