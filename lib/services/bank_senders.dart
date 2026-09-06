@@ -78,6 +78,8 @@ class BankSenders {
     if (up.contains('DASHEN') || up.contains('AMOLE')) return 'Dashen Bank';
     if (up.contains('AWASH')) return 'Awash Bank';
     if (up.contains('ZEMEN')) return 'Zemen Bank';
+    if (up == 'NIB' || up.contains('NIB')) return 'Nib Bank';
+    if (up.contains('BUNNA') || up.contains('BUNA')) return 'Bunna Bank';
     return null;
   }
 
@@ -100,6 +102,10 @@ class BankSenders {
       return ['awash', 'awashbirr', 'awash bank'];
     } else if (up.contains('ZEMEN')) {
       return ['zemen', 'zemen bank'];
+    } else if (up.contains('NIB')) {
+      return ['nib', 'nib bank', 'nibbank'];
+    } else if (up.contains('BUNNA') || up.contains('BUNA')) {
+      return ['bunna', 'buna', 'bunnabank', 'bunna bank'];
     } else {
       return [bankName.trim().toLowerCase()];
     }
@@ -292,6 +298,12 @@ class BankSenders {
         lower.contains('congratulations, you have won') ||
         lower.contains('you have won etb') ||
         lower.contains('gotten all letters') ||
+        lower.contains('choosing tele birr for your fuel payment') ||
+        lower.contains('beware of fake social media') ||
+        lower.contains('easily transfer money from commercial bank') ||
+        lower.contains('easily top-up your mobile airtime with telebirr') ||
+        lower.contains('telebirr mobile app is now available on play store') ||
+        lower.contains('due to a friend you invited') ||
         lower.contains('redeem your pocket money')) {
       return true;
     }
@@ -326,6 +338,9 @@ class BankSenders {
         lower.contains('has not been successful') ||
         lower.contains('was unsuccessful') ||
         lower.contains('fails to be sent') ||
+        lower.contains('fails to be verified') ||
+        lower.contains('exceeds the daily limit') ||
+        lower.contains('returns a transaction processing failure') ||
         lower.contains('reversed to your account') ||
         lower.contains('processing failure response') ||
         lower.contains('insufficient balance for the requested transaction') ||
@@ -363,10 +378,19 @@ class BankSenders {
         lower.contains('new login to your mobile') ||
         lower.contains('harmonization') ||
         lower.contains('harmonize your bank account') ||
+        lower.contains('verifayda') ||
+        lower.contains('your-holiday-cards') ||
         lower.contains('fayda.awashbank.com') ||
         lower.contains('tatariwochu') ||
         lower.contains('happy customer week') ||
         lower.contains('sooramaa') ||
+        lower.contains('approved by cbe birr') ||
+        lower.contains('customer profile has been updated') ||
+        lower.contains('customer status is active') ||
+        lower.contains('to complete your activation') ||
+        lower.contains('visit your nearest awash bank') ||
+        lower.contains('activated device financing') ||
+        lower.contains('preferred language has been successfully changed') ||
         lower.contains('has been successfully linked to your awashbirr')) {
       return true;
     }
@@ -375,7 +399,8 @@ class BankSenders {
     if (lower.contains('customer incentive account balance is') ||
         lower.contains('pocketmoneyaccount balance is') ||
         lower.contains('e-money link bank balance is') ||
-        lower.contains('customer e-money account balance is')) {
+        lower.contains('customer e-money account balance is') ||
+        lower.contains('cbe birr account balance is')) {
       return true;
     }
 

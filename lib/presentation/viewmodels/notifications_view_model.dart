@@ -34,6 +34,35 @@ class NotificationsViewModel extends ChangeNotifier {
   bool _hasPermission = false;
   bool get hasPermission => _hasPermission;
 
+  // ── Notification Panel Open State & Back Navigation ───────────────────────
+  bool _isPanelOpen = false;
+  bool get isPanelOpen => _isPanelOpen;
+  VoidCallback? _closePanelCallback;
+  bool Function()? handleBackPress;
+
+  void setPanelOpen(bool open, {VoidCallback? onClose}) {
+    if (_isPanelOpen == open && onClose == _closePanelCallback) return;
+    _isPanelOpen = open;
+    if (open && onClose != null) {
+      _closePanelCallback = onClose;
+    } else if (!open) {
+      _closePanelCallback = null;
+    }
+    notifyListeners();
+  }
+
+  bool closePanel() {
+    if (_isPanelOpen && _closePanelCallback != null) {
+      final callback = _closePanelCallback;
+      _closePanelCallback = null;
+      _isPanelOpen = false;
+      notifyListeners();
+      callback!();
+      return true;
+    }
+    return false;
+  }
+
   // ── Cross-VM callbacks (wired by main.dart ProxyProvider) ────────────────
   List<AppTransaction> Function()? getTransactions;
   List<AppReason> Function()? getReasons;

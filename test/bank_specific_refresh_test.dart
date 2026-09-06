@@ -105,6 +105,14 @@ class FakeSettingsRepo implements SettingsRepository {
   Future<void> setLastCelebratedLevel(int level) async {
     lastCelebratedLevel = level;
   }
+
+  bool isNotifGuideDismissed = false;
+  @override
+  Future<bool> getIsNotifGuideDismissed() async => isNotifGuideDismissed;
+  @override
+  Future<void> setIsNotifGuideDismissed(bool dismissed) async {
+    isNotifGuideDismissed = dismissed;
+  }
 }
 
 class FakeTxRepo implements TransactionRepository {

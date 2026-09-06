@@ -10,6 +10,8 @@ import '../../widgets/app_text_field.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../models/transaction_split.dart';
 import '../../services/database_service.dart';
+import '../../models/reason.dart';
+import 'reason_link_drawer.dart';
 
 enum _QuickEditView {
   categories,
@@ -80,6 +82,8 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
   bool _loaded = false;
   bool _isSaving = false;
   bool _linkReasonRule = false;
+  LinkScope _selectedLinkScope = LinkScope.allTransactions;
+  int _matchingTxCount = 0;
 
   // Split Sub-flow state
   final List<_QuickSplitItem> _quickSplits = [];
@@ -153,6 +157,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
         _type = data['type'] as String? ?? 'expense';
         _sender = data['sender'] as String? ?? '';
         _dateStr = data['date'] as String? ?? '';
+        _matchingTxCount = (data['matchingCount'] as num?)?.toInt() ?? 0;
 
         _loanType = _type == 'income' ? 'borrowed' : 'lent';
         if (_sender.isNotEmpty && _sender != 'Unknown') {
@@ -294,6 +299,37 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
     });
   }
 
+  void _openLinkReasonModal() {
+    if (_selectedReasonName == null) return;
+    HapticFeedback.lightImpact();
+
+    final linkType = _type.toLowerCase() == 'income' ? 'sender' : 'receiver';
+    final contactName =
+        _sender.isNotEmpty && _sender != 'Unknown' ? _sender : 'this user';
+
+    LinkReasonDrawer.show(
+      context: context,
+      reasonId: _selectedReasonId ?? 0,
+      reasonName: _selectedReasonName!,
+      contactName: contactName,
+      linkType: linkType,
+      currentTransactionId: _transactionId,
+      selectedScope: _linkReasonRule ? _selectedLinkScope : null,
+      matchingCount: _matchingTxCount,
+      onSelectScope: (scope) {
+        setState(() {
+          _linkReasonRule = true;
+          _selectedLinkScope = scope;
+        });
+      },
+      onRemoveRule: () {
+        setState(() {
+          _linkReasonRule = false;
+        });
+      },
+    );
+  }
+
   void _toggleGroup(_CategoryGroup group) {
     setState(() {
       if (_expandedGroupId == group.parent.id) {
@@ -427,6 +463,10 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
           'reasonName': _selectedReasonName,
           'reasonId': _selectedReasonId,
           'contactName': _sender,
+          'linkType': _type.toLowerCase() == 'income' ? 'sender' : 'receiver',
+          'scope': _selectedLinkScope == LinkScope.futureTransactionsOnly
+              ? 'futureTransactionsOnly'
+              : 'allTransactions',
         });
       } else {
         await _channel.invokeMethod('saveReason', {
@@ -735,12 +775,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
 
         // ── Auto-Link Reason Rule Section ──────────────────────────────────
         GestureDetector(
-          onTap: _selectedReasonName != null
-              ? () {
-                  HapticFeedback.lightImpact();
-                  setState(() => _linkReasonRule = !_linkReasonRule);
-                }
-              : null,
+          onTap: _selectedReasonName != null ? _openLinkReasonModal : null,
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -770,9 +805,9 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                       Text(
                         _selectedReasonName != null
                             ? (_sender.isNotEmpty && _sender != 'Unknown'
-                                ? 'Auto-link to "$_sender"'
-                                : 'Always auto-link this reason')
-                            : 'Select a reason to enable auto-linking',
+                                ? 'Link this reason to "$_sender"'
+                                : 'Link this reason to this user')
+                            : 'Select a reason to enable linking',
                         style: TextStyle(
                           color: _selectedReasonName != null
                               ? Colors.white
@@ -787,7 +822,11 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                       ),
                       if (_selectedReasonName != null)
                         Text(
-                          'Categorize future SMS automatically',
+                          _linkReasonRule
+                              ? (_selectedLinkScope == LinkScope.allTransactions
+                                  ? 'All Transactions (Past & Future)'
+                                  : 'From Now On (Future Only)')
+                              : 'Tap to select linking scope',
                           style: TextStyle(
                             color: _linkReasonRule
                                 ? AppColors.positive.withValues(alpha: 0.8)
@@ -802,7 +841,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
                 Icon(
                   _linkReasonRule && _selectedReasonName != null
                       ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked_rounded,
+                      : Icons.chevron_right_rounded,
                   size: 18,
                   color: _selectedReasonName != null
                       ? (_linkReasonRule
@@ -1085,12 +1124,39 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Select Category',
-                  style: TextStyle(
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.category_outlined,
                       color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Select Category',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               Expanded(
                 child: ListView.builder(
                   shrinkWrap: true,

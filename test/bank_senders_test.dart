@@ -19,6 +19,11 @@ void main() {
       expect(BankSenders.match('Zemen Bank'), equals('Zemen Bank'));
       expect(BankSenders.match('ZEMEN'), equals('Zemen Bank'));
       expect(BankSenders.match('zemen'), equals('Zemen Bank'));
+      expect(BankSenders.match('Nib Bank'), equals('Nib Bank'));
+      expect(BankSenders.match('NIB'), equals('Nib Bank'));
+      expect(BankSenders.match('nib'), equals('Nib Bank'));
+      expect(BankSenders.match('NIBBANK'), equals('Nib Bank'));
+      expect(BankSenders.match('NIB BANK'), equals('Nib Bank'));
     });
 
     test('rejects personal phone numbers and invalid senders', () {

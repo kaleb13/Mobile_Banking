@@ -247,12 +247,14 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
           // ── Header Row / Expandable Search Bar ────────────────────────────
           AppSearchBar(
             mode: AppSearchBarMode.pill,
+            icon: Icons.category_outlined,
             title: 'Select Reason',
             pillLabel: 'Search',
             isExpanded: _isSearchExpanded,
             controller: _searchController,
             hint: 'Search reason or category...',
             autofocus: true,
+            height: 38,
             onExpandChanged: (expanded) {
               setState(() => _isSearchExpanded = expanded);
             },
@@ -485,24 +487,7 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
   }
 
   IconData _getCategoryIcon(String name) {
-    final lower = name.toLowerCase().trim();
-    if (lower.contains('food')) return Icons.restaurant;
-    if (lower.contains('drink')) return Icons.local_cafe;
-    if (lower.contains('transport')) return Icons.directions_car;
-    if (lower.contains('housing') || lower.contains('rent')) return Icons.home;
-    if (lower.contains('utility') || lower.contains('light')) return Icons.lightbulb;
-    if (lower.contains('goods') || lower.contains('shopping')) return Icons.shopping_bag;
-    if (lower.contains('entertainment') || lower.contains('movie')) return Icons.movie;
-    if (lower.contains('health') || lower.contains('medical')) return Icons.medical_services;
-    if (lower.contains('education') || lower.contains('school')) return Icons.school;
-    if (lower.contains('investment') || lower.contains('saving')) return Icons.trending_up;
-    if (lower.contains('salary')) return Icons.account_balance_wallet;
-    if (lower.contains('mobile') || lower.contains('internet') || lower.contains('airtime')) return Icons.phone_android;
-    if (lower.contains('loan')) return Icons.handshake_outlined;
-    if (lower.contains('cash')) return Icons.payments_outlined;
-    if (lower.contains('pass-through') || lower.contains('pass through') || lower.contains('bounce')) return Icons.undo_rounded;
-    if (lower.contains('internal transfer')) return Icons.swap_horiz_rounded;
-    return Icons.category_outlined;
+    return AppTheme.getCategoryIcon(name);
   }
 
   Widget _buildCompactCategoryAccordion(AppReason category, TransactionsViewModel txVM) {
@@ -677,29 +662,9 @@ class _ReasonSelectionSheetState extends State<ReasonSelectionSheet> {
                               });
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               child: Row(
                                 children: [
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 140),
-                                    curve: Curves.easeOutCubic,
-                                    width: 26,
-                                    height: 26,
-                                    decoration: BoxDecoration(
-                                      color: isSubSelected
-                                          ? AppColors.positive.withValues(alpha: 0.20)
-                                          : Colors.white.withValues(alpha: 0.05),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      _getCategoryIcon(sub.name != 'General' ? sub.name : category.name),
-                                      color: isSubSelected
-                                          ? AppColors.positive
-                                          : Colors.white.withValues(alpha: 0.65),
-                                      size: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       sub.name,

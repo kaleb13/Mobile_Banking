@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -29,6 +28,7 @@ import '../../widgets/app_drawer.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/contact_avatar.dart';
+import '../../widgets/frosted_glass_noise_painter.dart';
 import 'category_detail_screen.dart';
 import 'all_transactions_screen.dart';
 
@@ -1374,7 +1374,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                 }
                               });
                             },
-                            isBalanceVisible: settingsVM.isBalanceVisible,
+                            isBalanceVisible: true,
                             userLevel: analyticsVM.userLevel,
                           ),
                           if (_selectedHeatmapDay != null) ...[
@@ -1392,7 +1392,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     data.totalIncome,
                     data.totalExpense,
                     data.netPnl,
-                    settingsVM.isBalanceVisible,
+                    true,
                   ),
                   const SizedBox(height: 14),
 
@@ -1401,7 +1401,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     data.categories,
                     data.chartTotal,
                     data.netPnl,
-                    settingsVM.isBalanceVisible,
+                    true,
                     data.filteredBankTxs,
                     data.filteredCashTxs,
                     txVM,
@@ -1421,7 +1421,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     data.bankBreakdown,
                     data.filteredBankTxs,
                     data.filteredCashTxs,
-                    settingsVM.isBalanceVisible,
+                    true,
                   ),
                   const SizedBox(height: 80),
                 ],
@@ -1831,9 +1831,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                             textAlign: TextAlign.center,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.80),
-                              fontSize: 10.5,
+                            style: const TextStyle(
+                              color: AppColors.analysisNarrativeText,
+                              fontSize: 9.5,
                               height: 1.35,
                               fontWeight: FontWeight.w400,
                               letterSpacing: 0.1,
@@ -2790,37 +2790,31 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildCategoryAnalysisHeader(0),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.analytics_outlined,
-                        color: AppColors.textSecondary, size: 16),
-                    SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'No transactions recorded for this period',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 10),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.analytics_outlined,
+                      color: AppColors.textSecondary, size: 16),
+                  SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'No transactions recorded for this period',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            crossFadeState: _isCategoryAnalysisExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 220),
           ),
         ],
       );
@@ -2914,21 +2908,27 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     final fmt = NumberFormat('#,##0.00');
     final periodSubtitle = _getPeriodSubtitle();
 
+    final bool hasMoreThanSix = categoryList.length > 6;
+    final visibleCategories = _isCategoryAnalysisExpanded
+        ? categoryList
+        : categoryList.take(6).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Header Row: Title, Badge, and Toggle Button ──
         _buildCategoryAnalysisHeader(categoryList.length),
 
-        AnimatedCrossFade(
-          firstChild: const SizedBox.shrink(),
-          secondChild: Column(
+        AnimatedSize(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          child: Column(
             children: [
               const SizedBox(height: 10),
-              for (int i = 0; i < categoryList.length; i++) ...[
+              for (int i = 0; i < visibleCategories.length; i++) ...[
                 Builder(
                   builder: (context) {
-                    final cat = categoryList[i];
+                    final cat = visibleCategories[i];
                     final pct =
                         totalSum > 0 ? cat.totalAmount / totalSum : 0.0;
                     final color = cat.color;
@@ -3113,7 +3113,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     );
                   },
                 ),
-                if (i < categoryList.length - 1)
+                if (i < visibleCategories.length - 1)
                   Divider(
                     color: AppColors.tabBackground,
                     height: 12,
@@ -3122,23 +3122,66 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               ],
             ],
           ),
-          crossFadeState: _isCategoryAnalysisExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 220),
         ),
+
+        // Expand / Collapse Action Text / Pill if > 6 categories
+        if (hasMoreThanSix) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _isCategoryAnalysisExpanded =
+                      !_isCategoryAnalysisExpanded;
+                });
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _isCategoryAnalysisExpanded
+                          ? 'Show Less'
+                          : '+${categoryList.length - 6} more categories',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _isCategoryAnalysisExpanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.textSecondary,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 
   Widget _buildCategoryAnalysisHeader(int count) {
+    final bool hasMoreThanSix = count > 6;
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() {
-          _isCategoryAnalysisExpanded = !_isCategoryAnalysisExpanded;
-        });
-      },
+      onTap: hasMoreThanSix
+          ? () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _isCategoryAnalysisExpanded = !_isCategoryAnalysisExpanded;
+              });
+            }
+          : null,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -3174,22 +3217,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 ),
               ],
             ),
-            AnimatedRotation(
-              turns: _isCategoryAnalysisExpanded ? 0.5 : 0.0,
-              duration: const Duration(milliseconds: 220),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: AppColors.buttonSecondary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textPrimary,
-                  size: 16,
+            if (hasMoreThanSix)
+              AnimatedRotation(
+                turns: _isCategoryAnalysisExpanded ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 220),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: AppColors.buttonSecondary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: AppColors.textPrimary,
+                    size: 16,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -3783,7 +3827,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       orElse: () => list.first,
     );
 
-    final isBalanceVisible = settingsVM.isBalanceVisible;
     final fmt = NumberFormat('#,##0.00');
 
     return Container(
@@ -3890,7 +3933,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${activeInsight.totalCount} transactions • ${isBalanceVisible ? '${fmt.format(activeInsight.totalVolume)} volume' : '••••••••'}',
+                                '${activeInsight.totalCount} transactions • ${fmt.format(activeInsight.totalVolume)} volume',
                                 style: const TextStyle(
                                   color: AppColors.textDisabled,
                                   fontSize: 10.5,
@@ -3918,9 +3961,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     Expanded(
                       child: _buildCompactStatTile(
                         label: 'To',
-                        value: isBalanceVisible
-                            ? fmt.format(activeInsight.totalSent)
-                            : '••••••••',
+                        value: fmt.format(activeInsight.totalSent),
                         color: AppColors.textSoft,
                         count: '${activeInsight.sentCount} to',
                       ),
@@ -3929,9 +3970,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     Expanded(
                       child: _buildCompactStatTile(
                         label: 'From',
-                        value: isBalanceVisible
-                            ? fmt.format(activeInsight.totalReceived)
-                            : '••••••••',
+                        value: fmt.format(activeInsight.totalReceived),
                         color: AppColors.textSoft,
                         count: '${activeInsight.receivedCount} from',
                       ),
@@ -3940,9 +3979,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     Expanded(
                       child: _buildCompactStatTile(
                         label: 'Net',
-                        value: isBalanceVisible
-                            ? '${activeInsight.netStanding >= 0 ? '+' : '-'}${fmt.format(activeInsight.netStanding.abs())}'
-                            : '••••••••',
+                        value: '${activeInsight.netStanding >= 0 ? '+' : '-'}${fmt.format(activeInsight.netStanding.abs())}',
                         color: activeInsight.netStanding >= 0
                             ? AppColors.positive
                             : AppColors.negative,
@@ -4050,9 +4087,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
               return c.name.toLowerCase().contains(query.trim().toLowerCase());
             }).toList();
 
-            final settingsVM = Provider.of<SettingsViewModel>(context);
             final fmt = NumberFormat('#,##0.00');
-            final isBalanceVisible = settingsVM.isBalanceVisible;
 
             return AppDrawer(
               heightFactor: 0.78,
@@ -4122,7 +4157,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   subtitle: Text(
-                                    '${item.totalCount} txs • ${isBalanceVisible ? 'ETB ${fmt.format(item.totalVolume)} volume' : '••••••••'}',
+                                    '${item.totalCount} txs • ETB ${fmt.format(item.totalVolume)} volume',
                                     style: const TextStyle(
                                       color: AppColors.textSoft,
                                       fontSize: 11,
@@ -4359,40 +4394,5 @@ class _SubcategoryDataAccumulator {
     required this.name,
     this.reason,
   });
-}
-
-// ── Frosted Glass Micro-Noise Grain Painter ─────────────────────────────────
-class FrostedGlassNoisePainter extends CustomPainter {
-  const FrostedGlassNoisePainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rand = Random(42);
-    final paintLight = Paint()
-      ..color = Colors.white.withValues(alpha: 0.07)
-      ..strokeWidth = 1.0;
-    final paintDark = Paint()
-      ..color = Colors.black.withValues(alpha: 0.07)
-      ..strokeWidth = 1.0;
-
-    final pointsLight = <Offset>[];
-    final pointsDark = <Offset>[];
-
-    for (int i = 0; i < 700; i++) {
-      final dx = rand.nextDouble() * size.width;
-      final dy = rand.nextDouble() * size.height;
-      if (i % 2 == 0) {
-        pointsLight.add(Offset(dx, dy));
-      } else {
-        pointsDark.add(Offset(dx, dy));
-      }
-    }
-
-    canvas.drawPoints(PointMode.points, pointsLight, paintLight);
-    canvas.drawPoints(PointMode.points, pointsDark, paintDark);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

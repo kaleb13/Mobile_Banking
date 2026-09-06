@@ -14,6 +14,10 @@ import 'package:mobile_banking_app/models/scan_window_option.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mobile_banking_app/widgets/bank_card_widget.dart';
 import 'package:mobile_banking_app/widgets/bank_avatar.dart';
+import 'package:mobile_banking_app/widgets/app_search_bar.dart';
+import 'package:mobile_banking_app/widgets/app_info_section.dart';
+import 'package:mobile_banking_app/widgets/app_banner_card.dart';
+import 'package:mobile_banking_app/screens/settings/notification_settings_screen.dart';
 import 'package:mobile_banking_app/theme/app_theme.dart';
 
 void main() {
@@ -314,6 +318,43 @@ void main() {
     });
   });
 
+  group('AppSearchBar Tests', () {
+    testWidgets('collapsible mode shows single circular-background X icon when text is entered', (WidgetTester tester) async {
+      final controller = TextEditingController();
+      bool expandChanged = true;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppSearchBar(
+              mode: AppSearchBarMode.icon,
+              isExpanded: true,
+              controller: controller,
+              onExpandChanged: (val) => expandChanged = val,
+            ),
+          ),
+        ),
+      );
+
+      // Verify the collapse X icon is rendered with circular background
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+
+      // Type some text
+      await tester.enterText(find.byType(TextField), 'Hello');
+      await tester.pumpAndSettle();
+
+      // Only 1 close icon must exist (no duplicate clear X button in collapsible mode)
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+
+      // Tap the close icon to collapse
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+
+      expect(expandChanged, isFalse);
+      expect(controller.text, isEmpty);
+    });
+  });
+
   group('AppMenuButton Tests', () {
     testWidgets('renders dark variant and opens popup menu with white item text', (WidgetTester tester) async {
       String? selectedValue;
@@ -470,6 +511,145 @@ void main() {
       }
     });
   });
+
+  group('AppInfoSection Widget Tests', () {
+    testWidgets('renders title, description and icon with proper styling', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppInfoSection(
+              title: 'Offline Processing',
+              description: 'All push reports are processed offline.',
+              icon: Icons.info_outline_rounded,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Offline Processing'), findsOneWidget);
+      expect(find.text('All push reports are processed offline.'), findsOneWidget);
+      expect(find.byIcon(Icons.info_outline_rounded), findsOneWidget);
+    });
+
+    testWidgets('renders description-only when title is omitted', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppInfoSection(
+              description: 'Simple info description without header.',
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Simple info description without header.'), findsOneWidget);
+      expect(find.byIcon(Icons.info_outline_rounded), findsOneWidget);
+    });
+  });
+
+  group('NotificationSettingsScreen Tests', () {
+    testWidgets('renders gradient onboarding banner with close icon and dismisses on tap', (WidgetTester tester) async {
+      final fakeRepo = FakeSettingsRepository();
+      final settingsVM = SettingsViewModel(repository: fakeRepo);
+      await settingsVM.init();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<SettingsViewModel>.value(
+            value: settingsVM,
+            child: const NotificationSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+      expect(
+        find.text('Assign reasons to transactions directly from incoming SMS banners!'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.auto_awesome_rounded), findsNothing);
+      expect(settingsVM.isNotifGuideDismissed, isTrue);
+    });
+
+    testWidgets('renders action button slots and live preview with icons', (WidgetTester tester) async {
+      final fakeRepo = FakeSettingsRepository();
+      fakeRepo.isNotifGuideDismissed = true;
+      final settingsVM = SettingsViewModel(repository: fakeRepo);
+      await settingsVM.init();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChangeNotifierProvider<SettingsViewModel>.value(
+            value: settingsVM,
+            child: const NotificationSettingsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Food'), findsAtLeast(1));
+      expect(find.text('Goods'), findsAtLeast(1));
+      expect(find.text('Categorize'), findsOneWidget);
+      expect(find.text('LIVE BANNER PREVIEW'), findsOneWidget);
+    });
+  });
+
+  group('AppBannerCard Widget Tests', () {
+    testWidgets('renders onboarding variant with close icon and triggers onDismiss', (WidgetTester tester) async {
+      bool dismissed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppBannerCard.onboarding(
+              text: 'Test Onboarding Banner',
+              onDismiss: () => dismissed = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test Onboarding Banner'), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pump();
+
+      expect(dismissed, isTrue);
+    });
+
+    testWidgets('renders orange-red feature variant with arrow icon and triggers onTap', (WidgetTester tester) async {
+      bool tapped = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AppBannerCard.feature(
+              text: 'Special AI Insight Available',
+              leadingIcon: Icons.bolt_rounded,
+              onTap: () => tapped = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Special AI Insight Available'), findsOneWidget);
+      expect(find.byIcon(Icons.bolt_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_forward_rounded), findsOneWidget);
+
+      await tester.tap(find.text('Special AI Insight Available'));
+      await tester.pump();
+
+      expect(tapped, isTrue);
+    });
+  });
 }
 
 class FakeSettingsRepository implements SettingsRepository {
@@ -528,17 +708,23 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> setReportMonthlyEnabled(bool value) async {}
 
+  String notifQuickButton1 = 'Food';
   @override
-  Future<String> getNotifQuickButton1() async => '';
+  Future<String> getNotifQuickButton1() async => notifQuickButton1;
 
   @override
-  Future<void> setNotifQuickButton1(String value) async {}
+  Future<void> setNotifQuickButton1(String value) async {
+    notifQuickButton1 = value;
+  }
+
+  String notifQuickButton2 = 'Goods';
+  @override
+  Future<String> getNotifQuickButton2() async => notifQuickButton2;
 
   @override
-  Future<String> getNotifQuickButton2() async => '';
-
-  @override
-  Future<void> setNotifQuickButton2(String value) async {}
+  Future<void> setNotifQuickButton2(String value) async {
+    notifQuickButton2 = value;
+  }
 
   @override
   Future<DateTime?> getCustomMonthAnchorDate() async => null;
@@ -595,6 +781,16 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> setLastCelebratedLevel(int level) async {
     lastCelebratedLevel = level;
+  }
+
+  bool isNotifGuideDismissed = false;
+
+  @override
+  Future<bool> getIsNotifGuideDismissed() async => isNotifGuideDismissed;
+
+  @override
+  Future<void> setIsNotifGuideDismissed(bool dismissed) async {
+    isNotifGuideDismissed = dismissed;
   }
 }
 

@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
-import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/cash_wallet_view_model.dart';
 import '../../theme/app_theme.dart';
@@ -113,12 +112,10 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final settingsVM = Provider.of<SettingsViewModel>(context);
     final txVM = Provider.of<TransactionsViewModel>(context);
     final cashVM = Provider.of<CashWalletViewModel>(context);
     final displayTitle = widget.title ?? widget.reason?.name ?? 'Transactions';
     final fmt = NumberFormat('#,##0.00');
-    final isBalanceVisible = settingsVM.isBalanceVisible;
 
     // Collect base source transactions
     List<AppTransaction> rawBankTransactions;
@@ -559,9 +556,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        isBalanceVisible
-                                            ? '${fmt.format(totalOutflow)} ETB'
-                                            : '••••••••',
+                                        '${fmt.format(totalOutflow)} ETB',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13.5,
@@ -608,9 +603,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        isBalanceVisible
-                                            ? '${fmt.format(totalInflow)} ETB'
-                                            : '••••••••',
+                                        '${fmt.format(totalInflow)} ETB',
                                         style: const TextStyle(
                                           color: AppColors.positive,
                                           fontSize: 13.5,
@@ -952,7 +945,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
                       )
                     else ...[
                       ...combinedItems.take(_displayLimit).map((item) {
-                        return _buildTransactionItem(item, fmt, isBalanceVisible);
+                        return _buildTransactionItem(item, fmt);
                       }),
                       if (combinedItems.length > _displayLimit)
                         Padding(
@@ -984,10 +977,9 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
   Widget _buildTransactionItem(
     _UnifiedReasonTxItem item,
     NumberFormat fmt,
-    bool isBalanceVisible,
   ) {
     final isIncome = item.isIncome;
-    final amountStr = isBalanceVisible ? fmt.format(item.amount) : '••••••••';
+    final amountStr = fmt.format(item.amount);
     final String label = isIncome ? 'Income' : 'Expense';
 
     return Container(
@@ -1133,12 +1125,9 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
     final fmt = NumberFormat('#,##0');
     final String countLabel = netAmount != null && netAmount > 0
-        ? (settingsVM.isBalanceVisible
-            ? '$count • ${fmt.format(netAmount)} ETB'
-            : '$count')
+        ? '$count • ${fmt.format(netAmount)} ETB'
         : '$count';
 
     return GestureDetector(

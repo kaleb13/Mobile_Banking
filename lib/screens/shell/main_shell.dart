@@ -11,6 +11,7 @@ import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../presentation/viewmodels/loans_view_model.dart';
 import '../../presentation/viewmodels/analytics_view_model.dart';
+import '../../presentation/viewmodels/notifications_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bank_card_widget.dart';
 import '../../widgets/app_toast.dart';
@@ -89,7 +90,7 @@ class _MainShellState extends State<MainShell> {
           newLevelDescription: analyticsVM.userLevelDescription,
           nextLevelName: analyticsVM.nextLevelName,
           nextLevelProgress: analyticsVM.nextLevelProgress,
-          isBalanceVisible: settingsVM.isBalanceVisible,
+          isBalanceVisible: true,
         );
       } catch (_) {
       } finally {
@@ -160,6 +161,15 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<bool> _onWillPop(SettingsViewModel settingsVM) async {
+    final notifsVM = context.read<NotificationsViewModel>();
+    if (notifsVM.isPanelOpen) {
+      final handled = notifsVM.handleBackPress?.call();
+      if (handled != true) {
+        notifsVM.closePanel();
+      }
+      return false;
+    }
+
     final currentIndex = settingsVM.currentScreenIndex;
 
     if (currentIndex != 0) {
@@ -352,7 +362,7 @@ class _MainShellState extends State<MainShell> {
       final double balance = txVM.balanceForSender(cardName);
       final int txCount = txVM.txCountForSender(cardName);
       final bool cardBalanceVisible =
-          settingsVM.isBalanceVisible && !settingsVM.isBankBalanceHidden(cardName);
+          !settingsVM.isBankBalanceHidden(cardName);
 
       final int homeDeckTopIndex =
           activeCount > 0 ? (activeCount.clamp(1, 3) - 1) : -1;

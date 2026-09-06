@@ -17,6 +17,7 @@ class AppMoneyText extends StatelessWidget {
   final String maskString;
   final bool isPositiveColor;
   final bool isNegativeColor;
+  final bool respectBalanceVisibility;
   final String? customFormatPattern;
 
   const AppMoneyText({
@@ -30,6 +31,7 @@ class AppMoneyText extends StatelessWidget {
     this.maskString = '••••••',
     this.isPositiveColor = false,
     this.isNegativeColor = false,
+    this.respectBalanceVisibility = true,
     this.customFormatPattern,
   });
 
@@ -44,6 +46,7 @@ class AppMoneyText extends StatelessWidget {
     this.maskString = '••••••',
     this.isPositiveColor = false,
     this.isNegativeColor = false,
+    this.respectBalanceVisibility = true,
     this.customFormatPattern = '#,##0',
   });
 
@@ -56,6 +59,7 @@ class AppMoneyText extends StatelessWidget {
     this.showCurrency = false,
     this.decimalDigits = 0,
     this.maskString = '••••••',
+    this.respectBalanceVisibility = true,
     this.customFormatPattern = '#,##0',
   })  : isPositiveColor = amount >= 0,
         isNegativeColor = amount < 0;
@@ -63,7 +67,7 @@ class AppMoneyText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settingsVM = context.watch<SettingsViewModel>();
-    final isVisible = settingsVM.isBalanceVisible;
+    final isVisible = !respectBalanceVisibility || settingsVM.isBalanceVisible;
 
     Color? textColor = style?.color;
     if (isPositiveColor) {

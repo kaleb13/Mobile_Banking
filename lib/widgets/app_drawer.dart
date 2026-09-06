@@ -12,8 +12,8 @@ import 'app_bottom_sheet.dart';
 /// - Dedicated sticky bottom action sheet / button bar
 /// - Fully rounded top corners (28–32px) and zero borders / stroke lines
 class AppDrawer extends StatelessWidget {
+  final IconData? icon;
   final String? title;
-  final String? subtitle;
   final Widget? headerCard;
   final Widget? trailingHeader;
   final Widget child;
@@ -28,8 +28,8 @@ class AppDrawer extends StatelessWidget {
 
   const AppDrawer({
     super.key,
+    this.icon,
     this.title,
-    this.subtitle,
     this.headerCard,
     this.trailingHeader,
     required this.child,
@@ -52,6 +52,7 @@ class AppDrawer extends StatelessWidget {
     bool enableDrag = true,
     Color? barrierColor,
     double blurSigma = 8.0,
+    bool useRootNavigator = false,
   }) {
     return AppBottomSheet.show<T>(
       context: context,
@@ -60,6 +61,7 @@ class AppDrawer extends StatelessWidget {
       enableDrag: enableDrag,
       barrierColor: barrierColor,
       blurSigma: blurSigma,
+      useRootNavigator: useRootNavigator,
       builder: builder,
     );
   }
@@ -76,7 +78,7 @@ class AppDrawer extends StatelessWidget {
 
     Widget bodyWidget;
     if (heightFactor != null) {
-      bodyWidget = isBodyScrollable ? Expanded(child: child) : child;
+      bodyWidget = Expanded(child: child);
     } else {
       bodyWidget = isBodyScrollable
           ? Flexible(
@@ -139,6 +141,23 @@ class AppDrawer extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  if (icon != null) ...[
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   Expanded(
                     child: Text(
                       title!,
@@ -187,7 +206,6 @@ class AppDrawerHeaderCard extends StatelessWidget {
   final Color? iconColor;
   final Widget? leading;
   final String title;
-  final String? subtitle;
   final Widget? trailing;
   final Color? backgroundColor;
   final EdgeInsetsGeometry padding;
@@ -198,7 +216,6 @@ class AppDrawerHeaderCard extends StatelessWidget {
     this.iconColor,
     this.leading,
     required this.title,
-    this.subtitle,
     this.trailing,
     this.backgroundColor,
     this.padding = const EdgeInsets.symmetric(horizontal: 4, vertical: 4),

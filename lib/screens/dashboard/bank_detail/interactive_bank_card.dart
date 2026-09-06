@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../models/sender.dart';
@@ -421,80 +422,81 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
                                       alignment: Alignment.centerLeft,
-                                      child: settingsVM.isBalanceVisible
-                                          ? Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  (widget.txCount == 0 && widget.currentBalance == 0.0)
-                                                      ? 'Unknown Balance'
-                                                      : fmt.format(widget.currentBalance),
-                                                  style: TextStyle(
-                                                    color: textColorPrimary,
-                                                    fontSize: (widget.txCount == 0 && widget.currentBalance == 0.0)
-                                                        ? 22
-                                                        : 28,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: -0.5,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          settingsVM.toggleBankBalanceVisibility(widget.sender.senderName);
+                                        },
+                                        child: !settingsVM.isBankBalanceHidden(widget.sender.senderName)
+                                            ? Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    (widget.txCount == 0 && widget.currentBalance == 0.0)
+                                                        ? 'Unknown Balance'
+                                                        : fmt.format(widget.currentBalance),
+                                                    style: TextStyle(
+                                                      color: textColorPrimary,
+                                                      fontSize: (widget.txCount == 0 && widget.currentBalance == 0.0)
+                                                          ? 22
+                                                          : 28,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: -0.5,
+                                                    ),
+                                                    maxLines: 1,
                                                   ),
-                                                  maxLines: 1,
-                                                ),
-                                                if (widget.txCount > 0 || widget.currentBalance > 0.0) ...[
+                                                  if (widget.txCount > 0 || widget.currentBalance > 0.0) ...[
+                                                    const SizedBox(width: 6),
+                                                    CurrencySymbolWidget(
+                                                      color: textColorPrimary,
+                                                      size: 19,
+                                                    ),
+                                                  ],
                                                   const SizedBox(width: 6),
-                                                  CurrencySymbolWidget(
-                                                    color: textColorPrimary,
-                                                    size: 19,
-                                                  ),
-                                                ],
-                                                const SizedBox(width: 6),
-                                                IconButton(
-                                                  icon: Icon(
+                                                  Icon(
                                                     Icons.visibility_outlined,
                                                     color: textColorSub,
                                                     size: 18,
                                                   ),
-                                                  splashRadius: 18,
-                                                  padding: EdgeInsets.zero,
-                                                  constraints:
-                                                      const BoxConstraints(),
-                                                  onPressed: () => settingsVM
-                                                      .toggleBalanceVisibility(),
-                                                ),
-                                              ],
-                                            )
-                                          : Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  '••••••••',
-                                                  style: TextStyle(
-                                                    color: textColorPrimary,
-                                                    fontSize: 28,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: -0.5,
+                                                ],
+                                              )
+                                            : Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    '••••••••',
+                                                    style: TextStyle(
+                                                      color: textColorPrimary,
+                                                      fontSize: 28,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: -0.5,
+                                                    ),
+                                                    maxLines: 1,
                                                   ),
-                                                  maxLines: 1,
-                                                ),
-                                                const SizedBox(width: 6),
-                                                IconButton(
-                                                  icon: Icon(
-                                                    Icons.visibility_off_outlined,
-                                                    color: textColorSub,
-                                                    size: 18,
+                                                  const SizedBox(width: 6),
+                                                  IconButton(
+                                                    icon: Icon(
+                                                      Icons.visibility_off_outlined,
+                                                      color: textColorSub,
+                                                      size: 18,
+                                                    ),
+                                                    splashRadius: 18,
+                                                    padding: EdgeInsets.zero,
+                                                    constraints:
+                                                        const BoxConstraints(),
+                                                    onPressed: () {
+                                                      HapticFeedback.selectionClick();
+                                                      settingsVM.toggleBankBalanceVisibility(widget.sender.senderName);
+                                                    },
                                                   ),
-                                                  splashRadius: 18,
-                                                  padding: EdgeInsets.zero,
-                                                  constraints:
-                                                      const BoxConstraints(),
-                                                  onPressed: () => settingsVM
-                                                      .toggleBalanceVisibility(),
-                                                ),
-                                              ],
-                                            ),
+                                                ],
+                                              ),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),

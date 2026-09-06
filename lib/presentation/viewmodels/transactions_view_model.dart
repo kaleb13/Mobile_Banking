@@ -494,10 +494,21 @@ class TransactionsViewModel extends ChangeNotifier {
     for (int i = 0; i < _transactions.length; i++) {
       final tx = _transactions[i];
 
-      if (tx.sender.isNotEmpty) uniqueSendersSet.add(tx.sender);
+      if (tx.sender.isNotEmpty) {
+        uniqueSendersSet.add(tx.sender);
+        final rawSender = tx.sender.trim();
+        final isBank = BankSenders.match(rawSender) != null;
+        if (!isBank && rawSender.isNotEmpty) {
+          final normalized = CounterpartyMatcher.normalize(rawSender);
+          if (normalized.isNotEmpty && BankSenders.match(normalized) == null) {
+            allPersonNamesSet.add(normalized);
+          } else if (normalized.isEmpty) {
+            allPersonNamesSet.add(rawSender);
+          }
+        }
+      }
       if (tx.name.isNotEmpty) {
         uniqueBanksSet.add(tx.name);
-        allPersonNamesSet.add(tx.name.trim());
       }
       allSimSlots.add(tx.simSlot);
 

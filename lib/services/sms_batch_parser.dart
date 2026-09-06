@@ -16,6 +16,8 @@ import 'boa_parser.dart';
 import 'dashen_parser.dart';
 import 'awash_parser.dart';
 import 'zemen_parser.dart';
+import 'nib_parser.dart';
+import 'bunna_parser.dart';
 
 class AutoReasonRule {
   final int id;
@@ -109,6 +111,9 @@ class SmsBatchParser {
       'telebirr',
       'cbe',
       'ahadu',
+      'nib',
+      'bunna',
+      'buna',
     ];
 
     final lower = msg.toLowerCase();
@@ -167,7 +172,9 @@ class SmsBatchParser {
           BoaParser.extractOwnerName(body) ??
           DashenParser.extractOwnerName(body) ??
           AwashParser.extractOwnerName(body) ??
-          ZemenParser.extractOwnerName(body);
+          ZemenParser.extractOwnerName(body) ??
+          NibParser.extractOwnerName(body) ??
+          BunnaParser.extractOwnerName(body);
 
       final bank = BankSenders.match(sender);
 
@@ -196,6 +203,10 @@ class SmsBatchParser {
         parsed = AwashParser.parse(body, date);
       } else if (bank == 'Zemen Bank') {
         parsed = ZemenParser.parse(body, date);
+      } else if (bank == 'Nib Bank') {
+        parsed = NibParser.parse(body, date);
+      } else if (bank == 'Bunna Bank') {
+        parsed = BunnaParser.parse(body, date);
       } else {
         // Custom sender check
         final customSender = params.customSenders.firstWhere(

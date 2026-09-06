@@ -42,9 +42,6 @@ class AppSearchBar extends StatefulWidget {
   /// Title or label shown when unopened in `pill` or `icon` mode.
   final String? title;
 
-  /// Custom title widget shown when unopened in `pill` or `icon` mode.
-  final Widget? titleWidget;
-
   /// Leading widget shown when unopened in `icon` mode (e.g. filter button, back button).
   final Widget? leading;
 
@@ -78,6 +75,9 @@ class AppSearchBar extends StatefulWidget {
   /// Outer padding around the search bar component.
   final EdgeInsetsGeometry padding;
 
+  /// Optional leading icon displayed beside the title when unopened in `pill` or `icon` mode.
+  final IconData? icon;
+
   /// Whether to center the title horizontally when unopened.
   final bool centerTitle;
 
@@ -97,7 +97,7 @@ class AppSearchBar extends StatefulWidget {
     this.autofocus = false,
     this.mode = AppSearchBarMode.bar,
     this.title,
-    this.titleWidget,
+    this.icon,
     this.leading,
     this.trailing,
     this.pillLabel = 'Search',
@@ -307,15 +307,15 @@ class _AppSearchBarState extends State<AppSearchBar> {
             ),
           ),
 
-          // Clear button ('X') when text is typed
-          if (_hasText)
+          // Clear button ('X') when text is typed (only in non-collapsible bar mode)
+          if (!isCollapsible && _hasText)
             GestureDetector(
               onTap: _handleClear,
               behavior: HitTestBehavior.opaque,
               child: Padding(
                 padding: const EdgeInsets.all(4.0),
                 child: Container(
-                  padding: const EdgeInsets.all(2),
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: clColor.withValues(alpha: 0.14),
                     shape: BoxShape.circle,
@@ -332,14 +332,24 @@ class _AppSearchBarState extends State<AppSearchBar> {
           // Collapse button ('X') inside on the right when collapsible
           if (isCollapsible)
             GestureDetector(
-              onTap: _collapse,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _collapse();
+              },
               behavior: HitTestBehavior.opaque,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                child: Icon(
-                  Icons.close_rounded,
-                  color: clColor,
-                  size: 18,
+                padding: const EdgeInsets.all(4.0),
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: clColor.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: clColor,
+                    size: 14,
+                  ),
                 ),
               ),
             ),
@@ -379,18 +389,17 @@ class _AppSearchBarState extends State<AppSearchBar> {
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 80),
-                  child: widget.titleWidget ??
-                      Text(
-                        widget.title ?? '',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: titleColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  child: Text(
+                    widget.title ?? '',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               Positioned(
@@ -436,23 +445,46 @@ class _AppSearchBarState extends State<AppSearchBar> {
         );
       }
 
+      final leadingWidget = widget.leading ??
+          (widget.icon != null
+              ? Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    widget.icon,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                )
+              : null);
+
       return SizedBox(
         height: widget.height,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (widget.titleWidget != null)
-              Expanded(child: widget.titleWidget!)
-            else
-              Expanded(
-                child: Text(
-                  widget.title ?? '',
-                  style: TextStyle(
-                    color: titleColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+            if (leadingWidget != null) ...[
+              leadingWidget,
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                widget.title ?? '',
+                style: TextStyle(
+                  color: titleColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.3,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
+            ),
             GestureDetector(
               onTap: _expand,
               behavior: HitTestBehavior.opaque,
@@ -503,19 +535,18 @@ class _AppSearchBarState extends State<AppSearchBar> {
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 48),
-                  child: widget.titleWidget ??
-                      Text(
-                        widget.title ?? '',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: titleColor,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.3,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  child: Text(
+                    widget.title ?? '',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.3,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               if (widget.leading != null)
@@ -570,17 +601,16 @@ class _AppSearchBarState extends State<AppSearchBar> {
               const SizedBox(width: 10),
             ],
             Expanded(
-              child: widget.titleWidget ??
-                  Text(
-                    widget.title ?? '',
-                    textAlign: TextAlign.start,
-                    style: TextStyle(
-                      color: titleColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
+              child: Text(
+                widget.title ?? '',
+                textAlign: TextAlign.start,
+                style: TextStyle(
+                  color: titleColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.3,
+                ),
+              ),
             ),
             GestureDetector(
               onTap: () {

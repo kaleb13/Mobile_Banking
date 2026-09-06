@@ -105,7 +105,7 @@ class ProfileHubScreen extends StatelessWidget {
                                 newLevelDescription: levelDesc,
                                 nextLevelName: nextLvName,
                                 nextLevelProgress: progress,
-                                isBalanceVisible: isVisible,
+                                isBalanceVisible: true,
                               ),
                               child: Interactive3DBadge(
                                 level: level,

@@ -160,6 +160,19 @@ class BankInfoData {
         behindGradient: unifiedGradient,
         isDarkTextTheme: isDark,
       );
+    } else if (nameUp.contains('NIB')) {
+      return BankInfoData(
+        bankName: name,
+        displayName: 'Nib Bank',
+        title: 'Nib International Bank S.C.',
+        subtitle: 'Nib International Bank S.C.',
+        badgeLabel: 'COMMERCIAL BANK · SMS PARSED',
+        badgeIcon: Icons.account_balance_rounded,
+        description:
+            'Automated financial ledger tracking for Nib International Bank notifications. Captures P2P transfers, IPS credits, ATM withdrawals, airtime top-ups, utility payments, and real-time account balances.',
+        behindGradient: unifiedGradient,
+        isDarkTextTheme: isDark,
+      );
     }
 
     // Generic fallback

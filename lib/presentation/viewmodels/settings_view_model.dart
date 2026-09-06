@@ -5,6 +5,7 @@ import '../../models/scan_window_option.dart';
 import '../../models/scan_progress_status.dart';
 import '../../data/repositories/settings_repository.dart';
 import '../../services/report_notification_service.dart';
+import '../../services/bank_senders.dart';
 
 class SettingsViewModel extends ChangeNotifier {
   final SettingsRepository _repository;
@@ -73,6 +74,9 @@ class SettingsViewModel extends ChangeNotifier {
   bool _isOnboardingComplete = false;
   bool get isOnboardingComplete => _isOnboardingComplete;
 
+  bool _isNotifGuideDismissed = false;
+  bool get isNotifGuideDismissed => _isNotifGuideDismissed;
+
   bool _isBalanceVisible = false;
   bool get isBalanceVisible => _isBalanceVisible;
 
@@ -90,35 +94,43 @@ class SettingsViewModel extends ChangeNotifier {
   Set<String> _hiddenBalanceBanks = {};
   Set<String> get hiddenBalanceBanks => Set.unmodifiable(_hiddenBalanceBanks);
 
+  static String _canonicalBankName(String bankName) {
+    return BankSenders.match(bankName) ?? bankName.trim();
+  }
+
   bool isBankBalanceHidden(String bankName) {
-    return _hiddenBalanceBanks
-        .any((b) => b.trim().toUpperCase() == bankName.trim().toUpperCase());
+    final target = _canonicalBankName(bankName).toUpperCase();
+    return _hiddenBalanceBanks.any((b) => _canonicalBankName(b).toUpperCase() == target);
   }
 
   Future<void> toggleBankBalanceVisibility(String bankName) async {
-    final nameUp = bankName.trim().toUpperCase();
+    final target = _canonicalBankName(bankName).toUpperCase();
     if (isBankBalanceHidden(bankName)) {
-      _hiddenBalanceBanks =
-          _hiddenBalanceBanks.where((b) => b.trim().toUpperCase() != nameUp).toSet();
+      _hiddenBalanceBanks = _hiddenBalanceBanks
+          .where((b) => _canonicalBankName(b).toUpperCase() != target)
+          .toSet();
     } else {
-      _hiddenBalanceBanks = {..._hiddenBalanceBanks, bankName.trim()};
+      final canonical = _canonicalBankName(bankName);
+      _hiddenBalanceBanks = {..._hiddenBalanceBanks, canonical};
     }
     notifyListeners();
     await _repository.setHiddenBalanceBanks(_hiddenBalanceBanks);
   }
 
   Future<void> setBankBalanceHidden(String bankName, bool isHidden) async {
-    final nameUp = bankName.trim().toUpperCase();
+    final target = _canonicalBankName(bankName).toUpperCase();
     if (isHidden) {
       if (!isBankBalanceHidden(bankName)) {
-        _hiddenBalanceBanks = {..._hiddenBalanceBanks, bankName.trim()};
+        final canonical = _canonicalBankName(bankName);
+        _hiddenBalanceBanks = {..._hiddenBalanceBanks, canonical};
         notifyListeners();
         await _repository.setHiddenBalanceBanks(_hiddenBalanceBanks);
       }
     } else {
       if (isBankBalanceHidden(bankName)) {
-        _hiddenBalanceBanks =
-            _hiddenBalanceBanks.where((b) => b.trim().toUpperCase() != nameUp).toSet();
+        _hiddenBalanceBanks = _hiddenBalanceBanks
+            .where((b) => _canonicalBankName(b).toUpperCase() != target)
+            .toSet();
         notifyListeners();
         await _repository.setHiddenBalanceBanks(_hiddenBalanceBanks);
       }
@@ -187,6 +199,7 @@ class SettingsViewModel extends ChangeNotifier {
     _hiddenBalanceBanks = await _repository.getHiddenBalanceBanks();
     _scanWindowOption = await _repository.getScanWindow();
     _lastCelebratedLevel = await _repository.getLastCelebratedLevel();
+    _isNotifGuideDismissed = await _repository.getIsNotifGuideDismissed();
     _isInitialized = true;
     notifyListeners();
 
@@ -313,5 +326,17 @@ class SettingsViewModel extends ChangeNotifier {
       notifyListeners();
       await _repository.setIsBalanceVisible(_isBalanceVisible);
     }
+  }
+
+  Future<void> dismissNotifGuide() async {
+    _isNotifGuideDismissed = true;
+    notifyListeners();
+    await _repository.setIsNotifGuideDismissed(true);
+  }
+
+  Future<void> resetNotifGuide() async {
+    _isNotifGuideDismissed = false;
+    notifyListeners();
+    await _repository.setIsNotifGuideDismissed(false);
   }
 }

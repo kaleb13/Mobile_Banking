@@ -255,9 +255,7 @@ class _WalletsScreenState extends State<WalletsScreen>
                             .toList();
                         final int activeAccountCount = activeAccounts.length;
                         final bool cardBalanceVisible =
-                            settingsVM.isBalanceVisible &&
-                                !settingsVM
-                                    .isBankBalanceHidden(sender.senderName);
+                            !settingsVM.isBankBalanceHidden(sender.senderName);
 
                         final int topDeckIndex = activeSenders.isNotEmpty
                             ? (activeSenders.length.clamp(1, 3) - 1)
@@ -320,9 +318,7 @@ class _WalletsScreenState extends State<WalletsScreen>
                               .toList();
                           final int activeAccountCount = activeAccounts.length;
                           final bool cardBalanceVisible =
-                              settingsVM.isBalanceVisible &&
-                                  !settingsVM
-                                      .isBankBalanceHidden(sender.senderName);
+                              !settingsVM.isBankBalanceHidden(sender.senderName);
 
                           return _WalletCard(
                             key: ValueKey(sender.senderName),
@@ -504,7 +500,7 @@ class _WalletsScreenState extends State<WalletsScreen>
       senderName: 'Cash Wallet',
       balance: txVM.balanceForSender('Cash Wallet', cashBalance: cashVM.cashBalance),
       txCount: txVM.txCountForSender('Cash Wallet', cashTxCount: cashVM.cashTransactions.length),
-      isBalanceVisible: settingsVM.isBalanceVisible,
+      isBalanceVisible: !settingsVM.isBankBalanceHidden('Cash Wallet'),
       isPaused: false, // Cash Wallet is never paused
       accountCount: 1,
       onTap: () {

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_banking_app/models/sender.dart';
 import 'package:mobile_banking_app/models/transaction.dart';
 import 'package:mobile_banking_app/models/reason.dart';
+import 'package:mobile_banking_app/models/cash_transaction.dart';
 import 'package:mobile_banking_app/models/transaction_split.dart';
 import 'package:mobile_banking_app/models/app_currency.dart';
 import 'package:mobile_banking_app/models/scan_window_option.dart';
@@ -10,6 +11,8 @@ import 'package:mobile_banking_app/presentation/viewmodels/transactions_view_mod
 import 'package:mobile_banking_app/presentation/viewmodels/settings_view_model.dart';
 import 'package:mobile_banking_app/data/repositories/transaction_repository.dart';
 import 'package:mobile_banking_app/data/repositories/settings_repository.dart';
+import 'package:mobile_banking_app/data/repositories/cash_wallet_repository.dart';
+import 'package:mobile_banking_app/widgets/bank_card_action_modal.dart';
 
 class FakeSettingsRepo implements SettingsRepository {
   bool isBalanceVisible = true;
@@ -99,6 +102,14 @@ class FakeSettingsRepo implements SettingsRepository {
   @override
   Future<void> setLastCelebratedLevel(int level) async {
     lastCelebratedLevel = level;
+  }
+
+  bool isNotifGuideDismissed = false;
+  @override
+  Future<bool> getIsNotifGuideDismissed() async => isNotifGuideDismissed;
+  @override
+  Future<void> setIsNotifGuideDismissed(bool dismissed) async {
+    isNotifGuideDismissed = dismissed;
   }
 }
 
@@ -274,5 +285,30 @@ void main() {
       expect(txVM.isTrackingPaused('CBE'), isFalse);
       expect(txVM.balanceForSender('CBE'), 8000.0);
     });
+
+    test('BankCardActionModal can be constructed with valid parameters', () {
+      const modal = BankCardActionModal(
+        senderName: 'Telebirr',
+        balance: 8000.0,
+        txCount: 2,
+        isBalanceVisible: true,
+        isPaused: false,
+      );
+      expect(modal.senderName, 'Telebirr');
+      expect(modal.balance, 8000.0);
+      expect(modal.txCount, 2);
+      expect(modal.isBalanceVisible, true);
+      expect(modal.isPaused, false);
+    });
   });
+}
+
+class FakeCashWalletRepository implements CashWalletRepository {
+  List<CashTransaction> cashTransactions = [];
+
+  @override
+  Future<List<CashTransaction>> getCashTransactions() async => cashTransactions;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

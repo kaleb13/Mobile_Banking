@@ -107,6 +107,11 @@ class MockSettingsRepository implements SettingsRepository {
   Future<Set<String>> getHiddenBalanceBanks() async => {};
   @override
   Future<void> setHiddenBalanceBanks(Set<String> banks) async {}
+
+  @override
+  Future<bool> getIsNotifGuideDismissed() async => false;
+  @override
+  Future<void> setIsNotifGuideDismissed(bool dismissed) async {}
 }
 
 AppTransaction _createTx(String bank, double totalBalance) {

@@ -22,6 +22,8 @@ import '../../widgets/custom_progress_bar.dart';
 import 'privacy_policy_screen.dart';
 import '../privacy/privacy_settings_screen.dart';
 import '../settings/notification_settings_screen.dart';
+import 'package:intl/intl.dart';
+import '../../widgets/app_confirm_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -570,9 +572,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       highlightColor: Colors.transparent,
                       onTap: () async {
                         Navigator.pop(sheetCtx);
+                        if (option == currentOption) return;
+
                         HapticFeedback.lightImpact();
 
                         final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+
+                        // Check if narrowing or if transactions will be purged
+                        final cutoff = option.anchorDate;
+                        final affectedTxCount = option == ScanWindowOption.allTime
+                            ? 0
+                            : txVM.transactions.where((tx) => tx.date.isBefore(cutoff)).length;
+                        final isNarrowing = (option.days >= 0 && (currentOption.days == -1 || option.days < currentOption.days)) ||
+                            affectedTxCount > 0;
+
+                        final confirmed = await AppConfirmDialog.show(
+                          context: context,
+                          title: isNarrowing ? 'Narrow Scan Range?' : 'Expand Scan Range?',
+                          message: isNarrowing
+                              ? (affectedTxCount > 0
+                                  ? 'Switching to "${option.title}" will remove $affectedTxCount older transaction${affectedTxCount == 1 ? '' : 's'} before ${DateFormat('MMM d, yyyy').format(cutoff)} from your active history.'
+                                  : 'Switching to "${option.title}" will narrow your active scan range.')
+                              : 'Switching to "${option.title}" will scan and import older banking SMS messages from your device inbox.',
+                          details: isNarrowing
+                              ? '• Older transactions outside this window will be purged from the app.\n'
+                                '• One-off manual reasons, notes, custom tags, and attachments on purged transactions will be permanently deleted.\n'
+                                '• Counterparty auto-link rules in Reason Settings will remain safe.'
+                              : '• Existing transactions and their custom reasons will be preserved.\n'
+                                '• Newly imported older transactions will only receive reasons if a matching counterparty auto-link rule exists.',
+                          confirmText: isNarrowing ? 'Change & Purge' : 'Expand & Scan',
+                          cancelText: 'Cancel',
+                          isDestructive: isNarrowing,
+                          onConfirm: () {},
+                        );
+
+                        if (confirmed != true) return;
+                        if (!context.mounted) return;
 
                         _showRescanProgressDialog(context, option.title);
 

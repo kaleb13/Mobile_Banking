@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/transaction.dart';
-import '../presentation/viewmodels/settings_view_model.dart';
 import '../presentation/viewmodels/transactions_view_model.dart';
 import '../screens/dashboard/all_transactions_screen.dart';
 import '../screens/dashboard/transaction_detail_screen.dart';
@@ -51,9 +50,7 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final settingsVM = context.watch<SettingsViewModel>();
     final txVM = context.watch<TransactionsViewModel>();
-    final isBalanceVisible = settingsVM.isBalanceVisible;
     final fmt = NumberFormat('#,##0.00');
 
     // Filter transactions exclusively for this counterparty/person using robust matching
@@ -180,28 +177,19 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
                   ],
                 ),
                 const SizedBox(height: 6),
-                isBalanceVisible
-                    ? CurrencyTextWidget(
-                        amount: netStanding,
-                        showSign: true,
-                        style: TextStyle(
-                          color: netStanding >= 0
-                              ? AppColors.positive
-                              : AppColors.negative,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                        customFormattedStr: fmt.format(netStanding.abs()),
-                      )
-                    : const Text(
-                        'ETB ••••••••',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                CurrencyTextWidget(
+                  amount: netStanding,
+                  showSign: true,
+                  style: TextStyle(
+                    color: netStanding >= 0
+                        ? AppColors.positive
+                        : AppColors.negative,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                  customFormattedStr: fmt.format(netStanding.abs()),
+                ),
                 const SizedBox(height: 10),
 
                 // Distribution Bar between Inflow and Outflow
@@ -248,7 +236,6 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
                   title: 'Total To',
                   amount: totalSent,
                   subtitle: '${expenseTxs.length} transfers to',
-                  isBalanceVisible: isBalanceVisible,
                   fmt: fmt,
                 ),
               ),
@@ -260,7 +247,6 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
                   title: 'Total From',
                   amount: totalReceived,
                   subtitle: '${incomeTxs.length} transfers from',
-                  isBalanceVisible: isBalanceVisible,
                   fmt: fmt,
                 ),
               ),
@@ -389,7 +375,6 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
                     _buildTransactionRow(
                       context,
                       displayedTxs[i],
-                      isBalanceVisible,
                       fmt,
                     ),
                   ],
@@ -428,7 +413,6 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
     required String title,
     required double amount,
     required String subtitle,
-    required bool isBalanceVisible,
     required NumberFormat fmt,
   }) {
     return Container(
@@ -460,7 +444,7 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            isBalanceVisible ? 'ETB ${fmt.format(amount)}' : 'ETB ••••••••',
+            'ETB ${fmt.format(amount)}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 14,
@@ -488,7 +472,6 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
   Widget _buildTransactionRow(
     BuildContext context,
     AppTransaction tx,
-    bool isBalanceVisible,
     NumberFormat fmt,
   ) {
     final isIncome = tx.type == 'income';
@@ -533,9 +516,7 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
               ),
             ),
             Text(
-              isBalanceVisible
-                  ? '${isIncome ? '+' : '-'} ETB ${fmt.format(tx.amount)}'
-                  : 'ETB ••••••••',
+              '${isIncome ? '+' : '-'} ETB ${fmt.format(tx.amount)}',
               style: TextStyle(
                 color: isIncome ? AppColors.positive : AppColors.negative,
                 fontSize: 12.5,

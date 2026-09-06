@@ -24,12 +24,14 @@ import '../../widgets/app_badges.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_note_card.dart';
+import '../../widgets/app_info_section.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../widgets/counterparty_insight_sheet.dart';
 import '../loans/loan_management_screen.dart';
+import '../loans/select_active_loan_sheet.dart';
 import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
 import 'reason_link_drawer.dart';
@@ -327,7 +329,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final int? activeReasonId =
         _selectedReason?.id ?? currentTx.reasonId;
 
-    // Find linked loan if any
+    // Find linked loan if any (as originator)
     LoanRecord? linkedLoan;
     try {
       linkedLoan = loansVM.loanRecords.firstWhere(
@@ -337,6 +339,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       linkedLoan = null;
     }
 
+    // Find linked repayment if any (as payment)
+    final linkedRepayment = currentTx.id != null
+        ? loansVM.getRepaymentForTransaction(currentTx.id!)
+        : null;
+
     final bool isCashWithDeductions = (currentTx.reason?.toLowerCase() == 'cash' ||
             currentTx.customReasonText?.toLowerCase() == 'cash' ||
             currentTx.resolvedReason?.toLowerCase() == 'cash') &&
@@ -344,8 +351,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     // True if this transaction is auto-locked (Telebirr credit/repayment)
     final bool isAutoLocked = currentTx.isReasonLocked;
-    // True if reason editing is blocked by any lock (linked loan OR auto-lock OR cash with active deductions)
-    final bool isReasonBlocked = linkedLoan != null || isAutoLocked || isCashWithDeductions;
+    // True if reason editing is blocked by any lock (linked loan OR linked repayment OR auto-lock OR cash with active deductions)
+    final bool isReasonBlocked = linkedLoan != null || linkedRepayment != null || isAutoLocked || isCashWithDeductions;
 
     AppReasonLink? activeLink;
     if (activeReasonId != null) {
@@ -494,72 +501,45 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 18),
-                        // Currency + Amount with premium split decimals & active currency symbol
-                        if (settingsVM.isBalanceVisible)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                sign,
-                                style: TextStyle(
-                                  color: amountColor,
-                                  fontSize: 44,
-                                  fontWeight: FontWeight.w300,
-                                ),
+                        const SizedBox(height: 18),                        // Currency + Amount with premium split decimals & active currency symbol
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              sign,
+                              style: TextStyle(
+                                color: amountColor,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w300,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                NumberFormat('#,##0')
-                                    .format(currentTx.amount),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 44,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -1,
-                                ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              NumberFormat('#,##0')
+                                  .format(currentTx.amount),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -1,
                               ),
-                              Text(
-                                '.${(currentTx.amount % 1).toStringAsFixed(2).split('.')[1]}',
-                                style: const TextStyle(
-                                  color: AppColors.textSoft,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const CurrencySymbolWidget(
-                                size: 22,
+                            ),
+                            Text(
+                              '.${(currentTx.amount % 1).toStringAsFixed(2).split('.')[1]}',
+                              style: const TextStyle(
                                 color: AppColors.textSoft,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w400,
                               ),
-                            ],
-                          )
-                        else
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                sign,
-                                style: TextStyle(
-                                  color: amountColor,
-                                  fontSize: 44,
-                                  fontWeight: FontWeight.w300,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                '••••••••',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 38,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 6),
+                            const CurrencySymbolWidget(
+                              size: 22,
+                              color: AppColors.textSoft,
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 18),
 
                         // ── 1. SPLIT TRANSACTION BREAKDOWN / LOAN / INTERNAL TRANSFER CARD (TOP MOST) ──
@@ -568,6 +548,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           const SizedBox(height: 14),
                         ] else if (linkedLoan != null) ...[
                           _buildLoanTrackingCard(context, linkedLoan, loansVM, settingsVM),
+                          const SizedBox(height: 14),
+                        ] else if (linkedRepayment != null) ...[
+                          _buildLoanRepaymentCard(context, linkedRepayment.loan, linkedRepayment.payment, loansVM, settingsVM),
                           const SizedBox(height: 14),
                         ] else if (currentTx.linkedTransactionId != null && currentTx.linkedTransactionId!.isNotEmpty) ...[
                           _buildInternalTransferCard(context, txVM, currentTx),
@@ -707,6 +690,26 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       );
       bankName = 'Zemen Bank S.C.';
       shortName = 'Zemen';
+    } else if (combined.contains('NIB')) {
+      bg = AppColors.cardNibDark.withValues(alpha: 0.15);
+      iconWidget = SvgPicture.asset(
+        'assets/images/NIB_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bankName = 'Nib International Bank S.C.';
+      shortName = 'Nib Bank';
+    } else if (combined.contains('BUNNA') || combined.contains('BUNA')) {
+      bg = AppColors.cardBunaDark.withValues(alpha: 0.15);
+      iconWidget = SvgPicture.asset(
+        'assets/images/Buna_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bankName = 'Bunna Bank S.C.';
+      shortName = 'Bunna Bank';
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
       bg = AppColors.slackPurple.withValues(alpha: 0.15);
       iconWidget = SvgPicture.asset('assets/images/CBE logo.svg', width: 24, height: 24, fit: BoxFit.contain);
@@ -2151,40 +2154,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildLinkReasonInfoSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                color: Colors.white.withValues(alpha: 0.4),
-                size: 15,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Automatic Reason Linking',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Linking a reason to a sender automatically assigns that reason to future transactions from the same direction (outgoing to outgoing, or incoming to incoming). You can view and manage linked rules anytime under Settings > Category Management.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.4),
-              fontSize: 11,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
+    return const AppInfoSection(
+      title: 'Automatic Reason Linking',
+      description:
+          'Linking a reason to a sender automatically assigns that reason to future transactions from the same direction (outgoing to outgoing, or incoming to incoming). You can view and manage linked rules anytime under Settings > Category Management.',
+      icon: Icons.info_outline_rounded,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 
@@ -2371,6 +2346,162 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
+  Widget _buildLoanRepaymentCard(
+      BuildContext context,
+      LoanRecord loan,
+      LoanPayment payment,
+      LoansViewModel loansVM,
+      SettingsViewModel settingsVM) {
+    final isLent = loan.loanType == 'lent';
+    final accentColor = isLent ? AppColors.positive : AppColors.warning;
+    final fmt = NumberFormat('#,##0.00');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadius.cardRadius,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.payments_outlined,
+                    color: accentColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Loan Repayment',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isLent
+                          ? 'Repayment from ${loan.personName}'
+                          : 'Payment towards ${loan.personName}\'s debt',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.50),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppButton.secondary(
+                text: 'View Loan',
+                fullWidth: false,
+                height: 30,
+                fontSize: 10,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LoanDetailScreen(loan: loan),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'APPLIED REPAYMENT',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fmt.format(payment.amount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const CurrencySymbolWidget(
+                          size: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'LOAN STATUS',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    loan.isPaid
+                        ? const AppBadge.success(
+                            text: 'SETTLED',
+                            icon: Icons.check_circle_rounded,
+                            size: AppBadgeSize.small,
+                          )
+                        : Text(
+                            '${fmt.format(loan.remainingAmount)} left',
+                            style: TextStyle(
+                              color: accentColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCreateLoanPromptCard(
       BuildContext context, AppTransaction currentTx) {
     return Container(
@@ -2380,63 +2511,98 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         color: AppColors.surface,
         borderRadius: AppRadius.cardRadius,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.positive.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.handshake_outlined,
-                color: AppColors.positive, size: 18),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.positive.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.handshake_outlined,
+                    color: AppColors.positive, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Loan & Debt Tracking',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Track as a new loan or link as a repayment to an existing loan',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.50),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Create Loan Record',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton.primary(
+                  text: 'New Loan',
+                  icon: Icons.add_rounded,
+                  height: 34,
+                  fontSize: 11.5,
+                  iconSize: 14,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  onPressed: () async {
+                    await AppDrawer.show(
+                      context: context,
+                      builder: (_) => AddLoanSheet(
+                        linkedTransactionId: currentTx.id,
+                        prefilledAmount: currentTx.amount,
+                        prefilledName: currentTx.sender,
+                        prefilledTrackedSender: currentTx.sender,
+                        prefilledType:
+                            currentTx.type == 'expense' ? 'lent' : 'borrowed',
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Track repayment & schedule for this transaction',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50),
-                    fontSize: 11.5,
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: AppButton.secondary(
+                  text: 'Link Repayment',
+                  icon: Icons.link_rounded,
+                  height: 34,
+                  fontSize: 11.5,
+                  iconSize: 14,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  onPressed: () async {
+                    final loan = await SelectActiveLoanSheet.show(
+                      context,
+                      transaction: currentTx,
+                    );
+                    if (loan == null || !context.mounted) return;
+                    await AppDrawer.show(
+                      context: context,
+                      builder: (_) => RecordPaymentSheet(
+                        loan: loan,
+                        initialTransaction: currentTx,
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          AppButton.primary(
-            text: 'Create',
-            icon: Icons.add_rounded,
-            fullWidth: false,
-            height: 32,
-            fontSize: 11.5,
-            iconSize: 14,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            onPressed: () async {
-              await AppDrawer.show(
-                context: context,
-                builder: (_) => AddLoanSheet(
-                  linkedTransactionId: currentTx.id,
-                  prefilledAmount: currentTx.amount,
-                  prefilledName: currentTx.sender,
-                  prefilledTrackedSender: currentTx.sender,
-                  prefilledType:
-                      currentTx.type == 'expense' ? 'lent' : 'borrowed',
-                ),
-              );
-            },
+              ),
+            ],
           ),
         ],
       ),

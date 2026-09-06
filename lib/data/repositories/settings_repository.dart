@@ -56,6 +56,9 @@ abstract class SettingsRepository {
 
   Future<int> getLastCelebratedLevel();
   Future<void> setLastCelebratedLevel(int level);
+
+  Future<bool> getIsNotifGuideDismissed();
+  Future<void> setIsNotifGuideDismissed(bool dismissed);
 }
 
 class SettingsRepositoryImpl implements SettingsRepository {
@@ -79,6 +82,7 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<Set<String>> getHiddenBalanceBanks() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final list = prefs.getStringList('hidden_balance_banks') ?? [];
     return list.toSet();
   }
@@ -86,7 +90,11 @@ class SettingsRepositoryImpl implements SettingsRepository {
   @override
   Future<void> setHiddenBalanceBanks(Set<String> banks) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('hidden_balance_banks', banks.toList());
+    if (banks.isEmpty) {
+      await prefs.remove('hidden_balance_banks');
+    } else {
+      await prefs.setStringList('hidden_balance_banks', banks.toList());
+    }
   }
 
   @override
@@ -321,5 +329,17 @@ class SettingsRepositoryImpl implements SettingsRepository {
     final fallback = option.anchorDate;
     await setScanWindowStartDate(fallback);
     return fallback;
+  }
+
+  @override
+  Future<bool> getIsNotifGuideDismissed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('is_notif_guide_dismissed_v1') ?? false;
+  }
+
+  @override
+  Future<void> setIsNotifGuideDismissed(bool dismissed) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_notif_guide_dismissed_v1', dismissed);
   }
 }

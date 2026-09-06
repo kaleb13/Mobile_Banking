@@ -170,24 +170,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   IconData _getReasonIcon(String? reason) {
     if (reason == null) return Icons.category_outlined;
-    final r = reason.toLowerCase().trim();
-    if (r.contains('food')) return Icons.restaurant;
-    if (r.contains('drink')) return Icons.local_cafe;
-    if (r.contains('transport')) return Icons.directions_car;
-    if (r.contains('housing') || r.contains('rent')) return Icons.home;
-    if (r.contains('utility') || r.contains('light')) return Icons.lightbulb;
-    if (r.contains('goods') || r.contains('shopping')) return Icons.shopping_bag;
-    if (r.contains('entertainment') || r.contains('movie')) return Icons.movie;
-    if (r.contains('health') || r.contains('medical')) return Icons.medical_services;
-    if (r.contains('education') || r.contains('school')) return Icons.school;
-    if (r.contains('loan') || r.contains('debt')) return Icons.handshake_outlined;
-    if (r.contains('cash')) return Icons.payments_outlined;
-    if (r.contains('pass-through') || r.contains('pass through') || r.contains('bounce')) return Icons.undo_rounded;
-    if (r.contains('internal transfer')) return Icons.swap_horiz_rounded;
-    if (r.contains('mobile') || r.contains('internet') || r.contains('airtime') || r.contains('phone')) return Icons.phone_android;
-    if (r.contains('investment') || r.contains('saving') || r.contains('stock')) return Icons.trending_up;
-    if (r.contains('salary')) return Icons.account_balance_wallet;
-    return Icons.category_outlined;
+    return AppTheme.getCategoryIcon(reason);
   }
 
 
@@ -315,12 +298,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 builder: (context, settingsVM, _) {
                   return Text(
                     overdueCount == 1
-                        ? (settingsVM.isBalanceVisible
-                            ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
-                            : 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ••••••••)')
-                        : (settingsVM.isBalanceVisible
-                            ? '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB'
-                            : '$overdueCount LOANS ARE OVERDUE — Total: ••••••••'),
+                        ? 'OVERDUE: ${firstOverdue.personName} (${firstOverdue.daysOverdue} days late — ${NumberFormat('#,###').format(firstOverdue.remainingAmount)} ETB)'
+                        : '$overdueCount LOANS ARE OVERDUE — Total: ${NumberFormat('#,###').format(totalRemaining)} ETB',
                     style: const TextStyle(
                       color: AppColors.negative,
                       fontSize: 12,
@@ -528,9 +507,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    settingsVM.isBalanceVisible
-                                        ? '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}'
-                                        : '••••••',
+                                    '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}',
                                     style: TextStyle(
                                       color: isPositive ? AppColors.positive : AppColors.negative,
                                       fontSize: 10,
@@ -637,11 +614,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final double balance = txVM.balanceForSender(cardName);
           final int txCount = txVM.txCountForSender(cardName);
 
-          final bool isBankHidden = settingsData.hiddenBanks.any(
-            (b) => b.trim().toUpperCase() == cardName.trim().toUpperCase(),
-          );
-          final bool cardBalanceVisible =
-              settingsData.isBalanceVisible && !isBankHidden;
+          final bool isBankHidden = settingsVM.isBankBalanceHidden(cardName);
+          final bool cardBalanceVisible = !isBankHidden;
 
           // Top-most card in the rendered stack dynamically takes the White version
           final bool isTop = (i == stackCount - 1);
@@ -696,12 +670,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     CashWalletViewModel cashVM,
     AnalyticsViewModel analyticsVM,
   ) {
-    final settingsVM = Provider.of<SettingsViewModel>(context, listen: false);
     final fmt = NumberFormat('#,##0.00');
 
     AppDrawer.show(
       context: context,
       builder: (drawerCtx) {
+        final settingsVM = drawerCtx.watch<SettingsViewModel>();
+        final bool isVisible = settingsVM.isBalanceVisible;
+
         return AppDrawer(
           headerCard: AppDrawerHeaderCard(
             leading: Container(
@@ -758,7 +734,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         displayName: sim?.displayName,
                         totalBalance: simBal,
                         bankBalances: nonZeroBanks,
-                        isBalanceVisible: settingsVM.isBalanceVisible,
+                        isBalanceVisible: isVisible,
                       );
                     },
                   ),
@@ -778,7 +754,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: AppColors.drawerCard,
                         borderRadius: BorderRadius.circular(AppRadius.cardSm),
                       ),
                       child: Column(
@@ -804,7 +780,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    settingsVM.isBalanceVisible
+                                    isVisible
                                         ? '${fmt.format(txVM.balanceForSender(sender.senderName))} ETB'
                                         : '••••••••',
                                     style: const TextStyle(
@@ -830,7 +806,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: AppColors.drawerCard,
                     borderRadius: BorderRadius.circular(AppRadius.cardSm),
                   ),
                   child: Row(
@@ -845,7 +821,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       Text(
-                        settingsVM.isBalanceVisible
+                        isVisible
                             ? '${fmt.format(cashVM.balance)} ETB'
                             : '••••••••',
                         style: const TextStyle(
@@ -862,7 +838,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
+                  color: AppColors.drawerCard,
                   borderRadius: BorderRadius.circular(AppRadius.cardSm),
                 ),
                 child: Row(
@@ -877,7 +853,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     Text(
-                      !settingsVM.isBalanceVisible
+                      !isVisible
                           ? '••••••••'
                           : ((txVM.transactions.isEmpty && analyticsVM.totalBalance == 0.0)
                               ? 'Unknown'
@@ -1633,6 +1609,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               amount: tx.amount,
               prefix: isIncome ? '+' : '-',
               decimalDigits: 2,
+              respectBalanceVisibility: false,
               style: const TextStyle(
                 color: AppColors.darkCharcoal,
                 fontSize: 12.5,
@@ -1696,6 +1673,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         fit: BoxFit.contain,
       );
       bgColor = AppColors.cardZemenDark.withValues(alpha: 0.12);
+    } else if (nameUp.contains('NIB')) {
+      img = SvgPicture.asset(
+        'assets/images/NIB_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bgColor = AppColors.cardNibDark.withValues(alpha: 0.12);
+    } else if (nameUp.contains('BUNNA') || nameUp.contains('BUNA')) {
+      img = SvgPicture.asset(
+        'assets/images/Buna_Bank_Logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
+      bgColor = AppColors.cardBunaDark.withValues(alpha: 0.12);
     } else if (nameUp.contains('CASH')) {
       img = SvgPicture.asset(
         'assets/images/Wallet Icon.svg',
@@ -1805,6 +1798,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
             : null,
       );
+    } else if (nameUp.contains('NIB')) {
+      return SvgPicture.asset(
+        'assets/images/NIB_Bank_Logo.svg',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        colorFilter: overrideColor != null
+            ? ColorFilter.mode(overrideColor, BlendMode.srcIn)
+            : null,
+      );
     } else if (nameUp.contains('CASH')) {
       return SvgPicture.asset(
         'assets/images/Wallet Icon.svg',
@@ -1875,7 +1878,7 @@ class _CollapsibleSimAccountCardState extends State<_CollapsibleSimAccountCard> 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.drawerCard,
         borderRadius: BorderRadius.circular(AppRadius.cardSm),
       ),
       child: Column(
@@ -1981,7 +1984,9 @@ class _CollapsibleSimAccountCardState extends State<_CollapsibleSimAccountCard> 
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            widget.isBalanceVisible ? '${fmt.format(item.value)} ETB' : '••••••••',
+                            widget.isBalanceVisible
+                                ? '${fmt.format(item.value)} ETB'
+                                : '••••••••',
                             style: const TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 11.5,

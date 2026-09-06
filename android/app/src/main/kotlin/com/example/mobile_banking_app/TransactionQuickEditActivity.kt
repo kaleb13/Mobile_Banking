@@ -85,6 +85,27 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     val resolvedDate = (currentTx["date"] as? String) ?: ""
                     val rawAmount = (currentTx["rawAmount"] as? Double) ?: 0.0
 
+                    var matchingCount = 0
+                    if (resolvedSender.isNotBlank()) {
+                        try {
+                            val dbPath = File(getDatabasePath(DB_NAME).path)
+                            if (dbPath.exists()) {
+                                val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READONLY)
+                                val countCursor = db.rawQuery(
+                                    "SELECT COUNT(*) FROM transactions WHERE LOWER(sender) = LOWER(?) AND LOWER(type) = LOWER(?)",
+                                    arrayOf(resolvedSender.trim(), resolvedType.trim().lowercase())
+                                )
+                                if (countCursor.moveToFirst()) {
+                                    matchingCount = countCursor.getInt(0)
+                                }
+                                countCursor.close()
+                                db.close()
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to count matching transactions", e)
+                        }
+                    }
+
                     val data = mapOf(
                         "txId" to resolvedTxId,
                         "smsBody" to smsBody,
@@ -96,6 +117,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                         "sender" to resolvedSender,
                         "date" to resolvedDate,
                         "reasons" to reasons,
+                        "matchingCount" to matchingCount,
                     )
                     result.success(data)
                 }
@@ -157,8 +179,10 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     val reasonName = call.argument<String>("reasonName") ?: ""
                     val reasonId = call.argument<Int>("reasonId")
                     val contactName = call.argument<String>("contactName") ?: ""
+                    val linkType = call.argument<String>("linkType") ?: if (direction.contains("From", true)) "sender" else "receiver"
+                    val scope = call.argument<String>("scope") ?: "allTransactions"
                     if (reasonName.isNotBlank()) {
-                        val saved = saveReasonWithRule(txIdArg, smsBody, reasonName, reasonId, contactName)
+                        val saved = saveReasonWithRule(txIdArg, smsBody, reasonName, reasonId, contactName, linkType, scope)
                         if (saved) {
                             setReasonUpdatePending()
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
@@ -637,7 +661,9 @@ class TransactionQuickEditActivity : FlutterActivity() {
         smsBody: String,
         reasonName: String,
         reasonId: Int?,
-        contactName: String
+        contactName: String,
+        linkType: String = "receiver",
+        scope: String = "allTransactions"
     ): Boolean {
         val saved = saveReasonToTransaction(txId, smsBody, reasonName, reasonId)
         if (saved && contactName.isNotBlank()) {
@@ -646,18 +672,56 @@ class TransactionQuickEditActivity : FlutterActivity() {
                 if (dbPath.exists()) {
                     val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
                     var rId = reasonId
-                    if (rId == null) {
-                        val cursor = db.rawQuery("SELECT id FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1", arrayOf(reasonName))
-                        if (cursor.moveToFirst()) rId = cursor.getInt(0)
-                        cursor.close()
+                    var categoryId: Int? = null
+                    var subcategoryId: Int? = null
+
+                    val cursorReason = if (rId != null) {
+                        db.rawQuery("SELECT id, name, parentId FROM reasons WHERE id = ? LIMIT 1", arrayOf(rId.toString()))
+                    } else {
+                        db.rawQuery("SELECT id, name, parentId FROM reasons WHERE LOWER(name) = LOWER(?) LIMIT 1", arrayOf(reasonName))
                     }
+                    if (cursorReason.moveToFirst()) {
+                        rId = cursorReason.getInt(0)
+                        val parentId = if (cursorReason.isNull(2)) null else cursorReason.getInt(2)
+                        if (parentId != null) {
+                            categoryId = parentId
+                            subcategoryId = rId
+                        } else {
+                            categoryId = rId
+                            subcategoryId = null
+                        }
+                    }
+                    cursorReason.close()
+
                     if (rId != null) {
+                        // 1. Clean conflicting link rule for this contact and linkType
+                        db.delete("reason_links", "LOWER(linkedName) = LOWER(?) AND linkType = ?", arrayOf(contactName.trim(), linkType))
+
+                        // 2. Insert new rule
                         val ruleValues = ContentValues().apply {
                             put("reasonId", rId)
                             put("linkedName", contactName.trim())
-                            put("linkType", "counterparty")
+                            put("linkType", linkType)
                         }
                         db.insertWithOnConflict("reason_links", null, ruleValues, SQLiteDatabase.CONFLICT_REPLACE)
+
+                        // 3. If scope is allTransactions, update all past matching transactions
+                        if (scope == "allTransactions") {
+                            val txValues = ContentValues().apply {
+                                put("reason", reasonName)
+                                put("reasonId", rId)
+                                if (categoryId != null) put("categoryId", categoryId) else putNull("categoryId")
+                                if (subcategoryId != null) put("subcategoryId", subcategoryId) else putNull("subcategoryId")
+                                putNull("customReasonText")
+                            }
+                            val targetTxType = if (linkType == "sender") "income" else "expense"
+                            db.update(
+                                "transactions",
+                                txValues,
+                                "LOWER(sender) = LOWER(?) AND LOWER(type) = LOWER(?)",
+                                arrayOf(contactName.trim(), targetTxType)
+                            )
+                        }
                     }
                     db.close()
                 }

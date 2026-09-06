@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../../models/transaction.dart';
 import '../../models/cash_transaction.dart';
 import '../../models/reason.dart';
-import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_back_button.dart';
 import '../../widgets/app_badges.dart';
@@ -149,9 +147,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final settingsVM = Provider.of<SettingsViewModel>(context);
     final fmt = NumberFormat('#,##0.00');
-    final isBalanceVisible = settingsVM.isBalanceVisible;
 
     // ── 1. Calculate Category Outflow, Inflow, and Net Totals for Active Date Filter ──
     double totalOutflow = 0.0;
@@ -451,9 +447,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    isBalanceVisible
-                                        ? '${fmt.format((totalOutflow - totalInflow).abs())} ETB'
-                                        : '••••••••',
+                                    '${fmt.format((totalOutflow - totalInflow).abs())} ETB',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 22,
@@ -511,9 +505,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        isBalanceVisible
-                                            ? '${fmt.format(totalOutflow)} ETB'
-                                            : '••••••••',
+                                        '${fmt.format(totalOutflow)} ETB',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 13.5,
@@ -560,9 +552,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        isBalanceVisible
-                                            ? '${fmt.format(totalInflow)} ETB'
-                                            : '••••••••',
+                                        '${fmt.format(totalInflow)} ETB',
                                         style: const TextStyle(
                                           color: AppColors.positive,
                                           fontSize: 13.5,
@@ -912,7 +902,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                       )
                     else ...[
                       ...combinedItems.take(_displayLimit).map((item) {
-                        return _buildTransactionItem(item, fmt, isBalanceVisible);
+                        return _buildTransactionItem(item, fmt);
                       }),
                       if (combinedItems.length > _displayLimit)
                         Padding(
@@ -948,12 +938,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    final settingsVM = Provider.of<SettingsViewModel>(context);
     final fmt = NumberFormat('#,##0');
     final String countLabel = netAmount != null && netAmount > 0
-        ? (settingsVM.isBalanceVisible
-            ? '$count • ${fmt.format(netAmount)} ETB'
-            : '$count')
+        ? '$count • ${fmt.format(netAmount)} ETB'
         : '$count';
 
     return GestureDetector(
@@ -1009,10 +996,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   Widget _buildTransactionItem(
     _UnifiedTxItem item,
     NumberFormat fmt,
-    bool isBalanceVisible,
   ) {
     final isIncome = item.isIncome;
-    final amountStr = isBalanceVisible ? fmt.format(item.amount) : '••••••••';
+    final amountStr = fmt.format(item.amount);
     final String label = isIncome ? 'Income' : 'Expense';
 
     return Container(

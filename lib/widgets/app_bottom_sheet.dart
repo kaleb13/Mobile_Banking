@@ -5,8 +5,8 @@ import 'interactive_drag_handle.dart';
 
 /// Standardized Modal Bottom Sheet Layout & Scaffold with Frosted Dark Blur.
 class AppBottomSheet extends StatelessWidget {
+  final IconData? icon;
   final String? title;
-  final String? subtitle;
   final Widget? trailingHeader;
   final Widget child;
   final Widget? footer;
@@ -16,8 +16,8 @@ class AppBottomSheet extends StatelessWidget {
 
   const AppBottomSheet({
     super.key,
+    this.icon,
     this.title,
-    this.subtitle,
     this.trailingHeader,
     required this.child,
     this.footer,
@@ -36,9 +36,11 @@ class AppBottomSheet extends StatelessWidget {
     bool enableDrag = true,
     Color? barrierColor,
     double blurSigma = 8.0,
+    bool useRootNavigator = false,
   }) {
     return showModalBottomSheet<T>(
       context: context,
+      useRootNavigator: useRootNavigator,
       isScrollControlled: isScrollControlled,
       isDismissible: isDismissible,
       enableDrag: enableDrag,
@@ -101,6 +103,23 @@ class AppBottomSheet extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                if (icon != null) ...[
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      icon,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
                   child: Text(
                     title!,

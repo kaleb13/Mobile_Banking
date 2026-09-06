@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../presentation/viewmodels/settings_view_model.dart';
 import '../theme/app_theme.dart';
-import '../screens/wallets/freeze_account_sheet.dart';
+
 import 'app_badges.dart';
 import 'bank_card_action_modal.dart';
-import 'currency_symbol_widget.dart';
 
 /// Single source-of-truth card widget used in both WalletsScreen list
 /// and MainShell's flight overlay animation.
@@ -18,6 +19,8 @@ class BankCardWidget extends StatelessWidget {
   final bool isBalanceVisible;
   final bool isPaused;
   final VoidCallback? onTap;
+  /// Callback to toggle this bank's balance visibility.
+  final VoidCallback? onToggleBalance;
   /// Animation factor: 0.0 = Home stack deck state, 1.0 = full Wallet list card state.
   final double animationFactor;
   /// Whether to display the top-right three-dot menu button.
@@ -26,7 +29,6 @@ class BankCardWidget extends StatelessWidget {
   final int accountCount;
   /// Callback when user selects Change Order from the 3-dot action modal.
   final VoidCallback? onEnterReorderMode;
-  /// Whether this card is rendered at the top of the homepage stack (Dynamic White Version).
   /// Whether this card is rendered at the top of the homepage stack (Dynamic White Version).
   final bool isTopCard;
   /// Optional drag handle action widget (e.g. for reordering list).
@@ -40,6 +42,7 @@ class BankCardWidget extends StatelessWidget {
     required this.isBalanceVisible,
     required this.isPaused,
     this.onTap,
+    this.onToggleBalance,
     this.animationFactor = 1.0,
     this.showMoreButton = true,
     this.accountCount = 1,
@@ -264,7 +267,65 @@ class BankCardWidget extends StatelessWidget {
       }
     }
 
-    // 9. Cash Wallet
+    // 9. Nib Bank: White version on gradient background, original brand fill on white
+    if (nameUp.contains('NIB')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/NIB_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/NIB_Bank_Logo.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/NIB_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 10. Bunna Bank / Buna Bank: White version on gradient background, original brand fill on white
+    if (nameUp.contains('BUNNA') || nameUp.contains('BUNA')) {
+      if (iconColor != null) {
+        return SvgPicture.asset(
+          'assets/images/Buna_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+      if (onLightSurface) {
+        return SvgPicture.asset(
+          'assets/images/Buna_Bank_Logo.svg',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        );
+      } else {
+        return SvgPicture.asset(
+          'assets/images/Buna_Bank_Logo.svg',
+          width: size,
+          height: size,
+          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        );
+      }
+    }
+
+    // 11. Cash Wallet
     if (nameUp == 'CASH WALLET' || nameUp == 'CASH') {
       return AppSvgIcon(
         'assets/images/Wallet Icon.svg',
@@ -273,7 +334,7 @@ class BankCardWidget extends StatelessWidget {
       );
     }
 
-    // 10. Loan Tracker
+    // 12. Loan Tracker
     if (nameUp == 'LOAN TRACKER' || nameUp == 'LOANS' || nameUp == 'LOAN') {
       return Icon(
         Icons.handshake_rounded,
@@ -299,6 +360,8 @@ class BankCardWidget extends StatelessWidget {
     if (n.contains('DASHEN')) return 'Dashen Bank S.C.';
     if (n.contains('AWASH')) return 'Awash Bank S.C.';
     if (n.contains('ZEMEN')) return 'Zemen Bank S.C.';
+    if (n.contains('NIB')) return 'Nib International Bank S.C.';
+    if (n.contains('BUNNA') || n.contains('BUNA')) return 'Bunna Bank S.C.';
     if (n == 'CASH WALLET') return 'Physical Cash Tracking';
     if (n == 'LOAN TRACKER' || n == 'LOANS' || n == 'LOAN') return 'Personal Debt & Loan Ledger';
     return 'Bank Account';
@@ -361,6 +424,16 @@ class BankCardWidget extends StatelessWidget {
       return [
         AppColors.cardZemenLight,
         AppColors.cardZemenDark,
+      ];
+    } else if (nameUp.contains('NIB')) {
+      return [
+        AppColors.cardNibLight,
+        AppColors.cardNibDark,
+      ];
+    } else if (nameUp.contains('BUNNA') || nameUp.contains('BUNA')) {
+      return [
+        AppColors.cardBunaLight,
+        AppColors.cardBunaDark,
       ];
     } else if (nameUp.contains('COOP')) {
       return [
@@ -556,51 +629,66 @@ class BankCardWidget extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: (!isPaused && isBalanceVisible && txCount == 0 && balance == 0.0 && senderName.toUpperCase() != 'CASH WALLET')
-                                    ? 'Unknown Balance'
-                                    : parts[0],
-                                style: TextStyle(
-                                  color: textColorPrimary,
-                                  fontSize: (!isPaused && isBalanceVisible && txCount == 0 && balance == 0.0 && senderName.toUpperCase() != 'CASH WALLET')
-                                      ? lerpDouble(17, 21, t)!
-                                      : balanceFontSize,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: isBalanceVisible ? -0.6 : 1.5,
-                                  height: 1.0,
-                                ),
-                              ),
-                              if (parts[1].isNotEmpty && (txCount > 0 || balance > 0.0 || senderName.toUpperCase() == 'CASH WALLET'))
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        if (onToggleBalance != null) {
+                          onToggleBalance!();
+                        } else {
+                          Provider.of<SettingsViewModel>(context, listen: false)
+                              .toggleBankBalanceVisibility(senderName);
+                        }
+                      },
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              children: [
                                 TextSpan(
-                                  text: '.${parts[1]}',
+                                  text: (!isPaused && isBalanceVisible && txCount == 0 && balance == 0.0 && senderName.toUpperCase() != 'CASH WALLET')
+                                      ? 'Unknown Balance'
+                                      : parts[0],
                                   style: TextStyle(
-                                    color: isDarkTextTheme
-                                        ? AppColors.darkCharcoal
-                                            .withValues(alpha: 0.5)
-                                        : Colors.white.withValues(alpha: 0.65),
-                                    fontSize: decimalFontSize,
-                                    fontWeight: FontWeight.w600,
+                                    color: textColorPrimary,
+                                    fontSize: (!isPaused && isBalanceVisible && txCount == 0 && balance == 0.0 && senderName.toUpperCase() != 'CASH WALLET')
+                                        ? lerpDouble(17, 21, t)!
+                                        : balanceFontSize,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: isBalanceVisible ? -0.6 : 1.5,
+                                    height: 1.0,
                                   ),
                                 ),
-                            ],
+                                if (parts[1].isNotEmpty && (txCount > 0 || balance > 0.0 || senderName.toUpperCase() == 'CASH WALLET'))
+                                  TextSpan(
+                                    text: '.${parts[1]}',
+                                    style: TextStyle(
+                                      color: isDarkTextTheme
+                                          ? AppColors.darkCharcoal
+                                              .withValues(alpha: 0.5)
+                                          : Colors.white.withValues(alpha: 0.65),
+                                      fontSize: decimalFontSize,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            maxLines: 1,
                           ),
-                          maxLines: 1,
-                        ),
-                        if (isBalanceVisible && !isPaused && (txCount > 0 || balance > 0.0 || senderName.toUpperCase() == 'CASH WALLET')) ...[
-                          const SizedBox(width: 5),
-                          CurrencySymbolWidget(
-                            color: textColorPrimary,
-                            size: decimalFontSize + 2,
-                          ),
+                          if (!isPaused && (txCount > 0 || balance > 0.0 || senderName.toUpperCase() == 'CASH WALLET')) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              isBalanceVisible
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: textColorPrimary.withValues(alpha: 0.75),
+                              size: decimalFontSize + 1,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -700,6 +788,76 @@ class BankCardDragHandle extends StatelessWidget {
   }
 }
 
+/// Standardized Glass Corner Action Button for bank cards (3-dot menu and modal close 'x')
+class BankCardGlassActionButton extends StatefulWidget {
+  final IconData icon;
+  final bool isDarkTextTheme;
+  final VoidCallback onTap;
+  final double size;
+  final double iconSize;
+
+  const BankCardGlassActionButton({
+    super.key,
+    required this.icon,
+    required this.isDarkTextTheme,
+    required this.onTap,
+    this.size = 32.0,
+    this.iconSize = 18.0,
+  });
+
+  @override
+  State<BankCardGlassActionButton> createState() => _BankCardGlassActionButtonState();
+}
+
+class _BankCardGlassActionButtonState extends State<BankCardGlassActionButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color baseBgColor = widget.isDarkTextTheme
+        ? AppColors.darkCharcoal.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.16);
+
+    final Color pressedBgColor = widget.isDarkTextTheme
+        ? AppColors.darkCharcoal.withValues(alpha: 0.16)
+        : Colors.white.withValues(alpha: 0.28);
+
+    final Color iconColor = widget.isDarkTextTheme
+        ? AppColors.darkCharcoal
+        : Colors.white;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        scale: _isPressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeInOut,
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _isPressed ? pressedBgColor : baseBgColor,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            widget.icon,
+            color: iconColor,
+            size: widget.iconSize,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Three-dot glass button in top-right corner of BankCardWidget
 class _CardMoreActionButton extends StatelessWidget {
   final String senderName;
@@ -722,18 +880,10 @@ class _CardMoreActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bgColor = isDarkTextTheme
-        ? AppColors.darkCharcoal.withValues(alpha: 0.08)
-        : Colors.white.withValues(alpha: 0.16);
-
-    final Color iconColor = isDarkTextTheme
-        ? AppColors.darkCharcoal
-        : Colors.white;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return BankCardGlassActionButton(
+      icon: Icons.more_horiz_rounded,
+      isDarkTextTheme: isDarkTextTheme,
       onTap: () async {
-        HapticFeedback.lightImpact();
         final result = await BankCardActionModal.show(
           context,
           senderName: senderName,
@@ -746,130 +896,7 @@ class _CardMoreActionButton extends StatelessWidget {
           onEnterReorderMode?.call();
         }
       },
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: bgColor,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.more_horiz_rounded,
-          color: iconColor,
-          size: 18,
-        ),
-      ),
     );
   }
 }
 
-/// Reusable Glassmorphic Pause/Resume Tracking Button Component
-class FreezeAccountGlassButton extends StatelessWidget {
-  final String senderName;
-  final double balance;
-  final int txCount;
-  final bool isBalanceVisible;
-  final bool isDarkTextTheme;
-  final bool isPaused;
-
-  const FreezeAccountGlassButton({
-    super.key,
-    required this.senderName,
-    required this.balance,
-    required this.txCount,
-    required this.isBalanceVisible,
-    required this.isDarkTextTheme,
-    required this.isPaused,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final Color bgColor = isPaused
-        ? AppColors.pausedBadge.withValues(alpha: 0.25)
-        : isDarkTextTheme
-            ? AppColors.darkCharcoal.withValues(alpha: 0.08)
-            : Colors.white.withValues(alpha: 0.12);
-
-    final Color iconColor = isPaused
-        ? AppColors.pausedBorder
-        : isDarkTextTheme
-            ? AppColors.darkCharcoal
-            : Colors.white;
-
-    final Color textColor = isPaused
-        ? AppColors.pausedBorder
-        : isDarkTextTheme
-            ? AppColors.darkCharcoal
-            : Colors.white;
-
-    final Color subTextColor = isPaused
-        ? AppColors.pausedBorder.withValues(alpha: 0.7)
-        : isDarkTextTheme
-            ? AppColors.darkCharcoal.withValues(alpha: 0.55)
-            : Colors.white.withValues(alpha: 0.6);
-
-    return GestureDetector(
-      onTap: () {
-        FreezeAccountBottomSheet.show(
-          context,
-          senderName: senderName,
-          balance: balance,
-          txCount: txCount,
-          isBalanceVisible: isBalanceVisible,
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isPaused
-                  ? Icons.play_circle_outline_rounded
-                  : Icons.pause_circle_outline_rounded,
-              color: iconColor,
-              size: 14,
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isPaused ? 'Resume Tracking' : 'Pause Tracking',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    isPaused
-                        ? 'TAP TO RESUME SMS TRACKING'
-                        : 'PAUSE SMS AUTO-TRACKING',
-                    style: TextStyle(
-                      color: subTextColor,
-                      fontSize: 5.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

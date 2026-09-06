@@ -269,37 +269,28 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerRight,
-                    child: settingsVM.isBalanceVisible
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])}',
-                                style: TextStyle(
-                                  color: isPositive
-                                      ? AppColors.positive
-                                      : Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              CurrencySymbolWidget(
-                                color: isPositive
-                                    ? AppColors.positive
-                                    : Colors.white,
-                                size: 12,
-                              ),
-                            ],
-                          )
-                        : const Text(
-                            '••••••••',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${isPositive ? '+' : '-'}${fmtShort.format(tx['amount'])}',
+                          style: TextStyle(
+                            color: isPositive
+                                ? AppColors.positive
+                                : Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
+                        const SizedBox(width: 4),
+                        CurrencySymbolWidget(
+                          color: isPositive
+                              ? AppColors.positive
+                              : Colors.white,
+                          size: 12,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

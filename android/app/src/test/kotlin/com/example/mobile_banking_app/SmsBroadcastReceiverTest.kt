@@ -49,6 +49,23 @@ class SmsBroadcastReceiverTest {
     }
 
     @Test
+    fun `matches Nib Bank sender`() {
+        assertEquals("Nib Bank", SmsBroadcastReceiver.matchBankSender("NIB"))
+        assertEquals("Nib Bank", SmsBroadcastReceiver.matchBankSender("NIB BANK"))
+        assertEquals("Nib Bank", SmsBroadcastReceiver.matchBankSender("NIBBANK"))
+        assertEquals("Nib Bank", SmsBroadcastReceiver.matchBankSender("nib"))
+    }
+
+    @Test
+    fun `matches Bunna Bank sender`() {
+        assertEquals("Bunna Bank", SmsBroadcastReceiver.matchBankSender("BUNNA"))
+        assertEquals("Bunna Bank", SmsBroadcastReceiver.matchBankSender("BUNNA BANK"))
+        assertEquals("Bunna Bank", SmsBroadcastReceiver.matchBankSender("Bunna Bank"))
+        assertEquals("Bunna Bank", SmsBroadcastReceiver.matchBankSender("BUNA"))
+        assertEquals("Bunna Bank", SmsBroadcastReceiver.matchBankSender("Buna Bank"))
+    }
+
+    @Test
     fun `case insensitive sender matching`() {
         assertEquals("CBE", SmsBroadcastReceiver.matchBankSender("cbe"))
         assertEquals("Telebirr", SmsBroadcastReceiver.matchBankSender("Telebirr"))
@@ -209,6 +226,31 @@ class SmsBroadcastReceiverTest {
     }
 
     @Test
+    fun `parses CBE received transfer with counterparty in parentheses`() {
+        val msg = "Dear Dawit Habtemu Tewendie You have received ETB 2,000.00 from account 1********9698 (Fewaz Seid Ahmed) to your account 1*********2555 on 04/09/2026 at 20:30:15. Your Current Balance is ETB 10,000.00. Thank you for Banking with CBE! https://apps.cbe.com.et:100/?id=FT26248CBE1234"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("CBE", msg)
+
+        assertNotNull(parsed)
+        assertEquals(2000.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("Fewaz Seid Ahmed", parsed.counterparty)
+        assertEquals(10000.0, parsed.totalBalance, 0.001)
+        assertEquals("FT26248CBE1234", parsed.txReference)
+    }
+
+    @Test
+    fun `parses CBE debit transaction pattern`() {
+        val msg = "Dear Dawit Habtemu Tewendie A debit transaction of ETB 200.0. has occurred on your account 1*********2555 on 03/09/2026 at 18:20:10. Your Current Balance is ETB 8,000.00. Thank you for Banking with CBE!"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("CBE", msg)
+
+        assertNotNull(parsed)
+        assertEquals(200.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("ATM or Other", parsed.counterparty)
+        assertEquals(8000.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
     fun `parses BOA credit with total balance`() {
         val msg = "Dear customer, your account has been credited with ETB 1,000.00 by ALMAZ on 15-May-2024. Available Balance is ETB 12,345.67. trx=TRX9988"
         val parsed = SmsBroadcastReceiver.parseBankingSms("BOA", msg)
@@ -321,5 +363,118 @@ Dashen Bank - Always one step ahead!"""
         val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
 
         assertNull("Non-transaction fragment must return null", parsed)
+    }
+
+    @Test
+    fun `parses Nib Bank credit transfer`() {
+        val msg = "Dear Customer, your A/C 440xxxx1122 has been credited with ETB 6,000.00 by BIRUK ASSEFA on 10/08/2026. Available Balance: ETB 18,500.00. Ref: NIB112233."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(6000.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("BIRUK ASSEFA", parsed.counterparty)
+        assertEquals("NIB112233", parsed.txReference)
+        assertEquals(18500.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Nib Bank debit with service charge`() {
+        val msg = "Dear Customer, your A/C 440xxxx1122 has been debited with ETB 1,500.00 on 11/08/2026. Service Charge: ETB 5.00. Total Debited: ETB 1,505.00. Available Balance: ETB 16,995.00. Ref: NIB889900."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(1505.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("NIB889900", parsed.txReference)
+        assertEquals(16995.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Nib Bank outbound transfer to recipient`() {
+        val msg = "Dear Customer, you have transferred ETB 2,000.00 from A/C 440xxxx1122 to SELAMAWIT KASSA on 12/08/2026. Service Charge: ETB 2.00 VAT: ETB 0.30. Available Balance: ETB 14,992.70. Ref: NIB556677."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(2000.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("SELAMAWIT KASSA", parsed.counterparty)
+        assertEquals("NIB556677", parsed.txReference)
+        assertEquals(14992.70, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Nib Bank airtime purchase`() {
+        val msg = "Dear Customer, you have purchased airtime of ETB 50.00 for 0911554433 from A/C 440xxxx1122 on 13/08/2026. Available Balance: ETB 14,942.70. Ref: NIBAIR88."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(50.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("Airtime (0911554433)", parsed.counterparty)
+        assertEquals("NIBAIR88", parsed.txReference)
+        assertEquals(14942.70, parsed.totalBalance, 0.001)
+        assertFalse(parsed.isLocked)
+    }
+
+    @Test
+    fun `parses Bunna Bank deposit via IPS`() {
+        val msg = "Dear Customer\nA Deposit of 40,000.00 ETB has been made to your account 426*******611 BY IPS /INCOMMING/ABYSETAA/ABYSETAAFT26155FLQKV on 04-06-2026 15:27:53, your current balance is 40,000.00 ETB. Thank you.\nBunna Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Bunna Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(40000.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("IPS (ABYSETAA)", parsed.counterparty)
+        assertEquals("ABYSETAAFT26155FLQKV", parsed.txReference)
+        assertEquals(40000.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Bunna Bank withdrawal to company`() {
+        val msg = "Dear Customer\nA Withdrawal of 40,000.00 ETB has been made from your account 426*******611 on 04-06-2026 15:39:51 by TO DMK TECHNOLOGY PLC '' UNDER FORMATION'', your current balance is 100.00 ETB. Thank you.\nBunna Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Bunna Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(40000.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("DMK TECHNOLOGY PLC '' UNDER FORMATION''", parsed.counterparty)
+        assertEquals(100.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Bunna Bank Telebirr transfer`() {
+        val msg = "Dear Customer\nA Withdrawal of 56.00 ETB has been made from your account 426*******611 on 08-07-2026 23:20:14 by TELEBIRR TRANSFER, your current balance is 44.00 ETB. Thank you.\nBunna Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Bunna Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(56.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("Telebirr Transfer", parsed.counterparty)
+        assertEquals(44.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Bunna Bank digital advice withdrawal`() {
+        val msg = "Dear Customer\nA Withdrawal of 2,012.00 ETB has been made from your account 426*******611 on 08-08-2026 16:01:11 by IPS OUT GOING, your current balance is 38,032.00 ETB. \nPlease Download Your Digital Advice Here: \nhttps://online.bunnabanksc.com/receipt/#/lW1L+BNvCOFS8CfWjw1yyBy/f1C4pprSuQijjdsezfw=\nPlease Rate Your Satisfaction Level Here: \nhttps://online.bunnabanksc.com/receipt/#/feedback/lW1L+BNvCOFS8CfWjw1yyBy/f1C4pprSuQijjdsezfw=\nThank you.\nBunna Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Bunna Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(2012.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("IPS Outgoing", parsed.counterparty)
+        assertEquals(38032.0, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Bunna Bank 1 ETB Telebirr deposit`() {
+        val msg = "Dear Customer\nA Deposit of 1.00 ETB has been made to your account 426***611 BY TELEBIRR RECEIVABLE ACCOUNT TELEINCOME on 06-09-2026 15:55:28, your current balance is 219.47 ETB. Thank you.\nBunna Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Bunna Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(1.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("TELEBIRR RECEIVABLE ACCOUNT TELEINCOME", parsed.counterparty)
+        assertEquals(219.47, parsed.totalBalance, 0.001)
     }
 }

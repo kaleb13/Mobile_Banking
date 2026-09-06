@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/loan_record.dart';
 import '../../models/loan_repayment_request.dart';
+import '../../models/transaction.dart';
 import '../../presentation/viewmodels/loans_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
@@ -11,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 import '../dashboard/bank_detail/bank_behind_info_panel.dart';
 import '../dashboard/bank_detail/bank_metadata.dart';
+import 'select_transaction_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Loan Management Screen
@@ -369,9 +371,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  widget.settingsVM.isBalanceVisible
-                                                      ? fmt.format(widget.totalLent)
-                                                      : '••••••',
+                                                  fmt.format(widget.totalLent),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 11.5,
@@ -384,13 +384,11 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                                           .ellipsis,
                                                 ),
                                               ),
-                                              if (widget.settingsVM.isBalanceVisible) ...[
-                                                const SizedBox(width: 3),
-                                                const CurrencySymbolWidget(
-                                                  color: Colors.white,
-                                                  size: 10,
-                                                ),
-                                              ],
+                                              const SizedBox(width: 3),
+                                              const CurrencySymbolWidget(
+                                                color: Colors.white,
+                                                size: 10,
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -442,9 +440,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  widget.settingsVM.isBalanceVisible
-                                                      ? fmt.format(widget.totalBorrowed)
-                                                      : '••••••',
+                                                  fmt.format(widget.totalBorrowed),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 11.5,
@@ -457,13 +453,11 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                                                           .ellipsis,
                                                 ),
                                               ),
-                                              if (widget.settingsVM.isBalanceVisible) ...[
-                                                const SizedBox(width: 3),
-                                                const CurrencySymbolWidget(
-                                                  color: Colors.white,
-                                                  size: 10,
-                                                ),
-                                              ],
+                                              const SizedBox(width: 3),
+                                              const CurrencySymbolWidget(
+                                                color: Colors.white,
+                                                size: 10,
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -600,19 +594,6 @@ class _LoanCard extends StatelessWidget {
       {required this.loan, required this.accentColor, this.showPaid = false});
 
   Widget _buildAmount(BuildContext context, double amount, {bool isRightAligned = false}) {
-    final settingsVM = context.watch<SettingsViewModel>();
-    if (!settingsVM.isBalanceVisible) {
-      return Text(
-        '••••••••',
-        textAlign: isRightAligned ? TextAlign.right : TextAlign.left,
-        style: TextStyle(
-          color: context.themeTextPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
-        ),
-      );
-    }
     final fmt = NumberFormat('#,##0.00');
     final formattedStr = fmt.format(amount);
     final parts = formattedStr.split('.');
@@ -962,39 +943,28 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (settingsVM.isBalanceVisible) ...[
-                  Text(
-                    NumberFormat('#,##0').format(current.principalAmount),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -1,
-                    ),
+                Text(
+                  NumberFormat('#,##0').format(current.principalAmount),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
                   ),
-                  Text(
-                    '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const CurrencySymbolWidget(
-                    size: 18,
+                ),
+                Text(
+                  '.${(current.principalAmount % 1).toStringAsFixed(2).split('.')[1]}',
+                  style: const TextStyle(
                     color: AppColors.textSoft,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w400,
                   ),
-                ] else
-                  const Text(
-                    '••••••••',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2,
-                    ),
-                  ),
+                ),
+                const SizedBox(width: 6),
+                const CurrencySymbolWidget(
+                  size: 18,
+                  color: AppColors.textSoft,
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -1013,19 +983,17 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               children: [
                 _buildProgressStat(
                   'Principal',
-                  settingsVM.isBalanceVisible ? '${fmt.format(current.principalAmount)} ETB' : '••••••••',
+                  '${fmt.format(current.principalAmount)} ETB',
                   Colors.white,
                 ),
                 _buildProgressStat(
                   'Paid (${(current.progressPercent * 100).toStringAsFixed(0)}%)',
-                  settingsVM.isBalanceVisible ? '${fmt.format(current.paidAmount)} ETB' : '••••••••',
+                  '${fmt.format(current.paidAmount)} ETB',
                   AppColors.positive,
                 ),
                 _buildProgressStat(
                   'Remaining',
-                  settingsVM.isBalanceVisible
-                      ? '${fmt.format(current.remainingAmount)} ETB'
-                      : '••••••••',
+                  '${fmt.format(current.remainingAmount)} ETB',
                   current.remainingAmount > 0 ? accentColor : AppColors.textSoft,
                 ),
               ],
@@ -2205,6 +2173,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
   Widget build(BuildContext context) {
     return AppDrawer(
       heightFactor: 0.70,
+      icon: Icons.people_outline_rounded,
       title: widget.title,
       trailingHeader: _filtered.isNotEmpty
           ? GestureDetector(
@@ -2389,8 +2358,13 @@ class _SheetField extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class RecordPaymentSheet extends StatefulWidget {
   final LoanRecord loan;
-  const RecordPaymentSheet(
-      {super.key, required this.loan});
+  final AppTransaction? initialTransaction;
+
+  const RecordPaymentSheet({
+    super.key,
+    required this.loan,
+    this.initialTransaction,
+  });
 
   @override
   State<RecordPaymentSheet> createState() => _RecordPaymentSheetState();
@@ -2399,13 +2373,29 @@ class RecordPaymentSheet extends StatefulWidget {
 class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  AppTransaction? _selectedTransaction;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill remaining amount for convenience
-    _amountCtrl.text = widget.loan.remainingAmount.toStringAsFixed(2);
+    _selectedTransaction = widget.initialTransaction;
+    if (_selectedTransaction != null) {
+      final initialAmount = _selectedTransaction!.amount.clamp(
+        0.0,
+        widget.loan.remainingAmount > 0
+            ? widget.loan.remainingAmount
+            : _selectedTransaction!.amount,
+      );
+      _amountCtrl.text = initialAmount.toStringAsFixed(2);
+      final senderName = _selectedTransaction!.name.trim().isNotEmpty
+          ? _selectedTransaction!.name.trim()
+          : _selectedTransaction!.sender.trim();
+      _noteCtrl.text = 'Repaid via $senderName';
+    } else {
+      // Pre-fill remaining amount for convenience
+      _amountCtrl.text = widget.loan.remainingAmount.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -2415,17 +2405,51 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
     super.dispose();
   }
 
+  Future<void> _selectTransaction() async {
+    final tx = await SelectTransactionSheet.show(
+      context,
+      loan: widget.loan,
+    );
+    if (tx == null) return;
+    setState(() {
+      _selectedTransaction = tx;
+      final autoAmount = tx.amount.clamp(
+        0.0,
+        widget.loan.remainingAmount > 0
+            ? widget.loan.remainingAmount
+            : tx.amount,
+      );
+      _amountCtrl.text = autoAmount.toStringAsFixed(2);
+      final senderName = tx.sender.trim().isNotEmpty
+          ? tx.sender.trim()
+          : tx.name.trim();
+      if (_noteCtrl.text.trim().isEmpty ||
+          _noteCtrl.text.startsWith('Repaid via')) {
+        _noteCtrl.text = 'Repaid via $senderName';
+      }
+    });
+  }
+
   Future<void> _save() async {
     final amountStr = _amountCtrl.text.trim().replaceAll(',', '');
     final amount = double.tryParse(amountStr);
     if (amount == null || amount <= 0) return;
 
     setState(() => _saving = true);
-    await context.read<LoansViewModel>().recordLoanPayment(
-      loanId: widget.loan.id!,
-      amount: amount,
-      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-    );
+    if (_selectedTransaction != null) {
+      await context.read<LoansViewModel>().attachTransactionRepayment(
+        loanId: widget.loan.id!,
+        transaction: _selectedTransaction!,
+        customAmount: amount,
+        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      );
+    } else {
+      await context.read<LoansViewModel>().recordLoanPayment(
+        loanId: widget.loan.id!,
+        amount: amount,
+        note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+      );
+    }
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -2448,6 +2472,83 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_selectedTransaction != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.modalCard,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.positive.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long_rounded,
+                      color: AppColors.positive,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _selectedTransaction!.sender.trim().isNotEmpty
+                              ? _selectedTransaction!.sender.trim()
+                              : _selectedTransaction!.name.trim(),
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${_selectedTransaction!.name} • ${DateFormat('MMM d, yyyy').format(_selectedTransaction!.date)}',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.textSecondary,
+                      size: 18,
+                    ),
+                    tooltip: 'Remove linked transaction',
+                    onPressed: () {
+                      setState(() {
+                        _selectedTransaction = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ] else ...[
+            AppButton.secondary(
+              text: 'Link from Transactions',
+              icon: Icons.link_rounded,
+              height: 38,
+              fontSize: 12.5,
+              iconSize: 16,
+              onPressed: _selectTransaction,
+            ),
+            const SizedBox(height: 12),
+          ],
           _SheetField(
             controller: _amountCtrl,
             maxLength: 14,

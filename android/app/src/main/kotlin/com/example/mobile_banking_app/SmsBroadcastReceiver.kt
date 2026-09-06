@@ -87,6 +87,13 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             "AWASHBIRR" to "Awash Bank",
             "ZEMEN" to "Zemen Bank",
             "ZEMEN BANK" to "Zemen Bank",
+            "NIB" to "Nib Bank",
+            "NIB BANK" to "Nib Bank",
+            "NIBBANK" to "Nib Bank",
+            "BUNNA" to "Bunna Bank",
+            "BUNNA BANK" to "Bunna Bank",
+            "BUNA" to "Bunna Bank",
+            "BUNA BANK" to "Bunna Bank",
         )
 
         fun matchBankSender(sender: String?): String? {
@@ -105,6 +112,8 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (upper.contains("DASHEN") || upper.contains("AMOLE")) return "Dashen Bank"
             if (upper.contains("AWASH")) return "Awash Bank"
             if (upper.contains("ZEMEN")) return "Zemen Bank"
+            if (upper == "NIB" || upper.contains("NIB")) return "Nib Bank"
+            if (upper.contains("BUNNA") || upper.contains("BUNA")) return "Bunna Bank"
             return null
         }
 
@@ -720,6 +729,32 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         )
                     }
 
+                    if (lower.contains("received")) {
+                        val amount = parseAmount(Regex("(?i)received\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount > 0) {
+                            val fromMatchParens = Regex("(?i)from\\s+account\\s+[\\d*]+\\s+\\(([^)]+)\\)").find(singleLine)
+                            val senderName = fromMatchParens?.groupValues?.get(1)?.trim() ?: "CBE Inward"
+                            val refMatch = Regex("(?i)id=([A-Za-z0-9]+)").find(singleLine)
+                                ?: Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
+                                ?: Regex("(FT[0-9A-Z]+)").find(singleLine)
+                            val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                            return NativeParsedSms(
+                                bankName = "CBE",
+                                amount = amount,
+                                formattedAmount = formatEtb(amount),
+                                isDebit = false,
+                                counterparty = senderName,
+                                directionHeader = "From: $senderName",
+                                title = "Income",
+                                isLocked = false,
+                                lockedReasonName = null,
+                                txReference = ref,
+                                totalBalance = cbeTotalBal
+                            )
+                        }
+                    }
+
                     if (lower.contains("transfer")) {
                         val amount = parseAmount(Regex("(?i)transferr?ed\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine).let {
                             if (it > 0) it else parseAmount(Regex("(?i)transfer\\s+of\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
@@ -784,6 +819,30 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             txReference = ref,
                             totalBalance = cbeTotalBal
                         )
+                    }
+
+                    if (lower.contains("debit transaction")) {
+                        val amount = parseAmount(Regex("(?i)debit\\s+transaction\\s+of\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount > 0) {
+                            val refMatch = Regex("(?i)id=([A-Za-z0-9]+)").find(singleLine)
+                                ?: Regex("(?i)ref\\s*(?:no\\.?)?\\s*([A-Za-z0-9]+)").find(singleLine)
+                                ?: Regex("(FT[0-9A-Z]+)").find(singleLine)
+                            val ref = refMatch?.groupValues?.get(1)?.trim()
+
+                            return NativeParsedSms(
+                                bankName = "CBE",
+                                amount = amount,
+                                formattedAmount = formatEtb(amount),
+                                isDebit = true,
+                                counterparty = "ATM or Other",
+                                directionHeader = "To: ATM or Other",
+                                title = "Expense",
+                                isLocked = false,
+                                lockedReasonName = null,
+                                txReference = ref,
+                                totalBalance = cbeTotalBal
+                            )
+                        }
                     }
                 }
 
@@ -1297,6 +1356,239 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         lockedReasonName = lockedReason,
                         txReference = ref,
                         totalBalance = zemenTotalBal
+                    )
+                }
+
+                "Nib Bank" -> {
+                    val nibBalMatch = Regex("(?i)(?:Available\\s+Balance|Available\\s+Bal\\.|Bal\\.)[:\\s]+(?:ETB|Birr)?\\s*([0-9,]+(?:\\.[0-9]+)?)").find(singleLine)
+                    val nibTotalBal = if (nibBalMatch != null) {
+                        val raw = nibBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
+                    var amount = 0.0
+                    var isDebit = false
+                    var counterparty = ""
+                    var ref: String? = null
+                    var isLocked = false
+                    var lockedReason: String? = null
+
+                    // 1. Airtime Purchase
+                    if (lower.contains("purchased airtime")) {
+                        isDebit = true
+                        isLocked = false
+                        lockedReason = "Airtime"
+                        amount = parseAmount(Regex("(?i)airtime\\s+of\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val forMatch = Regex("(?i)for\\s+([0-9+]+)").find(singleLine)
+                        counterparty = if (forMatch != null) "Airtime (${forMatch.groupValues[1].trim()})" else "Airtime"
+                    }
+                    // 2. Utility / Bill Payment
+                    else if (lower.contains("paid") && lower.contains("for")) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)paid\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val forMatch = Regex("(?i)for\\s+(.*?)\\s+from\\s+A/C").find(singleLine)
+                        counterparty = if (forMatch != null) {
+                            forMatch.groupValues[1].trim()
+                        } else {
+                            val fallbackFor = Regex("(?i)for\\s+(.*?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}").find(singleLine)
+                            fallbackFor?.groupValues?.get(1)?.trim() ?: "Bill Payment"
+                        }
+                    }
+                    // 3. ATM Cash Withdrawal
+                    else if (lower.contains("debited") && lower.contains("atm")) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)debited\\s+with\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)total\\s+debited:\\s*(?:ETB|Birr)?\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val atmMatch = Regex("(?i)at\\s+(ATM\\s+[A-Za-z0-9\\s]+?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}").find(singleLine)
+                        counterparty = atmMatch?.groupValues?.get(1)?.trim() ?: "ATM Cash Withdrawal"
+                    }
+                    // 4. Outbound Transfer
+                    else if (lower.contains("transferred") && lower.contains("to")) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)transferred\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val toMatch = Regex("(?i)to\\s+(.*?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}").find(singleLine)
+                        counterparty = toMatch?.groupValues?.get(1)?.trim() ?: "Transfer Out"
+                    }
+                    // 5. Inbound IPS Transfer
+                    else if (lower.contains("credited") && lower.contains("via ips")) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)credited\\s+with\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val fromMatch = Regex("(?i)from\\s+(.*?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}").find(singleLine)
+                        counterparty = if (fromMatch != null) "${fromMatch.groupValues[1].trim()} via IPS" else "IPS Inward Transfer"
+                    }
+                    // 6. Inbound Credit / P2P / Salary
+                    else if (lower.contains("credited")) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)credited\\s+with\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)\\s+by"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val byMatch = Regex("(?i)by\\s+(.*?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}").find(singleLine)
+                        counterparty = if (byMatch != null) {
+                            byMatch.groupValues[1].trim()
+                        } else {
+                            val fallbackBy = Regex("(?i)by\\s+(.*?)(?=\\.\\s*Available|\\.|$)").find(singleLine)
+                            fallbackBy?.groupValues?.get(1)?.trim() ?: "Deposit"
+                        }
+                    }
+                    // 7. Direct Debit with optional Service Charge / Total Debited
+                    else if (lower.contains("debited")) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)total\\s+debited:\\s*(?:ETB|Birr)?\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)debited\\s+with\\s+(?:ETB|Birr)\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        counterparty = "Debit"
+                    } else {
+                        return null
+                    }
+
+                    val refMatch = Regex("(?i)(?:Ref|Txn\\s*ID|Transaction\\s*ID|Reference)[:\\s]+([A-Za-z0-9]+)").find(singleLine)
+                    ref = refMatch?.groupValues?.get(1)?.trim()
+
+                    return NativeParsedSms(
+                        bankName = "Nib Bank",
+                        amount = amount,
+                        formattedAmount = formatEtb(amount),
+                        isDebit = isDebit,
+                        counterparty = counterparty,
+                        directionHeader = if (isDebit) "To: $counterparty" else "From: $counterparty",
+                        title = if (isDebit) "Expense" else "Income",
+                        isLocked = isLocked,
+                        lockedReasonName = lockedReason,
+                        txReference = ref,
+                        totalBalance = nibTotalBal
+                    )
+                }
+
+                "Bunna Bank", "Buna Bank" -> {
+                    val bunnaBalMatch = Regex("(?i)(?:your\\s+)?current\\s+balance\\s+is\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*(?:ETB|Birr)?").find(singleLine)
+                    val bunnaTotalBal = if (bunnaBalMatch != null) {
+                        val raw = bunnaBalMatch.groupValues[1].replace(",", "")
+                        val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
+                        clean.toDoubleOrNull() ?: 0.0
+                    } else 0.0
+
+                    var amount = 0.0
+                    var isDebit = false
+                    var counterparty = ""
+                    var ref: String? = null
+
+                    // 1. Deposit (Income)
+                    if (lower.contains("deposit")) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)deposit\\s+of\\s+([0-9,]+(?:\\.[0-9]+)?)\\s*(?:ETB|Birr)?"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)(?:ETB|Birr)?\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*(?:ETB|Birr)?\\s+has\\s+been\\s+made\\s+to\\s+your\\s+account"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val byMatch = Regex("(?i)(?:BY|by)\\s+(.*?)\\s+on\\s+\\d{2}[-/]\\d{2}[-/]\\d{2,4}").find(singleLine)
+                        if (byMatch != null) {
+                            var rawCp = byMatch.groupValues[1].trim()
+                            if (rawCp.startsWith("FROM ", ignoreCase = true)) {
+                                rawCp = rawCp.substring(5).trim()
+                            } else if (rawCp.startsWith("TO ", ignoreCase = true)) {
+                                rawCp = rawCp.substring(3).trim()
+                            }
+
+                            val ipsMatch = Regex("(?i)IPS\\s*/INCOMMING/([^/]+)/([A-Za-z0-9]+)").find(rawCp)
+                            if (ipsMatch != null) {
+                                val bankCode = ipsMatch.groupValues[1].trim()
+                                ref = ipsMatch.groupValues[2].trim()
+                                counterparty = if (bankCode.isNotEmpty()) "IPS ($bankCode)" else "IPS Inward"
+                            } else {
+                                counterparty = rawCp
+                            }
+                        } else {
+                            counterparty = "Deposit"
+                        }
+                    }
+                    // 2. Withdrawal (Expense)
+                    else if (lower.contains("withdrawal")) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)withdrawal\\s+of\\s+([0-9,]+(?:\\.[0-9]+)?)\\s*(?:ETB|Birr)?"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)(?:ETB|Birr)?\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*(?:ETB|Birr)?\\s+has\\s+been\\s+made\\s+from\\s+your\\s+account"), singleLine)
+                        }
+                        if (amount <= 0) return null
+
+                        val byMatch = Regex("(?i)(?:by|BY)\\s+(.*?)(?=,\\s*(?:your\\s+)?current\\s+balance|\\.\\s*(?:your\\s+)?current\\s+balance|\\s+(?:your\\s+)?current\\s+balance|\\.\\s*Please|\\s*Please|\\n|$)").find(singleLine)
+                        if (byMatch != null) {
+                            var rawCp = byMatch.groupValues[1].trim()
+                            if (rawCp.endsWith(",") || rawCp.endsWith(".")) {
+                                rawCp = rawCp.substring(0, rawCp.length - 1).trim()
+                            }
+                            if (rawCp.startsWith("TO ", ignoreCase = true)) {
+                                rawCp = rawCp.substring(3).trim()
+                            } else if (rawCp.startsWith("FROM ", ignoreCase = true)) {
+                                rawCp = rawCp.substring(5).trim()
+                            }
+
+                            counterparty = when {
+                                rawCp.equals("TELEBIRR TRANSFER", ignoreCase = true) -> "Telebirr Transfer"
+                                rawCp.equals("IPS OUT GOING", ignoreCase = true) || rawCp.equals("IPS OUTGOING", ignoreCase = true) -> "IPS Outgoing"
+                                else -> rawCp
+                            }
+                        } else {
+                            counterparty = "Withdrawal"
+                        }
+                    } else {
+                        return null
+                    }
+
+                    if (ref == null) {
+                        val refMatch = Regex("(?i)(?:Ref|Txn\\s*ID|Transaction\\s*ID|Reference)[:\\s]+([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
+
+                    if (ref == null) {
+                        val urlMatch = Regex("receipt/#/([A-Za-z0-9+/=_-]{12,})").find(singleLine)
+                        if (urlMatch != null) {
+                            val hashToken = urlMatch.groupValues[1].replace("/", "").replace("+", "").replace("=", "")
+                            val snippet = if (hashToken.length > 14) hashToken.substring(0, 14) else hashToken
+                            ref = "BUNNA-$snippet"
+                        }
+                    }
+
+                    return NativeParsedSms(
+                        bankName = "Bunna Bank",
+                        amount = amount,
+                        formattedAmount = formatEtb(amount),
+                        isDebit = isDebit,
+                        counterparty = counterparty,
+                        directionHeader = if (isDebit) "To: $counterparty" else "From: $counterparty",
+                        title = if (isDebit) "Expense" else "Income",
+                        isLocked = false,
+                        lockedReasonName = null,
+                        txReference = ref,
+                        totalBalance = bunnaTotalBal
                     )
                 }
             }

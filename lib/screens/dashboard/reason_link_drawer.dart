@@ -19,6 +19,10 @@ class LinkReasonDrawer extends StatelessWidget {
   final String contactName;
   final String linkType;
   final String? currentTransactionId;
+  final LinkScope? selectedScope;
+  final int? matchingCountOverride;
+  final ValueChanged<LinkScope>? onSelectScope;
+  final VoidCallback? onRemoveRule;
 
   const LinkReasonDrawer({
     super.key,
@@ -27,17 +31,25 @@ class LinkReasonDrawer extends StatelessWidget {
     required this.contactName,
     required this.linkType,
     this.currentTransactionId,
+    this.selectedScope,
+    this.matchingCountOverride,
+    this.onSelectScope,
+    this.onRemoveRule,
   });
 
-  static Future<void> show({
+  static Future<LinkScope?> show({
     required BuildContext context,
     required int reasonId,
     required String reasonName,
     required String contactName,
     required String linkType,
     String? currentTransactionId,
+    LinkScope? selectedScope,
+    int? matchingCount,
+    ValueChanged<LinkScope>? onSelectScope,
+    VoidCallback? onRemoveRule,
   }) {
-    return AppDrawer.show(
+    return AppDrawer.show<LinkScope>(
       context: context,
       builder: (_) => LinkReasonDrawer(
         reasonId: reasonId,
@@ -45,20 +57,39 @@ class LinkReasonDrawer extends StatelessWidget {
         contactName: contactName,
         linkType: linkType,
         currentTransactionId: currentTransactionId,
+        selectedScope: selectedScope,
+        matchingCountOverride: matchingCount,
+        onSelectScope: onSelectScope,
+        onRemoveRule: onRemoveRule,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+    TransactionsViewModel? txVM;
+    try {
+      txVM = Provider.of<TransactionsViewModel>(context, listen: false);
+    } catch (_) {
+      txVM = null;
+    }
+
     final expectedType = linkType == 'sender' ? 'income' : 'expense';
 
-    final matchingCount = txVM.transactions.where((t) {
-      final matchesName = CounterpartyMatcher.matches(t.sender, contactName);
-      final matchesType = t.type.toLowerCase() == expectedType;
-      return matchesName && matchesType;
-    }).length;
+    final int matchingCount;
+    if (matchingCountOverride != null) {
+      matchingCount = matchingCountOverride!;
+    } else if (txVM != null) {
+      matchingCount = txVM.transactions.where((t) {
+        final matchesName = CounterpartyMatcher.matches(t.sender, contactName);
+        final matchesType = t.type.toLowerCase() == expectedType;
+        return matchesName && matchesType;
+      }).length;
+    } else {
+      matchingCount = 0;
+    }
+
+    final hasActiveSelection = selectedScope != null;
 
     return AppDrawer(
       heightFactor: null,
@@ -97,20 +128,25 @@ class LinkReasonDrawer extends StatelessWidget {
                 : 'Automatically categorize all future ${linkType == 'sender' ? 'income transactions from' : 'expense transactions to'} and apply to any past records.',
             badgeText: 'Recommended',
             badgeVariant: AppBadgeVariant.success,
+            isSelected: selectedScope == LinkScope.allTransactions,
             onTap: () async {
-              Navigator.pop(context);
-              await txVM.addReasonLinkScoped(
-                reasonId: reasonId,
-                linkedName: contactName,
-                linkType: linkType,
-                scope: LinkScope.allTransactions,
-                currentTransactionId: currentTransactionId,
-              );
-              if (context.mounted) {
-                AppToast.success(
-                  context,
-                  message: 'Linked "$reasonName" to all transactions ${linkType == 'sender' ? 'from' : 'to'} "$contactName"',
+              Navigator.pop(context, LinkScope.allTransactions);
+              if (onSelectScope != null) {
+                onSelectScope!(LinkScope.allTransactions);
+              } else if (txVM != null) {
+                await txVM.addReasonLinkScoped(
+                  reasonId: reasonId,
+                  linkedName: contactName,
+                  linkType: linkType,
+                  scope: LinkScope.allTransactions,
+                  currentTransactionId: currentTransactionId,
                 );
+                if (context.mounted) {
+                  AppToast.success(
+                    context,
+                    message: 'Linked "$reasonName" to all transactions ${linkType == 'sender' ? 'from' : 'to'} "$contactName"',
+                  );
+                }
               }
             },
           ),
@@ -126,23 +162,48 @@ class LinkReasonDrawer extends StatelessWidget {
                 'Keep past transactions unchanged, but automatically categorize all upcoming ${linkType == 'sender' ? 'income transactions from' : 'expense transactions to'} "$contactName".',
             badgeText: 'Future',
             badgeVariant: AppBadgeVariant.info,
+            isSelected: selectedScope == LinkScope.futureTransactionsOnly,
             onTap: () async {
-              Navigator.pop(context);
-              await txVM.addReasonLinkScoped(
-                reasonId: reasonId,
-                linkedName: contactName,
-                linkType: linkType,
-                scope: LinkScope.futureTransactionsOnly,
-                currentTransactionId: currentTransactionId,
-              );
-              if (context.mounted) {
-                AppToast.success(
-                  context,
-                  message: 'Saved auto-link rule for future transactions',
+              Navigator.pop(context, LinkScope.futureTransactionsOnly);
+              if (onSelectScope != null) {
+                onSelectScope!(LinkScope.futureTransactionsOnly);
+              } else if (txVM != null) {
+                await txVM.addReasonLinkScoped(
+                  reasonId: reasonId,
+                  linkedName: contactName,
+                  linkType: linkType,
+                  scope: LinkScope.futureTransactionsOnly,
+                  currentTransactionId: currentTransactionId,
                 );
+                if (context.mounted) {
+                  AppToast.success(
+                    context,
+                    message: 'Saved auto-link rule for future transactions',
+                  );
+                }
               }
             },
           ),
+
+          // ── Option 3: Remove / Do Not Link (when rule is currently active) ──
+          if (hasActiveSelection || onRemoveRule != null) ...[
+            const SizedBox(height: 10),
+            _buildOptionCard(
+              context: context,
+              icon: Icons.link_off_rounded,
+              iconColor: AppColors.textSoft,
+              title: 'Do Not Link (Remove Rule)',
+              subtitle:
+                  'Categorize only this transaction without creating an automatic linking rule for "$contactName".',
+              badgeText: 'Off',
+              badgeVariant: AppBadgeVariant.neutral,
+              isSelected: false,
+              onTap: () {
+                Navigator.pop(context);
+                onRemoveRule?.call();
+              },
+            ),
+          ],
           const SizedBox(height: 16),
         ],
       ),
@@ -158,10 +219,13 @@ class LinkReasonDrawer extends StatelessWidget {
     required String badgeText,
     required AppBadgeVariant badgeVariant,
     required VoidCallback onTap,
+    bool isSelected = false,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.drawerCard,
+        color: isSelected
+            ? AppColors.positive.withValues(alpha: 0.14)
+            : AppColors.drawerCard,
         borderRadius: AppRadius.cardRadius,
       ),
       child: Material(
@@ -179,10 +243,16 @@ class LinkReasonDrawer extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.12),
+                    color: isSelected
+                        ? AppColors.positive.withValues(alpha: 0.22)
+                        : iconColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: iconColor, size: 20),
+                  child: Icon(
+                    isSelected ? Icons.check_circle_rounded : icon,
+                    color: isSelected ? AppColors.positive : iconColor,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -194,17 +264,21 @@ class LinkReasonDrawer extends StatelessWidget {
                           Expanded(
                             child: Text(
                               title,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white,
                                 fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w600,
                               ),
                             ),
                           ),
                           const SizedBox(width: 6),
                           AppBadge(
                             text: badgeText,
-                            variant: badgeVariant,
+                            variant: isSelected
+                                ? AppBadgeVariant.success
+                                : badgeVariant,
                             size: AppBadgeSize.micro,
                           ),
                         ],
@@ -212,8 +286,10 @@ class LinkReasonDrawer extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: isSelected
+                              ? AppColors.positive.withValues(alpha: 0.85)
+                              : AppColors.textSecondary,
                           fontSize: 11.5,
                           height: 1.35,
                         ),
@@ -222,9 +298,11 @@ class LinkReasonDrawer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Colors.white24,
+                Icon(
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  color: isSelected ? AppColors.positive : Colors.white24,
                   size: 20,
                 ),
               ],

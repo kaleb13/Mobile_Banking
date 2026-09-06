@@ -375,6 +375,113 @@ class LoansViewModel extends ChangeNotifier {
     return payments;
   }
 
+  /// Returns the loan and payment record if [transactionId] was recorded as a repayment.
+  ({LoanRecord loan, LoanPayment payment})? getRepaymentForTransaction(
+      String transactionId) {
+    if (transactionId.isEmpty) return null;
+    for (final entry in _loanPayments.entries) {
+      for (final payment in entry.value) {
+        if (payment.linkedTransactionId == transactionId) {
+          final loan = _loanRecords.firstWhere(
+            (l) => l.id == entry.key,
+            orElse: () => LoanRecord(
+              id: entry.key,
+              loanType: 'lent',
+              personName: 'Unknown',
+              principalAmount: 0,
+              loanDate: payment.paymentDate,
+              dueDate: payment.paymentDate,
+            ),
+          );
+          return (loan: loan, payment: payment);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Returns transactions that are eligible to be attached as repayments for [loan].
+  ///
+  /// For 'lent' loans, looks for 'income' transactions.
+  /// For 'borrowed' loans, looks for 'expense' transactions.
+  /// Excludes transactions already linked as loan originators or existing repayments.
+  List<AppTransaction> getEligibleTransactionsForLoan(LoanRecord loan,
+      {bool allowAll = false}) {
+    final allTx = getTransactions?.call() ?? [];
+    if (allTx.isEmpty) return [];
+
+    final expectedType = loan.loanType == 'lent' ? 'income' : 'expense';
+
+    // Set of all transaction IDs already used in loan origin or payments
+    final usedTxIds = <String>{};
+    for (final l in _loanRecords) {
+      if (l.linkedTransactionId != null && l.linkedTransactionId!.isNotEmpty) {
+        usedTxIds.add(l.linkedTransactionId!);
+      }
+    }
+    for (final payments in _loanPayments.values) {
+      for (final p in payments) {
+        if (p.linkedTransactionId != null && p.linkedTransactionId!.isNotEmpty) {
+          usedTxIds.add(p.linkedTransactionId!);
+        }
+      }
+    }
+
+    return allTx.where((tx) {
+      if (tx.id == null || tx.id!.isEmpty) return false;
+      if (!allowAll && tx.type != expectedType) return false;
+      if (usedTxIds.contains(tx.id)) return false;
+      return true;
+    }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  /// Manually attaches an existing transaction as a repayment against [loanId].
+  Future<void> attachTransactionRepayment({
+    required int loanId,
+    required AppTransaction transaction,
+    double? customAmount,
+    String? note,
+  }) async {
+    final loan = _loanRecords.cast<LoanRecord?>().firstWhere(
+          (l) => l?.id == loanId,
+          orElse: () => null,
+        );
+    if (loan == null) return;
+
+    final payAmount = customAmount ?? transaction.amount;
+    if (payAmount <= 0) return;
+
+    final counterparty = transaction.sender.trim().isNotEmpty
+        ? transaction.sender.trim()
+        : transaction.name.trim();
+    final effectiveNote = (note != null && note.trim().isNotEmpty)
+        ? note.trim()
+        : 'Repayment via $counterparty';
+
+    await recordLoanPayment(
+      loanId: loanId,
+      amount: payAmount,
+      linkedTransactionId: transaction.id,
+      note: effectiveNote,
+    );
+
+    // Synchronize transaction reason via injected callback
+    if (transaction.id != null && updateTransactionReason != null) {
+      final reasons = getReasons?.call() ?? [];
+      final loanReason = reasons.cast<AppReason?>().firstWhere(
+            (r) => r?.name.toLowerCase() == 'loan',
+            orElse: () => null,
+          );
+      await updateTransactionReason!(
+        transaction.id!,
+        reasonId: loanReason?.id,
+        customReasonText: loanReason == null ? 'Loan Repayment' : null,
+      );
+    }
+  }
+
+
   // ── Repayment Detection & Approval ────────────────────────────────────────
 
   /// Called when a new income SMS arrives — checks if the sender is tracked

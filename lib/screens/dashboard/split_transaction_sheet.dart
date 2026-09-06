@@ -315,7 +315,6 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
       headerCard: AppDrawerHeaderCard(
         icon: Icons.call_split_rounded,
         title: 'Split Transaction',
-        subtitle: '${_fmt.format(_totalTarget)} $currency • ${widget.transaction.name}',
         trailing: widget.initialSplits != null && widget.initialSplits!.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.delete_outline_rounded,
@@ -339,7 +338,7 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: AppColors.modalCard,
               borderRadius: AppRadius.cardRadius,
             ),
             child: Column(
@@ -419,7 +418,7 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppColors.modalCard,
                 borderRadius: AppRadius.cardRadius,
               ),
               child: Column(
@@ -434,8 +433,8 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
                           Container(
                             width: 22,
                             height: 22,
-                            decoration: BoxDecoration(
-                              color: AppColors.tabBackground,
+                            decoration: const BoxDecoration(
+                              color: AppColors.buttonSecondary,
                               shape: BoxShape.circle,
                             ),
                             alignment: Alignment.center,
@@ -476,7 +475,7 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
                   const SizedBox(height: 12),
 
                   // Amount TextField
-                  AppTextField(
+                  AppTextField.modal(
                     controller: item.amountController,
                     label: 'AMOUNT ($currency)',
                     hint: '0.00',
@@ -484,7 +483,7 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                     prefixIcon: Icons.account_balance_wallet_outlined,
-                    backgroundColor: AppColors.tabBackground,
+                    backgroundColor: AppColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(14),
                     onChanged: (_) => setState(() {}),
                   ),
@@ -498,7 +497,7 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: AppColors.tabBackground,
+                        color: AppColors.surfaceElevated,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
@@ -539,13 +538,13 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
                   const SizedBox(height: 10),
 
                   // Note TextField
-                  AppTextField(
+                  AppTextField.modal(
                     controller: item.noteController,
                     label: 'NOTE (OPTIONAL)',
                     hint: 'e.g. Food, Airtime, Transport',
                     maxLength: 60,
                     prefixIcon: Icons.edit_note_rounded,
-                    backgroundColor: AppColors.tabBackground,
+                    backgroundColor: AppColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ],
@@ -557,7 +556,7 @@ class _SplitTransactionSheetState extends State<SplitTransactionSheet> {
           const SizedBox(height: 4),
           Center(
             child: AppButton.secondary(
-              text: '+ Add Another Split',
+              text: 'Add Another Split',
               icon: Icons.add_rounded,
               height: 44,
               onPressed: _addNewSplitItem,

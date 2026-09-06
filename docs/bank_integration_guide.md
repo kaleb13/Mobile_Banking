@@ -18,10 +18,9 @@ This document is the mandatory rulebook and checklist for adding any banking ins
 [9]  Transaction Detail Sheet Info Header -> lib/screens/dashboard/transaction_detail_screen.dart (_getBankInfo)
 [10] Dashboard Recent Transactions Avatar -> lib/screens/dashboard/dashboard_screen.dart (_buildBankAvatarSmallWhite & _getBankIconSmall)
 [11] All Transactions Screen Dark Avatar  -> lib/screens/dashboard/all_transactions_screen.dart (_buildDarkBankAvatar)
-[12] Transaction Search Screen Avatar     -> lib/screens/dashboard/transaction_search_screen.dart (_buildBankAvatarSmallWhite)
-[13] Analytics & Wallets Breakdown Filter -> lib/screens/dashboard/analysis_screen.dart (_normalizeBankName, _matchesBank, bankMap)
-[14] Onboarding & Privacy Disclosures     -> lib/screens/intro/onboarding_screen.dart & privacy_policy_screen.dart
-[15] Comprehensive Unit Test Suite       -> test/unit/<bank>_parser_test.dart & test/bank_senders_test.dart
+[12] Analytics & Wallets Breakdown Filter -> lib/screens/dashboard/analysis_screen.dart (_normalizeBankName, _matchesBank, bankMap)
+[13] Onboarding & Privacy Disclosures     -> lib/screens/intro/onboarding_screen.dart & privacy_policy_screen.dart
+[14] Comprehensive Unit Test Suite       -> test/unit/<bank>_parser_test.dart & test/bank_senders_test.dart
 ```
 
 ---
@@ -149,25 +148,16 @@ static const Color card<Bank>DarkIcon = Color(0xFF...); // Deep icon tone
   }
   ```
 
-### Point 12: Transaction Search Screen Avatar (`lib/screens/dashboard/transaction_search_screen.dart`)
-- `_buildBankAvatarSmallWhite`:
-  ```dart
-  } else if (nameUp.contains('<BANK>')) {
-    img = SvgPicture.asset('assets/images/<Bank>_Logo.svg', width: 24, height: 24, fit: BoxFit.contain);
-    bgColor = AppColors.card<Bank>Dark.withValues(alpha: 0.12);
-  }
-  ```
-
-### Point 13: Analytics & Breakdown (`lib/screens/dashboard/analysis_screen.dart`)
+### Point 12: Analytics & Breakdown (`lib/screens/dashboard/analysis_screen.dart`)
 - In `_normalizeBankName`: Return `'<Bank>'`.
 - In `_matchesBank`: Handle `bUp.contains('<BANK>')`.
 - In `bankMap`: Add `'<Bank>': (inVal: 0.0, outVal: 0.0)`.
 
-### Point 14: Onboarding & Privacy Disclosures
+### Point 13: Onboarding & Privacy Disclosures
 - In `lib/screens/intro/onboarding_screen.dart`: Add to `supportedBanks` list and terms.
 - In `lib/screens/dashboard/privacy_policy_screen.dart`: Add to supported banks paragraph.
 
-### Point 15: Automated Unit Tests
+### Point 14: Automated Unit Tests
 - Create `test/unit/<bank>_parser_test.dart` testing each pattern and the XML backup dataset.
 - Update `test/bank_senders_test.dart`.
 - Run `flutter test` to verify 100% pass rate.

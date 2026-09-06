@@ -42,7 +42,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
     this.selectedDay,
     required this.onDaySelected,
     this.onMonthSelected,
-    this.isBalanceVisible = false,
+    this.isBalanceVisible = true,
     this.userLevel = 1,
     this.analysisType = 'All',
   });
@@ -282,8 +282,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
                   }
                 }
 
-                final formattedNet =
-                    isBalanceVisible ? formatCompactNet(net) : '•••';
+                final formattedNet = formatCompactNet(net);
 
                 return InkWell(
                   onTap: () {
@@ -474,8 +473,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
       }
     }
 
-    final formattedTotal =
-        isBalanceVisible ? formatCompactNet(monthTotalNet) : '••••';
+    final formattedTotal = formatCompactNet(monthTotalNet);
 
     final Color totalColor = monthTotalNet > 0
         ? AppColors.positive
@@ -679,8 +677,7 @@ class DailyNetHeatmapWidget extends StatelessWidget {
               }
             }
 
-            final formattedNet =
-                isBalanceVisible ? formatCompactNet(monthNet) : '•••';
+            final formattedNet = formatCompactNet(monthNet);
 
             return InkWell(
               onTap: () {

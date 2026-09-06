@@ -73,8 +73,16 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
     }
   }
 
+  bool _isClosing = false;
+
   @override
   void dispose() {
+    if (_overlayEntry != null) {
+      try {
+        Provider.of<NotificationsViewModel>(context, listen: false)
+            .setPanelOpen(false);
+      } catch (_) {}
+    }
     _removeOverlay();
     _animController.dispose();
     _unfurlCtrl.dispose();
@@ -115,14 +123,27 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
     );
 
     Overlay.of(context, rootOverlay: true).insert(_overlayEntry!);
+    notifVM.setPanelOpen(true, onClose: _closePanel);
     _animController.forward();
     if (mounted) setState(() {});
   }
 
   void _closePanel() async {
-    await _animController.reverse();
-    _removeOverlay();
-    _triggerUnfurlAnimation();
+    if (_isClosing) return;
+    _isClosing = true;
+    if (mounted) {
+      try {
+        Provider.of<NotificationsViewModel>(context, listen: false)
+            .setPanelOpen(false);
+      } catch (_) {}
+    }
+    try {
+      await _animController.reverse();
+      _removeOverlay();
+      _triggerUnfurlAnimation();
+    } finally {
+      _isClosing = false;
+    }
   }
 
   void _removeOverlay() {

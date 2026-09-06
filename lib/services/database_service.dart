@@ -1394,9 +1394,6 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
           );
 
           if (rows.length > 1) {
-            final keeper = rows.first;
-            final keeperId = keeper['id'] as String;
-
             for (int i = 1; i < rows.length; i++) {
               final rId = rows[i]['id'] as String;
               await txn.delete('transactions', where: 'id = ?', whereArgs: [rId]);

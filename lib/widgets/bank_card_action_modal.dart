@@ -11,6 +11,7 @@ import '../widgets/app_badges.dart';
 import '../widgets/bank_card_widget.dart';
 import '../screens/dashboard/sender_detail_screen.dart';
 import '../screens/dashboard/analysis_screen.dart';
+import 'app_button.dart';
 import 'app_toast.dart';
 
 /// Modal dialog inspired by iOS Focus Mode UI, presenting a heroic
@@ -78,6 +79,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
   late AnimationController _animController;
   late Animation<double> _cardScaleAnim;
   late Animation<double> _cardOpacityAnim;
+  bool _isAccountsExpanded = false;
 
   @override
   void initState() {
@@ -127,8 +129,7 @@ class _BankCardActionModalState extends State<BankCardActionModal>
     final settingsVM = Provider.of<SettingsViewModel>(context);
 
     final bool isBankHidden = settingsVM.isBankBalanceHidden(widget.senderName);
-    final bool effectiveBalanceVisible =
-        widget.isBalanceVisible && !isBankHidden;
+    final bool effectiveBalanceVisible = !isBankHidden;
     final bool currentPaused = txVM.isTrackingPaused(widget.senderName);
     final double liveBalance = txVM.balanceForSender(widget.senderName, cashBalance: cashVM.cashBalance);
     final int liveTxCount = txVM.txCountForSender(widget.senderName, cashTxCount: cashVM.cashTransactions.length);
@@ -295,127 +296,20 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                             ),
                           )
                         else
-                          ...accounts.asMap().entries.map((entry) {
-                            final int idx = entry.key;
-                            final int slot = entry.value;
-                            final bool isSlotPaused =
-                                txVM.isAccountPaused(widget.senderName, slot);
-                            final String accountTitle = 'Account ${idx + 1}';
-
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: idx < accounts.length - 1 ? 10 : 0),
-                              child: _StaggeredRevealPill(
-                                controller: _animController,
-                                startInterval: 0.10 + (idx * 0.08),
-                                endInterval: 0.50 + (idx * 0.08),
-                                child: _FocusActionPill(
-                                  icon: isSlotPaused
-                                      ? Icons.play_circle_rounded
-                                      : Icons.pause_circle_rounded,
-                                  title: isSlotPaused
-                                      ? 'Resume $accountTitle'
-                                      : 'Pause $accountTitle',
-                                  subtitle: isSlotPaused
-                                      ? 'Resume automated SMS sync for $accountTitle'
-                                      : 'Silence SMS detection for $accountTitle',
-                                  trailing: isSlotPaused
-                                      ? const AppBadge.warning(
-                                          text: 'PAUSED',
-                                          icon: Icons.pause_rounded,
-                                          size: AppBadgeSize.small,
-                                        )
-                                      : const AppBadge.success(
-                                          text: 'ACTIVE',
-                                          icon: Icons.check_circle_rounded,
-                                          size: AppBadgeSize.small,
-                                        ),
-                                  onTap: () async {
-                                    HapticFeedback.lightImpact();
-                                    final nav = Navigator.of(context);
-                                    final name = widget.senderName;
-                                    final wasPaused = isSlotPaused;
-
-                                    nav.pop();
-                                    await txVM.toggleAccountPause(name, slot);
-
-                                    if (context.mounted) {
-                                      if (wasPaused) {
-                                        AppToast.success(
-                                          context,
-                                          message: '$name $accountTitle Resumed',
-                                          subtitle: 'SMS auto-detection is active for $accountTitle',
-                                        );
-                                      } else {
-                                        AppToast.warning(
-                                          context,
-                                          message: '$name $accountTitle Paused',
-                                          subtitle: 'SMS auto-detection silenced for $accountTitle',
-                                        );
-                                      }
-                                    }
-                                  },
-                                ),
-                              ),
-                            );
-                          }),
-
-                        const SizedBox(height: 10),
-
-                        // 2. Hide / Show Bank Balance Action Pill (Replaces Bank Details & Credentials)
-                        _StaggeredRevealPill(
-                          controller: _animController,
-                          startInterval: 0.28,
-                          endInterval: 0.70,
-                          child: _FocusActionPill(
-                            icon: isBankHidden
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            title: isBankHidden
-                                ? 'Show Balance'
-                                : 'Hide Balance',
-                            subtitle: isBankHidden
-                                ? 'Reveal balance for this wallet in manager'
-                                : 'Mask balance for this wallet in manager',
-                            trailing: isBankHidden
-                                ? const AppBadge.neutral(
-                                    text: 'HIDDEN',
-                                    size: AppBadgeSize.small,
-                                  )
-                                : const AppBadge.neutral(
-                                    text: 'VISIBLE',
-                                    size: AppBadgeSize.small,
-                                  ),
-                            onTap: () async {
-                              HapticFeedback.lightImpact();
-                              final nav = Navigator.of(context);
-                              final name = widget.senderName;
-                              final wasHidden = isBankHidden;
-
-                              nav.pop();
-                              await settingsVM.toggleBankBalanceVisibility(name);
-
-                              if (context.mounted) {
-                                if (wasHidden) {
-                                  AppToast.success(
-                                    context,
-                                    message: '$name Balance Visible',
-                                    subtitle: 'Card balance is now displayed in wallet manager',
-                                  );
-                                } else {
-                                  AppToast.info(
-                                    context,
-                                    message: '$name Balance Hidden',
-                                    subtitle: 'Card balance is now masked in wallet manager',
-                                  );
-                                }
-                              }
-                            },
+                          _StaggeredRevealPill(
+                            controller: _animController,
+                            startInterval: 0.12,
+                            endInterval: 0.54,
+                            child: _buildMultiAccountPauseSection(
+                              context,
+                              txVM,
+                              accounts,
+                            ),
                           ),
-                        ),
 
                         const SizedBox(height: 10),
 
-                        // 3. Change Order Action Pill
+                        // 2. Change Order Action Pill
                         _StaggeredRevealPill(
                           controller: _animController,
                           startInterval: 0.36,
@@ -507,9 +401,161 @@ class _BankCardActionModalState extends State<BankCardActionModal>
       ),
     );
   }
+
+  Widget _buildMultiAccountPauseSection(
+    BuildContext context,
+    TransactionsViewModel txVM,
+    List<int> accounts,
+  ) {
+    final bool allPaused =
+        accounts.every((slot) => txVM.isAccountPaused(widget.senderName, slot));
+    final bool anyPaused =
+        accounts.any((slot) => txVM.isAccountPaused(widget.senderName, slot));
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+      child: !_isAccountsExpanded
+          ? _FocusActionPill(
+              key: const ValueKey('collapsed_pause_pill'),
+              icon: allPaused
+                  ? Icons.play_circle_rounded
+                  : Icons.pause_circle_rounded,
+              title: allPaused ? 'Resume Tracking' : 'Pause Tracking',
+              subtitle: 'SIM 1 & SIM 2 separate controls',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (allPaused)
+                    const AppBadge.warning(
+                      text: 'PAUSED',
+                      icon: Icons.pause_rounded,
+                      size: AppBadgeSize.small,
+                    )
+                  else if (anyPaused)
+                    const AppBadge.warning(
+                      text: '1 PAUSED',
+                      size: AppBadgeSize.small,
+                    )
+                  else
+                    const AppBadge.success(
+                      text: 'ACTIVE',
+                      icon: Icons.check_circle_rounded,
+                      size: AppBadgeSize.small,
+                    ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.keyboard_arrow_right_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ],
+              ),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() {
+                  _isAccountsExpanded = true;
+                });
+              },
+            )
+          : SizedBox(
+              key: const ValueKey('expanded_pause_pill'),
+              height: 48,
+              child: Row(
+                children: [
+                  for (int i = 0; i < accounts.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(
+                      child: AppButton.secondary(
+                        fullWidth: false,
+                        text: txVM.isAccountPaused(widget.senderName, accounts[i])
+                            ? 'Resume SIM ${accounts[i] + 1}'
+                            : 'Pause SIM ${accounts[i] + 1}',
+                        icon: txVM.isAccountPaused(widget.senderName, accounts[i])
+                            ? Icons.play_arrow_rounded
+                            : Icons.pause_rounded,
+                        height: 48,
+                        fontSize: 11.5,
+                        iconSize: 15,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        onPressed: () =>
+                            _handleAccountToggle(context, txVM, accounts[i]),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(100),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          _isAccountsExpanded = false;
+                        });
+                      },
+                      child: Container(
+                        width: 44,
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.buttonSecondary,
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: const Icon(
+                          Icons.keyboard_arrow_left_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Future<void> _handleAccountToggle(
+    BuildContext context,
+    TransactionsViewModel txVM,
+    int slot,
+  ) async {
+    HapticFeedback.lightImpact();
+    final nav = Navigator.of(context);
+    final name = widget.senderName;
+    final bool wasPaused = txVM.isAccountPaused(name, slot);
+    final String simTitle = 'SIM ${slot + 1}';
+
+    nav.pop();
+    await txVM.toggleAccountPause(name, slot);
+
+    if (context.mounted) {
+      if (wasPaused) {
+        AppToast.success(
+          context,
+          message: '$name $simTitle Resumed',
+          subtitle: 'SMS auto-detection is active for $simTitle',
+        );
+      } else {
+        AppToast.warning(
+          context,
+          message: '$name $simTitle Paused',
+          subtitle: 'SMS auto-detection silenced for $simTitle',
+        );
+      }
+    }
+  }
 }
 
-/// Frosted Close Button inside top-right of Card
+/// Frosted Close Button inside top-right of Card (shares BankCardGlassActionButton style)
 class _CloseModalButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool isDarkTextTheme;
@@ -521,27 +567,10 @@ class _CloseModalButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: isDarkTextTheme
-              ? AppColors.surface
-              : Colors.black.withValues(alpha: 0.28),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.close_rounded,
-          color: Colors.white,
-          size: 16,
-        ),
-      ),
+    return BankCardGlassActionButton(
+      icon: Icons.close_rounded,
+      isDarkTextTheme: isDarkTextTheme,
+      onTap: onTap,
     );
   }
 }
@@ -555,6 +584,7 @@ class _FocusActionPill extends StatefulWidget {
   final VoidCallback onTap;
 
   const _FocusActionPill({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,

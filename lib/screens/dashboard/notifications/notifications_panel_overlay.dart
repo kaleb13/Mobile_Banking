@@ -35,9 +35,18 @@ class NotificationsPanelOverlay extends StatelessWidget {
     const double targetLeft = 0.0;
     final double targetWidth = screenWidth;
 
-    return AnimatedBuilder(
-      animation: expandAnim,
-      builder: (context, child) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final handled = notifsVM.handleBackPress?.call();
+        if (handled != true) {
+          onClose();
+        }
+      },
+      child: AnimatedBuilder(
+        animation: expandAnim,
+        builder: (context, child) {
         final double currentHeight =
             38.0 + (expandedHeight - 38.0) * expandAnim.value;
         final double currentWidth =
@@ -194,6 +203,7 @@ class NotificationsPanelOverlay extends StatelessWidget {
           ],
         );
       },
+      ),
     );
   }
 }

@@ -188,6 +188,13 @@ class AppColors {
   static const Color cardZemenDark      = Color(0xFFD12048); // Zemen Ruby Crimson (From Logo SVG #D12048)
   static const Color cardZemenLight     = Color(0xFFF43F5E); // Zemen Vibrant Rose Gradient Stop (#F43F5E)
   static const Color cardZemenDarkIcon  = Color(0xFF9E1030); // Zemen Deep Crimson Icon Tone
+  static const Color cardNibDark        = Color(0xFF8B4D20); // Nib Brand Coffee Brown (From Logo SVG #8B4D20)
+  static const Color cardNibLight       = Color(0xFFB86B35); // Luminous Warm Coffee Caramel Gradient Stop
+  static const Color cardNibDarkIcon    = Color(0xFF5A2E10); // Deep Roasted Espresso Icon Tone
+  static const Color cardNibGold        = Color(0xFFFFB815); // Nib Gold Accent (From Logo SVG #FFB815)
+  static const Color cardBunaDark       = Color(0xFF551919); // Buna Brand Deep Maroon (From Logo SVG #551919)
+  static const Color cardBunaLight      = Color(0xFF852A2A); // Luminous Warm Burgundy Gradient Stop (Lighter version)
+  static const Color cardBunaDarkIcon   = Color(0xFF380E0E); // Deep Roast Icon Tone
   static const Color cardCoopBg       = Color(0xFF5E35B1);
   static const Color cardCoopDarkIcon = Color(0xFF2E175B);
   static const Color cardCoopTitle    = Color(0xFFD1C4E9);
@@ -258,6 +265,14 @@ class AppColors {
   static const Color analysisCardGradientMid   = Color(0xFF071F18);
   static const Color analysisCardGradientEnd   = Color(0xFF0D151D);
   static const Color analysisAmbientGlow       = Color(0xFF0E382C);
+  static const Color analysisNarrativeText     = Color(0x8CFFFFFF); // ~55% translucent white for cash flow narrative
+
+  // Feature Banner Gradient & Glow (Orange with Red variant)
+  static const Color bannerOrangeRedStart      = Color(0xFF38150C);
+  static const Color bannerOrangeRedMid        = Color(0xFF260D07);
+  static const Color bannerOrangeRedEnd        = Color(0xFF140707);
+  static const Color bannerOrangeGlow          = Color(0xFFFF6D00);
+  static const Color bannerRedGlow             = Color(0xFFE11D48);
 
   // ── Additional Semantic & Dynamic UI Palette ──────────────────────────────
   static const Color destructiveRed            = Color(0xFFFF5252);
@@ -784,6 +799,9 @@ extension ColorContrast on Color {
 }
 
 class AppTheme {
+  /// Returns the canonical icon for any category / reason name.
+  static IconData getCategoryIcon(String name) => AppColors.getCategoryIcon(name);
+
   static ThemeData themeFor(AppThemeMode mode) {
     switch (mode) {
       case AppThemeMode.light:

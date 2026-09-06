@@ -260,10 +260,29 @@ class CbeParser {
   }
 
   static String? extractOwnerName(String message) {
-    if (message.startsWith("Dear ")) {
-      final commaIdx = message.indexOf(',');
-      if (commaIdx != -1 && commaIdx > 5) {
-        return message.substring(5, commaIdx).trim();
+    if (!message.startsWith("Dear")) return null;
+    final match = RegExp(
+      r'^Dear\s+(?:Mr\.?\s+|Ms\.?\s+|Mrs\.?\s+)?([A-Za-z\s]+?)(?:,|\s+your\s+Account|\s+You\s+have|\s+A\s+debit)',
+      caseSensitive: false,
+    ).firstMatch(message);
+
+    if (match != null) {
+      final name = match.group(1)?.trim();
+      if (name != null &&
+          name.isNotEmpty &&
+          !name.toLowerCase().contains('customer') &&
+          !name.toLowerCase().contains('sir') &&
+          !name.toLowerCase().contains('madam')) {
+        return name;
+      }
+    }
+
+    // Fallback to comma if within first 40 chars
+    final commaIdx = message.indexOf(',');
+    if (commaIdx != -1 && commaIdx > 5 && commaIdx <= 40) {
+      final raw = message.substring(5, commaIdx).trim();
+      if (!raw.toLowerCase().contains('customer')) {
+        return raw;
       }
     }
     return null;

@@ -1,5 +1,6 @@
 import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../presentation/viewmodels/cash_wallet_view_model.dart';
@@ -293,76 +294,87 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                               FittedBox(
                                 fit: BoxFit.scaleDown,
                                 alignment: Alignment.center,
-                                child: settingsVM.isBalanceVisible
-                                    ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            fmt.format(cashVM.cashBalance),
-                                            style: const TextStyle(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    settingsVM.toggleBankBalanceVisibility('Cash Wallet');
+                                  },
+                                  child: !settingsVM.isBankBalanceHidden('Cash Wallet')
+                                      ? Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              fmt.format(cashVM.cashBalance),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 34,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: -0.5,
+                                              ),
+                                              maxLines: 1,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            const CurrencySymbolWidget(
                                               color: Colors.white,
-                                              fontSize: 34,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: -0.5,
+                                              size: 22,
                                             ),
-                                            maxLines: 1,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          const CurrencySymbolWidget(
-                                            color: Colors.white,
-                                            size: 22,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          IconButton(
-                                            icon: Icon(
-                                              Icons.visibility_outlined,
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.8),
-                                              size: 20,
+                                            const SizedBox(width: 6),
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.visibility_outlined,
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.8),
+                                                size: 20,
+                                              ),
+                                              splashRadius: 20,
+                                              padding: EdgeInsets.zero,
+                                              constraints:
+                                                  const BoxConstraints(),
+                                              onPressed: () {
+                                                HapticFeedback.selectionClick();
+                                                settingsVM.toggleBankBalanceVisibility('Cash Wallet');
+                                              },
                                             ),
-                                            splashRadius: 20,
-                                            padding: EdgeInsets.zero,
-                                            constraints:
-                                                const BoxConstraints(),
-                                            onPressed: () => settingsVM
-                                                .toggleBalanceVisibility(),
-                                          ),
-                                        ],
-                                      )
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          const Text(
-                                            '••••••••',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 34,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: -0.5,
+                                          ],
+                                        )
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            const Text(
+                                              '••••••••',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 34,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: -0.5,
+                                              ),
+                                              maxLines: 1,
                                             ),
-                                            maxLines: 1,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          IconButton(
-                                            icon: Icon(
-                                              Icons.visibility_off_outlined,
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.8),
-                                              size: 20,
+                                            const SizedBox(width: 6),
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.visibility_off_outlined,
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.8),
+                                                size: 20,
+                                              ),
+                                              splashRadius: 20,
+                                              padding: EdgeInsets.zero,
+                                              constraints:
+                                                  const BoxConstraints(),
+                                              onPressed: () {
+                                                HapticFeedback.selectionClick();
+                                                settingsVM.toggleBankBalanceVisibility('Cash Wallet');
+                                              },
                                             ),
-                                            splashRadius: 20,
-                                            padding: EdgeInsets.zero,
-                                            constraints:
-                                                const BoxConstraints(),
-                                            onPressed: () => settingsVM
-                                                .toggleBalanceVisibility(),
-                                          ),
-                                        ],
-                                      ),
+                                          ],
+                                        ),
+                                ),
                               ),
                               const SizedBox(height: 18),
                               Row(

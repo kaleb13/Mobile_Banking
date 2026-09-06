@@ -33,6 +33,49 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
   bool _isExporting = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<NotificationsViewModel>().handleBackPress = _handleBack;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    try {
+      final notifsVM = context.read<NotificationsViewModel>();
+      if (notifsVM.handleBackPress == _handleBack) {
+        notifsVM.handleBackPress = null;
+      }
+    } catch (_) {}
+    super.dispose();
+  }
+
+  bool _handleBack() {
+    if (!mounted) return false;
+    if (_selectedNotificationForManualInsert != null) {
+      setState(() => _selectedNotificationForManualInsert = null);
+      return true;
+    }
+    if (_selectedNotificationForMenu != null) {
+      setState(() => _selectedNotificationForMenu = null);
+      return true;
+    }
+    if (_isConfirmingIgnoreAll) {
+      setState(() => _isConfirmingIgnoreAll = false);
+      return true;
+    }
+    if (_showBankFilters) {
+      setState(() => _showBankFilters = false);
+      return true;
+    }
+    widget.onClose();
+    return true;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final notifsVM = context.watch<NotificationsViewModel>();
     final allNotifications = notifsVM.notifications;

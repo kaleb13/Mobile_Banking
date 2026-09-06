@@ -490,28 +490,19 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          isBalanceVisible
-              ? CurrencyTextWidget(
-                  amount: netStanding,
-                  showSign: true,
-                  style: TextStyle(
-                    color: netStanding >= 0
-                        ? AppColors.positive
-                        : AppColors.negative,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                  ),
-                  customFormattedStr: fmt.format(netStanding.abs()),
-                )
-              : const Text(
-                  'ETB ••••••••',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+          CurrencyTextWidget(
+            amount: netStanding,
+            showSign: true,
+            style: TextStyle(
+              color: netStanding >= 0
+                  ? AppColors.positive
+                  : AppColors.negative,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+            ),
+            customFormattedStr: fmt.format(netStanding.abs()),
+          ),
           const SizedBox(height: 8),
 
           // Distribution Ratio Bar
@@ -526,7 +517,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'To: ${isBalanceVisible ? 'ETB ${fmt.format(totalSent)}' : '••••••••'} (${(sentRatio * 100).toStringAsFixed(0)}%)',
+                'To: ETB ${fmt.format(totalSent)} (${(sentRatio * 100).toStringAsFixed(0)}%)',
                 style: const TextStyle(
                   color: AppColors.negative,
                   fontSize: 10.5,
@@ -534,7 +525,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 ),
               ),
               Text(
-                'From: ${isBalanceVisible ? 'ETB ${fmt.format(totalReceived)}' : '••••••••'} (${((1.0 - sentRatio) * 100).toStringAsFixed(0)}%)',
+                'From: ETB ${fmt.format(totalReceived)} (${((1.0 - sentRatio) * 100).toStringAsFixed(0)}%)',
                 style: const TextStyle(
                   color: AppColors.positive,
                   fontSize: 10.5,
@@ -929,9 +920,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    settingsVM.isBalanceVisible
-                        ? '${isIncome ? '+' : '-'} ETB ${NumberFormat('#,##0.00').format(tx.amount)}'
-                        : 'ETB ••••••••',
+                    '${isIncome ? '+' : '-'} ETB ${NumberFormat('#,##0.00').format(tx.amount)}',
                     style: TextStyle(
                       color: isIncome ? AppColors.positive : Colors.white,
                       fontSize: 15,
@@ -942,9 +931,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                   if (tx.totalBalance > 0) ...[
                     const SizedBox(height: 3),
                     Text(
-                      settingsVM.isBalanceVisible
-                          ? 'Bal: ETB ${NumberFormat('#,##0.00').format(tx.totalBalance)}'
-                          : 'Bal: ••••••••',
+                      'Bal: ETB ${NumberFormat('#,##0.00').format(tx.totalBalance)}',
                       style: const TextStyle(
                         color: AppColors.textDisabled,
                         fontSize: 11,

@@ -84,7 +84,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final txVM = Provider.of<TransactionsViewModel>(context);
-    final settingsVM = Provider.of<SettingsViewModel>(context);
     final topSafeArea = MediaQuery.paddingOf(context).top;
 
     // Get latest sender info from provider to reflect linked status
@@ -325,7 +324,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         InteractiveBalanceChart(
                           transactions: allTxForSender,
                           initialFilter: _chartFilter,
-                          isBalanceVisible: settingsVM.isBalanceVisible,
+                          isBalanceVisible: true,
                           chartHeight: 140,
                           onFilterChanged: (val) =>
                               setState(() => _chartFilter = val),
@@ -353,7 +352,6 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   /// Summary card for Telebirr Savings (Sanduq) when savings balance exists
   Widget _buildTelebirrSavingSummaryCard(double savingBalance, [int? activeSimSlot]) {
     final fmt = NumberFormat('#,##0.00');
-    final settingsVM = context.watch<SettingsViewModel>();
     final String subtitle = activeSimSlot != null
         ? 'SIM ${activeSimSlot + 1} savings vault'
         : 'High-yield savings vault';
@@ -413,33 +411,24 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 ],
               ),
             ),
-            settingsVM.isBalanceVisible
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        fmt.format(savingBalance),
-                        style: const TextStyle(
-                          color: AppColors.telebirrGreen,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const CurrencySymbolWidget(
-                        color: AppColors.telebirrGreen,
-                        size: 13,
-                      ),
-                    ],
-                  )
-                : const Text(
-                    '••••••••',
-                    style: TextStyle(
-                      color: AppColors.telebirrGreen,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  fmt.format(savingBalance),
+                  style: const TextStyle(
+                    color: AppColors.telebirrGreen,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+                const SizedBox(width: 4),
+                const CurrencySymbolWidget(
+                  color: AppColors.telebirrGreen,
+                  size: 13,
+                ),
+              ],
+            ),
           ],
         ),
       );
@@ -1069,48 +1058,32 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                   ],
                 ),
               ),
-              Consumer<SettingsViewModel>(
-                builder: (context, settingsVM, child) {
-                  final isVisible = settingsVM.isBalanceVisible;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      isVisible
-                          ? CurrencyTextWidget(
-                              amount: tx.amount,
-                              showSign: true,
-                              style: TextStyle(
-                                color: isIncome
-                                    ? AppColors.positive
-                                    : Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              customFormattedStr: NumberFormat('#,##0.00')
-                                  .format(tx.amount),
-                            )
-                          : Text(
-                              '••••••••',
-                              style: TextStyle(
-                                color: isIncome
-                                    ? AppColors.positive
-                                    : Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                      const SizedBox(height: 4),
-                      Text(
-                        DateFormat('hh:mm a').format(tx.date),
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  CurrencyTextWidget(
+                    amount: tx.amount,
+                    showSign: true,
+                    style: TextStyle(
+                      color: isIncome
+                          ? AppColors.positive
+                          : Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    customFormattedStr: NumberFormat('#,##0.00')
+                        .format(tx.amount),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('hh:mm a').format(tx.date),
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

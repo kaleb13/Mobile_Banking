@@ -63,10 +63,9 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
             return AppDrawer(
               heightFactor: 0.88,
               maxHeightFactor: 0.94,
-              headerCard: AppDrawerHeaderCard(
+              headerCard: const AppDrawerHeaderCard(
                 icon: Icons.person_add_alt_1_rounded,
                 title: 'Link Person',
-                subtitle: 'Auto-categorize transactions for "${reason.name}"',
               ),
               bottomAction: Row(
                 children: [
@@ -303,7 +302,6 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
       headerCard: AppDrawerHeaderCard(
         icon: Icons.people_outline_rounded,
         title: 'Linked Persons',
-        subtitle: 'Auto-categorization rules for "${reason.name}"',
         trailing: AppBadge.neutral(
           text: '${links.length} ${links.length == 1 ? 'person' : 'persons'}',
           size: AppBadgeSize.small,

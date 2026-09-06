@@ -262,22 +262,18 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     Row(
                       children: [
                         Text(
-                          settingsVM.isBalanceVisible
-                              ? 'Target: ${currencyFmt.format(goal.targetAmount)}'
-                              : 'Target: ••••••••',
+                          'Target: ${currencyFmt.format(goal.targetAmount)}',
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 12.5,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        if (settingsVM.isBalanceVisible) ...[
-                          const SizedBox(width: 3),
-                          const CurrencySymbolWidget(
-                            size: 11,
-                            color: AppColors.textSecondary,
-                          ),
-                        ],
+                        const SizedBox(width: 3),
+                        const CurrencySymbolWidget(
+                          size: 11,
+                          color: AppColors.textSecondary,
+                        ),
                       ],
                     ),
                   ],
@@ -377,22 +373,18 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     ),
                   ),
                   Text(
-                    settingsVM.isBalanceVisible
-                        ? currencyFmt.format(totalCovered)
-                        : '••••••••',
+                    currencyFmt.format(totalCovered),
                     style: const TextStyle(
                       color: AppColors.positive,
                       fontSize: 12.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (settingsVM.isBalanceVisible) ...[
-                    const SizedBox(width: 2),
-                    const CurrencySymbolWidget(
-                      size: 10,
-                      color: AppColors.positive,
-                    ),
-                  ],
+                  const SizedBox(width: 2),
+                  const CurrencySymbolWidget(
+                    size: 10,
+                    color: AppColors.positive,
+                  ),
                 ],
               ),
               Row(
@@ -406,22 +398,18 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                     ),
                   ),
                   Text(
-                    settingsVM.isBalanceVisible
-                        ? currencyFmt.format((goal.targetAmount - totalCovered).clamp(0, double.infinity))
-                        : '••••••••',
+                    currencyFmt.format((goal.targetAmount - totalCovered).clamp(0, double.infinity)),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12.5,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (settingsVM.isBalanceVisible) ...[
-                    const SizedBox(width: 2),
-                    const CurrencySymbolWidget(
-                      size: 10,
-                      color: Colors.white,
-                    ),
-                  ],
+                  const SizedBox(width: 2),
+                  const CurrencySymbolWidget(
+                    size: 10,
+                    color: Colors.white,
+                  ),
                 ],
               ),
             ],
