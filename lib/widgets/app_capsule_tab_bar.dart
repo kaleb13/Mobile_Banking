@@ -180,7 +180,7 @@ typedef AppCapsuleTabBar = AppPrimaryTabBar;
 ///
 /// Features independent 100% fully rounded pill elements with surface/elevated
 /// surface contrast, zero borders, and horizontal scrolling support.
-class AppSecondaryTabBar extends StatelessWidget {
+class AppSecondaryTabBar extends StatefulWidget {
   final List<String> tabs;
   final int selectedIndex;
   final ValueChanged<int> onTabChanged;
@@ -191,6 +191,7 @@ class AppSecondaryTabBar extends StatelessWidget {
   final double itemSpacing;
   final Color? activeColor;
   final Color? inactiveColor;
+  final ScrollController? scrollController;
 
   const AppSecondaryTabBar({
     super.key,
@@ -204,15 +205,132 @@ class AppSecondaryTabBar extends StatelessWidget {
     this.itemSpacing = 8,
     this.activeColor,
     this.inactiveColor,
+    this.scrollController,
   });
 
+  @override
+  State<AppSecondaryTabBar> createState() => _AppSecondaryTabBarState();
+}
+
+class _AppSecondaryTabBarState extends State<AppSecondaryTabBar> {
+  ScrollController? _internalController;
+  ScrollController get _effectiveController =>
+      widget.scrollController ?? (_internalController ??= _createController());
+
+  late List<GlobalKey> _tabKeys;
+
+  ScrollController _createController() {
+    // If the selected tab is towards the right end (e.g. current month/period),
+    // start with a high initial scroll offset. Flutter's ScrollPosition clamps
+    // initialScrollOffset to maxScrollExtent on the initial layout pass,
+    // so the active item is positioned at the right edge immediately on frame 1 with 0ms flicker.
+    final bool shouldStartAtRight = widget.isScrollable &&
+        widget.tabs.length > 2 &&
+        widget.selectedIndex >= widget.tabs.length - 1;
+
+    return ScrollController(
+      initialScrollOffset: shouldStartAtRight ? 10000.0 : 0.0,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabKeys = List.generate(widget.tabs.length, (_) => GlobalKey());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToSelected(animate: false);
+    });
+  }
+
+  @override
+  void didUpdateWidget(AppSecondaryTabBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tabs.length != _tabKeys.length) {
+      _tabKeys = List.generate(widget.tabs.length, (_) => GlobalKey());
+    }
+    if (oldWidget.scrollController != widget.scrollController &&
+        oldWidget.scrollController == null) {
+      _internalController?.dispose();
+      _internalController = null;
+    }
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.tabs != widget.tabs) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToSelected(animate: true);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _internalController?.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSelected({bool animate = false}) {
+    if (!widget.isScrollable || widget.tabs.isEmpty) return;
+    final index = widget.selectedIndex.clamp(0, widget.tabs.length - 1);
+    _scrollToIndex(index, animate: animate);
+  }
+
+  void _scrollToIndex(int index, {bool animate = true}) {
+    if (!widget.isScrollable || widget.tabs.isEmpty) return;
+    final controller = _effectiveController;
+    if (!controller.hasClients) return;
+
+    // 1. Rightmost tab: align to right edge (maxScrollExtent)
+    if (index == widget.tabs.length - 1) {
+      final maxExtent = controller.position.maxScrollExtent;
+      if (animate) {
+        controller.animateTo(
+          maxExtent,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        controller.jumpTo(maxExtent);
+      }
+      return;
+    }
+
+    // 2. First tab: align to left edge (0.0)
+    if (index == 0) {
+      if (animate) {
+        controller.animateTo(
+          0.0,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        controller.jumpTo(0.0);
+      }
+      return;
+    }
+
+    // 3. Middle tabs: center the tab in the viewport
+    if (index >= 0 && index < _tabKeys.length) {
+      final key = _tabKeys[index];
+      final currentContext = key.currentContext;
+      if (currentContext != null) {
+        Scrollable.ensureVisible(
+          currentContext,
+          alignment: 0.5,
+          duration: animate ? const Duration(milliseconds: 280) : Duration.zero,
+          curve: Curves.easeOutCubic,
+        );
+      }
+    }
+  }
+
   Widget _buildPill(BuildContext context, int index) {
-    final isSelected = index == selectedIndex;
-    final activeBg = activeColor ??
+    final isSelected = index == widget.selectedIndex;
+    final activeBg = widget.activeColor ??
         (context.isLightMode
             ? AppColors.buttonPrimary
             : AppColors.buttonPrimary);
-    final inactiveBg = inactiveColor ??
+    final inactiveBg = widget.inactiveColor ??
         (context.isLightMode
             ? AppColors.cardTileLight
             : AppColors.heatmapNeutral);
@@ -227,23 +345,25 @@ class AppSecondaryTabBar extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
-        onTabChanged(index);
+        widget.onTabChanged(index);
+        _scrollToIndex(index, animate: true);
       },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        height: widget.height,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: isSelected ? activeBg : inactiveBg,
           borderRadius: BorderRadius.circular(100),
         ),
         child: Center(
           child: Text(
-            tabs[index],
+            widget.tabs[index],
             style: TextStyle(
               color: isSelected ? activeText : inactiveText,
-              fontSize: fontSize,
+              fontSize: widget.fontSize,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               letterSpacing: -0.1,
             ),
@@ -255,37 +375,50 @@ class AppSecondaryTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (tabs.isEmpty) return const SizedBox.shrink();
+    if (widget.tabs.isEmpty) return const SizedBox.shrink();
 
-    if (isScrollable) {
+    if (widget.isScrollable) {
       return SizedBox(
-        height: height,
-        child: ListView.separated(
+        height: widget.height,
+        child: SingleChildScrollView(
+          controller: _effectiveController,
           scrollDirection: Axis.horizontal,
           clipBehavior: Clip.none,
           physics: const BouncingScrollPhysics(),
-          padding: padding,
-          itemCount: tabs.length,
-          separatorBuilder: (_, __) => SizedBox(width: itemSpacing),
-          itemBuilder: (context, index) => _buildPill(context, index),
+          padding: widget.padding,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (int i = 0; i < widget.tabs.length; i++) ...[
+                if (i > 0) SizedBox(width: widget.itemSpacing),
+                KeyedSubtree(
+                  key: _tabKeys[i],
+                  child: _buildPill(context, i),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
 
-    return Padding(
-      padding: padding,
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        children: List.generate(tabs.length, (index) {
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                right: index < tabs.length - 1 ? itemSpacing : 0,
+    return SizedBox(
+      height: widget.height,
+      child: Padding(
+        padding: widget.padding,
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          children: List.generate(widget.tabs.length, (index) {
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: index < widget.tabs.length - 1 ? widget.itemSpacing : 0,
+                ),
+                child: _buildPill(context, index),
               ),
-              child: _buildPill(context, index),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }

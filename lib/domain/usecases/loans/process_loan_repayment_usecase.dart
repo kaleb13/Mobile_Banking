@@ -50,14 +50,19 @@ class ProcessLoanRepaymentUseCase {
       }
     }
 
-    final txSenderLower = transaction.sender.toLowerCase().trim();
-    final txNameLower = transaction.name.toLowerCase().trim();
+    final counterpartyLower = transaction.counterparty.toLowerCase().trim();
+    final bankNameLower = transaction.bankName.toLowerCase().trim();
     for (final loan in activeLoans) {
       final personLower = loan.personName.toLowerCase().trim();
-      if (txNameLower.isNotEmpty && (txNameLower == personLower || txNameLower.contains(personLower) || personLower.contains(txNameLower))) {
+      if (counterpartyLower == personLower ||
+          counterpartyLower.contains(personLower) ||
+          personLower.contains(counterpartyLower)) {
         return loan;
       }
-      if (txSenderLower == personLower || txSenderLower.contains(personLower) || personLower.contains(txSenderLower)) {
+      if (bankNameLower.isNotEmpty &&
+          (bankNameLower == personLower ||
+              bankNameLower.contains(personLower) ||
+              personLower.contains(bankNameLower))) {
         return loan;
       }
     }

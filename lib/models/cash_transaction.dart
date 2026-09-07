@@ -1,6 +1,6 @@
 class CashTransaction {
   final int? id;
-  final String type; // 'addition' or 'expense'
+  final String type; // 'income' or 'expense'
   final double amount;
   final DateTime date;
   final String? description;
@@ -8,6 +8,12 @@ class CashTransaction {
   final int? reasonId;
   final String? reasonName;
   final String? linkedTransactionId;
+
+  /// True if this cash entry represents money flowing in (positive inflow).
+  bool get isIncome => type == 'income' || type == 'addition';
+
+  /// True if this cash entry represents money flowing out (negative outflow).
+  bool get isExpense => type == 'expense' || type == 'deduction';
 
   CashTransaction({
     this.id,
@@ -36,9 +42,10 @@ class CashTransaction {
   }
 
   factory CashTransaction.fromMap(Map<String, dynamic> map) {
+    final rawType = (map['type'] ?? 'expense') as String;
     return CashTransaction(
       id: map['id'] as int?,
-      type: map['type'] as String,
+      type: rawType == 'addition' ? 'income' : rawType,
       amount: (map['amount'] as num).toDouble(),
       date: DateTime.parse(map['date'] as String),
       description: map['description'] as String?,

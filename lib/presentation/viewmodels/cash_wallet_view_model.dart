@@ -79,7 +79,7 @@ class CashWalletViewModel extends ChangeNotifier {
 
     // 2. Manual cash additions and deductions
     for (final tx in _cashTransactions) {
-      if (tx.type == 'addition') {
+      if (tx.isIncome) {
         balance += tx.amount;
       } else {
         balance -= tx.amount;

@@ -134,6 +134,6 @@ class CounterpartyMatcher {
     String targetName,
   ) {
     if (targetName.trim().isEmpty) return const [];
-    return transactions.where((tx) => matches(tx.sender, targetName)).toList();
+    return transactions.where((tx) => matches(tx.counterparty, targetName)).toList();
   }
 }

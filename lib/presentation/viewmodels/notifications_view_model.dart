@@ -16,6 +16,8 @@ import '../../services/sms_service.dart';
 import '../../services/bank_senders.dart';
 
 class NotificationsViewModel extends ChangeNotifier {
+  static final RegExp _whitespaceRegex = RegExp(r'\s+');
+
   final NotificationRepository _repository;
 
   NotificationsViewModel({required NotificationRepository repository})
@@ -75,11 +77,17 @@ class NotificationsViewModel extends ChangeNotifier {
     return _hasPermission;
   }
 
-  Future<void> loadNotifications() async {
-    _isLoading = true;
-    notifyListeners();
+  Future<void> loadNotifications({bool silent = false}) async {
+    if (!silent) {
+      _isLoading = true;
+      notifyListeners();
+    }
 
     try {
+      final prevPermission = _hasPermission;
+      final prevUnread = _unreadCount;
+      final prevCount = _notifications.length;
+
       // Check current SMS permission status so the pill shows correctly
       _hasPermission = await Permission.sms.status.isGranted;
       final all = await _repository.getNotifications();
@@ -96,59 +104,82 @@ class NotificationsViewModel extends ChangeNotifier {
 
       // ── Reconciliation: prune notifications already parsed as transactions ──
       final transactions = getTransactions?.call();
-      if (transactions != null && transactions.isNotEmpty) {
+      if (transactions != null && transactions.isNotEmpty && all.isNotEmpty) {
         final reasons = getReasons?.call() ?? [];
+        final reasonMap = <String, AppReason>{};
+        for (final r in reasons) {
+          reasonMap[r.name.toLowerCase().trim()] = r;
+        }
+
+        // Index the small set of notifications (typically 0-10 items) in O(K)
+        final notifByNormBody = <String, AppNotification>{};
+        for (final n in all) {
+          final norm = n.body.replaceAll(_whitespaceRegex, ' ').trim();
+          if (norm.isNotEmpty) {
+            notifByNormBody[norm] = n;
+          }
+        }
+
         final List<String> idsToDelete = [];
 
-        for (final n in all) {
-          final bodyNorm = n.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+        // Pruning checks only need to inspect recent transactions (latest 100)
+        final candidateTxs = transactions.length > 100
+            ? transactions.sublist(0, 100)
+            : transactions;
 
-          // Check if this notification's body matches any existing transaction
-          final matchedTx = transactions.cast<AppTransaction?>().firstWhere(
-            (t) =>
-                t!.rawMessage.replaceAll(RegExp(r'\s+'), ' ').trim() ==
-                bodyNorm,
-            orElse: () => null,
-          );
-
-          if (matchedTx != null) {
+        for (final t in candidateTxs) {
+          final norm = t.rawMessage.replaceAll(_whitespaceRegex, ' ').trim();
+          final matchedNotif = notifByNormBody[norm];
+          if (matchedNotif != null) {
             // Transfer pending reason from notification → transaction
-            if (n.reason != null &&
-                n.reason!.isNotEmpty &&
-                (matchedTx.reason == null ||
-                    matchedTx.reason!.isEmpty ||
-                    matchedTx.reason!.toLowerCase() == 'uncategorized') &&
+            if (matchedNotif.reason != null &&
+                matchedNotif.reason!.isNotEmpty &&
+                (t.reason == null ||
+                    t.reason!.isEmpty ||
+                    t.reason!.toLowerCase() == 'uncategorized') &&
                 updateTransactionReason != null &&
-                matchedTx.id != null) {
-              final matchedReason = reasons.cast<AppReason?>().firstWhere(
-                (r) =>
-                    r!.name.toLowerCase().trim() ==
-                    n.reason!.toLowerCase().trim(),
-                orElse: () => null,
-              );
+                t.id != null) {
+              final matchedReason =
+                  reasonMap[matchedNotif.reason!.toLowerCase().trim()];
               await updateTransactionReason!(
-                matchedTx.id!,
-                matchedReason?.name ?? n.reason!,
+                t.id!,
+                matchedReason?.name ?? matchedNotif.reason!,
                 matchedReason?.id,
               );
             }
-            idsToDelete.add(n.id);
+            idsToDelete.add(matchedNotif.id);
           }
         }
 
         // Delete reconciled notifications from DB and in-memory list
-        for (final id in idsToDelete) {
-          _repository.deleteNotification(id);
+        if (idsToDelete.isNotEmpty) {
+          final deleteSet = idsToDelete.toSet();
+          for (final id in idsToDelete) {
+            _repository.deleteNotification(id);
+          }
+          all.removeWhere((n) => deleteSet.contains(n.id));
         }
-        all.removeWhere((n) => idsToDelete.contains(n.id));
       }
 
       _notifications = all;
       _unreadCount = all.where((n) => !n.isRead).length;
+
+      final bool hasChanged = !silent ||
+          _hasPermission != prevPermission ||
+          _unreadCount != prevUnread ||
+          _notifications.length != prevCount;
+
+      if (!silent) {
+        _isLoading = false;
+      }
+      if (hasChanged) {
+        notifyListeners();
+      }
     } catch (_) {
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!silent) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 

@@ -56,7 +56,7 @@ class GetBalanceHistoryUseCase {
       final upperAllowed =
           allowedBanks.map((b) => b.trim().toUpperCase()).toSet();
       scopedTxs = transactions
-          .where((tx) => upperAllowed.contains(tx.name.trim().toUpperCase()))
+          .where((tx) => upperAllowed.contains(tx.bankName.trim().toUpperCase()))
           .toList();
     } else {
       scopedTxs = transactions;
@@ -120,7 +120,7 @@ class GetBalanceHistoryUseCase {
     // Pre-seed all accounts with their earliest known positive balance in history
     // so that active accounts don't start at zero before their first transaction in this window.
     for (final tx in sortedTxs) {
-      final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
+      final accountKey = '${tx.bankName.trim().toUpperCase()}:${tx.simSlot}';
       if (!lastKnownBalance.containsKey(accountKey) && tx.totalBalance > 0) {
         lastKnownBalance[accountKey] = tx.totalBalance;
       }
@@ -129,7 +129,7 @@ class GetBalanceHistoryUseCase {
     // Accumulate cash pre-seed strictly BEFORE the chart window
     for (final tx in sortedTxs) {
       if (tx.date.isBefore(actualChartStart)) {
-        final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
+        final accountKey = '${tx.bankName.trim().toUpperCase()}:${tx.simSlot}';
         if (tx.totalBalance > 0) {
           lastKnownBalance[accountKey] = tx.totalBalance;
         } else if (lastKnownBalance.containsKey(accountKey)) {
@@ -151,7 +151,7 @@ class GetBalanceHistoryUseCase {
     }
     for (final ctx in sortedCashTxs) {
       if (ctx.date.isBefore(actualChartStart)) {
-        if (ctx.type == 'addition') {
+        if (ctx.isIncome) {
           currentCashBalance += ctx.amount;
         } else {
           currentCashBalance -= ctx.amount;
@@ -188,7 +188,7 @@ class GetBalanceHistoryUseCase {
       final dayTxs = txsByDay[key];
       if (dayTxs != null) {
         for (final tx in dayTxs) {
-          final accountKey = '${tx.name.trim().toUpperCase()}:${tx.simSlot}';
+          final accountKey = '${tx.bankName.trim().toUpperCase()}:${tx.simSlot}';
           if (tx.totalBalance > 0) {
             lastKnownBalance[accountKey] = tx.totalBalance;
           } else if (lastKnownBalance.containsKey(accountKey)) {
@@ -213,7 +213,7 @@ class GetBalanceHistoryUseCase {
       final dayCashTxs = cashTxsByDay[key];
       if (dayCashTxs != null) {
         for (final ctx in dayCashTxs) {
-          if (ctx.type == 'addition') {
+          if (ctx.isIncome) {
             currentCashBalance += ctx.amount;
           } else {
             currentCashBalance -= ctx.amount;

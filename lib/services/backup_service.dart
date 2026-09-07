@@ -262,7 +262,7 @@ class BackupService {
 
         results.add(ImportResult(
           type: 'transaction',
-          label: '${tx.name} ${tx.amount} (${tx.type})',
+          label: '${tx.bankName} ${tx.amount} (${tx.type})',
           success: true,
         ));
       } catch (e) {

@@ -95,7 +95,7 @@ class _SelectTransactionSheetState extends State<SelectTransactionSheet> {
 
     // Extract all unique banks present in the eligible transactions
     final availableBanks = candidateList
-        .map((tx) => tx.name.trim())
+        .map((tx) => tx.bankName.trim())
         .where((name) => name.isNotEmpty)
         .toSet()
         .toList()
@@ -111,7 +111,7 @@ class _SelectTransactionSheetState extends State<SelectTransactionSheet> {
     final filtered = candidateList.where((tx) {
       // 1. Bank filter
       if (_selectedBank != 'All' &&
-          tx.name.trim().toLowerCase() != _selectedBank.toLowerCase()) {
+          tx.bankName.trim().toLowerCase() != _selectedBank.toLowerCase()) {
         return false;
       }
 
@@ -135,12 +135,12 @@ class _SelectTransactionSheetState extends State<SelectTransactionSheet> {
       // 4. Search query
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
-        final sender = tx.sender.toLowerCase();
-        final name = tx.name.toLowerCase();
+        final counterparty = tx.counterparty.toLowerCase();
+        final bankName = tx.bankName.toLowerCase();
         final note = (tx.note ?? '').toLowerCase();
         final amountStr = tx.amount.toString();
-        if (!sender.contains(query) &&
-            !name.contains(query) &&
+        if (!counterparty.contains(query) &&
+            !bankName.contains(query) &&
             !note.contains(query) &&
             !amountStr.contains(query)) {
           return false;
@@ -305,12 +305,12 @@ class _SelectTransactionSheetState extends State<SelectTransactionSheet> {
                       final isIncome = tx.type == 'income';
 
                       // Counterparty name displayed prominently
-                      final counterparty = tx.sender.trim().isNotEmpty
-                          ? tx.sender.trim()
-                          : (tx.name.trim().isNotEmpty
-                              ? tx.name.trim()
+                      final counterparty = tx.counterparty.trim().isNotEmpty
+                          ? tx.counterparty.trim()
+                          : (tx.bankName.trim().isNotEmpty
+                              ? tx.bankName.trim()
                               : 'Unknown Counterparty');
-                      final bankName = tx.name.trim();
+                      final bankName = tx.bankName.trim();
                       final dateStr =
                           DateFormat('MMM d, yyyy • h:mm a').format(tx.date);
 

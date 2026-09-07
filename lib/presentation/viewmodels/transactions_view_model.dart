@@ -494,11 +494,11 @@ class TransactionsViewModel extends ChangeNotifier {
     for (int i = 0; i < _transactions.length; i++) {
       final tx = _transactions[i];
 
-      if (tx.sender.isNotEmpty) {
-        uniqueSendersSet.add(tx.sender);
-        final rawSender = tx.sender.trim();
+      if (tx.counterparty.isNotEmpty) {
+        final rawSender = tx.counterparty.trim();
         final isBank = BankSenders.match(rawSender) != null;
         if (!isBank && rawSender.isNotEmpty) {
+          uniqueSendersSet.add(rawSender);
           final normalized = CounterpartyMatcher.normalize(rawSender);
           if (normalized.isNotEmpty && BankSenders.match(normalized) == null) {
             allPersonNamesSet.add(normalized);
@@ -507,12 +507,12 @@ class TransactionsViewModel extends ChangeNotifier {
           }
         }
       }
-      if (tx.name.isNotEmpty) {
-        uniqueBanksSet.add(tx.name);
+      if (tx.bankName.isNotEmpty) {
+        uniqueBanksSet.add(tx.bankName);
       }
       allSimSlots.add(tx.simSlot);
 
-      final canonicalBank = BankSenders.match(tx.name) ?? tx.name.trim();
+      final canonicalBank = BankSenders.match(tx.bankName) ?? tx.bankName.trim();
       final bankKey = canonicalBank.toUpperCase();
 
       // Group transactions by canonical bank key
@@ -538,13 +538,13 @@ class TransactionsViewModel extends ChangeNotifier {
       // Check paused
       bool isTxPaused = false;
       if (_pausedBanks.isNotEmpty) {
-        if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, tx.name))) {
+        if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, tx.bankName))) {
           isTxPaused = true;
         } else {
           isTxPaused = _pausedBanks.any((b) {
             if (!b.contains(':')) return false;
             final parts = b.split(':');
-            return BankSenders.isSameBank(parts[0], tx.name) && parts[1] == '${tx.simSlot}';
+            return BankSenders.isSameBank(parts[0], tx.bankName) && parts[1] == '${tx.simSlot}';
           });
         }
       }
@@ -721,14 +721,16 @@ class TransactionsViewModel extends ChangeNotifier {
 
   Future<void> loadData() => loadAll();
 
-  Future<void> loadAll() async {
+  Future<void> loadAll({bool runMaintenance = false}) async {
     _isLoading = true;
     notifyListeners();
     try {
-      try {
-        await DatabaseService.instance.reconcileInternalTransfers();
-        await DatabaseService.instance.deduplicateTransactions();
-      } catch (_) {}
+      if (runMaintenance) {
+        try {
+          await DatabaseService.instance.reconcileInternalTransfers();
+          await DatabaseService.instance.deduplicateTransactions();
+        } catch (_) {}
+      }
 
       // Strictly enforce active historical scan window on every load/restart when configured
       if (_settingsRepository != null) {
@@ -917,8 +919,8 @@ class TransactionsViewModel extends ChangeNotifier {
       // Per-bank SIM breakdown
       final Map<String, Map<int, int>> bankSimCounts = {};
       for (final tx in parseResult.transactions) {
-        bankSimCounts.putIfAbsent(tx.name, () => {});
-        bankSimCounts[tx.name]![tx.simSlot] = (bankSimCounts[tx.name]![tx.simSlot] ?? 0) + 1;
+        bankSimCounts.putIfAbsent(tx.bankName, () => {});
+        bankSimCounts[tx.bankName]![tx.simSlot] = (bankSimCounts[tx.bankName]![tx.simSlot] ?? 0) + 1;
       }
       for (final entry in bankSimCounts.entries) {
         debugPrint('[ShibreSIM-Dart] ${entry.key}: ${entry.value}');
@@ -927,9 +929,9 @@ class TransactionsViewModel extends ChangeNotifier {
       final Map<String, int> bankCounts = {};
       final Map<String, double> bankLatestBalances = {};
       for (final tx in parseResult.transactions) {
-        bankCounts[tx.name] = (bankCounts[tx.name] ?? 0) + 1;
+        bankCounts[tx.bankName] = (bankCounts[tx.bankName] ?? 0) + 1;
         if (tx.totalBalance > 0) {
-          bankLatestBalances[tx.name] = tx.totalBalance;
+          bankLatestBalances[tx.bankName] = tx.totalBalance;
         }
       }
       final List<ScannedBankProgress> scannedBankList = bankCounts.entries.map((e) {
@@ -956,7 +958,7 @@ class TransactionsViewModel extends ChangeNotifier {
             parseResult.unrecognizedNotifications);
       }
 
-      await loadAll();
+      await loadAll(runMaintenance: true);
       onSmsEventReceived?.call();
 
       onProgress?.call(ScanProgressStatus(
@@ -981,11 +983,23 @@ class TransactionsViewModel extends ChangeNotifier {
     }
   }
 
+  DateTime? _lastResumeReconcileTime;
+
   /// Reconciles any pending notification reasons and refreshes state on app resume
   Future<void> reconcileOnResume() async {
     try {
-      await _repository.reconcilePendingNotificationReasons();
-      await loadAll();
+      final now = DateTime.now();
+      if (_lastResumeReconcileTime != null &&
+          now.difference(_lastResumeReconcileTime!) < const Duration(seconds: 15)) {
+        return;
+      }
+      _lastResumeReconcileTime = now;
+
+      final reconciledCount =
+          await _repository.reconcilePendingNotificationReasons();
+      if (reconciledCount > 0 || _transactions.isEmpty) {
+        await loadAll();
+      }
     } catch (_) {}
   }
 
@@ -1161,7 +1175,7 @@ class TransactionsViewModel extends ChangeNotifier {
             parseResult.unrecognizedNotifications);
       }
 
-      await loadAll();
+      await loadAll(runMaintenance: true);
       onSmsEventReceived?.call();
 
       onProgress?.call(ScanProgressStatus(
@@ -1280,7 +1294,7 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<void> addTransaction(AppTransaction transaction) async {
     await _repository.insertTransaction(transaction);
     _transactions.insert(0, transaction);
-    await _ensureSenderExists(transaction.name);
+    await _ensureSenderExists(transaction.bankName);
     _rebuildAggregateIndices();
     notifyListeners();
   }
@@ -1289,7 +1303,7 @@ class TransactionsViewModel extends ChangeNotifier {
     await _repository.insertTransactionsBatch(transactions);
     _transactions.insertAll(0, transactions);
     for (final tx in transactions) {
-      await _ensureSenderExists(tx.name);
+      await _ensureSenderExists(tx.bankName);
     }
     _rebuildAggregateIndices();
     notifyListeners();
@@ -1684,7 +1698,7 @@ class TransactionsViewModel extends ChangeNotifier {
           final tx = _transactions[i];
           final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
 
-          if (CounterpartyMatcher.matches(tx.sender, linkedName) &&
+          if (CounterpartyMatcher.matches(tx.counterparty, linkedName) &&
               expectedLinkType == linkType) {
             final newTx = tx.copyWith(
               reasonId: reasonId,
@@ -1746,7 +1760,7 @@ class TransactionsViewModel extends ChangeNotifier {
           final tx = _transactions[i];
           final expectedLinkType = tx.type == 'income' ? 'sender' : 'receiver';
 
-          if (CounterpartyMatcher.matches(tx.sender, linkedName) &&
+          if (CounterpartyMatcher.matches(tx.counterparty, linkedName) &&
               expectedLinkType == linkType &&
               (reasonId == null || tx.reasonId == reasonId)) {
             _transactions[i] = tx.copyWith(
@@ -1808,21 +1822,8 @@ class TransactionsViewModel extends ChangeNotifier {
     return allLinksForCategoryTree(reasonId).isNotEmpty;
   }
 
-  /// Returns a sorted unique list of known counterparty names from transactions and senders.
-  List<String> get uniqueCounterparties {
-    final Set<String> names = {};
-    for (final s in _senders) {
-      final n = s.senderName.trim();
-      if (n.isNotEmpty) names.add(n);
-    }
-    for (final t in _transactions) {
-      final n = t.sender.trim();
-      if (n.isNotEmpty) names.add(n);
-    }
-    final sorted = names.toList();
-    sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return sorted;
-  }
+  /// Returns a sorted unique list of known counterparty names from transactions (O(1)).
+  List<String> get uniqueCounterparties => _cachedUniqueSenders;
 
   // ── Category / Subcategory Helpers ──────────────────────────────────────
 

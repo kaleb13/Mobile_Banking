@@ -149,8 +149,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             builder: (_) => AddLoanSheet(
               linkedTransactionId: latestTx.id,
               prefilledAmount: latestTx.amount,
-              prefilledName: existingLoan?.personName ?? latestTx.sender,
-              prefilledTrackedSender: latestTx.sender,
+              prefilledName: existingLoan?.personName ?? latestTx.counterparty,
+              prefilledTrackedSender: latestTx.bankName,
               prefilledType:
                   latestTx.type == 'expense' ? 'lent' : 'borrowed',
             ),
@@ -244,7 +244,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         } else {
           toastSubtitle = 'Assigned to $reasonName';
           toastDetails =
-              'This transaction has been categorized under $reasonName. You can optionally link this reason to ${currentTx.sender} so future messages are automatically classified.';
+              'This transaction has been categorized under $reasonName. You can optionally link this reason to ${currentTx.counterparty} so future messages are automatically classified.';
           toastMetadata = {
             'Reason': reasonName,
             'Flow': isIncome ? 'Income' : 'Expense',
@@ -359,7 +359,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final links = txVM.linksForReason(activeReasonId);
       final idx = links.indexWhere((l) =>
           l.linkedName.toLowerCase() ==
-          currentTx.sender.toLowerCase());
+          currentTx.counterparty.toLowerCase());
       if (idx != -1) activeLink = links[idx];
     }
 
@@ -630,9 +630,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   ({Widget icon, String name, String shortName, String subtitle, Color bgColor}) _getBankInfo() {
-    final senderStr = widget.transaction.sender.trim();
-    final nameStr = widget.transaction.name.trim();
-    final combined = '$senderStr $nameStr'.toUpperCase();
+    final counterpartyStr = widget.transaction.counterparty.trim();
+    final bankStr = widget.transaction.bankName.trim();
+    final combined = bankStr.toUpperCase();
 
     Widget iconWidget;
     String bankName;
@@ -711,8 +711,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       bankName = 'Bunna Bank S.C.';
       shortName = 'Bunna Bank';
     } else if (combined.contains('CBE') || combined.contains('COMMERCIAL BANK')) {
-      bg = AppColors.slackPurple.withValues(alpha: 0.15);
-      iconWidget = SvgPicture.asset('assets/images/CBE logo.svg', width: 24, height: 24, fit: BoxFit.contain);
+      bg = AppColors.cbePurple.withValues(alpha: 0.15);
+      iconWidget = SvgPicture.asset(
+        'assets/images/CBE logo.svg',
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      );
       bankName = 'Commercial Bank of Ethiopia';
       shortName = 'CBE';
     } else if (combined.contains('CASH')) {
@@ -725,15 +730,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       bankName = 'Cash Wallet';
       shortName = 'Cash';
     } else {
-      iconWidget = const Icon(Icons.account_balance_outlined, color: AppColors.positive, size: 22);
-      bankName = senderStr.isNotEmpty ? senderStr : 'Mobile Banking';
-      shortName = senderStr.isNotEmpty ? senderStr : 'Bank';
+      iconWidget = const Icon(Icons.account_balance_rounded, color: AppColors.textPrimary, size: 22);
+      bankName = bankStr.isNotEmpty ? bankStr : 'Bank Transaction';
+      shortName = bankStr.isNotEmpty ? bankStr : 'Bank';
       bg = AppColors.buttonSecondary;
     }
 
     String subtitleText = '';
-    if (senderStr.isNotEmpty && senderStr.toUpperCase() != bankName.toUpperCase()) {
-      subtitleText = senderStr;
+    if (counterpartyStr.isNotEmpty && counterpartyStr.toUpperCase() != bankName.toUpperCase()) {
+      subtitleText = counterpartyStr;
     } else if (widget.transaction.customReasonText?.isNotEmpty == true) {
       subtitleText = widget.transaction.customReasonText!;
     } else {
@@ -753,8 +758,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     ({Widget icon, String name, String shortName, String subtitle, Color bgColor}) bankInfo,
     bool isIncome,
   ) {
-    final String counterparty = widget.transaction.sender.isNotEmpty
-        ? widget.transaction.sender
+    final String counterparty = widget.transaction.counterparty.isNotEmpty
+        ? widget.transaction.counterparty
         : 'External Party';
 
     return Container(
@@ -825,13 +830,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   : counterparty,
               maxWords: 3,
             ),
-            onTap: widget.transaction.sender.isNotEmpty &&
-                    widget.transaction.sender != 'Manual Entry' &&
-                    widget.transaction.sender != 'Cash'
+            onTap: widget.transaction.counterparty.isNotEmpty &&
+                    widget.transaction.counterparty != 'Manual Entry' &&
+                    widget.transaction.counterparty != 'Cash'
                 ? () {
                     CounterpartyInsightSheet.show(
                       context,
-                      personName: widget.transaction.sender,
+                      personName: widget.transaction.counterparty,
                     );
                   }
                 : null,
@@ -839,7 +844,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           _buildCollapsibleInfoRow(
               Icons.fingerprint, 'Transaction ID', widget.transaction.id ?? 'Pending'),
           _buildCollapsibleInfoRow(
-              Icons.grid_view_rounded, 'SMS Category', widget.transaction.category),
+              Icons.tag_rounded, 'Source Tag', widget.transaction.sourceTag),
           _buildCollapsibleInfoRow(
               Icons.calendar_today_outlined,
               'Date & Time',
@@ -1809,7 +1814,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           context: context,
                           link: activeLink,
                           reasonName: currentLabel ?? 'Reason',
-                          contactName: widget.transaction.sender,
+                          contactName: widget.transaction.counterparty,
                           currentTransactionId: widget.transaction.id,
                         );
                       },
@@ -1828,7 +1833,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           context: context,
                           reasonId: activeReasonId,
                           reasonName: currentLabel ?? 'Reason',
-                          contactName: widget.transaction.sender,
+                          contactName: widget.transaction.counterparty,
                           linkType: isIncome ? 'sender' : 'receiver',
                           currentTransactionId: widget.transaction.id,
                         );
@@ -2568,8 +2573,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       builder: (_) => AddLoanSheet(
                         linkedTransactionId: currentTx.id,
                         prefilledAmount: currentTx.amount,
-                        prefilledName: currentTx.sender,
-                        prefilledTrackedSender: currentTx.sender,
+                        prefilledName: currentTx.counterparty,
+                        prefilledTrackedSender: currentTx.bankName,
                         prefilledType:
                             currentTx.type == 'expense' ? 'lent' : 'borrowed',
                       ),
@@ -2813,10 +2818,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              linkedTx.sender.isNotEmpty
+                              linkedTx.counterparty.isNotEmpty
                                   ? (linkedTx.type == 'income'
-                                      ? 'From: ${linkedTx.sender}'
-                                      : 'To: ${linkedTx.sender}')
+                                      ? 'From: ${linkedTx.counterparty}'
+                                      : 'To: ${linkedTx.counterparty}')
                                   : 'Ref: ${linkedTx.bankReference ?? linkedTx.id}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

@@ -28,7 +28,7 @@ void main() {
       ];
 
       final cashTransactions = [
-        CashTransaction(id: 1, amount: 1000, type: 'addition', date: DateTime(2026, 8, 1)),
+        CashTransaction(id: 1, amount: 1000, type: 'income', date: DateTime(2026, 8, 1)),
         CashTransaction(id: 2, amount: 400, type: 'expense', date: DateTime(2026, 8, 10)),
       ]; // Net cash = 600
 

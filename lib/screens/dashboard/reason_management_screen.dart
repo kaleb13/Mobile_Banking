@@ -180,7 +180,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
             children: [
               AppDrawerActionTile(
                 icon: Icons.people_outline_rounded,
-                title: 'Linked Persons (${linkedList.length})',
+                title: 'Linked Counterparties (${linkedList.length})',
                 onTap: () {
                   Navigator.pop(sheetCtx);
                   CategoryLinkedPersonsDrawer.show(context, reason: reason);

@@ -31,7 +31,7 @@ void showAddCashModal(BuildContext context, CashWalletViewModel viewModel) {
             if (amt != null && amt > 0) {
               viewModel.addCashTransaction(
                 CashTransaction(
-                  type: 'addition',
+                  type: 'income',
                   amount: amt,
                   date: DateTime.now(),
                   description: noteController.text.trim().isEmpty

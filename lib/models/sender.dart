@@ -1,6 +1,10 @@
+/// Represents a Bank or Wallet account container (historically called "Sender" in SMS banking).
 class AppSender {
   final String? id;
   final String senderName;
+
+  /// Clean alias for [senderName] to identify the bank or financial institution.
+  String get bankName => senderName;
 
   AppSender({
     this.id,

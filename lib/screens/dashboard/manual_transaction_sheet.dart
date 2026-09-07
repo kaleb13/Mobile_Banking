@@ -79,14 +79,11 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
     if (_selectedSender == null) {
       final txVM = widget.txVM ?? Provider.of<TransactionsViewModel>(context, listen: false);
       if (widget.notification != null && txVM.senders.isNotEmpty) {
+        final notifBank = widget.notification!.bankName.toLowerCase();
         _selectedSender = txVM.senders.firstWhere(
           (s) =>
-              s.senderName
-                  .toLowerCase()
-                  .contains(widget.notification!.sender.toLowerCase()) ||
-              widget.notification!.sender
-                  .toLowerCase()
-                  .contains(s.senderName.toLowerCase()),
+              s.bankName.toLowerCase().contains(notifBank) ||
+              notifBank.contains(s.bankName.toLowerCase()),
           orElse: () => txVM.senders.first,
         );
       } else if (txVM.senders.isNotEmpty) {
@@ -150,14 +147,14 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
         : (currentBankBalance - amount);
 
     final tx = AppTransaction(
-      name: _selectedSender!.senderName,
+      bankName: _selectedSender!.senderName,
       amount: amount,
       type: _type,
       date: _fixedDate,
-      sender: _receiverController.text.trim().isEmpty
-          ? (widget.notification?.sender ?? 'Manual Entry')
+      counterparty: _receiverController.text.trim().isEmpty
+          ? (widget.notification != null ? 'Unspecified' : 'Manual Entry')
           : _receiverController.text.trim(),
-      category: _selectedReason?.name ?? 'Uncategorized',
+      sourceTag: 'Manual',
       rawMessage: widget.notification?.body ?? 'Manual entry via UI',
       isAutoDetected: false,
       reasonId: _selectedReason?.id,

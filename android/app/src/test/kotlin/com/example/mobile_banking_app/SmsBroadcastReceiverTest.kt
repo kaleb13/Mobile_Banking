@@ -366,55 +366,10 @@ Dashen Bank - Always one step ahead!"""
     }
 
     @Test
-    fun `parses Nib Bank credit transfer`() {
+    fun `Nib Bank parsing returns null while disabled pending authentic samples`() {
         val msg = "Dear Customer, your A/C 440xxxx1122 has been credited with ETB 6,000.00 by BIRUK ASSEFA on 10/08/2026. Available Balance: ETB 18,500.00. Ref: NIB112233."
         val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
-
-        assertNotNull(parsed)
-        assertEquals(6000.0, parsed!!.amount, 0.001)
-        assertFalse(parsed.isDebit)
-        assertEquals("BIRUK ASSEFA", parsed.counterparty)
-        assertEquals("NIB112233", parsed.txReference)
-        assertEquals(18500.0, parsed.totalBalance, 0.001)
-    }
-
-    @Test
-    fun `parses Nib Bank debit with service charge`() {
-        val msg = "Dear Customer, your A/C 440xxxx1122 has been debited with ETB 1,500.00 on 11/08/2026. Service Charge: ETB 5.00. Total Debited: ETB 1,505.00. Available Balance: ETB 16,995.00. Ref: NIB889900."
-        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
-
-        assertNotNull(parsed)
-        assertEquals(1505.0, parsed!!.amount, 0.001)
-        assertTrue(parsed.isDebit)
-        assertEquals("NIB889900", parsed.txReference)
-        assertEquals(16995.0, parsed.totalBalance, 0.001)
-    }
-
-    @Test
-    fun `parses Nib Bank outbound transfer to recipient`() {
-        val msg = "Dear Customer, you have transferred ETB 2,000.00 from A/C 440xxxx1122 to SELAMAWIT KASSA on 12/08/2026. Service Charge: ETB 2.00 VAT: ETB 0.30. Available Balance: ETB 14,992.70. Ref: NIB556677."
-        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
-
-        assertNotNull(parsed)
-        assertEquals(2000.0, parsed!!.amount, 0.001)
-        assertTrue(parsed.isDebit)
-        assertEquals("SELAMAWIT KASSA", parsed.counterparty)
-        assertEquals("NIB556677", parsed.txReference)
-        assertEquals(14992.70, parsed.totalBalance, 0.001)
-    }
-
-    @Test
-    fun `parses Nib Bank airtime purchase`() {
-        val msg = "Dear Customer, you have purchased airtime of ETB 50.00 for 0911554433 from A/C 440xxxx1122 on 13/08/2026. Available Balance: ETB 14,942.70. Ref: NIBAIR88."
-        val parsed = SmsBroadcastReceiver.parseBankingSms("Nib Bank", msg)
-
-        assertNotNull(parsed)
-        assertEquals(50.0, parsed!!.amount, 0.001)
-        assertTrue(parsed.isDebit)
-        assertEquals("Airtime (0911554433)", parsed.counterparty)
-        assertEquals("NIBAIR88", parsed.txReference)
-        assertEquals(14942.70, parsed.totalBalance, 0.001)
-        assertFalse(parsed.isLocked)
+        assertNull("Nib Bank parsing must return null to route to notifications table", parsed)
     }
 
     @Test

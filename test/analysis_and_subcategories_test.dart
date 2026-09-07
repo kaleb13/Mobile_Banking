@@ -11,6 +11,7 @@ import 'package:mobile_banking_app/theme/app_theme.dart';
 import 'package:mobile_banking_app/presentation/viewmodels/settings_view_model.dart';
 import 'package:mobile_banking_app/presentation/viewmodels/transactions_view_model.dart';
 import 'package:mobile_banking_app/presentation/viewmodels/cash_wallet_view_model.dart';
+import 'package:mobile_banking_app/presentation/viewmodels/analytics_view_model.dart';
 import 'package:mobile_banking_app/data/repositories/settings_repository.dart';
 import 'package:mobile_banking_app/data/repositories/transaction_repository.dart';
 import 'package:mobile_banking_app/data/repositories/cash_wallet_repository.dart';
@@ -18,9 +19,12 @@ import 'package:mobile_banking_app/screens/dashboard/analysis_screen.dart';
 import 'package:mobile_banking_app/screens/dashboard/category_detail_screen.dart';
 import 'package:mobile_banking_app/screens/dashboard/reason_transactions_screen.dart';
 import 'package:mobile_banking_app/models/transaction_split.dart';
+import 'package:mobile_banking_app/models/expense_definition.dart';
 import 'package:mobile_banking_app/screens/dashboard/all_transactions_screen.dart';
+import 'package:mobile_banking_app/screens/dashboard/date_transactions_screen.dart';
 import 'package:mobile_banking_app/widgets/counterparty_insight_sheet.dart';
 import 'package:mobile_banking_app/widgets/daily_net_heatmap_widget.dart';
+import 'package:mobile_banking_app/widgets/animated_reasons_icon.dart';
 import 'package:mobile_banking_app/utils/counterparty_matcher.dart';
 
 class FakeSettingsRepository implements SettingsRepository {
@@ -209,6 +213,9 @@ class FakeCashWalletRepository implements CashWalletRepository {
   Future<List<CashTransaction>> getCashTransactions() async => cashTransactions;
 
   @override
+  Future<List<ExpenseDefinition>> getExpenseDefinitions() async => [];
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -216,9 +223,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('PeriodFilter Enum Tests', () {
-    test('contains all expected periods including allTime', () {
+    test('contains all expected periods including allTime and customRange', () {
       expect(PeriodFilter.values, contains(PeriodFilter.allTime));
-      expect(PeriodFilter.values.length, 6);
+      expect(PeriodFilter.values, contains(PeriodFilter.customRange));
+      expect(PeriodFilter.values.length, 7);
     });
   });
 
@@ -547,7 +555,7 @@ void main() {
       // All 4 transactions (including tx1 from 40 days ago) should be visible
       expect(find.text('All Time'), findsOneWidget);
       expect(find.text('Abebe Bikila'), findsWidgets);
-      expect(find.text('4 transactions with this person'), findsOneWidget);
+      expect(find.text('4 transactions with this counterparty'), findsOneWidget);
       expect(find.textContaining('Net Standing'), findsOneWidget);
       expect(find.text('All Categories'), findsOneWidget);
     });
@@ -702,6 +710,260 @@ void main() {
       expect(find.textContaining('Daily Net'), findsOneWidget);
       expect(find.text('-500'), findsOneWidget);
       expect(find.text('+1.0K'), findsOneWidget);
+
+      // 4. Custom Date Range Mode
+      final customRange = DateTimeRange(
+        start: DateTime(2026, 3, 10),
+        end: DateTime(2026, 3, 20),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DailyNetHeatmapWidget(
+              bankTransactions: txList,
+              cashTransactions: const [],
+              selectedDate: testDate,
+              analysisType: 'All',
+              periodType: HeatmapPeriodType.customRange,
+              highlightedWeekRange: customRange,
+              isBalanceVisible: true,
+              onDaySelected: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Daily Net · Mar 10 - Mar 20'), findsOneWidget);
+
+      // 5. Inactive Day Grayed Contrast Mode (When a day is selected)
+      final contrastTxs = [
+        AppTransaction(
+          id: 'tx_subtle',
+          name: 'Telebirr',
+          amount: 500.0,
+          type: 'expense',
+          date: DateTime(2026, 8, 2),
+          sender: 'Store',
+          category: 'General',
+          rawMessage: 'msg',
+          isAutoDetected: true,
+        ),
+        AppTransaction(
+          id: 'tx_heavy',
+          name: 'CBE',
+          amount: 25000.0,
+          type: 'income',
+          date: DateTime(2026, 8, 3),
+          sender: 'Work',
+          category: 'General',
+          rawMessage: 'msg',
+          isAutoDetected: true,
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DailyNetHeatmapWidget(
+              bankTransactions: contrastTxs,
+              cashTransactions: const [],
+              selectedDate: testDate,
+              analysisType: 'All',
+              selectedDay: DateTime(2026, 3, 1),
+              isBalanceVisible: true,
+              onDaySelected: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final animatedContainers = tester.widgetList<AnimatedContainer>(find.byType(AnimatedContainer));
+      final tileColors = animatedContainers
+          .map((c) => (c.decoration as BoxDecoration?)?.color)
+          .whereType<Color>()
+          .toSet();
+      expect(tileColors, contains(AppColors.heatmapNeutral));
+      expect(tileColors, contains(AppColors.heatmapInactiveSubtle));
+      expect(tileColors, contains(AppColors.heatmapInactiveHeavy));
+    });
+  });
+
+  group('DateTransactionsScreen Tests', () {
+    late FakeTransactionRepository txRepo;
+    late FakeCashWalletRepository cashRepo;
+    late TransactionsViewModel txVM;
+    late CashWalletViewModel cashVM;
+
+    final targetDate = DateTime(2026, 3, 10, 14, 30);
+    final otherDate = DateTime(2026, 3, 11, 10, 0);
+
+    final txDay1 = AppTransaction(
+      id: 'dtx1',
+      name: 'Telebirr',
+      amount: 450.0,
+      type: 'expense',
+      date: targetDate,
+      sender: 'Supermarket',
+      category: 'Food',
+      rawMessage: 'msg1',
+      isAutoDetected: true,
+    );
+
+    final txDay2 = AppTransaction(
+      id: 'dtx2',
+      name: 'Commercial Bank of Ethiopia',
+      amount: 1200.0,
+      type: 'income',
+      date: targetDate,
+      sender: 'Employer Inc',
+      category: 'Salary',
+      rawMessage: 'msg2',
+      isAutoDetected: true,
+    );
+
+    final txOther = AppTransaction(
+      id: 'dtx3',
+      name: 'Telebirr',
+      amount: 100.0,
+      type: 'expense',
+      date: otherDate,
+      sender: 'Coffee Shop',
+      category: 'Food',
+      rawMessage: 'msg3',
+      isAutoDetected: true,
+    );
+
+    final cashDay = CashTransaction(
+      id: 101,
+      amount: 150.0,
+      type: 'expense',
+      date: targetDate,
+      description: 'Taxi Fare',
+      reasonName: 'Transport',
+    );
+
+    setUp(() async {
+      txRepo = FakeTransactionRepository();
+      txRepo.transactions = [txDay1, txDay2, txOther];
+      cashRepo = FakeCashWalletRepository();
+      cashRepo.cashTransactions = [cashDay];
+
+      txVM = TransactionsViewModel(repository: txRepo);
+      await txVM.loadAll();
+      cashVM = CashWalletViewModel(repository: cashRepo);
+      await cashVM.loadCashData();
+    });
+
+    testWidgets('renders top summary, net flow, and filtered transactions for date', (tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<TransactionsViewModel>.value(value: txVM),
+            ChangeNotifierProvider<CashWalletViewModel>.value(value: cashVM),
+          ],
+          child: MaterialApp(
+            home: DateTransactionsScreen(
+              date: targetDate,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify Summary Banner
+      expect(find.text('Net Daily Flow'), findsOneWidget);
+      // Inflow: 1200, Outflow: 450 + 150 = 600, Net = +600
+      expect(find.text('+600.00 ETB'), findsOneWidget);
+      expect(find.text('600.00 ETB'), findsOneWidget); // Expense total
+      expect(find.text('1,200.00 ETB'), findsOneWidget); // Income total
+      expect(find.text('3 Total Transactions'), findsOneWidget);
+
+      // Verify Transactions are rendered
+      expect(find.text('Supermarket'), findsOneWidget);
+      expect(find.text('Employer Inc'), findsOneWidget);
+      expect(find.text('Taxi Fare'), findsOneWidget);
+      expect(find.text('Coffee Shop'), findsNothing); // Different date
+
+      // Verify Search Bar and Filtering
+      await tester.tap(find.byIcon(Icons.search_rounded).last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Supermarket');
+      await tester.pumpAndSettle();
+
+      // One in the search input, one in the filtered list item
+      expect(find.text('Supermarket'), findsNWidgets(2));
+      expect(find.text('Employer Inc'), findsNothing);
+      expect(find.text('Taxi Fare'), findsNothing);
+    });
+  });
+
+  group('Category Analysis Badge & AnimatedReasonsIcon Tests', () {
+    testWidgets('AnimatedReasonsIcon paints and updates on tick', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: AnimatedReasonsIcon(size: 20),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(AnimatedReasonsIcon), findsOneWidget);
+      expect(find.byType(CustomPaint), findsWidgets);
+
+      // Verify animation ticks smoothly without throwing
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 1000));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AnalysisScreen renders Category Analysis badge with #2A2D34 and animated reasons icon', (tester) async {
+      final fakeSettings = FakeSettingsRepository();
+      final fakeTxRepo = FakeTransactionRepository();
+      final fakeCashRepo = FakeCashWalletRepository();
+
+      final settingsVM = SettingsViewModel(repository: fakeSettings);
+      final txVM = TransactionsViewModel(repository: fakeTxRepo);
+      final cashVM = CashWalletViewModel(repository: fakeCashRepo);
+      final analyticsVM = AnalyticsViewModel();
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: settingsVM),
+            ChangeNotifierProvider.value(value: txVM),
+            ChangeNotifierProvider.value(value: cashVM),
+            ChangeNotifierProvider.value(value: analyticsVM),
+          ],
+          child: const MaterialApp(
+            home: AnalysisScreen(),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Verify Category Analysis badge is present
+      expect(find.text('CATEGORY ANALYSIS'), findsOneWidget);
+      // Verify AnimatedReasonsIcon is present on the badge
+      expect(find.byType(AnimatedReasonsIcon), findsOneWidget);
+      // Verify the removed rightmost circular icon is NOT present
+      expect(find.byIcon(Icons.pie_chart_outline_rounded), findsNothing);
+
+      // Verify the badge container has AppColors.categoryBadgeBg (0xFF2A2D34)
+      final badgeContainer = tester.widget<Container>(
+        find.ancestor(
+          of: find.text('CATEGORY ANALYSIS'),
+          matching: find.byType(Container),
+        ).first,
+      );
+      final badgeDecoration = badgeContainer.decoration as BoxDecoration;
+      expect(badgeDecoration.color, equals(AppColors.categoryBadgeBg));
+      expect(badgeDecoration.color, equals(const Color(0xFF2A2D34)));
+      // Verify Category Analysis badge has NO drop shadow
+      expect(badgeDecoration.boxShadow, isNull);
     });
   });
 }
+

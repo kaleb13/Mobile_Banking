@@ -109,7 +109,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           'appTransaction': tx,
           'date': tx.date,
           'title': isWithdrawal ? 'Bank Cash Withdrawal' : 'Bank Cash Deposit',
-          'subtitle': tx.name, // Bank name
+          'subtitle': tx.bankName, // Bank name
           'amount': tx.amount,
           'isPositive': isWithdrawal,
           'isCashTx': false,
@@ -129,12 +129,12 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
       allTxs.add({
         'id': ctx.id,
         'date': ctx.date,
-        'title': ctx.type == 'addition'
+        'title': ctx.isIncome
             ? 'Cash Added'
             : (ctx.reasonName ?? 'Cash Expense'),
         'subtitle': sub,
         'amount': ctx.amount,
-        'isPositive': ctx.type == 'addition',
+        'isPositive': ctx.isIncome,
         'isCashTx': true,
       });
     }

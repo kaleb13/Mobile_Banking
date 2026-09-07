@@ -359,40 +359,52 @@ class BankSenders {
     }
 
     // 8. Account Activations, Status & Profile Notices
-    if (lower.contains('saving service') ||
-        lower.contains('customer status has been change') ||
-        lower.contains('account status has been changed') ||
-        lower.contains('status has been changed from') ||
-        lower.contains('changed to dormant') ||
-        lower.contains('signature on your account') ||
-        lower.contains('update your profile') ||
-        lower.contains('registered for mobile banking') ||
-        lower.contains('register yourself for') ||
-        lower.contains('successfully registered and activated') ||
-        lower.contains('account has been successfully activated') ||
-        lower.contains('has been activated successfully') ||
-        lower.contains('account is activated successfully') ||
-        lower.contains('welcome! we are delighted') ||
-        lower.contains('download cbe android application') ||
-        lower.contains('start activation') ||
-        lower.contains('new login to your mobile') ||
-        lower.contains('harmonization') ||
-        lower.contains('harmonize your bank account') ||
-        lower.contains('verifayda') ||
-        lower.contains('your-holiday-cards') ||
-        lower.contains('fayda.awashbank.com') ||
-        lower.contains('tatariwochu') ||
-        lower.contains('happy customer week') ||
-        lower.contains('sooramaa') ||
-        lower.contains('approved by cbe birr') ||
-        lower.contains('customer profile has been updated') ||
-        lower.contains('customer status is active') ||
-        lower.contains('to complete your activation') ||
-        lower.contains('visit your nearest awash bank') ||
-        lower.contains('activated device financing') ||
-        lower.contains('preferred language has been successfully changed') ||
-        lower.contains('has been successfully linked to your awashbirr')) {
-      return true;
+    // Ensure real transaction receipts with marketing/Fayda promotional footers (e.g. verifayda) are NOT dropped.
+    final bool hasTransactionKeyword = lower.contains('transfer') ||
+        lower.contains('debit') ||
+        lower.contains('credit') ||
+        lower.contains('deposit') ||
+        lower.contains('withdrawn') ||
+        lower.contains('paid') ||
+        lower.contains('received') ||
+        lower.contains('sent');
+
+    if (!hasTransactionKeyword) {
+      if (lower.contains('saving service') ||
+          lower.contains('customer status has been change') ||
+          lower.contains('account status has been changed') ||
+          lower.contains('status has been changed from') ||
+          lower.contains('changed to dormant') ||
+          lower.contains('signature on your account') ||
+          lower.contains('update your profile') ||
+          lower.contains('registered for mobile banking') ||
+          lower.contains('register yourself for') ||
+          lower.contains('successfully registered and activated') ||
+          lower.contains('account has been successfully activated') ||
+          lower.contains('has been activated successfully') ||
+          lower.contains('account is activated successfully') ||
+          lower.contains('welcome! we are delighted') ||
+          lower.contains('download cbe android application') ||
+          lower.contains('start activation') ||
+          lower.contains('new login to your mobile') ||
+          lower.contains('harmonization') ||
+          lower.contains('harmonize your bank account') ||
+          lower.contains('verifayda') ||
+          lower.contains('your-holiday-cards') ||
+          lower.contains('fayda.awashbank.com') ||
+          lower.contains('tatariwochu') ||
+          lower.contains('happy customer week') ||
+          lower.contains('sooramaa') ||
+          lower.contains('approved by cbe birr') ||
+          lower.contains('customer profile has been updated') ||
+          lower.contains('customer status is active') ||
+          lower.contains('to complete your activation') ||
+          lower.contains('visit your nearest awash bank') ||
+          lower.contains('activated device financing') ||
+          lower.contains('preferred language has been successfully changed') ||
+          lower.contains('has been successfully linked to your awashbirr')) {
+        return true;
+      }
     }
 
     // 9. Informational balance breakdowns without transaction

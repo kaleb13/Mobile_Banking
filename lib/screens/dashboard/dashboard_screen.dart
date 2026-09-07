@@ -44,7 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _typeFilter = 'All';
   bool _isBookmarkedOnly = false;
   AppDateFilterValue _dateFilterValue = const AppDateFilterValue.last30Days();
-  String _senderFilter = 'All Senders';
+  String _senderFilter = 'All Counterparties';
   String _bankFilter = 'All Banks';
   String _sortBy = 'Date: Newest';
   int _displayedLimit = 30;
@@ -1096,9 +1096,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDraggableTransactionsSheet(
       BuildContext context, TransactionsViewModel txVM, LoansViewModel loansVM) {
 
-    final allSenders = ['All Senders', ...txVM.uniqueSenders];
+    final allSenders = ['All Counterparties', ...txVM.uniqueSenders];
     if (!allSenders.contains(_senderFilter)) {
-      _senderFilter = 'All Senders';
+      _senderFilter = 'All Counterparties';
     }
 
     final allBanks = ['All Banks', ...txVM.uniqueBanks];
@@ -1405,7 +1405,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             _typeFilter != 'All' ||
                             _dateFilterValue.preset != AppDateFilterPreset.last30Days ||
                             _bankFilter != 'All Banks' ||
-                            _senderFilter != 'All Senders' ||
+                            (_senderFilter != 'All Counterparties' && _senderFilter != 'All Senders') ||
                             _sortBy != 'Date: Newest') ...[
                           const SizedBox(width: 8),
                           AppResetFilterButton(
@@ -1415,7 +1415,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 _typeFilter = 'All';
                                 _dateFilterValue = const AppDateFilterValue.last30Days();
                                 _bankFilter = 'All Banks';
-                                _senderFilter = 'All Senders';
+                                _senderFilter = 'All Counterparties';
                                 _sortBy = 'Date: Newest';
                                 _displayedLimit = 30;
                               });
@@ -1524,7 +1524,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Income' : 'Expense';
-    final subLabel = isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
+    final subLabel = isIncome ? 'From ${tx.counterparty}' : 'To ${tx.counterparty}';
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
     final bool hasReason = tx.reasonId != null ||
         (tx.customReasonText != null &&
@@ -1546,7 +1546,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: Colors.white,
         child: Row(
           children: [
-            _buildBankAvatarSmallWhite(tx.name),
+            _buildBankAvatarSmallWhite(tx.bankName),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -1573,7 +1573,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           padding: EdgeInsets.only(left: 4.0),
                           child: BookmarkBadge(),
                         ),
-                      if (txVM.accountsForBank(tx.name).length > 1)
+                      if (txVM.accountsForBank(tx.bankName).length > 1)
                         Padding(
                           padding: const EdgeInsets.only(left: 4.0),
                           child: SimBadge(simSlot: tx.simSlot),

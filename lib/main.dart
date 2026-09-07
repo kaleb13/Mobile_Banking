@@ -199,12 +199,21 @@ class _MobileBankingAppState extends State<MobileBankingApp>
     super.dispose();
   }
 
+  DateTime? _lastResumeTime;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      final now = DateTime.now();
+      if (_lastResumeTime != null &&
+          now.difference(_lastResumeTime!) < const Duration(seconds: 10)) {
+        return;
+      }
+      _lastResumeTime = now;
+
       try {
         context.read<TransactionsViewModel>().reconcileOnResume();
-        context.read<NotificationsViewModel>().loadNotifications();
+        context.read<NotificationsViewModel>().loadNotifications(silent: true);
       } catch (_) {}
     }
   }

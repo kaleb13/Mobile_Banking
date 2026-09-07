@@ -124,4 +124,85 @@ void main() {
       expect(result.first.id, 'RECENT');
     });
   });
+
+  group('FilterTransactionsUseCase Bank and Counterparty Tests', () {
+    const useCase = FilterTransactionsUseCase();
+
+    final txTelebirrAlice = AppTransaction(
+      id: 'TX1',
+      name: 'Telebirr',
+      amount: 100.0,
+      type: 'expense',
+      date: DateTime(2026, 8, 1),
+      sender: 'Alice',
+      counterparty: 'Alice Smith',
+      category: 'Auto',
+      rawMessage: 'msg',
+      isAutoDetected: true,
+    );
+
+    final txCbeAlice = AppTransaction(
+      id: 'TX2',
+      name: 'CBE',
+      amount: 200.0,
+      type: 'income',
+      date: DateTime(2026, 8, 2),
+      sender: 'Alice',
+      counterparty: 'Alice Smith',
+      category: 'Auto',
+      rawMessage: 'msg',
+      isAutoDetected: true,
+    );
+
+    final txTelebirrBob = AppTransaction(
+      id: 'TX3',
+      name: 'Telebirr',
+      amount: 300.0,
+      type: 'expense',
+      date: DateTime(2026, 8, 3),
+      sender: 'Bob',
+      counterparty: 'Bob Jones',
+      category: 'Auto',
+      rawMessage: 'msg',
+      isAutoDetected: true,
+    );
+
+    final list = [txTelebirrAlice, txCbeAlice, txTelebirrBob];
+
+    test('treats "All Counterparties" and "All Senders" as no-op filters', () {
+      final res1 = useCase.execute(
+        transactions: list,
+        params: const FilterTransactionsParams(counterpartyFilter: 'All Counterparties'),
+      );
+      expect(res1.length, 3);
+
+      final res2 = useCase.execute(
+        transactions: list,
+        params: const FilterTransactionsParams(counterpartyFilter: 'All Senders'),
+      );
+      expect(res2.length, 3);
+    });
+
+    test('filters by counterpartyFilter alone', () {
+      final res = useCase.execute(
+        transactions: list,
+        params: const FilterTransactionsParams(counterpartyFilter: 'Alice Smith'),
+      );
+      expect(res.map((t) => t.id).toList(), ['TX2', 'TX1']);
+    });
+
+    test('filters simultaneously by bankFilter and counterpartyFilter', () {
+      final res = useCase.execute(
+        transactions: list,
+        params: const FilterTransactionsParams(
+          bankFilter: 'Telebirr',
+          counterpartyFilter: 'Alice Smith',
+        ),
+      );
+      expect(res.length, 1);
+      expect(res.first.id, 'TX1');
+      expect(res.first.name, 'Telebirr');
+      expect(res.first.counterparty, 'Alice Smith');
+    });
+  });
 }

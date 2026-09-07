@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,13 +28,16 @@ import '../../widgets/app_search_bar.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_capsule_tab_bar.dart';
 import '../../widgets/app_date_filter.dart';
+import '../../widgets/app_date_picker_drawer.dart';
 import '../../widgets/contact_avatar.dart';
 import '../../widgets/frosted_glass_noise_painter.dart';
+import '../../widgets/animated_reasons_icon.dart';
 import 'category_detail_screen.dart';
 import 'all_transactions_screen.dart';
+import 'date_transactions_screen.dart';
 
 // ─── Period Filter Enum ────────────────────────────────────────────────────────
-enum PeriodFilter { day, week, month, quarter, year, allTime }
+enum PeriodFilter { day, week, month, quarter, year, allTime, customRange }
 
 class AnalysisScreen extends StatefulWidget {
   final String? initialBankFilter;
@@ -51,9 +55,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   bool _isFilterExpanded = false;
   bool _isBankPerformanceExpanded = false;
   bool _isPersonContactExpanded = false;
-  bool _isCategoryAnalysisExpanded = false;
   bool _isNetBreakdownExpanded = false;
+  bool _isCategoryAnalysisExpanded = false;
   PeriodFilter _selectedPeriod = PeriodFilter.month;
+  DateTimeRange? _selectedDateRange;
   String _selectedAnalysisType = 'All'; // Default: 'All', 'Expenses', 'Income'
   int? _selectedSimSlot; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
   int _selectedSubPeriodIndex = 0;
@@ -126,12 +131,17 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final years = _getYearsInWindow(now, _getLookbackDays());
         final targetYear = safeIndex < years.length ? years[safeIndex] : now.year;
         return DateTime(targetYear, 1, 1);
+      case PeriodFilter.customRange:
+        return _selectedDateRange?.start ?? now;
       case PeriodFilter.allTime:
         return now;
     }
   }
 
   DateTimeRange? _getSynchronizedWeekRange() {
+    if (_selectedPeriod == PeriodFilter.customRange) {
+      return _selectedDateRange;
+    }
     if (_selectedPeriod != PeriodFilter.week) return null;
     final now = DateTime.now();
     final subItems = _getSubPeriodItemsFormatted();
@@ -151,6 +161,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     switch (_selectedPeriod) {
       case PeriodFilter.allTime:
+        return const AppDateFilterValue.anyTime();
+      case PeriodFilter.customRange:
+        if (_selectedDateRange != null) {
+          return AppDateFilterValue.dateRange(_selectedDateRange!);
+        }
         return const AppDateFilterValue.anyTime();
       case PeriodFilter.day:
         final targetDay = _getSynchronizedTargetDate();
@@ -242,37 +257,29 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   bool _matchesBank(AppTransaction tx, String bank) {
     if (bank == 'All' || bank == 'All Banks' || bank == 'All Wallets') return true;
     final bUp = bank.toUpperCase();
-    final tNameUp = tx.name.toUpperCase();
-    final tSenderUp = tx.sender.toUpperCase();
+    final tBankUp = tx.bankName.toUpperCase();
 
     if (bUp.contains('TELEBIRR')) {
-      return tNameUp.contains('TELEBIRR') || tSenderUp.contains('TELEBIRR');
+      return tBankUp.contains('TELEBIRR');
     } else if (bUp == 'CBE BIRR' || bUp == 'CBEBIRR') {
-      return tNameUp.contains('CBE BIRR') ||
-          tNameUp.contains('CBEBIRR') ||
-          tSenderUp.contains('CBE BIRR') ||
-          tSenderUp.contains('CBEBIRR');
+      return tBankUp.contains('CBE BIRR') || tBankUp.contains('CBEBIRR');
     } else if (bUp == 'CBE' || bUp.contains('COMMERCIAL BANK')) {
-      return (tNameUp == 'CBE' ||
-              tSenderUp == 'CBE' ||
-              tNameUp.contains('COMMERCIAL BANK')) &&
-          !tNameUp.contains('BIRR') &&
-          !tSenderUp.contains('BIRR');
+      return (tBankUp == 'CBE' || tBankUp.contains('COMMERCIAL BANK')) &&
+          !tBankUp.contains('BIRR');
     } else if (bUp.contains('AHADU')) {
-      return tNameUp.contains('AHADU') || tSenderUp.contains('AHADU');
+      return tBankUp.contains('AHADU');
     } else if (bUp.contains('DASHEN')) {
-      return tNameUp.contains('DASHEN') || tSenderUp.contains('DASHEN');
+      return tBankUp.contains('DASHEN');
     } else if (bUp.contains('BOA') || bUp.contains('ABYSSINIA')) {
-      return tNameUp.contains('BOA') ||
-          tSenderUp.contains('BOA') ||
-          tNameUp.contains('ABYSSINIA') ||
-          tSenderUp.contains('ABYSSINIA');
+      return tBankUp.contains('BOA') || tBankUp.contains('ABYSSINIA');
     } else if (bUp.contains('AWASH')) {
-      return tNameUp.contains('AWASH') || tSenderUp.contains('AWASH');
+      return tBankUp.contains('AWASH');
     } else if (bUp.contains('ZEMEN')) {
-      return tNameUp.contains('ZEMEN') || tSenderUp.contains('ZEMEN');
+      return tBankUp.contains('ZEMEN');
+    } else if (bUp.contains('BUNNA')) {
+      return tBankUp.contains('BUNNA');
     }
-    return tNameUp.contains(bUp) || tSenderUp.contains(bUp);
+    return tBankUp.contains(bUp);
   }
 
   List<String> _getAvailableBanks(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
@@ -286,7 +293,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
     for (final tx in txVM.transactions) {
-      final name = _normalizeBankName(tx.name.isNotEmpty ? tx.name : tx.sender);
+      final name = _normalizeBankName(tx.bankName);
       if (name.isNotEmpty && seen.add(name)) {
         result.add(name);
       }
@@ -460,12 +467,82 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           return (label: s, shortLabel: s);
         }).toList();
 
+      case PeriodFilter.customRange:
       case PeriodFilter.allTime:
         return const [];
     }
   }
 
   Widget _buildSubPeriodSelector() {
+    if (_selectedPeriod == PeriodFilter.customRange) {
+      final rangeText = _selectedDateRange != null
+          ? '${DateFormat('MMM d, y').format(_selectedDateRange!.start)} – ${DateFormat('MMM d, y').format(_selectedDateRange!.end)}'
+          : 'Select Date Range';
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: GestureDetector(
+            onTap: () => _pickCustomDateRange(context),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.tabBackground,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.date_range_rounded,
+                    size: 15,
+                    color: AppColors.buttonPrimary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    rangeText,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.buttonSecondary,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.edit_calendar_rounded,
+                          size: 12,
+                          color: AppColors.buttonSecondaryText,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Change',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.buttonSecondaryText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final items = _getSubPeriodItemsFormatted();
     if (items.isEmpty) return const SizedBox.shrink();
 
@@ -494,9 +571,63 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   int _getDefaultSubPeriodIndex(PeriodFilter period) {
+    if (period == PeriodFilter.customRange) return 0;
     final items = _getSubPeriodItemsFormatted();
     if (items.isEmpty) return 0;
     return items.length - 1;
+  }
+
+  HeatmapPeriodType _getHeatmapPeriodType() {
+    switch (_selectedPeriod) {
+      case PeriodFilter.day:
+        return HeatmapPeriodType.day;
+      case PeriodFilter.week:
+        return HeatmapPeriodType.week;
+      case PeriodFilter.month:
+        return HeatmapPeriodType.month;
+      case PeriodFilter.quarter:
+        return HeatmapPeriodType.quarter;
+      case PeriodFilter.year:
+        return HeatmapPeriodType.year;
+      case PeriodFilter.customRange:
+        return HeatmapPeriodType.customRange;
+      case PeriodFilter.allTime:
+        return HeatmapPeriodType.month;
+    }
+  }
+
+  Future<void> _pickCustomDateRange(BuildContext context) async {
+    final now = DateTime.now();
+    final initialRange = _selectedDateRange ??
+        DateTimeRange(
+          start: now.subtract(const Duration(days: 30)),
+          end: now,
+        );
+
+    final picked = await AppDatePickerDrawer.showDateRange(
+      context: context,
+      initialRange: initialRange,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2),
+      title: 'Filter Date Range',
+    );
+
+    if (picked != null && mounted) {
+      HapticFeedback.selectionClick();
+      _changeFilter(() {
+        _selectedDateRange = picked;
+        _selectedPeriod = PeriodFilter.customRange;
+        _selectedHeatmapDay = null;
+        _drilledCategory = null;
+        _selectedSubPeriodIndex = 0;
+      });
+    } else if (_selectedDateRange == null && mounted) {
+      _changeFilter(() {
+        _selectedDateRange = initialRange;
+        _selectedPeriod = PeriodFilter.customRange;
+        _selectedSubPeriodIndex = 0;
+      });
+    }
   }
 
   void _changeFilter(VoidCallback updateState) {
@@ -514,7 +645,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   void _onPeriodChanged(PeriodFilter period) {
-    if (_selectedPeriod == period) return;
+    if (_selectedPeriod == period && period != PeriodFilter.customRange) return;
     HapticFeedback.selectionClick();
     _changeFilter(() {
       _selectedPeriod = period;
@@ -528,7 +659,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           _selectedSubPeriodIndex = 2;
           _selectedYear = now.year;
         }
-      } else if (period == PeriodFilter.allTime) {
+      } else if (period == PeriodFilter.allTime || period == PeriodFilter.customRange) {
         _selectedSubPeriodIndex = 0;
       } else {
         _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(period);
@@ -696,7 +827,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     final targetYear = (_selectedPeriod == PeriodFilter.year)
         ? (now.year - (2 - _selectedSubPeriodIndex))
-        : _selectedYear;
+        : (_selectedPeriod == PeriodFilter.customRange && _selectedDateRange != null)
+            ? _selectedDateRange!.start.year
+            : _selectedYear;
 
     if (!isCashOnly) {
       for (var tx in txVM.transactions) {
@@ -770,10 +903,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        if (tx.type == 'expense') {
+        if (tx.isExpense) {
           final categoryLabel = _resolveCashTxCategoryName(tx, txVM);
           categoryExpenses[categoryLabel] = (categoryExpenses[categoryLabel] ?? 0) + tx.amount;
-        } else if (tx.type == 'addition' && tx.reasonName != null && tx.reasonName!.isNotEmpty) {
+        } else if (tx.isIncome && tx.reasonName != null && tx.reasonName!.isNotEmpty) {
           final categoryLabel = _resolveCashTxCategoryName(tx, txVM);
           categoryIncome[categoryLabel] = (categoryIncome[categoryLabel] ?? 0) + tx.amount;
         }
@@ -826,7 +959,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
 
       for (var tx in filteredCashTxs) {
-        if (tx.type == 'expense') {
+        if (tx.isExpense) {
           final parentCat = _resolveCashTxCategoryName(tx, txVM);
           if (parentCat.toLowerCase() == categoryName) {
             String subName = (tx.reasonName ?? 'General').trim();
@@ -835,7 +968,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             }
             categoryExpenses[subName] = (categoryExpenses[subName] ?? 0) + tx.amount;
           }
-        } else if (tx.type == 'addition' && tx.reasonName != null && tx.reasonName!.isNotEmpty) {
+        } else if (tx.isIncome && tx.reasonName != null && tx.reasonName!.isNotEmpty) {
           final parentCat = _resolveCashTxCategoryName(tx, txVM);
           if (parentCat.toLowerCase() == categoryName) {
             String subName = tx.reasonName!.trim();
@@ -890,7 +1023,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         .where((t) => t.type == 'income')
         .fold(0, (sum, t) => sum + t.amount);
     totalIncome += filteredCashTxs
-        .where((t) => t.type == 'addition')
+        .where((t) => t.isIncome)
         .fold(0, (sum, t) => sum + t.amount);
 
     final double netPnl = totalIncome - totalExpense;
@@ -912,33 +1045,29 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       'BOA': (inVal: 0.0, outVal: 0.0),
       'Awash': (inVal: 0.0, outVal: 0.0),
       'Zemen': (inVal: 0.0, outVal: 0.0),
+      'Bunna': (inVal: 0.0, outVal: 0.0),
       'Cash Wallet': (inVal: 0.0, outVal: 0.0),
     };
 
     for (var tx in filteredBankTxs) {
-      final nameUpper = tx.name.toUpperCase();
-      final senderUpper = tx.sender.toUpperCase();
+      final bankUpper = tx.bankName.toUpperCase();
       String key = 'CBE';
-      if (nameUpper.contains('TELEBIRR') || senderUpper.contains('TELEBIRR')) {
+      if (bankUpper.contains('TELEBIRR')) {
         key = 'Telebirr';
-      } else if (nameUpper.contains('CBE BIRR') ||
-          nameUpper.contains('CBEBIRR') ||
-          senderUpper.contains('CBE BIRR') ||
-          senderUpper.contains('CBEBIRR')) {
+      } else if (bankUpper.contains('CBE BIRR') || bankUpper.contains('CBEBIRR')) {
         key = 'CBE Birr';
-      } else if (nameUpper.contains('AHADU') || senderUpper.contains('AHADU')) {
+      } else if (bankUpper.contains('AHADU')) {
         key = 'Ahadu';
-      } else if (nameUpper.contains('DASHEN') || senderUpper.contains('DASHEN')) {
+      } else if (bankUpper.contains('DASHEN')) {
         key = 'Dashen';
-      } else if (nameUpper.contains('BOA') ||
-          nameUpper.contains('ABYSSINIA') ||
-          senderUpper.contains('BOA') ||
-          senderUpper.contains('ABYSSINIA')) {
+      } else if (bankUpper.contains('BOA') || bankUpper.contains('ABYSSINIA')) {
         key = 'BOA';
-      } else if (nameUpper.contains('AWASH') || senderUpper.contains('AWASH')) {
+      } else if (bankUpper.contains('AWASH')) {
         key = 'Awash';
-      } else if (nameUpper.contains('ZEMEN') || senderUpper.contains('ZEMEN')) {
+      } else if (bankUpper.contains('ZEMEN')) {
         key = 'Zemen';
+      } else if (bankUpper.contains('BUNNA')) {
+        key = 'Bunna';
       }
 
       final curr = bankMap[key] ?? (inVal: 0.0, outVal: 0.0);
@@ -951,9 +1080,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
 
     for (var tx in filteredCashTxs) {
       final curr = bankMap['Cash Wallet']!;
-      if (tx.type == 'addition') {
+      if (tx.isIncome) {
         bankMap['Cash Wallet'] = (inVal: curr.inVal + tx.amount, outVal: curr.outVal);
-      } else if (tx.type == 'expense') {
+      } else if (tx.isExpense) {
         bankMap['Cash Wallet'] = (inVal: curr.inVal, outVal: curr.outVal + tx.amount);
       }
     }
@@ -1026,6 +1155,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         final years = _getYearsInWindow(now, _getLookbackDays());
         final targetYear = subIndex < years.length ? years[subIndex] : now.year;
         return date.year == targetYear;
+
+      case PeriodFilter.customRange:
+        if (_selectedDateRange == null) return true;
+        final start = DateTime(
+          _selectedDateRange!.start.year,
+          _selectedDateRange!.start.month,
+          _selectedDateRange!.start.day,
+        );
+        final end = DateTime(
+          _selectedDateRange!.end.year,
+          _selectedDateRange!.end.month,
+          _selectedDateRange!.end.day,
+          23,
+          59,
+          59,
+        );
+        return !date.isBefore(start) && !date.isAfter(end);
 
       case PeriodFilter.allTime:
         return true;
@@ -1319,8 +1465,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                             bankTransactions: data.heatmapBankTxs,
                             cashTransactions: data.heatmapCashTxs,
                             analysisType: _selectedAnalysisType,
-                            periodType:
-                                HeatmapPeriodType.values[_selectedPeriod.index],
+                            periodType: _getHeatmapPeriodType(),
                             selectedDate: _getSynchronizedTargetDate(),
                             highlightedWeekRange: _getSynchronizedWeekRange(),
                             selectedQuarter: _selectedSubPeriodIndex.clamp(0, 3),
@@ -1330,7 +1475,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                     final int safeIdx = _selectedSubPeriodIndex.clamp(0, max(0, years.length - 1)).toInt();
                                     return years[safeIdx];
                                   }()
-                                : _selectedYear,
+                                : (_selectedPeriod == PeriodFilter.customRange && _selectedDateRange != null)
+                                    ? _selectedDateRange!.start.year
+                                    : _selectedYear,
                             selectedDay: _selectedHeatmapDay,
                             onDaySelected: (day) {
                               _changeFilter(() {
@@ -1379,7 +1526,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                           ),
                           if (_selectedHeatmapDay != null) ...[
                             const SizedBox(height: 12),
-                            _buildActiveDayFilterBanner(),
+                            _buildActiveDayFilterBanner(txVM, cashVM),
                           ],
                         ],
                       ),
@@ -1443,7 +1590,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         _selectedYear != DateTime.now().year ||
         _selectedAnalysisType != 'All' ||
         _selectedSimSlot != null ||
-        _selectedSubPeriodIndex != _getDefaultSubPeriodIndex(_selectedPeriod);
+        (_selectedPeriod != PeriodFilter.customRange &&
+            _selectedSubPeriodIndex != _getDefaultSubPeriodIndex(_selectedPeriod)) ||
+        (_selectedPeriod == PeriodFilter.customRange && _selectedDateRange != null);
 
     return AnimatedCrossFade(
       firstChild: const SizedBox.shrink(),
@@ -1456,7 +1605,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              // 1. Period / Date Filter Dropdown (Day, Week, Month, Quarter, Year, All Time)
+              // 1. Period / Date Filter Dropdown (Day, Week, Month, Quarter, Year, All Time, Date Range)
               AppDropdown<PeriodFilter>.dark(
                 value: _selectedPeriod,
                 items: const [
@@ -1466,12 +1615,53 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                   AppDropdownItem(value: PeriodFilter.quarter, label: 'Quarter'),
                   AppDropdownItem(value: PeriodFilter.year, label: 'Year'),
                   AppDropdownItem(value: PeriodFilter.allTime, label: 'All Time'),
+                  AppDropdownItem(value: PeriodFilter.customRange, label: 'Date Range'),
                 ],
                 onChanged: (PeriodFilter? val) {
-                  if (val != null) _onPeriodChanged(val);
+                  if (val != null) {
+                    if (val == PeriodFilter.customRange) {
+                      _onPeriodChanged(val);
+                      _pickCustomDateRange(context);
+                    } else {
+                      _onPeriodChanged(val);
+                    }
+                  }
                 },
                 isDefault: _selectedPeriod == PeriodFilter.month && _selectedYear == DateTime.now().year,
               ),
+              if (_selectedPeriod == PeriodFilter.customRange && _selectedDateRange != null) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _pickCustomDateRange(context),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.buttonSecondary,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 14,
+                          color: AppColors.buttonSecondaryText,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${DateFormat('MMM d').format(_selectedDateRange!.start)} – ${DateFormat('MMM d').format(_selectedDateRange!.end)}',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.buttonSecondaryText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
 
               // 3. Net / Transferred / Deposit Flow Filter
@@ -1551,6 +1741,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                     _changeFilter(() {
                       _selectedBank = 'All Wallets';
                       _selectedPeriod = PeriodFilter.month;
+                      _selectedDateRange = null;
                       _selectedYear = DateTime.now().year;
                       _selectedSubPeriodIndex = _getDefaultSubPeriodIndex(PeriodFilter.month);
                       _selectedAnalysisType = 'All';
@@ -1582,41 +1773,158 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return 'Net';
   }
 
-  Widget _buildActiveDayFilterBanner() {
+  Widget _buildActiveDayFilterBanner(TransactionsViewModel txVM, CashWalletViewModel cashVM) {
     if (_selectedHeatmapDay == null) return const SizedBox.shrink();
-    final fmtDate = DateFormat('EEEE, MMM d, yyyy').format(_selectedHeatmapDay!);
+    final targetDate = _selectedHeatmapDay!;
+    final fmtDate = DateFormat('EEE, MMM d, yyyy').format(targetDate);
+
+    final matchingBankTxs = txVM.transactions.where((t) =>
+        t.date.year == targetDate.year &&
+        t.date.month == targetDate.month &&
+        t.date.day == targetDate.day).toList();
+    final matchingCashTxs = cashVM.cashTransactions.where((c) =>
+        c.date.year == targetDate.year &&
+        c.date.month == targetDate.month &&
+        c.date.day == targetDate.day).toList();
+    final totalCount = matchingBankTxs.length + matchingCashTxs.length;
+
+    void openDateDetail() {
+      HapticFeedback.selectionClick();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DateTransactionsScreen(
+            date: targetDate,
+            initialBankTransactions: matchingBankTxs,
+            initialCashTransactions: matchingCashTxs,
+          ),
+        ),
+      );
+    }
 
     return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      height: 38,
       decoration: BoxDecoration(
-        color: AppColors.heatmapNeutral,
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(100),
       ),
+      padding: const EdgeInsets.fromLTRB(10, 0, 6, 0),
       child: Row(
         children: [
-          const Icon(Icons.filter_alt_rounded, color: AppColors.textPrimary, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Filtered for $fmtDate',
-              style: const TextStyle(
+          // Subtle calendar icon badge
+          GestureDetector(
+            onTap: openDateDetail,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                color: AppColors.buttonSecondary,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.calendar_today_rounded,
                 color: AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+                size: 11,
               ),
             ),
           ),
-          InkWell(
+          const SizedBox(width: 8),
+
+          // Date Label
+          Expanded(
+            child: GestureDetector(
+              onTap: openDateDetail,
+              behavior: HitTestBehavior.opaque,
+              child: Text(
+                fmtDate,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Minimalist "See transactions" action pill
+          GestureDetector(
+            onTap: openDateDetail,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+              decoration: BoxDecoration(
+                color: AppColors.buttonSecondary,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'See transactions',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (totalCount > 0) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.tabBackground,
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        '$totalCount',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: 1),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textSecondary,
+                    size: 14,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+
+          // Dismiss / Close filter button
+          GestureDetector(
             onTap: () {
+              HapticFeedback.selectionClick();
               _changeFilter(() {
                 _selectedHeatmapDay = null;
               });
             },
-            borderRadius: BorderRadius.circular(12),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 18),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(
+                color: Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.close_rounded,
+                color: AppColors.textSecondary,
+                size: 15,
+              ),
             ),
           ),
         ],
@@ -2754,11 +3062,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       processBankTx(t);
     }
     for (var ctx in filteredCashTxs) {
-      final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-      if (_selectedAnalysisType == 'Expenses' && isAddition) {
+      if (_selectedAnalysisType == 'Expenses' && ctx.isIncome) {
         continue;
       }
-      if (_selectedAnalysisType == 'Income' && !isAddition) {
+      if (_selectedAnalysisType == 'Income' && !ctx.isIncome) {
         continue;
       }
       processCashTx(ctx);
@@ -2785,11 +3092,23 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       }
     }
 
+    final totalUserCategories = txVM.topLevelCategories.isNotEmpty
+        ? txVM.topLevelCategories.length
+        : (txVM.reasons.where((r) => !r.isSubcategory).isNotEmpty
+            ? txVM.reasons.where((r) => !r.isSubcategory).length
+            : 0);
+
     if (categoryMap.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildCategoryAnalysisHeader(0),
+          _CategorySlidingInsightHeader(
+            totalUserCategories: totalUserCategories,
+            categoryFeedData: const [],
+            totalSum: 0.0,
+            isBalanceVisible: isBalanceVisible,
+            analysisType: _selectedAnalysisType,
+          ),
           const SizedBox(height: 10),
           const Center(
             child: Padding(
@@ -2834,7 +3153,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           }
         }
         for (final ct in sAcc.cashTxs) {
-          if (ct.type == 'addition' || ct.type == 'income') {
+          if (ct.isIncome) {
             sInc += ct.amount;
           } else {
             sExp += ct.amount;
@@ -2872,7 +3191,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         }
       }
       for (final ct in acc.allCashTxs) {
-        if (ct.type == 'addition' || ct.type == 'income') {
+        if (ct.isIncome) {
           catInc += ct.amount;
         } else {
           catExp += ct.amount;
@@ -2913,11 +3232,26 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         ? categoryList
         : categoryList.take(6).toList();
 
+    final feedData = categoryList
+        .map((c) => _CategoryInsightData(
+              name: c.categoryName,
+              amount: c.totalAmount,
+              color: c.color,
+              count: c.totalTxCount,
+            ))
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Header Row: Title, Badge, and Toggle Button ──
-        _buildCategoryAnalysisHeader(categoryList.length),
+        // ── Header Row: Title Badge with Sliding Behind Insight Pill ──
+        _CategorySlidingInsightHeader(
+          totalUserCategories: totalUserCategories,
+          categoryFeedData: feedData,
+          totalSum: totalSum,
+          isBalanceVisible: isBalanceVisible,
+          analysisType: _selectedAnalysisType,
+        ),
 
         AnimatedSize(
           duration: const Duration(milliseconds: 350),
@@ -3171,75 +3505,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     );
   }
 
-  Widget _buildCategoryAnalysisHeader(int count) {
-    final bool hasMoreThanSix = count > 6;
-    return GestureDetector(
-      onTap: hasMoreThanSix
-          ? () {
-              HapticFeedback.selectionClick();
-              setState(() {
-                _isCategoryAnalysisExpanded = !_isCategoryAnalysisExpanded;
-              });
-            }
-          : null,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Text(
-                  'Category Analysis',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.buttonSecondary,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (hasMoreThanSix)
-              AnimatedRotation(
-                turns: _isCategoryAnalysisExpanded ? 0.5 : 0.0,
-                duration: const Duration(milliseconds: 220),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: AppColors.buttonSecondary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textPrimary,
-                    size: 16,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── 8. Redesigned Bank Performance Breakdown Section ─────────────────────
   Widget _buildRedesignedBankPerformance(
     List<({String name, double income, double expense, double net})> bankBreakdown,
@@ -3460,7 +3725,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     // Find top counterparty for this bank
     final Map<String, int> partyCounts = {};
     for (var tx in bankTxs) {
-      final s = tx.sender.trim();
+      final s = tx.counterparty.trim();
       if (s.isNotEmpty) {
         partyCounts[s] = (partyCounts[s] ?? 0) + 1;
       }
@@ -3761,10 +4026,10 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       ...txVM.senders.map((s) => s.senderName.trim().toUpperCase()),
     };
 
-    // Group by counterparty / sender
+    // Group by counterparty
     final Map<String, List<AppTransaction>> groups = {};
     for (final tx in transactions) {
-      final rawSender = tx.sender.trim();
+      final rawSender = tx.counterparty.trim();
       if (rawSender.isEmpty || bankNamesUpper.contains(rawSender.toUpperCase())) {
         continue;
       }
@@ -3783,7 +4048,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       final Set<String> banks = {};
       DateTime? latest;
       for (final t in txs) {
-        if (t.name.isNotEmpty) banks.add(t.name);
+        if (t.bankName.isNotEmpty) banks.add(t.bankName);
         if (latest == null || t.date.isAfter(latest)) latest = t.date;
       }
       return CounterpartyInsight(
@@ -3854,7 +4119,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 Row(
                   children: [
                     const Text(
-                      'Person & Contact',
+                      'Counterparties',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 13,
@@ -4004,7 +4269,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                       context,
                       MaterialPageRoute(
                         builder: (_) => AllTransactionsScreen(
-                          initialSenderFilter: activeInsight.name,
+                          initialCounterpartyFilter: activeInsight.name,
                           initialDateFilter: const AppDateFilterValue.anyTime(),
                         ),
                       ),
@@ -4080,6 +4345,9 @@ class _AnalysisScreenState extends State<AnalysisScreen>
       context: context,
       builder: (sheetCtx) {
         String query = '';
+        bool isSearchExpanded = false;
+        final searchCtrl = TextEditingController();
+
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final filtered = list.where((c) {
@@ -4090,19 +4358,37 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             final fmt = NumberFormat('#,##0.00');
 
             return AppDrawer(
-              heightFactor: 0.78,
-              headerCard: const AppDrawerHeaderCard(
-                icon: Icons.person_search_rounded,
-                title: 'Select Contact',
-              ),
+              heightFactor: isSearchExpanded ? 0.94 : 0.84,
+              backgroundColor: AppColors.surfaceElevated,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Header Row / Expandable Search Bar ─────────────────────
                   AppSearchBar(
                     mode: AppSearchBarMode.pill,
-                    hint: 'Search contact name...',
-                    onChanged: (val) {
-                      setSheetState(() => query = val);
+                    icon: Icons.person_search_rounded,
+                    title: 'Select Counterparty',
+                    pillLabel: 'Search',
+                    isExpanded: isSearchExpanded,
+                    controller: searchCtrl,
+                    hint: 'Search counterparty name...',
+                    autofocus: true,
+                    height: 38,
+                    onExpandChanged: (expanded) {
+                      setSheetState(() => isSearchExpanded = expanded);
                     },
+                    onChanged: (val) => setSheetState(() => query = val.trim()),
+                    onClear: () => setSheetState(() => query = ''),
+                    onClose: () {
+                      setSheetState(() {
+                        isSearchExpanded = false;
+                        query = '';
+                      });
+                    },
+                    backgroundColor: AppColors.drawerCard,
+                    iconColor: Colors.white70,
+                    textColor: Colors.white,
+                    hintColor: AppColors.textSoft,
                   ),
                   const SizedBox(height: 12),
                   Expanded(
@@ -4111,7 +4397,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                             child: Padding(
                               padding: EdgeInsets.symmetric(vertical: 24),
                               child: Text(
-                                'No contacts found matching search.',
+                                'No counterparties found matching search.',
                                 style: TextStyle(color: AppColors.textSoft),
                               ),
                             ),
@@ -4132,56 +4418,59 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                                       : AppColors.drawerCard,
                                   borderRadius: AppRadius.cardRadius,
                                 ),
-                                child: ListTile(
-                                  shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
-                                  leading: ContactAvatar(
-                                    name: item.name,
-                                    size: 32,
-                                  ),
-                                  dense: true,
-                                  visualDensity: VisualDensity.compact,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 2,
-                                  ),
-                                  title: Text(
-                                    item.name,
-                                    style: TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 13.5,
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.w600,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: ListTile(
+                                    shape: RoundedRectangleBorder(borderRadius: AppRadius.cardRadius),
+                                    leading: ContactAvatar(
+                                      name: item.name,
+                                      size: 32,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    '${item.totalCount} txs • ETB ${fmt.format(item.totalVolume)} volume',
-                                    style: const TextStyle(
-                                      color: AppColors.textSoft,
-                                      fontSize: 11,
+                                    dense: true,
+                                    visualDensity: VisualDensity.compact,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 2,
                                     ),
+                                    title: Text(
+                                      item.name,
+                                      style: TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 13.5,
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      '${item.totalCount} txs • ETB ${fmt.format(item.totalVolume)} volume',
+                                      style: const TextStyle(
+                                        color: AppColors.textSoft,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    trailing: isSelected
+                                        ? const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: AppColors.positive,
+                                            size: 18,
+                                          )
+                                        : (index == 0 && query.isEmpty)
+                                            ? const AppBadge.warning(
+                                                text: 'TOP',
+                                                size: AppBadgeSize.micro,
+                                              )
+                                            : null,
+                                    onTap: () {
+                                      Navigator.pop(sheetCtx);
+                                      HapticFeedback.selectionClick();
+                                      setState(() {
+                                        _selectedCounterparty = item.name;
+                                      });
+                                    },
                                   ),
-                                  trailing: isSelected
-                                      ? const Icon(
-                                          Icons.check_circle_rounded,
-                                          color: AppColors.positive,
-                                          size: 18,
-                                        )
-                                      : (index == 0 && query.isEmpty)
-                                          ? const AppBadge.warning(
-                                              text: 'TOP',
-                                              size: AppBadgeSize.micro,
-                                            )
-                                          : null,
-                                  onTap: () {
-                                    Navigator.pop(sheetCtx);
-                                    HapticFeedback.selectionClick();
-                                    setState(() {
-                                      _selectedCounterparty = item.name;
-                                    });
-                                  },
                                 ),
                               );
                             },
@@ -4394,5 +4683,481 @@ class _SubcategoryDataAccumulator {
     required this.name,
     this.reason,
   });
+}
+
+// ── Category Analysis Header with Sliding Behind Insight Drawer ─────────────
+
+class _CategoryInsightData {
+  final String name;
+  final double amount;
+  final Color color;
+  final int count;
+
+  const _CategoryInsightData({
+    required this.name,
+    required this.amount,
+    required this.color,
+    required this.count,
+  });
+}
+
+class _CategoryInsightFeedItem {
+  final IconData icon;
+  final Color iconColor;
+  final String text;
+
+  const _CategoryInsightFeedItem({
+    required this.icon,
+    required this.iconColor,
+    required this.text,
+  });
+}
+
+class _CategorySlidingInsightHeader extends StatefulWidget {
+  final int totalUserCategories;
+  final List<_CategoryInsightData> categoryFeedData;
+  final double totalSum;
+  final bool isBalanceVisible;
+  final String analysisType;
+
+  const _CategorySlidingInsightHeader({
+    required this.totalUserCategories,
+    required this.categoryFeedData,
+    required this.totalSum,
+    required this.isBalanceVisible,
+    required this.analysisType,
+  });
+
+  @override
+  State<_CategorySlidingInsightHeader> createState() =>
+      _CategorySlidingInsightHeaderState();
+}
+
+class _CategorySlidingInsightHeaderState
+    extends State<_CategorySlidingInsightHeader>
+    with SingleTickerProviderStateMixin {
+  final GlobalKey _badgeKey = GlobalKey();
+  double _frontBadgeWidth = 146.0;
+  bool _isExpanded = false;
+  int _currentFeedIndex = 0;
+  Timer? _feedTimer;
+  late final AnimationController _gradientController;
+
+  @override
+  void initState() {
+    super.initState();
+    _gradientController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3800),
+    )..repeat(reverse: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureBadge());
+  }
+
+  void _measureBadge() {
+    final box = _badgeKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && mounted) {
+      if ((box.size.width - _frontBadgeWidth).abs() > 1.0) {
+        setState(() {
+          _frontBadgeWidth = box.size.width;
+        });
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _CategorySlidingInsightHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureBadge());
+  }
+
+  @override
+  void dispose() {
+    _feedTimer?.cancel();
+    _gradientController.dispose();
+    super.dispose();
+  }
+
+  double _horizontalDragAccumulator = 0.0;
+
+  void _setExpanded(bool expanded) {
+    if (_isExpanded == expanded) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _isExpanded = expanded;
+      if (_isExpanded) {
+        _currentFeedIndex = 0;
+        _startTimer();
+      } else {
+        _feedTimer?.cancel();
+        _feedTimer = null;
+      }
+    });
+  }
+
+  void _toggleExpand() {
+    _setExpanded(!_isExpanded);
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _horizontalDragAccumulator = 0.0;
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    final delta = details.primaryDelta ?? 0.0;
+    _horizontalDragAccumulator += delta;
+
+    if (!_isExpanded && _horizontalDragAccumulator > 16.0) {
+      _horizontalDragAccumulator = 0.0;
+      _setExpanded(true);
+    } else if (_isExpanded && _horizontalDragAccumulator < -16.0) {
+      _horizontalDragAccumulator = 0.0;
+      _setExpanded(false);
+    }
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0.0;
+    if (!_isExpanded &&
+        (velocity > 120.0 || _horizontalDragAccumulator > 10.0)) {
+      _setExpanded(true);
+    } else if (_isExpanded &&
+        (velocity < -120.0 || _horizontalDragAccumulator < -10.0)) {
+      _setExpanded(false);
+    } else if (_isExpanded && velocity > 150.0) {
+      _nextFeed();
+    }
+    _horizontalDragAccumulator = 0.0;
+  }
+
+  void _startTimer() {
+    _feedTimer?.cancel();
+    _feedTimer = Timer.periodic(const Duration(milliseconds: 3200), (_) {
+      final items = _buildFeedItems();
+      if (items.isEmpty || !mounted) return;
+      setState(() {
+        _currentFeedIndex = (_currentFeedIndex + 1) % items.length;
+      });
+    });
+  }
+
+  void _nextFeed() {
+    final items = _buildFeedItems();
+    if (items.isEmpty) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _currentFeedIndex = (_currentFeedIndex + 1) % items.length;
+    });
+    _startTimer();
+  }
+
+  String _formatShortAmount(double amount) {
+    final absVal = amount.abs();
+    if (absVal >= 1000000) {
+      final val = absVal / 1000000;
+      return '${val.toStringAsFixed(val >= 10 ? 0 : 1)}M ETB';
+    } else if (absVal >= 1000) {
+      final val = absVal / 1000;
+      return '${val.toStringAsFixed(val >= 10 ? 0 : 1)}K ETB';
+    } else {
+      return '${absVal.toStringAsFixed(0)} ETB';
+    }
+  }
+
+  List<_CategoryInsightFeedItem> _buildFeedItems() {
+    final list = widget.categoryFeedData;
+    final total = widget.totalSum;
+    final isBal = widget.isBalanceVisible;
+    final items = <_CategoryInsightFeedItem>[];
+
+    if (list.isEmpty) {
+      items.add(const _CategoryInsightFeedItem(
+        icon: Icons.info_outline_rounded,
+        iconColor: Colors.white70,
+        text: 'No transactions',
+      ));
+      return items;
+    }
+
+    // 1. Most money spent on (Top Reason)
+    final top = list.first;
+    final topPct =
+        total > 0 ? (top.amount / total * 100).toStringAsFixed(0) : '0';
+    items.add(_CategoryInsightFeedItem(
+      icon: Icons.local_fire_department_rounded,
+      iconColor: Colors.white,
+      text: isBal
+          ? 'Top: ${top.name} • ${_formatShortAmount(top.amount)}'
+          : 'Top: ${top.name} ($topPct%)',
+    ));
+
+    // 2. Lowest money spent on (Lowest Reason)
+    if (list.length > 1) {
+      final low = list.last;
+      final lowPct =
+          total > 0 ? (low.amount / total * 100).toStringAsFixed(0) : '0';
+      items.add(_CategoryInsightFeedItem(
+        icon: Icons.trending_down_rounded,
+        iconColor: Colors.white70,
+        text: isBal
+            ? 'Min: ${low.name} • ${_formatShortAmount(low.amount)}'
+            : 'Min: ${low.name} ($lowPct%)',
+      ));
+    }
+
+    // 3. Active reason ratio vs total reasons
+    items.add(_CategoryInsightFeedItem(
+      icon: Icons.pie_chart_outline_rounded,
+      iconColor: Colors.white,
+      text: '${list.length}/${widget.totalUserCategories} active categories',
+    ));
+
+    // 4. Average spending per active category
+    if (isBal && list.isNotEmpty) {
+      final avg = total / list.length;
+      items.add(_CategoryInsightFeedItem(
+        icon: Icons.analytics_outlined,
+        iconColor: Colors.white70,
+        text: 'Avg: ${_formatShortAmount(avg)} / category',
+      ));
+    }
+
+    // 5. Volume concentration (Top 2 combined share)
+    if (list.length >= 2 && total > 0) {
+      final top2 = list[0].amount + list[1].amount;
+      final top2Pct = (top2 / total * 100).toStringAsFixed(0);
+      items.add(_CategoryInsightFeedItem(
+        icon: Icons.donut_large_rounded,
+        iconColor: Colors.white,
+        text: 'Top 2: $top2Pct% of total',
+      ));
+    }
+
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final feedItems = _buildFeedItems();
+        final currentItem = feedItems.isNotEmpty
+            ? feedItems[_currentFeedIndex % feedItems.length]
+            : null;
+
+        return AnimatedBuilder(
+          animation: _gradientController,
+          builder: (context, _) {
+            final gVal = _gradientController.value;
+            // Smooth living movement that oscillates between top-left and bottom-right
+            final gradientBegin = Alignment.lerp(
+              const Alignment(-1.2, -0.6),
+              const Alignment(-0.6, -1.2),
+              gVal,
+            )!;
+            final gradientEnd = Alignment.lerp(
+              const Alignment(0.6, 1.2),
+              const Alignment(1.2, 0.6),
+              gVal,
+            )!;
+            final liveGradient = LinearGradient(
+              begin: gradientBegin,
+              end: gradientEnd,
+              colors: AppColors.categorySlidingPrimaryGradient,
+            );
+
+            const double drawerLeft = 24.0;
+            const double visibleCollapsedWidth = 42.0;
+            final double hiddenSpacerWidth =
+                max(0.0, _frontBadgeWidth - drawerLeft);
+            final double collapsedWidth =
+                hiddenSpacerWidth + visibleCollapsedWidth;
+            final double expandedWidth =
+                max(collapsedWidth, availableWidth - drawerLeft);
+            final double drawerWidth =
+                _isExpanded ? expandedWidth : collapsedWidth;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: SizedBox(
+                height: 28,
+                width: availableWidth,
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // ── 1. Behind Drawer: Extended empty left section tucked safely under Front Badge ──
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOutCubic,
+                      left: drawerLeft,
+                      top: 1,
+                      bottom: 1,
+                      width: drawerWidth,
+                      child: GestureDetector(
+                        onTap: _isExpanded ? _nextFeed : _toggleExpand,
+                        onHorizontalDragStart: _onHorizontalDragStart,
+                        onHorizontalDragUpdate: _onHorizontalDragUpdate,
+                        onHorizontalDragEnd: _onHorizontalDragEnd,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: liveGradient,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Row(
+                            children: [
+                              // Empty section hidden underneath the front badge
+                              SizedBox(width: hiddenSpacerWidth),
+
+                              // Visible section content
+                              if (_isExpanded) ...[
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: AnimatedSwitcher(
+                                    duration:
+                                        const Duration(milliseconds: 280),
+                                    transitionBuilder: (child, anim) {
+                                      return FadeTransition(
+                                        opacity: anim,
+                                        child: SlideTransition(
+                                          position: Tween<Offset>(
+                                            begin: const Offset(0.08, 0),
+                                            end: Offset.zero,
+                                          ).animate(anim),
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                                    child: currentItem != null
+                                        ? Row(
+                                            key: ValueKey<int>(
+                                                _currentFeedIndex),
+                                            children: [
+                                              Icon(
+                                                currentItem.icon,
+                                                color: currentItem.iconColor,
+                                                size: 11.5,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Expanded(
+                                                child: Text(
+                                                  currentItem.text,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    letterSpacing: -0.1,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: _toggleExpand,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    child: const Icon(
+                                      Icons.chevron_left_rounded,
+                                      color: Colors.white,
+                                      size: 15,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ] else ...[
+                                Expanded(
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '${widget.totalUserCategories}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 1),
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // ── 2. Front Badge: Sits on top with zero drop shadow ──
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: GestureDetector(
+                        onTap: _toggleExpand,
+                        onHorizontalDragStart: _onHorizontalDragStart,
+                        onHorizontalDragUpdate: _onHorizontalDragUpdate,
+                        onHorizontalDragEnd: _onHorizontalDragEnd,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          key: _badgeKey,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.categoryBadgeBg,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'CATEGORY ANALYSIS',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              AnimatedReasonsIcon(
+                                size: 13,
+                                color: AppColors.textPrimary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
 

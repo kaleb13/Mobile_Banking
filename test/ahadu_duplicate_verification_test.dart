@@ -64,4 +64,28 @@ Ahadu Bank.''';
         .fold(0.0, (sum, t) => sum + t.amount);
     expect(totalIncome, equals(30867.0), reason: 'Analysis page calculates 30,867.00 ETB, NOT 60k');
   });
+
+  test('Ahadu transfer with Fayda update link is not ignored and parses all fields correctly', () {
+    const sept2TransferSms = '''Dear KALEB,
+You have made a transfer of ETB 20,000.00. Including Service charge and VAT (15%) from account number 008XXXXXX0101 to Telebirr of 972665987 with reference number w2b17883520939961797 on 02-SEP-26. 
+Your Available Balance is ETB 10,475.90. 
+https://receipt.ahadubank.com/digitalreceipt?es=1008700007948/02-SEP-26/ 5466
+For Fayda ID Update
+https://verifayda.ahadubank.com/
+Ahadu Bank!''';
+
+    final fallback = DateTime(2026, 9, 2, 15, 23, 44);
+    final tx = AhaduParser.parse(sept2TransferSms, fallback);
+
+    expect(tx, isNotNull);
+    expect(tx!.amount, equals(20000.0));
+    expect(tx.type, equals('expense'));
+    expect(tx.counterparty, equals('972665987'));
+    expect(tx.totalBalance, equals(10475.90));
+    expect(tx.id, equals('w2b17883520939961797'));
+    expect(tx.date.year, equals(2026));
+    expect(tx.date.month, equals(9));
+    expect(tx.date.day, equals(2));
+  });
 }
+

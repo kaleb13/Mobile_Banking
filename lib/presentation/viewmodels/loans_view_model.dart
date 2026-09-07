@@ -149,12 +149,14 @@ class LoansViewModel extends ChangeNotifier {
   Future<LoanRecord> createLoan({
     required String loanType,
     required String personName,
+    String? monitoredBanks,
     String? trackedSenderName,
     required double principalAmount,
     required DateTime dueDate,
     String? linkedTransactionId,
     String? note,
   }) async {
+    final effectiveBanks = monitoredBanks ?? trackedSenderName;
     // Determine the loan creation date
     DateTime startingDate = DateTime.now();
     if (linkedTransactionId != null && getTransactions != null) {
@@ -168,7 +170,7 @@ class LoansViewModel extends ChangeNotifier {
     final loan = LoanRecord(
       loanType: loanType,
       personName: personName,
-      trackedSenderName: trackedSenderName,
+      monitoredBanks: effectiveBanks,
       principalAmount: principalAmount,
       loanDate: startingDate,
       dueDate: dueDate,
@@ -180,7 +182,7 @@ class LoansViewModel extends ChangeNotifier {
       id: id,
       loanType: loan.loanType,
       personName: loan.personName,
-      trackedSenderName: loan.trackedSenderName,
+      monitoredBanks: loan.monitoredBanks,
       principalAmount: loan.principalAmount,
       paidAmount: 0,
       loanDate: loan.loanDate,
@@ -220,31 +222,30 @@ class LoansViewModel extends ChangeNotifier {
         ..sort((a, b) => a.date.compareTo(b.date));
 
       for (var tx in potentialRepayments) {
-        if (trackedSenderName != null && trackedSenderName.trim().isNotEmpty) {
-          final watchedChannels = trackedSenderName
+        if (effectiveBanks != null && effectiveBanks.trim().isNotEmpty) {
+          final watchedChannels = effectiveBanks
               .split(',')
               .map((c) => c.trim().toLowerCase())
               .where((c) => c.isNotEmpty)
               .toList();
-          final txSenderLower = tx.sender.trim().toLowerCase();
-          final txNameLower = tx.name.trim().toLowerCase();
+          final txCounterpartyLower = tx.counterparty.trim().toLowerCase();
+          final txBankLower = tx.bankName.trim().toLowerCase();
           final channelMatches = watchedChannels.any((channel) =>
-              txSenderLower.contains(channel) ||
-              channel.contains(txSenderLower) ||
-              txNameLower.contains(channel) ||
-              channel.contains(txNameLower));
+              txCounterpartyLower.contains(channel) ||
+              channel.contains(txCounterpartyLower) ||
+              txBankLower.contains(channel) ||
+              channel.contains(txBankLower));
           if (!channelMatches) continue;
         }
 
         final candidateName =
-            tx.name.trim().isNotEmpty ? tx.name.trim() : tx.sender.trim();
+            tx.counterparty.trim().isNotEmpty ? tx.counterparty.trim() : tx.bankName.trim();
         final isBank = senders.any(
             (s) => s.senderName.toLowerCase() == candidateName.toLowerCase());
-        if (isBank && tx.name.trim().isEmpty) continue;
+        if (isBank && tx.counterparty.trim().isEmpty) continue;
 
         final score = _nameMatchScore(
-          incoming:
-              tx.name.trim().isNotEmpty ? tx.name.trim() : candidateName,
+          incoming: candidateName,
           tracked: personName,
         );
 
@@ -452,9 +453,9 @@ class LoansViewModel extends ChangeNotifier {
     final payAmount = customAmount ?? transaction.amount;
     if (payAmount <= 0) return;
 
-    final counterparty = transaction.sender.trim().isNotEmpty
-        ? transaction.sender.trim()
-        : transaction.name.trim();
+    final counterparty = transaction.counterparty.trim().isNotEmpty
+        ? transaction.counterparty.trim()
+        : transaction.bankName.trim();
     final effectiveNote = (note != null && note.trim().isNotEmpty)
         ? note.trim()
         : 'Repayment via $counterparty';
@@ -498,32 +499,31 @@ class LoansViewModel extends ChangeNotifier {
     final senders = getSenders?.call() ?? [];
 
     for (final loan in allActive) {
-      if (loan.trackedSenderName != null &&
-          loan.trackedSenderName!.trim().isNotEmpty) {
-        final watchedChannels = loan.trackedSenderName!
+      if (loan.monitoredBanks != null &&
+          loan.monitoredBanks!.trim().isNotEmpty) {
+        final watchedChannels = loan.monitoredBanks!
             .split(',')
             .map((c) => c.trim().toLowerCase())
             .where((c) => c.isNotEmpty)
             .toList();
-        final txSenderLower = tx.sender.trim().toLowerCase();
-        final txNameLower = tx.name.trim().toLowerCase();
+        final txCounterpartyLower = tx.counterparty.trim().toLowerCase();
+        final txBankLower = tx.bankName.trim().toLowerCase();
         final channelMatches = watchedChannels.any((channel) =>
-            txSenderLower.contains(channel) ||
-            channel.contains(txSenderLower) ||
-            txNameLower.contains(channel) ||
-            channel.contains(txNameLower));
+            txCounterpartyLower.contains(channel) ||
+            channel.contains(txCounterpartyLower) ||
+            txBankLower.contains(channel) ||
+            channel.contains(txBankLower));
         if (!channelMatches) continue;
       }
 
       final candidateName =
-          tx.name.trim().isNotEmpty ? tx.name.trim() : tx.sender.trim();
+          tx.counterparty.trim().isNotEmpty ? tx.counterparty.trim() : tx.bankName.trim();
       final isBank = senders.any(
           (s) => s.senderName.toLowerCase() == candidateName.toLowerCase());
-      if (isBank && tx.name.trim().isEmpty) continue;
+      if (isBank && tx.counterparty.trim().isEmpty) continue;
 
       final best = _nameMatchScore(
-        incoming:
-            tx.name.trim().isNotEmpty ? tx.name.trim() : candidateName,
+        incoming: candidateName,
         tracked: loan.personName,
       );
 
@@ -587,7 +587,7 @@ class LoansViewModel extends ChangeNotifier {
       loanId: loan.id!,
       amount: applicable,
       linkedTransactionId: tx.id,
-      note: 'Auto-detected from SMS (${tx.name})',
+      note: 'Auto-detected from SMS (${tx.bankName})',
     );
 
     if (tx.id != null && updateTransactionReason != null) {
@@ -613,12 +613,12 @@ class LoansViewModel extends ChangeNotifier {
     if (applicable <= 0) return;
 
     final candidateName =
-        tx.name.trim().isNotEmpty ? tx.name.trim() : tx.sender.trim();
+        tx.counterparty.trim().isNotEmpty ? tx.counterparty.trim() : tx.bankName.trim();
 
     final req = LoanRepaymentRequest(
       loanId: loan.id!,
-      transactionId: tx.id ?? '${tx.sender}_${tx.date.millisecondsSinceEpoch}',
-      senderFound: candidateName,
+      transactionId: tx.id ?? '${tx.counterparty}_${tx.date.millisecondsSinceEpoch}',
+      counterpartyFound: candidateName,
       trackedName: loan.personName,
       amount: applicable,
       createdAt: DateTime.now(),

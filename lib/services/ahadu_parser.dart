@@ -23,6 +23,7 @@ class AhaduParser {
     if (message.isEmpty) return null;
 
     final lowerMsg = message.toLowerCase();
+    final singleLine = message.replaceAll(RegExp(r'\s+'), ' ');
 
     String type = '';
     double amount = 0.0;
@@ -67,9 +68,9 @@ class AhaduParser {
       }
 
       final toMatchRef = RegExp(
-              r'to\s+(.*?)\s+(?:with\s+reference|with\s+ref|on\s+\d{1,2}-|\.)',
+              r'to\s+(.*?)\s+(?:with\s+(?:transaction\s+)?ref(?:erence)?|with\s+ref|on\s+\d{1,2}-|\.)',
               caseSensitive: false)
-          .firstMatch(message);
+          .firstMatch(singleLine);
       if (toMatchRef != null) {
         recipientOrSender = toMatchRef.group(1)?.trim() ?? '';
         final ofMatch = RegExp(
@@ -101,9 +102,9 @@ class AhaduParser {
       }
 
       final fromMatch = RegExp(
-              r'from\s+(.*?)\s+(?:with\s+reference|with\s+ref|on\s+\d{1,2}-|\.)',
+              r'from\s+(.*?)\s+(?:with\s+(?:transaction\s+)?ref(?:erence)?|with\s+ref|on\s+\d{1,2}-|\.)',
               caseSensitive: false)
-          .firstMatch(message);
+          .firstMatch(singleLine);
       if (fromMatch != null) {
         recipientOrSender = fromMatch.group(1)?.trim() ?? '';
         final ofMatch = RegExp(
@@ -112,6 +113,9 @@ class AhaduParser {
             .firstMatch(recipientOrSender);
         if (ofMatch != null) {
           recipientOrSender = ofMatch.group(1)?.trim() ?? recipientOrSender;
+        }
+        if (recipientOrSender.toLowerCase().startsWith('on ')) {
+          recipientOrSender = '';
         }
       }
     } else {
@@ -128,10 +132,18 @@ class AhaduParser {
 
     if (amount <= 0) return null;
 
-    // 2. Extract Available Balance: "Your Available Balance is ETB 4,937.35."
-    totalBalance = extractAmount(RegExp(
-        r'(?:Available\s+Balance|Balance)\s+(?:is\s+)?ETB\s*([0-9,.]+)',
-        caseSensitive: false));
+    // 2. Extract Available Balance: "Your Available Balance is ETB 4,937.35." or "Your current balance is 19,037.20."
+    final balMatch = RegExp(
+      r'(?:Available\s+Balance|Current\s+Balance|Balance)\s*(?:is|:)?\s*(?:ETB\s*)?(-?[0-9,]+(?:\.[0-9]+)?)',
+      caseSensitive: false,
+    ).firstMatch(singleLine);
+    if (balMatch != null) {
+      String balStr = balMatch.group(1)?.replaceAll(',', '') ?? '0';
+      if (balStr.endsWith('.')) {
+        balStr = balStr.substring(0, balStr.length - 1);
+      }
+      totalBalance = double.tryParse(balStr) ?? 0.0;
+    }
 
     // 3. Extract Date — three supported formats:
     //   a) "on 14-JUL-26"  → DD-MMM-YY  (transfer messages)

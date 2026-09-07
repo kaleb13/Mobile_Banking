@@ -31,12 +31,6 @@ class _WalletsScreenState extends State<WalletsScreen>
       vsync: this,
       duration: const Duration(milliseconds: 350),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
-      if (txVM.senders.isEmpty) {
-        txVM.ensureDefaultSenders();
-      }
-    });
   }
 
   @override

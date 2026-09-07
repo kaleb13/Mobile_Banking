@@ -38,3 +38,4 @@ export 'contact_avatar.dart';
 export 'app_info_section.dart';
 export 'frosted_glass_noise_painter.dart';
 export 'app_banner_card.dart';
+export 'animated_reasons_icon.dart';

@@ -106,7 +106,16 @@ class AppReasonLink {
   final int? id;
   final int reasonId;
   final String linkedName;
-  final String linkType; // 'sender' or 'receiver'
+  final String linkType; // 'sender' (Income) or 'receiver' (Expense)
+
+  /// The counterparty name (person or merchant) linked to this category.
+  String get counterpartyName => linkedName;
+
+  /// True if this rule categorizes incoming funds from this counterparty ('sender').
+  bool get isIncome => linkType == 'sender' || linkType == 'income';
+
+  /// True if this rule categorizes outgoing funds to this counterparty ('receiver').
+  bool get isExpense => linkType == 'receiver' || linkType == 'expense';
 
   AppReasonLink({
     this.id,

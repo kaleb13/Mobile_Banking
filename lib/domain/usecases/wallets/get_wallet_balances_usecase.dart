@@ -30,14 +30,14 @@ class GetWalletBalancesUseCase {
     final Map<String, double> latestBalancesMap = {};
     double totalBalance = 0.0;
 
-    // 1. Bank Accounts: Match latest transaction balance by bank name (tx.name)
+    // 1. Bank Accounts: Match latest transaction balance by bank name (tx.bankName)
     for (final sender in senders) {
       // Check if whole bank is paused (i.e. 'CBE' without colon)
       if (pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, sender.senderName))) {
         continue;
       }
 
-      final senderTxs = transactions.where((t) => BankSenders.isSameBank(t.name, sender.senderName));
+      final senderTxs = transactions.where((t) => BankSenders.isSameBank(t.bankName, sender.senderName));
 
       final slots = senderTxs.map((t) => t.simSlot).toSet().toList();
       double bankTotal = 0.0;
@@ -96,9 +96,9 @@ class GetWalletBalancesUseCase {
 
     // 2b. Manual cash additions and deductions
     for (final ctx in cashTransactions) {
-      if (ctx.type == 'addition') {
+      if (ctx.isIncome) {
         cashInflows += ctx.amount;
-      } else if (ctx.type == 'expense') {
+      } else if (ctx.isExpense) {
         cashOutflows += ctx.amount;
       }
     }

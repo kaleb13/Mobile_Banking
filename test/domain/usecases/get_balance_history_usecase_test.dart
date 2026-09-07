@@ -19,7 +19,7 @@ void main() {
       ];
 
       final cashTransactions = [
-        CashTransaction(id: 1, amount: 600, type: 'addition', date: DateTime(2026, 8, 13)),
+        CashTransaction(id: 1, amount: 600, type: 'income', date: DateTime(2026, 8, 13)),
       ];
 
       final result = useCase.execute(

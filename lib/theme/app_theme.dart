@@ -88,12 +88,14 @@ class AppColors {
   static const Color levelGlow5 = Color(0xFFFBBF24);
 
   // ── Daily Net Heatmap Palette ─────────────────────────────────────────────
-  static const Color heatmapHeavyGreen   = Color(0xFF34D399); // Vibrant emerald for high positive daily net
-  static const Color heatmapSubtleGreen  = Color(0xFF0F5234); // Deep forest green for moderate positive daily net
-  static const Color heatmapNeutral      = Color(0xFF1B2431); // Dark charcoal for zero/no transaction days
-  static const Color heatmapNeutralLight = Color(0xFFE2E8F0); // Light slate for zero/no transaction days on light theme
-  static const Color heatmapSubtleRed    = Color(0xFF4A1D24); // Deep burgundy for moderate negative daily net
-  static const Color heatmapHeavyRed     = levelGlow4; // Vibrant coral red for high negative daily net
+  static const Color heatmapHeavyGreen     = Color(0xFF34D399); // Vibrant emerald for high positive daily net
+  static const Color heatmapSubtleGreen    = Color(0xFF0F5234); // Deep forest green for moderate positive daily net
+  static const Color heatmapNeutral        = Color(0xFF1B2431); // Dark charcoal for zero/no transaction days
+  static const Color heatmapNeutralLight   = Color(0xFFE2E8F0); // Light slate for zero/no transaction days on light theme
+  static const Color heatmapInactiveSubtle = Color(0xFF243042); // Grayed/dimmed slate for moderate transaction days
+  static const Color heatmapInactiveHeavy  = Color(0xFF37465B); // Elevated grayed/slate for high transaction days
+  static const Color heatmapSubtleRed      = Color(0xFF4A1D24); // Deep burgundy for moderate negative daily net
+  static const Color heatmapHeavyRed       = levelGlow4; // Vibrant coral red for high negative daily net
 
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFFFFFFFF); // Primary text on dark
@@ -314,6 +316,19 @@ class AppColors {
     savingProgressGreenMid, // Color(0xFF047857)
     chartDarkEmerald,       // Color(0xFF059669)
     chartBrightEmerald,     // Color(0xFF10B981)
+  ];
+
+  /// Sleek slate charcoal tone for Category Analysis Badge.
+  static const Color categoryBadgeBg = Color(0xFF2A2D34);
+
+  /// Unified primary emerald green gradient for Category Analysis sliding info drawer.
+  static const List<Color> categorySlidingPrimaryGradient = unifiedBankBehindGradient;
+
+  /// Vibrant sapphire-to-royal blue gradient for Category Analysis sliding info drawer (legacy alias).
+  static const List<Color> categorySlidingBlueGradient = [
+    Color(0xFF1E3A8A), // Deep royal blue (#1E3A8A)
+    Color(0xFF2563EB), // Vibrant sapphire blue (#2563EB)
+    Color(0xFF3B82F6), // Radiant electric blue (#3B82F6)
   ];
 
   static const List<Color> categoryFallbackPalette = [

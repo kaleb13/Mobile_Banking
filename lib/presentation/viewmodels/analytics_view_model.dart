@@ -46,7 +46,7 @@ class AnalyticsViewModel extends ChangeNotifier {
     Map<String, DateTime> latestTimes = {};
 
     for (var tx in transactions) {
-      final bankKey = tx.name.trim();
+      final bankKey = tx.bankName.trim();
       counts[bankKey] = (counts[bankKey] ?? 0) + 1;
       if (latestTimes[bankKey] == null ||
           tx.date.isAfter(latestTimes[bankKey]!)) {
@@ -87,7 +87,7 @@ class AnalyticsViewModel extends ChangeNotifier {
 
     Map<String, int> counts = {};
     for (var tx in transactions) {
-      final bankKey = tx.name.trim();
+      final bankKey = tx.bankName.trim();
       counts[bankKey] = (counts[bankKey] ?? 0) + 1;
     }
 
@@ -236,8 +236,8 @@ class AnalyticsViewModel extends ChangeNotifier {
       if (ctx.date.year == now.year &&
           ctx.date.month == now.month &&
           ctx.date.day == now.day) {
-        if (ctx.type == 'addition') income += ctx.amount;
-        if (ctx.type == 'expense') expense += ctx.amount;
+        if (ctx.isIncome) income += ctx.amount;
+        if (ctx.isExpense) expense += ctx.amount;
       }
     }
     return income - expense;
@@ -263,8 +263,8 @@ class AnalyticsViewModel extends ChangeNotifier {
     }
     for (final ctx in cashTxns) {
       if (ctx.date.year != now.year || ctx.date.month != now.month) continue;
-      if (ctx.type == 'addition') income += ctx.amount;
-      if (ctx.type == 'expense') expense += ctx.amount;
+      if (ctx.isIncome) income += ctx.amount;
+      if (ctx.isExpense) expense += ctx.amount;
     }
     final rawPnl = income - expense;
     final liabilityDrag = getTotalBorrowedLiability?.call() ?? 0.0;

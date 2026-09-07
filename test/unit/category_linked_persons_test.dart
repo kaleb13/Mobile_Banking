@@ -117,10 +117,10 @@ void main() {
       expect(viewModel.hasLinkedPersons(20), isFalse);
     });
 
-    test('uniqueCounterparties extracts sorted unique names from senders and transactions', () async {
+    test('uniqueCounterparties extracts sorted unique names from transactions and excludes bank wallets', () async {
       repo.senders = [
-        AppSender(senderName: 'Telebirr Service'),
-        AppSender(senderName: 'Kebede Tadesse'),
+        AppSender(senderName: 'Telebirr'),
+        AppSender(senderName: 'CBE'),
       ];
       repo.transactions = [
         AppTransaction(
@@ -152,7 +152,9 @@ void main() {
       final counterparties = viewModel.uniqueCounterparties;
       expect(counterparties.contains('Almaz Wolde'), isTrue);
       expect(counterparties.contains('Kebede Tadesse'), isTrue);
-      expect(counterparties.contains('Telebirr Service'), isTrue);
+      // Bank wallets must never be in counterparties
+      expect(counterparties.contains('Telebirr'), isFalse);
+      expect(counterparties.contains('CBE'), isFalse);
       // Ensure no duplicates
       expect(counterparties.where((n) => n == 'Kebede Tadesse').length, 1);
     });

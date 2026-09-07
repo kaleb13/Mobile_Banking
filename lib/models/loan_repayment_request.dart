@@ -10,8 +10,11 @@ class LoanRepaymentRequest {
   /// The SMS transaction ID that triggered this
   final String transactionId;
 
-  /// The name found in the SMS (e.g. "NAHOM Abreham Hailesilase")
-  final String senderFound;
+  /// The counterparty name found in the SMS (e.g. "NAHOM Abreham Hailesilase")
+  final String counterpartyFound;
+
+  /// Backward-compatibility alias for [counterpartyFound].
+  String get senderFound => counterpartyFound;
 
   /// The name that was being tracked (e.g. "Nahom Abreham")
   final String trackedName;
@@ -29,12 +32,13 @@ class LoanRepaymentRequest {
     this.id,
     required this.loanId,
     required this.transactionId,
-    required this.senderFound,
+    String? counterpartyFound,
+    String? senderFound,
     required this.trackedName,
     required this.amount,
     required this.createdAt,
     this.status = 'pending',
-  });
+  }) : counterpartyFound = counterpartyFound ?? senderFound ?? '';
 
   bool get isPending => status == 'pending';
 
@@ -42,7 +46,7 @@ class LoanRepaymentRequest {
         if (id != null) 'id': id,
         'loanId': loanId,
         'transactionId': transactionId,
-        'senderFound': senderFound,
+        'senderFound': counterpartyFound,
         'trackedName': trackedName,
         'amount': amount,
         'createdAt': createdAt.toIso8601String(),
@@ -54,18 +58,25 @@ class LoanRepaymentRequest {
         id: m['id'] as int?,
         loanId: m['loanId'] as int,
         transactionId: m['transactionId'] as String,
-        senderFound: m['senderFound'] as String,
+        counterpartyFound:
+            (m['counterpartyFound'] ?? m['senderFound'] ?? '') as String,
         trackedName: m['trackedName'] as String,
         amount: (m['amount'] as num).toDouble(),
         createdAt: DateTime.parse(m['createdAt'] as String),
         status: m['status'] as String? ?? 'pending',
       );
 
-  LoanRepaymentRequest copyWith({String? status}) => LoanRepaymentRequest(
+  LoanRepaymentRequest copyWith({
+    String? status,
+    String? counterpartyFound,
+    String? senderFound,
+  }) =>
+      LoanRepaymentRequest(
         id: id,
         loanId: loanId,
         transactionId: transactionId,
-        senderFound: senderFound,
+        counterpartyFound:
+            counterpartyFound ?? senderFound ?? this.counterpartyFound,
         trackedName: trackedName,
         amount: amount,
         createdAt: createdAt,

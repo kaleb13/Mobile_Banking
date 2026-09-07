@@ -9,9 +9,11 @@ class LoanRecord {
   /// Full name / identifier of the other party
   final String personName;
 
-  /// Optional: the SMS sender address / bank sender name to watch for repayments.
-  /// When an SMS income arrives from this sender, system auto-attributes it.
-  final String? trackedSenderName;
+  /// Comma-separated bank channels to watch for repayments (e.g. "Telebirr, CBE").
+  final String? monitoredBanks;
+
+  /// Backward-compatibility alias for [monitoredBanks].
+  String? get trackedSenderName => monitoredBanks;
 
   /// Original loan amount
   final double principalAmount;
@@ -42,7 +44,8 @@ class LoanRecord {
     this.id,
     required this.loanType,
     required this.personName,
-    this.trackedSenderName,
+    String? monitoredBanks,
+    String? trackedSenderName,
     required this.principalAmount,
     this.paidAmount = 0.0,
     required this.loanDate,
@@ -51,7 +54,7 @@ class LoanRecord {
     this.status = 'active',
     this.note,
     this.contractNumber,
-  });
+  }) : monitoredBanks = monitoredBanks ?? trackedSenderName;
 
   double get remainingAmount =>
       (principalAmount - paidAmount).clamp(0, double.infinity);
@@ -70,7 +73,7 @@ class LoanRecord {
         if (id != null) 'id': id,
         'loanType': loanType,
         'personName': personName,
-        'trackedSenderName': trackedSenderName,
+        'trackedSenderName': monitoredBanks,
         'principalAmount': principalAmount,
         'paidAmount': paidAmount,
         'loanDate': loanDate.toIso8601String(),
@@ -85,7 +88,7 @@ class LoanRecord {
         id: m['id'] as int?,
         loanType: m['loanType'] as String,
         personName: m['personName'] as String,
-        trackedSenderName: m['trackedSenderName'] as String?,
+        monitoredBanks: (m['monitoredBanks'] ?? m['trackedSenderName']) as String?,
         principalAmount: (m['principalAmount'] as num).toDouble(),
         paidAmount: (m['paidAmount'] as num? ?? 0).toDouble(),
         loanDate: DateTime.parse(m['loanDate'] as String),
@@ -99,6 +102,7 @@ class LoanRecord {
   LoanRecord copyWith({
     double? paidAmount,
     String? status,
+    String? monitoredBanks,
     String? trackedSenderName,
     String? note,
     DateTime? dueDate,
@@ -109,7 +113,7 @@ class LoanRecord {
         id: id,
         loanType: loanType,
         personName: personName,
-        trackedSenderName: trackedSenderName ?? this.trackedSenderName,
+        monitoredBanks: monitoredBanks ?? trackedSenderName ?? this.monitoredBanks,
         principalAmount: principalAmount,
         paidAmount: paidAmount ?? this.paidAmount,
         loanDate: loanDate,

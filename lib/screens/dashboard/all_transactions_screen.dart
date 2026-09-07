@@ -19,17 +19,22 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
+import '../../services/bank_senders.dart';
 import '../../widgets/bank_avatar.dart';
 import 'transaction_detail_screen.dart';
 
 class AllTransactionsScreen extends StatefulWidget {
   final String? initialSearchQuery;
-  final String? initialSenderFilter;
+  final String? initialBankFilter;
+  final String? initialCounterpartyFilter;
+  final String? initialSenderFilter; // Backward-compatibility alias
   final AppDateFilterValue? initialDateFilter;
 
   const AllTransactionsScreen({
     super.key,
     this.initialSearchQuery,
+    this.initialBankFilter,
+    this.initialCounterpartyFilter,
     this.initialSenderFilter,
     this.initialDateFilter,
   });
@@ -41,7 +46,8 @@ class AllTransactionsScreen extends StatefulWidget {
 class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   late TextEditingController _searchController;
   String _searchQuery = '';
-  late String _selectedSender;
+  late String _selectedBank;
+  String? _selectedCounterparty;
   int? _selectedSimSlot; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
   late AppDateFilterValue _dateFilterValue;
   String _selectedType = 'All';
@@ -54,7 +60,25 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   void initState() {
     super.initState();
     _searchQuery = widget.initialSearchQuery ?? '';
-    _selectedSender = widget.initialSenderFilter ?? 'All';
+    _selectedBank = widget.initialBankFilter ?? 'All Banks';
+    _selectedCounterparty = widget.initialCounterpartyFilter;
+
+    // Backward-compatibility bridge for initialSenderFilter
+    if (widget.initialSenderFilter != null &&
+        widget.initialSenderFilter!.isNotEmpty &&
+        widget.initialSenderFilter != 'All' &&
+        widget.initialSenderFilter != 'All Senders') {
+      final senderVal = widget.initialSenderFilter!;
+      final isKnownBank = BankSenders.match(senderVal) != null;
+      if (isKnownBank) {
+        if (_selectedBank == 'All Banks' || _selectedBank == 'All') {
+          _selectedBank = senderVal;
+        }
+      } else {
+        _selectedCounterparty ??= senderVal;
+      }
+    }
+
     _dateFilterValue =
         widget.initialDateFilter ?? const AppDateFilterValue.anyTime();
     _searchController = TextEditingController(text: _searchQuery);
@@ -73,30 +97,31 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final allTransactions = txVM.transactions;
     final fmt = NumberFormat('#,##0.00');
 
-    // Unique sender / bank names for the dropdown
-    final Set<String> senderNamesSet = {
-      'All',
+    // Unique bank names for the dropdown (strictly banks only)
+    final Set<String> bankNamesSet = {
+      'All Banks',
       ...txVM.senders.map((s) => s.senderName),
     };
-    if (_selectedSender != 'All') {
-      senderNamesSet.add(_selectedSender);
+    if (_selectedBank != 'All Banks' && _selectedBank != 'All') {
+      bankNamesSet.add(_selectedBank);
     }
-    final senderNames = senderNamesSet.toList();
+    final bankNames = bankNamesSet.toList();
 
-    final isBank = txVM.senders.any(
-      (s) =>
-          s.senderName.trim().toUpperCase() ==
-          _selectedSender.trim().toUpperCase(),
-    );
-
-    final bool isCounterpartyView = !isBank && _selectedSender != 'All';
+    final bool isCounterpartyView = _selectedCounterparty != null &&
+        _selectedCounterparty!.trim().isNotEmpty &&
+        _selectedCounterparty != 'All' &&
+        _selectedCounterparty != 'All Counterparties' &&
+        _selectedCounterparty != 'All Senders';
 
     // 1. Compute full category inventory for this counterparty across active date & search
     final counterpartyTxs = isCounterpartyView
         ? const FilterTransactionsUseCase().execute(
             transactions: allTransactions,
             params: FilterTransactionsParams(
-              senderFilter: _selectedSender,
+              bankFilter: (_selectedBank != 'All Banks' && _selectedBank != 'All')
+                  ? _selectedBank
+                  : null,
+              counterpartyFilter: _selectedCounterparty,
               simSlotFilter: _selectedSimSlot,
               dateFilter: _dateFilterValue,
               searchQuery: _searchQuery,
@@ -108,8 +133,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final Map<String, int> categoryCounts = {};
     if (isCounterpartyView) {
       for (final tx in counterpartyTxs) {
-        final rawCat =
-            (tx.resolvedReason ?? tx.reason ?? tx.category).trim();
+        final rawCat = tx.resolvedCategory.trim();
         final cat = rawCat.isNotEmpty ? rawCat : 'General';
         categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
       }
@@ -119,9 +143,10 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final filteredTransactions = const FilterTransactionsUseCase().execute(
       transactions: allTransactions,
       params: FilterTransactionsParams(
-        bankFilter: isBank ? _selectedSender : null,
-        senderFilter:
-            !isBank && _selectedSender != 'All' ? _selectedSender : null,
+        bankFilter: (_selectedBank != 'All Banks' && _selectedBank != 'All')
+            ? _selectedBank
+            : null,
+        counterpartyFilter: isCounterpartyView ? _selectedCounterparty : null,
         categoryFilter:
             _selectedCategory != 'All' ? _selectedCategory : null,
         typeFilter: _selectedType,
@@ -147,7 +172,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             _buildTopHeaderAndSearch(
               context,
               txVM,
-              senderNames,
+              bankNames,
               filteredTransactions.length,
               isCounterpartyView: isCounterpartyView,
               counterpartyTxs: counterpartyTxs,
@@ -169,7 +194,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   Widget _buildTopHeaderAndSearch(
     BuildContext context,
     TransactionsViewModel txVM,
-    List<String> senderNames,
+    List<String> bankNames,
     int count, {
     required bool isCounterpartyView,
     required List<AppTransaction> counterpartyTxs,
@@ -181,7 +206,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final bool isReasonFilter =
         widget.initialSearchQuery != null && widget.initialSearchQuery!.isNotEmpty;
     final bool isFiltered = _searchQuery.isNotEmpty ||
-        _selectedSender != 'All' ||
+        (_selectedBank != 'All' && _selectedBank != 'All Banks') ||
+        isCounterpartyView ||
         _selectedType != 'All' ||
         _selectedCategory != 'All' ||
         _selectedSimSlot != null ||
@@ -189,11 +215,11 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
         _isBookmarkedOnly ||
         _sortBy != 'Date: Newest';
 
-    final cleanSenderName = isCounterpartyView
-        ? (CounterpartyMatcher.normalize(_selectedSender).isNotEmpty
-            ? CounterpartyMatcher.normalize(_selectedSender)
-            : _selectedSender)
-        : _selectedSender;
+    final cleanCounterpartyName = isCounterpartyView
+        ? (CounterpartyMatcher.normalize(_selectedCounterparty!).isNotEmpty
+            ? CounterpartyMatcher.normalize(_selectedCounterparty!)
+            : _selectedCounterparty!)
+        : '';
 
     return Container(
       color: AppColors.background,
@@ -217,7 +243,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                   children: [
                     Text(
                       isCounterpartyView
-                          ? cleanSenderName
+                          ? cleanCounterpartyName
                           : isReasonFilter
                               ? widget.initialSearchQuery!
                               : 'Transactions',
@@ -233,7 +259,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     const SizedBox(height: 2),
                     Text(
                       isCounterpartyView
-                          ? '$count transactions with this person'
+                          ? '$count transactions with this counterparty'
                           : isReasonFilter
                               ? 'Reason Analysis Detail'
                               : '$count transactions recorded',
@@ -258,12 +284,15 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                     setState(() {
                       _searchQuery = '';
                       _searchController.clear();
-                      _selectedSender = 'All';
+                      _selectedBank = 'All Banks';
+                      _selectedCounterparty = null;
                       _selectedType = 'All';
                       _selectedCategory = 'All';
+                      _selectedSimSlot = null;
                       _sortBy = 'Date: Newest';
                       _isBookmarkedOnly = false;
                       _dateFilterValue = const AppDateFilterValue.anyTime();
+                      _displayLimit = 30;
                     });
                   },
                 ),
@@ -293,6 +322,60 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             physics: const BouncingScrollPhysics(),
             child: Row(
               children: [
+                // ── Active Counterparty Filter Pill (Dismissible) ──
+                if (isCounterpartyView) ...[
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedCounterparty = null;
+                        _selectedCategory = 'All';
+                        _displayLimit = 30;
+                      });
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.brandGreen.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.person_rounded,
+                            size: 15,
+                            color: AppColors.brandGreen,
+                          ),
+                          const SizedBox(width: 6),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 130),
+                            child: Text(
+                              cleanCounterpartyName,
+                              style: const TextStyle(
+                                color: AppColors.brandGreen,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          const Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: AppColors.brandGreen,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+
                 // ── Bookmark Filter Toggle Pill ──
                 GestureDetector(
                   onTap: () {
@@ -360,8 +443,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                 ),
                 const SizedBox(width: 8),
 
-                // ── Sender / Account Dropdown ──
-                _buildSenderDropdown(senderNames),
+                // ── Bank / Account Dropdown ──
+                _buildBankDropdown(bankNames),
                 const SizedBox(width: 8),
 
                 // ── Dynamic SIM Dropdown (Dual-SIM only) ──
@@ -386,7 +469,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                         _selectedSimSlot = null;
                         _dateFilterValue =
                             const AppDateFilterValue.anyTime();
-                        _selectedSender = 'All';
+                        _selectedBank = 'All Banks';
+                        _selectedCounterparty = null;
                         _sortBy = 'Date: Newest';
                         _searchQuery = '';
                         _displayLimit = 30;
@@ -399,12 +483,12 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             ),
           ),
 
-          // ── Counterparty Net Flow Summary Card (When Sender Selected) ───────
+          // ── Counterparty Net Flow Summary Card (When Counterparty Selected) ──
           if (isCounterpartyView) ...[
             const SizedBox(height: 12),
             _buildCounterpartyNetFlowCard(
               filteredTransactions,
-              cleanSenderName,
+              cleanCounterpartyName,
               isBalanceVisible,
               fmt,
             ),
@@ -426,7 +510,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   // ── Dynamic Counterparty Net Flow Summary Card ─────────────────────────────
   Widget _buildCounterpartyNetFlowCard(
     List<AppTransaction> txs,
-    String senderName,
+    String counterpartyName,
     bool isBalanceVisible,
     NumberFormat fmt,
   ) {
@@ -677,27 +761,27 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     );
   }
 
-  Widget _buildSenderDropdown(List<String> senderNames) {
+  Widget _buildBankDropdown(List<String> bankNames) {
     return AppDropdown.simple(
-      value: _selectedSender,
-      items: senderNames,
+      value: _selectedBank,
+      items: bankNames,
       onChanged: (name) {
         if (name != null) {
           setState(() {
-            _selectedSender = name;
-            _selectedCategory = 'All';
+            _selectedBank = name;
             _displayLimit = 30;
           });
         }
       },
       variant: AppDropdownVariant.dark,
-      maxWidth: 120,
+      maxWidth: 130,
       borderRadius: 100,
       prefix: Icon(
         Icons.account_balance_wallet_rounded,
         size: 14,
-        color:
-            _selectedSender != 'All' ? Colors.white : AppColors.textSecondary,
+        color: (_selectedBank != 'All' && _selectedBank != 'All Banks')
+            ? Colors.white
+            : AppColors.textSecondary,
       ),
     );
   }
@@ -767,7 +851,8 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
             icon: Icons.receipt_long_outlined,
             title: 'No Transactions Found',
             subtitle: _searchQuery.isNotEmpty ||
-                    _selectedSender != 'All' ||
+                    (_selectedBank != 'All' && _selectedBank != 'All Banks') ||
+                    _selectedCounterparty != null ||
                     _selectedCategory != 'All' ||
                     _selectedType != 'All' ||
                     !_dateFilterValue.isDefault ||
@@ -827,7 +912,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Income' : 'Expense';
     final String subLabel =
-        isIncome ? 'From ${tx.sender}' : 'To ${tx.sender}';
+        isIncome ? 'From ${tx.counterparty}' : 'To ${tx.counterparty}';
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
     final bool hasReason = tx.reasonId != null ||
         (tx.customReasonText != null &&
@@ -850,7 +935,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              _buildDarkBankAvatar(tx.name),
+              _buildDarkBankAvatar(tx.bankName),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -876,7 +961,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
                             padding: EdgeInsets.only(left: 6.0),
                             child: BookmarkBadge(),
                           ),
-                        if (txVM.accountsForBank(tx.name).length > 1)
+                        if (txVM.accountsForBank(tx.bankName).length > 1)
                           Padding(
                             padding: const EdgeInsets.only(left: 6.0),
                             child: SimBadge(simSlot: tx.simSlot),

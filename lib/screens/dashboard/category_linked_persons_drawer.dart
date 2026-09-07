@@ -65,7 +65,7 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
               maxHeightFactor: 0.94,
               headerCard: const AppDrawerHeaderCard(
                 icon: Icons.person_add_alt_1_rounded,
-                title: 'Link Person',
+                title: 'Link Counterparty',
               ),
               bottomAction: Row(
                 children: [
@@ -79,13 +79,13 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: AppButton.primary(
-                      text: 'Link Person',
+                      text: 'Link Counterparty',
                       icon: Icons.link_rounded,
                       onPressed: () async {
                         final name = nameCtrl.text.trim();
                         if (name.isEmpty) {
                           AppToast.warning(context,
-                              message: 'Please enter a person name');
+                              message: 'Please enter a counterparty name');
                           return;
                         }
 
@@ -115,10 +115,10 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Person Name Field with Clean White Person Icon
+                    // 1. Counterparty Name Field with Clean White Person Icon
                     AppTextField.modal(
                       controller: nameCtrl,
-                      hint: 'Person or counterparty name...',
+                      hint: 'Search counterparty name...',
                       maxLength: 60,
                       prefixIcon: Icons.person_outline_rounded,
                       prefixIconColor: Colors.white,
@@ -130,7 +130,7 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
                     if (filteredSuggestions.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Text(
-                        query.isEmpty ? 'RECENT CONTACTS' : 'MATCHING CONTACTS',
+                        query.isEmpty ? 'RECENT COUNTERPARTIES' : 'MATCHING COUNTERPARTIES',
                         style: const TextStyle(
                           color: AppColors.textSoft,
                           fontSize: 10.5,
@@ -301,14 +301,14 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
       maxHeightFactor: 0.92,
       headerCard: AppDrawerHeaderCard(
         icon: Icons.people_outline_rounded,
-        title: 'Linked Persons',
+        title: 'Linked Counterparties',
         trailing: AppBadge.neutral(
-          text: '${links.length} ${links.length == 1 ? 'person' : 'persons'}',
+          text: '${links.length} ${links.length == 1 ? 'counterparty' : 'counterparties'}',
           size: AppBadgeSize.small,
         ),
       ),
       bottomAction: AppButton.primary(
-        text: 'Link New Person',
+        text: 'Link New Counterparty',
         icon: Icons.person_add_alt_1_rounded,
         onPressed: () => _showLinkPersonDrawer(context, txVM),
       ),
@@ -349,7 +349,7 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'No Persons Linked Yet',
+              'No Counterparties Linked Yet',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -358,7 +358,7 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Link contacts or counterparties so incoming or outgoing transfers are automatically categorized under "${reason.name}".',
+              'Link counterparties so incoming or outgoing transfers are automatically categorized under "${reason.name}".',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.textSecondary,
@@ -380,7 +380,7 @@ class CategoryLinkedPersonsDrawer extends StatelessWidget {
     final expectedType = link.linkType == 'sender' ? 'income' : 'expense';
     final matchingCount = txVM.transactions.where((t) {
       final matchesName =
-          CounterpartyMatcher.matches(t.sender, link.linkedName);
+          CounterpartyMatcher.matches(t.counterparty, link.linkedName);
       final matchesType = t.type.toLowerCase() == expectedType;
       return matchesName && matchesType;
     }).length;

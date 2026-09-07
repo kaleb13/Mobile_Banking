@@ -81,7 +81,7 @@ class LinkReasonDrawer extends StatelessWidget {
       matchingCount = matchingCountOverride!;
     } else if (txVM != null) {
       matchingCount = txVM.transactions.where((t) {
-        final matchesName = CounterpartyMatcher.matches(t.sender, contactName);
+        final matchesName = CounterpartyMatcher.matches(t.counterparty, contactName);
         final matchesType = t.type.toLowerCase() == expectedType;
         return matchesName && matchesType;
       }).length;
@@ -356,7 +356,7 @@ class UnlinkReasonDrawer extends StatelessWidget {
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
 
     final matchingCount = txVM.transactions.where((t) {
-      final matchesName = CounterpartyMatcher.matches(t.sender, contactName);
+      final matchesName = CounterpartyMatcher.matches(t.counterparty, contactName);
       final matchesReason = t.reasonId == link.reasonId ||
           (t.resolvedReason?.toLowerCase() == reasonName.toLowerCase());
       return matchesName && matchesReason;

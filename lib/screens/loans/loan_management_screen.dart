@@ -38,9 +38,6 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
     final initialTab = context.read<LoansViewModel>().activeLoanTabIndex.clamp(0, 2);
     _tabCtrl = TabController(length: 3, vsync: this, initialIndex: initialTab);
     _tabCtrl.addListener(_onTabChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LoansViewModel>().loadLoans();
-    });
   }
 
   void _onTabChanged() {
@@ -53,6 +50,110 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
     _tabCtrl.removeListener(_onTabChanged);
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  int? _dragStartTabIndex;
+  double _accumulatedOverscroll = 0.0;
+  bool _navigatedBoundary = false;
+  DateTime? _lastBoundaryNavigationTime;
+
+  bool _handleLoanTabScrollNotification(
+    ScrollNotification notification,
+    SettingsViewModel settingsVM,
+  ) {
+    if (notification.metrics.axis != Axis.horizontal) return false;
+
+    if (notification is ScrollStartNotification) {
+      _dragStartTabIndex = _tabCtrl.index;
+      _accumulatedOverscroll = 0.0;
+      _navigatedBoundary = false;
+      return false;
+    }
+
+    if (_navigatedBoundary || _tabCtrl.indexIsChanging) return false;
+
+    // Check debounce time (prevent double trigger within 600ms)
+    final now = DateTime.now();
+    if (_lastBoundaryNavigationTime != null &&
+        now.difference(_lastBoundaryNavigationTime!) <
+            const Duration(milliseconds: 600)) {
+      return false;
+    }
+
+    // Track overscroll from ClampingScrollPhysics (Android default)
+    if (notification is OverscrollNotification) {
+      _accumulatedOverscroll += notification.overscroll;
+    }
+
+    // Also track stretch overscroll from BouncingScrollPhysics
+    if (notification is ScrollUpdateNotification) {
+      if (notification.metrics.pixels > notification.metrics.maxScrollExtent) {
+        _accumulatedOverscroll =
+            notification.metrics.pixels - notification.metrics.maxScrollExtent;
+      } else if (notification.metrics.pixels <
+          notification.metrics.minScrollExtent) {
+        _accumulatedOverscroll =
+            notification.metrics.pixels - notification.metrics.minScrollExtent;
+      }
+    }
+
+    // Threshold check during active drag (36 logical pixels)
+    // 1. Rightmost tab (Settled, tab index 2) -> user swipes left to go to Profile (page 4)
+    if (_tabCtrl.index == 2 &&
+        _dragStartTabIndex == 2 &&
+        _accumulatedOverscroll > 36.0) {
+      _navigatedBoundary = true;
+      _lastBoundaryNavigationTime = now;
+      _accumulatedOverscroll = 0.0;
+      HapticFeedback.lightImpact();
+      settingsVM.animateToTab(4);
+      return false;
+    }
+
+    // 2. Leftmost tab (Lent Out, tab index 0) -> user swipes right to go to Analysis / Spending Chart (page 2)
+    if (_tabCtrl.index == 0 &&
+        _dragStartTabIndex == 0 &&
+        _accumulatedOverscroll < -36.0) {
+      _navigatedBoundary = true;
+      _lastBoundaryNavigationTime = now;
+      _accumulatedOverscroll = 0.0;
+      HapticFeedback.lightImpact();
+      settingsVM.animateToTab(2);
+      return false;
+    }
+
+    // Flick / release check on ScrollEndNotification
+    if (notification is ScrollEndNotification) {
+      final velocity = notification.dragDetails?.primaryVelocity ?? 0.0;
+
+      // Settled tab: flicking left (negative velocity) or dragging past 14px
+      if (_tabCtrl.index == 2 &&
+          _dragStartTabIndex == 2 &&
+          (velocity < -160.0 || _accumulatedOverscroll > 14.0)) {
+        _navigatedBoundary = true;
+        _lastBoundaryNavigationTime = now;
+        _accumulatedOverscroll = 0.0;
+        HapticFeedback.lightImpact();
+        settingsVM.animateToTab(4);
+        return false;
+      }
+
+      // Lent Out tab: flicking right (positive velocity) or dragging past -14px
+      if (_tabCtrl.index == 0 &&
+          _dragStartTabIndex == 0 &&
+          (velocity > 160.0 || _accumulatedOverscroll < -14.0)) {
+        _navigatedBoundary = true;
+        _lastBoundaryNavigationTime = now;
+        _accumulatedOverscroll = 0.0;
+        HapticFeedback.lightImpact();
+        settingsVM.animateToTab(2);
+        return false;
+      }
+
+      _accumulatedOverscroll = 0.0;
+    }
+
+    return false;
   }
 
   @override
@@ -109,30 +210,36 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
               // ── Tab views (Rendered underneath, padded by card resting height) ──
               Padding(
                 padding: EdgeInsets.only(top: cardRestingHeight),
-                child: TabBarView(
-                  controller: _tabCtrl,
-                  children: [
-                    _LoanList(
-                      loans: lentLoans,
-                      accentColor: _lentColor,
-                      emptyTitle: 'No active loans given',
-                      emptySubtitle: 'Track money you\'ve lent to others',
-                    ),
-                    _LoanList(
-                      loans: borrowedLoans,
-                      accentColor: _borrowColor,
-                      emptyTitle: 'No active debts',
-                      emptySubtitle: 'Track money you\'ve borrowed from others',
-                    ),
-                    _LoanList(
-                      loans: paidLoans,
-                      accentColor: _paidColor,
-                      emptyTitle: 'No settled loans yet',
-                      emptySubtitle:
-                          'Paid loans will appear here automatically',
-                      showPaid: true,
-                    ),
-                  ],
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (notification) =>
+                      _handleLoanTabScrollNotification(
+                          notification, settingsVM),
+                  child: TabBarView(
+                    controller: _tabCtrl,
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      _LoanList(
+                        loans: lentLoans,
+                        accentColor: _lentColor,
+                        emptyTitle: 'No active loans given',
+                        emptySubtitle: 'Track money you\'ve lent to others',
+                      ),
+                      _LoanList(
+                        loans: borrowedLoans,
+                        accentColor: _borrowColor,
+                        emptyTitle: 'No active debts',
+                        emptySubtitle: 'Track money you\'ve borrowed from others',
+                      ),
+                      _LoanList(
+                        loans: paidLoans,
+                        accentColor: _paidColor,
+                        emptyTitle: 'No settled loans yet',
+                        emptySubtitle:
+                            'Paid loans will appear here automatically',
+                        showPaid: true,
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
@@ -249,6 +356,27 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
     });
   }
 
+  void _handleCardHorizontalSwipe(DragEndDetails details) {
+    final v = details.primaryVelocity ?? 0.0;
+    if (v < -180.0) {
+      // Swiping left on top card
+      if (widget.tabController.index < 2) {
+        widget.tabController.animateTo(widget.tabController.index + 1);
+      } else {
+        HapticFeedback.lightImpact();
+        widget.settingsVM.animateToTab(4);
+      }
+    } else if (v > 180.0) {
+      // Swiping right on top card
+      if (widget.tabController.index > 0) {
+        widget.tabController.animateTo(widget.tabController.index - 1);
+      } else {
+        HapticFeedback.lightImpact();
+        widget.settingsVM.animateToTab(2);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final topSafeArea = MediaQuery.paddingOf(context).top;
@@ -281,18 +409,21 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
             // ── Front Sliding Loan Card ──
             Transform.translate(
               offset: Offset(0, currentSlide),
-              child: Container(
-                width: double.infinity,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(topCornerRadius),
-                    topRight: Radius.circular(topCornerRadius),
-                    bottomLeft: const Radius.circular(28),
-                    bottomRight: const Radius.circular(28),
+              child: GestureDetector(
+                onHorizontalDragEnd: _handleCardHorizontalSwipe,
+                behavior: HitTestBehavior.translucent,
+                child: Container(
+                  width: double.infinity,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(topCornerRadius),
+                      topRight: Radius.circular(topCornerRadius),
+                      bottomLeft: const Radius.circular(28),
+                      bottomRight: const Radius.circular(28),
+                    ),
                   ),
-                ),
                 child: SafeArea(
                     bottom: false,
                     child: Padding(
@@ -509,6 +640,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                     ),
                   ),
                 ),
+              ),
               ),
             ],
           );
@@ -1084,9 +1216,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
           _buildInfoRow('Creation Date', DateFormat('MMM d, yyyy').format(current.loanDate), Colors.white),
           _buildInfoDivider(),
           _buildInfoRow('Due Date', DateFormat('MMM d, yyyy').format(current.dueDate), current.isOverdue ? AppColors.negative : Colors.white),
-          if (current.trackedSenderName != null && current.trackedSenderName!.isNotEmpty) ...[
+          if (current.monitoredBanks != null && current.monitoredBanks!.isNotEmpty) ...[
             _buildInfoDivider(),
-            _buildInfoRow('Monitored Banks', current.trackedSenderName!, Colors.white70),
+            _buildInfoRow('Monitored Banks', current.monitoredBanks!, Colors.white70),
           ],
           if (current.note != null && current.note!.isNotEmpty) ...[
             _buildInfoDivider(),
@@ -1694,7 +1826,12 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
       _amountCtrl.text = widget.prefilledAmount!.toStringAsFixed(2);
     }
     if (widget.prefilledName != null) {
-      _nameCtrl.text = widget.prefilledName!;
+      final trimmed = widget.prefilledName!.trim();
+      if (trimmed.isNotEmpty &&
+          trimmed.toLowerCase() != 'unspecified' &&
+          trimmed.toLowerCase() != 'unknown') {
+        _nameCtrl.text = trimmed;
+      }
     }
     if (widget.prefilledType != null) {
       _loanType = widget.prefilledType!;
@@ -1708,6 +1845,10 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
       _initialized = true;
       final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
       _selectedBanks = Set<String>.from(txVM.bankSenderNames);
+      if (widget.prefilledTrackedSender != null &&
+          widget.prefilledTrackedSender!.trim().isNotEmpty) {
+        _selectedBanks.add(widget.prefilledTrackedSender!.trim());
+      }
     }
   }
 
@@ -1771,7 +1912,7 @@ class _AddLoanSheetState extends State<AddLoanSheet> {
     await loansVM.createLoan(
       loanType: _loanType,
       personName: name,
-      trackedSenderName: tracked,
+      monitoredBanks: tracked,
       principalAmount: amount,
       dueDate: _dueDate,
       linkedTransactionId: widget.linkedTransactionId,
@@ -2198,8 +2339,8 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
         height: 48,
         onPressed: _confirmSelection,
         text: _selectedNames.isEmpty
-            ? 'Done (No contact selected)'
-            : 'Done (${_selectedNames.length} contact${_selectedNames.length > 1 ? "s" : ""} selected)',
+            ? 'Done (No counterparty selected)'
+            : 'Done (${_selectedNames.length} counterparty${_selectedNames.length > 1 ? "s" : ""} selected)',
       ),
       child: Column(
         children: [
@@ -2207,7 +2348,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
           AppSearchBar(
             mode: AppSearchBarMode.bar,
             controller: _searchCtrl,
-            hint: 'Search contacts…',
+            hint: 'Search counterparties…',
             backgroundColor: AppColors.previewCardBg,
             textColor: Colors.white,
             hintColor: AppColors.textSecondary.withValues(alpha: 0.6),
@@ -2219,7 +2360,7 @@ class _NamePickerSheetState extends State<_NamePickerSheet> {
           Expanded(
             child: _filtered.isEmpty
                 ? const Center(
-                    child: Text('No matching contacts found',
+                    child: Text('No matching counterparties found',
                         style: TextStyle(color: AppColors.textSecondary)),
                   )
                 : ListView.separated(
@@ -2388,10 +2529,10 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
             : _selectedTransaction!.amount,
       );
       _amountCtrl.text = initialAmount.toStringAsFixed(2);
-      final senderName = _selectedTransaction!.name.trim().isNotEmpty
-          ? _selectedTransaction!.name.trim()
-          : _selectedTransaction!.sender.trim();
-      _noteCtrl.text = 'Repaid via $senderName';
+      final sourceName = _selectedTransaction!.bankName.trim().isNotEmpty
+          ? _selectedTransaction!.bankName.trim()
+          : _selectedTransaction!.counterparty.trim();
+      _noteCtrl.text = 'Repaid via $sourceName';
     } else {
       // Pre-fill remaining amount for convenience
       _amountCtrl.text = widget.loan.remainingAmount.toStringAsFixed(2);
@@ -2420,12 +2561,12 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
             : tx.amount,
       );
       _amountCtrl.text = autoAmount.toStringAsFixed(2);
-      final senderName = tx.sender.trim().isNotEmpty
-          ? tx.sender.trim()
-          : tx.name.trim();
+      final sourceName = tx.bankName.trim().isNotEmpty
+          ? tx.bankName.trim()
+          : tx.counterparty.trim();
       if (_noteCtrl.text.trim().isEmpty ||
           _noteCtrl.text.startsWith('Repaid via')) {
-        _noteCtrl.text = 'Repaid via $senderName';
+        _noteCtrl.text = 'Repaid via $sourceName';
       }
     });
   }
@@ -2500,9 +2641,9 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _selectedTransaction!.sender.trim().isNotEmpty
-                              ? _selectedTransaction!.sender.trim()
-                              : _selectedTransaction!.name.trim(),
+                          _selectedTransaction!.counterparty.trim().isNotEmpty
+                              ? _selectedTransaction!.counterparty.trim()
+                              : _selectedTransaction!.bankName.trim(),
                           style: AppTypography.bodyMedium.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
@@ -2512,7 +2653,7 @@ class _RecordPaymentSheetState extends State<RecordPaymentSheet> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          '${_selectedTransaction!.name} • ${DateFormat('MMM d, yyyy').format(_selectedTransaction!.date)}',
+                          '${_selectedTransaction!.bankName} • ${DateFormat('MMM d, yyyy').format(_selectedTransaction!.date)}',
                           style: AppTypography.caption.copyWith(
                             color: AppColors.textSecondary,
                             fontSize: 11,
@@ -2685,7 +2826,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      req.senderFound,
+                                      req.counterpartyFound,
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 13,
@@ -2731,7 +2872,7 @@ class _PendingApprovalsBannerState extends State<_PendingApprovalsBanner> {
                                         const TextSpan(
                                             text: 'Incoming payment from '),
                                         TextSpan(
-                                          text: req.senderFound,
+                                          text: req.counterpartyFound,
                                           style: const TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.w600),

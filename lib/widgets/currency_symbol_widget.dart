@@ -51,6 +51,7 @@ class CurrencyTextWidget extends StatelessWidget {
   final double? iconSize;
   final AppCurrency? currency;
   final bool showSign;
+  final String? prefix;
   final String? customFormattedStr;
   final MainAxisSize mainAxisSize;
   final CrossAxisAlignment crossAxisAlignment;
@@ -64,6 +65,7 @@ class CurrencyTextWidget extends StatelessWidget {
     this.iconSize,
     this.currency,
     this.showSign = false,
+    this.prefix,
     this.customFormattedStr,
     this.mainAxisSize = MainAxisSize.min,
     this.crossAxisAlignment = CrossAxisAlignment.center,
@@ -81,7 +83,10 @@ class CurrencyTextWidget extends StatelessWidget {
 
     final formatter = NumberFormat('#,##0.00');
     final formattedAmount = customFormattedStr ?? formatter.format(amount.abs());
-    final signStr = showSign ? (amount > 0 ? '+' : amount < 0 ? '-' : '') : (amount < 0 ? '-' : '');
+    final signStr = prefix ??
+        (showSign
+            ? (amount > 0 ? '+' : amount < 0 ? '-' : '')
+            : (amount < 0 ? '-' : ''));
 
     final symbolWidget = CurrencySymbolWidget(
       currency: activeCurrency,

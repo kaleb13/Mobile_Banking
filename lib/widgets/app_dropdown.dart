@@ -242,6 +242,7 @@ class AppDropdown<T> extends StatelessWidget {
     final str = value.toString();
     return str == 'All' ||
         str == 'Any Time' ||
+        str == 'All Counterparties' ||
         str == 'All Senders' ||
         str == 'All Banks' ||
         str == 'All Wallets' ||

@@ -451,12 +451,15 @@ class TransactionQuickEditActivity : FlutterActivity() {
                         result = mapOf(
                             "id" to cursor.getString(0),
                             "name" to cursor.getString(1),
+                            "bankName" to cursor.getString(1),
                             "rawAmount" to cursor.getDouble(2),
                             "amount" to "ETB " + String.format(java.util.Locale.US, "%,.2f", cursor.getDouble(2)),
                             "type" to cursor.getString(3),
                             "date" to cursor.getString(4),
                             "sender" to cursor.getString(5),
+                            "counterparty" to cursor.getString(5),
                             "category" to cursor.getString(6),
+                            "sourceTag" to cursor.getString(6),
                             "rawMessage" to txRaw
                         )
                         break
@@ -474,12 +477,15 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     result = mapOf(
                         "id" to cursor.getString(0),
                         "name" to cursor.getString(1),
+                        "bankName" to cursor.getString(1),
                         "rawAmount" to cursor.getDouble(2),
                         "amount" to "ETB " + String.format(java.util.Locale.US, "%,.2f", cursor.getDouble(2)),
                         "type" to cursor.getString(3),
                         "date" to cursor.getString(4),
                         "sender" to cursor.getString(5),
+                        "counterparty" to cursor.getString(5),
                         "category" to cursor.getString(6),
+                        "sourceTag" to cursor.getString(6),
                         "rawMessage" to (cursor.getString(7) ?: "")
                     )
                 }

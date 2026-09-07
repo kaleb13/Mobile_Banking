@@ -350,7 +350,7 @@ class PeriodicReportReceiver : BroadcastReceiver() {
             // 3. Add cash balance if cash_transactions table exists and not paused
             if (!pausedSenders.contains("cash wallet")) {
                 val cursorCash = db.rawQuery(
-                    "SELECT SUM(CASE WHEN type = 'addition' THEN amount WHEN type = 'expense' THEN -amount ELSE 0 END) FROM cash_transactions",
+                    "SELECT SUM(CASE WHEN type = 'addition' OR type = 'income' THEN amount WHEN type = 'expense' OR type = 'deduction' THEN -amount ELSE 0 END) FROM cash_transactions",
                     null
                 )
                 if (cursorCash.moveToFirst()) {

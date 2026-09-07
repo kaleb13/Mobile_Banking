@@ -22,15 +22,19 @@ import 'bunna_parser.dart';
 class AutoReasonRule {
   final int id;
   final String name;
-  final String sender;
+  final String counterparty;
   final String? type;
+
+  /// Backward-compatibility alias for [counterparty]
+  String get sender => counterparty;
 
   const AutoReasonRule({
     required this.id,
     required this.name,
-    required this.sender,
+    String? counterparty,
+    String? sender,
     this.type,
-  });
+  }) : counterparty = counterparty ?? sender ?? '';
 }
 
 class BatchParseParams {
@@ -287,7 +291,7 @@ class SmsBatchParser {
           accountIdentifier: msg.accountIdentifier,
         ).copyWith(totalBalance: effectiveBal);
 
-        final txId = tx.id ?? '${tx.name}_${tx.date.millisecondsSinceEpoch}_${tx.amount}';
+        final txId = tx.id ?? '${tx.bankName}_${tx.date.millisecondsSinceEpoch}_${tx.amount}';
         if (seenTxIds.add(txId)) {
           parsedTransactions.add(tx);
         }
@@ -321,7 +325,7 @@ class SmsBatchParser {
       final tx = parsedTransactions[i];
       final ref = tx.bankReference?.trim().toUpperCase();
       if (ref != null && ref.isNotEmpty && ref.length >= 4) {
-        final key = '${tx.name.toUpperCase()}_${ref}_${tx.amount.toStringAsFixed(2)}';
+        final key = '${tx.bankName.toUpperCase()}_${ref}_${tx.amount.toStringAsFixed(2)}';
         refIndex.putIfAbsent(key, () => []).add(i);
       }
     }
@@ -383,11 +387,11 @@ class SmsBatchParser {
 
     return ParsedSmsResult(
       id: id,
-      bankName: sender.senderName,
+      bankName: sender.bankName,
       amount: amount,
       type: type,
       date: date,
-      counterparty: sender.senderName,
+      counterparty: 'Unspecified',
       totalBalance: 0.0,
       rawMessage: body,
       patternType: SmsPatternType.standardTransfer,

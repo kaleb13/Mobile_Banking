@@ -4,15 +4,34 @@ import '../utils/link_extractor.dart';
 
 class AppTransaction {
   final String? id;
-  final String name;
+  final String bankName;
   final double amount;
   final String type; // 'income' or 'expense'
   final DateTime date;
-  final String sender;
-  final String category;
+  final String counterparty;
+  final String sourceTag; // e.g. 'Auto' (parsed from SMS) or 'Manual'
   final String rawMessage;
   final bool isAutoDetected;
   final double totalBalance;
+
+  /// Backward-compatibility alias for [bankName]
+  String get name => bankName;
+
+  /// Backward-compatibility alias for [counterparty]
+  String get sender => counterparty;
+
+  /// Backward-compatibility alias for [sourceTag]
+  String get category => sourceTag;
+
+  /// True category of the transaction: resolves to the assigned reason/category name,
+  /// or 'Uncategorized' if no category/reason is linked.
+  String get resolvedCategory => resolvedReason ?? 'Uncategorized';
+
+  /// True if this transaction represents incoming funds (income).
+  bool get isIncome => type == 'income';
+
+  /// True if this transaction represents outgoing funds (expense).
+  bool get isExpense => type == 'expense';
 
   // Reason & Hierarchy system
   final int? reasonId; // points to reasons table (reusable)
@@ -31,12 +50,15 @@ class AppTransaction {
 
   AppTransaction({
     this.id,
-    required this.name,
+    String? bankName,
+    String? name,
     required this.amount,
     required this.type,
     required this.date,
-    required this.sender,
-    required this.category,
+    String? counterparty,
+    String? sender,
+    String? sourceTag,
+    String? category,
     required this.rawMessage,
     required this.isAutoDetected,
     this.totalBalance = 0.0,
@@ -52,7 +74,9 @@ class AppTransaction {
     this.isBookmarked = false,
     this.simSlot = 0,
     this.accountIdentifier,
-  });
+  })  : bankName = bankName ?? name ?? 'Unknown',
+        counterparty = counterparty ?? sender ?? '',
+        sourceTag = sourceTag ?? category ?? 'Auto';
 
   /// Factory that enriches a pure parser DTO (ParsedSmsResult) into an AppTransaction entity.
   factory AppTransaction.fromParsedResult(
@@ -76,12 +100,12 @@ class AppTransaction {
 
     return AppTransaction(
       id: uniqueId,
-      name: result.bankName,
+      bankName: result.bankName,
       amount: result.amount,
       type: result.type,
       date: result.date,
-      sender: result.counterparty,
-      category: 'Auto',
+      counterparty: result.counterparty,
+      sourceTag: 'Auto',
       totalBalance: result.totalBalance,
       rawMessage: result.rawMessage,
       isAutoDetected: true,
@@ -116,10 +140,7 @@ class AppTransaction {
     }
 
     final lower = rawMessage.toLowerCase();
-
-    final isTelebirr = name.toLowerCase().contains('telebirr') ||
-        sender.toLowerCase().contains('127') ||
-        sender.toLowerCase().contains('telebirr');
+    final isTelebirr = bankName.toLowerCase().contains('telebirr');
     if (!isTelebirr) return false;
 
     // 2. Sanduq / Savings account transfer
@@ -135,12 +156,12 @@ class AppTransaction {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'name': name,
+      'name': bankName,
       'amount': amount,
       'type': type,
       'date': date.toIso8601String(),
-      'sender': sender,
-      'category': category,
+      'sender': counterparty,
+      'category': sourceTag,
       'rawMessage': rawMessage,
       'isAutoDetected': isAutoDetected ? 1 : 0,
       'totalBalance': totalBalance,
@@ -165,12 +186,12 @@ class AppTransaction {
   }) {
     return AppTransaction(
       id: map['id']?.toString(),
-      name: map['name'] ?? 'Unknown',
+      bankName: (map['bankName'] ?? map['name'] ?? 'Unknown') as String,
       amount: (map['amount'] as num).toDouble(),
       type: map['type'],
       date: DateTime.parse(map['date']),
-      sender: map['sender'],
-      category: map['category'],
+      counterparty: (map['counterparty'] ?? map['sender'] ?? '') as String,
+      sourceTag: (map['sourceTag'] ?? map['category'] ?? 'Auto') as String,
       rawMessage: map['rawMessage'],
       isAutoDetected: map['isAutoDetected'] == 1,
       totalBalance: (map['totalBalance'] as num?)?.toDouble() ?? 0.0,
@@ -190,10 +211,15 @@ class AppTransaction {
   }
 
   AppTransaction copyWith({
+    String? bankName,
     String? name,
     double? amount,
     String? type,
     DateTime? date,
+    String? counterparty,
+    String? sender,
+    String? sourceTag,
+    String? category,
     int? reasonId,
     bool clearReasonId = false,
     int? categoryId,
@@ -219,12 +245,12 @@ class AppTransaction {
   }) {
     return AppTransaction(
       id: id,
-      name: name ?? this.name,
+      bankName: bankName ?? name ?? this.bankName,
       amount: amount ?? this.amount,
       type: type ?? this.type,
       date: date ?? this.date,
-      sender: sender,
-      category: category,
+      counterparty: counterparty ?? sender ?? this.counterparty,
+      sourceTag: sourceTag ?? category ?? this.sourceTag,
       rawMessage: rawMessage,
       isAutoDetected: isAutoDetected,
       totalBalance: totalBalance ?? this.totalBalance,

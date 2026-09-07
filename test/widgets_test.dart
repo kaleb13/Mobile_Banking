@@ -18,6 +18,7 @@ import 'package:mobile_banking_app/widgets/app_search_bar.dart';
 import 'package:mobile_banking_app/widgets/app_info_section.dart';
 import 'package:mobile_banking_app/widgets/app_banner_card.dart';
 import 'package:mobile_banking_app/screens/settings/notification_settings_screen.dart';
+import 'package:mobile_banking_app/widgets/currency_symbol_widget.dart';
 import 'package:mobile_banking_app/theme/app_theme.dart';
 
 void main() {
@@ -223,6 +224,27 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(activeIndex, equals(2));
+    });
+
+    testWidgets('auto-scrolls to the right edge when selectedIndex is the last tab in scrollable list', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 150,
+              child: AppSecondaryTabBar(
+                tabs: const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
+                selectedIndex: 8,
+                onTabChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Sep should be visible
+      expect(find.text('Sep'), findsOneWidget);
     });
   });
 
@@ -648,6 +670,72 @@ void main() {
       await tester.pump();
 
       expect(tapped, isTrue);
+    });
+  });
+
+  group('CurrencyTextWidget Tests', () {
+    const testCurrency = AppCurrency(
+      code: 'etb',
+      name: 'Ethiopian Birr',
+      symbol: 'ETB',
+      shortLabel: 'ETB',
+      isPrefix: false,
+    );
+
+    testWidgets('renders negative prefix "-" for expense with positive amount', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CurrencyTextWidget(
+              amount: 250.0,
+              prefix: '-',
+              currency: testCurrency,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('-'), findsOneWidget);
+      expect(find.text('250.00'), findsOneWidget);
+      expect(find.text('ETB'), findsOneWidget);
+    });
+
+    testWidgets('renders positive prefix "+" for income', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CurrencyTextWidget(
+              amount: 500.0,
+              prefix: '+',
+              currency: testCurrency,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('+'), findsOneWidget);
+      expect(find.text('500.00'), findsOneWidget);
+      expect(find.text('ETB'), findsOneWidget);
+    });
+
+    testWidgets('respects showSign: true when prefix is omitted', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CurrencyTextWidget(
+              amount: 100.0,
+              showSign: true,
+              currency: testCurrency,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('+'), findsOneWidget);
+      expect(find.text('100.00'), findsOneWidget);
     });
   });
 }

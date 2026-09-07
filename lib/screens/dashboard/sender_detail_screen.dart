@@ -36,7 +36,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
   String _chartFilter = '30D'; // 1D, 7D, 30D, 180D, 360D
   String _searchQuery = '';
   String _typeFilter = 'All'; // All, Income, Expense
-  String _senderFilter = 'All Senders';
+  String _senderFilter = 'All Counterparties';
   bool _isBookmarkedOnly = false;
   String _sortBy = 'Date: Newest';
   String _dateRangeFilter = 'All Time'; // Default to All Time so multi-SIM history is visible
@@ -108,21 +108,21 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         : rawBankTx;
 
     final uniqueSenders = allTxForSender
-        .map((tx) => tx.sender.trim())
+        .map((tx) => tx.counterparty.trim())
         .where((s) => s.isNotEmpty)
         .toSet()
         .toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final senderOptions = ['All Senders', ...uniqueSenders];
+    final senderOptions = ['All Counterparties', ...uniqueSenders];
     if (!senderOptions.contains(_senderFilter)) {
-      _senderFilter = 'All Senders';
+      _senderFilter = 'All Counterparties';
     }
 
     // Filter transactions for listing & search
     final filteredTransactions = allTxForSender.where((tx) {
       final q = _searchQuery.trim().toLowerCase();
       final matchesSearch = q.isEmpty ||
-          tx.sender.toLowerCase().contains(q) ||
+          tx.counterparty.toLowerCase().contains(q) ||
           (tx.resolvedReason?.toLowerCase().contains(q) ?? false) ||
           tx.amount.toString().contains(q) ||
           (tx.bankReference?.toLowerCase().contains(q) ?? false);
@@ -131,8 +131,9 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           (_typeFilter == 'Income' && tx.type == 'income') ||
           (_typeFilter == 'Expense' && tx.type != 'income');
 
-      final matchesSender = _senderFilter == 'All Senders' ||
-          tx.sender.trim().toLowerCase() == _senderFilter.trim().toLowerCase();
+      final matchesSender = _senderFilter == 'All Counterparties' ||
+          _senderFilter == 'All Senders' ||
+          tx.counterparty.trim().toLowerCase() == _senderFilter.trim().toLowerCase();
 
       final matchesBookmark = !_isBookmarkedOnly || tx.isBookmarked;
 
@@ -588,7 +589,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       int totalCount, List<String> senderOptions) {
     final hasActiveFilters = _isBookmarkedOnly ||
         _typeFilter != 'All' ||
-        _senderFilter != 'All Senders' ||
+        (_senderFilter != 'All Counterparties' && _senderFilter != 'All Senders') ||
         _dateRangeFilter != 'All Time' ||
         _sortBy != 'Date: Newest' ||
         _searchQuery.isNotEmpty;
@@ -669,7 +670,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                     setState(() {
                       _isBookmarkedOnly = false;
                       _typeFilter = 'All';
-                      _senderFilter = 'All Senders';
+                      _senderFilter = 'All Counterparties';
                       _dateRangeFilter = 'All Time';
                       _sortBy = 'Date: Newest';
                       _searchQuery = '';
@@ -830,7 +831,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
       final bankName = widget.sender.senderName;
       final isFiltered = _isBookmarkedOnly ||
           _typeFilter != 'All' ||
-          _senderFilter != 'All Senders' ||
+          (_senderFilter != 'All Counterparties' && _senderFilter != 'All Senders') ||
           _dateRangeFilter != 'All Time' ||
           _searchQuery.isNotEmpty;
 
@@ -973,7 +974,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
 
   Widget _buildTransactionItem(AppTransaction tx) {
     final isIncome = tx.type == 'income';
-    final partyName = tx.sender.trim();
+    final partyName = tx.counterparty.trim();
     final partyLabel = partyName.isNotEmpty
         ? (isIncome ? 'From $partyName' : 'To $partyName')
         : (isIncome ? 'Income' : 'Expense');
@@ -999,7 +1000,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: isIncome
-                      ? AppColors.positive.withValues(alpha: 0.12)
+                       ? AppColors.positive.withValues(alpha: 0.12)
                       : AppColors.negative.withValues(alpha: 0.12),
                 ),
                 child: Icon(
@@ -1037,7 +1038,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                         ],
                         if (Provider.of<TransactionsViewModel>(context,
                                     listen: false)
-                                .accountsForBank(tx.name)
+                                .accountsForBank(tx.bankName)
                                 .length >
                             1) ...[
                           const SizedBox(width: 5),
@@ -1063,7 +1064,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
                 children: [
                   CurrencyTextWidget(
                     amount: tx.amount,
-                    showSign: true,
+                    prefix: isIncome ? '+' : '-',
                     style: TextStyle(
                       color: isIncome
                           ? AppColors.positive

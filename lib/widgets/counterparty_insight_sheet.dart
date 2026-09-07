@@ -78,7 +78,7 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
 
     final Set<String> banksUsed = {};
     for (final tx in personTxs) {
-      if (tx.name.isNotEmpty) banksUsed.add(tx.name);
+      if (tx.bankName.isNotEmpty) banksUsed.add(tx.bankName);
     }
 
     final DateTime? lastTxDate =
@@ -395,7 +395,7 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
               nav.push(
                 MaterialPageRoute(
                   builder: (_) => AllTransactionsScreen(
-                    initialSenderFilter: widget.personName,
+                    initialCounterpartyFilter: widget.personName,
                     initialDateFilter: const AppDateFilterValue.anyTime(),
                   ),
                 ),
@@ -490,14 +490,14 @@ class _CounterpartyInsightSheetState extends State<CounterpartyInsightSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            BankCardWidget.bankLogo(tx.name, 18, Colors.white),
+            BankCardWidget.bankLogo(tx.bankName, 18, Colors.white),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    tx.name,
+                    tx.bankName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12.5,

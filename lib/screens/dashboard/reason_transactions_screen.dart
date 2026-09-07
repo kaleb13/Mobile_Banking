@@ -49,7 +49,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
   String _sortBy = 'Date: Newest';
   AppDateFilterValue _dateFilterValue = const AppDateFilterValue.thisMonth();
   String _bankFilter = 'All Banks';
-  String _senderFilter = 'All Senders';
+  String _senderFilter = 'All Counterparties';
   String _selectedSubcategory = 'All';
   int _displayLimit = 30;
 
@@ -189,20 +189,20 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
       }
     }
     for (final ctx in rawCashTransactions) {
-      if (ctx.type == 'addition' || ctx.type == 'income') {
+      if (ctx.isIncome) {
         totalInflow += ctx.amount;
       } else {
         totalOutflow += ctx.amount;
       }
     }
 
-    // Collect Available Bank & Sender Filter Options
+    // Collect Available Bank & Counterparty Filter Options
     final Set<String> banks = {'All Banks'};
-    final Set<String> senders = {'All Senders'};
+    final Set<String> senders = {'All Counterparties'};
 
     for (final tx in rawBankTransactions) {
-      if (tx.name.isNotEmpty) banks.add(tx.name);
-      if (tx.sender.isNotEmpty) senders.add(tx.sender);
+      if (tx.bankName.isNotEmpty) banks.add(tx.bankName);
+      if (tx.counterparty.isNotEmpty) senders.add(tx.counterparty);
     }
     if (rawCashTransactions.isNotEmpty) {
       banks.add('Cash');
@@ -217,7 +217,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
     if (!allBanksList.contains(_bankFilter)) _bankFilter = 'All Banks';
 
     final allSendersList = senders.toList()..sort();
-    if (!allSendersList.contains(_senderFilter)) _senderFilter = 'All Senders';
+    if (!allSendersList.contains(_senderFilter)) _senderFilter = 'All Counterparties';
 
     // Collect and count active subcategories
     final List<({String name, int count, double totalAmount})> activeSubcategories = [];
@@ -320,19 +320,20 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
       if (_typeFilter == 'Income' && tx.type != 'income') return false;
 
       if (_bankFilter != 'All Banks' &&
-          tx.name.toLowerCase() != _bankFilter.toLowerCase()) {
+          tx.bankName.toLowerCase() != _bankFilter.toLowerCase()) {
         return false;
       }
-      if (_senderFilter != 'All Senders' &&
-          tx.sender.toLowerCase() != _senderFilter.toLowerCase()) {
+      if (_senderFilter != 'All Counterparties' &&
+          _senderFilter != 'All Senders' &&
+          tx.counterparty.toLowerCase() != _senderFilter.toLowerCase()) {
         return false;
       }
       if (!_matchesDateFilter(tx.date, _dateFilterValue)) return false;
 
       if (_searchQuery.trim().isNotEmpty) {
         final query = _searchQuery.toLowerCase().trim();
-        final matchSender = tx.sender.toLowerCase().contains(query);
-        final matchBank = tx.name.toLowerCase().contains(query);
+        final matchSender = tx.counterparty.toLowerCase().contains(query);
+        final matchBank = tx.bankName.toLowerCase().contains(query);
         final matchReason = (tx.resolvedReason ?? tx.reason ?? '')
             .toLowerCase()
             .contains(query);
@@ -373,12 +374,13 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
       }
 
       if (_isBookmarkedOnly) return false;
-      final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-      if (_typeFilter == 'Expense' && isAddition) return false;
-      if (_typeFilter == 'Income' && !isAddition) return false;
+      final isIncome = ctx.isIncome;
+      if (_typeFilter == 'Expense' && isIncome) return false;
+      if (_typeFilter == 'Income' && !isIncome) return false;
 
       if (_bankFilter != 'All Banks' && _bankFilter != 'Cash') return false;
-      if (_senderFilter != 'All Senders' &&
+      if (_senderFilter != 'All Counterparties' &&
+          _senderFilter != 'All Senders' &&
           (ctx.description ?? '').toLowerCase() != _senderFilter.toLowerCase()) {
         return false;
       }
@@ -1197,10 +1199,10 @@ class _UnifiedReasonTxItem {
   DateTime get date => isBank ? bankTx!.date : cashTx!.date;
   double get amount => isBank ? bankTx!.amount : cashTx!.amount;
   bool get isIncome =>
-      isBank ? bankTx!.type == 'income' : (cashTx!.type == 'addition' || cashTx!.type == 'income');
-  String get bankName => isBank ? bankTx!.name : 'CASH';
+      isBank ? bankTx!.type == 'income' : cashTx!.isIncome;
+  String get bankName => isBank ? bankTx!.bankName : 'CASH';
   String get displayName => isBank
-      ? (bankTx!.sender.isNotEmpty ? bankTx!.sender : bankTx!.name)
+      ? (bankTx!.counterparty.isNotEmpty ? bankTx!.counterparty : bankTx!.bankName)
       : (cashTx!.description ?? 'Cash');
   bool get isBookmarked => isBank ? bankTx!.isBookmarked : false;
   String? get reasonTag => isBank

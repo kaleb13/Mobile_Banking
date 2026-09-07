@@ -37,3 +37,23 @@ When working on the application, strictly enforce the 4-layer boundary:
 ## 5. Architectural Non-Regression Guardrails
 - Modifying one bank's parser must never alter the parser table, database schema, or behavior of the other 5 banks.
 - When the user asks "Can the app read this message?", output ONLY the exact `ParsedSmsResult` facts. Do not invent extra fields or mix in downstream UI/reason actions unless explicitly instructed.
+
+## 6. System-Wide Domain Vocabulary Contract (AI & Human Alignment)
+To prevent semantic confusion and misinterpretation across the codebase:
+- **Bank / Provider Identity (`tx.bankName` / `AppSender.bankName`)**: The financial institution (e.g. Telebirr, CBE, Bunna Bank). NEVER use `tx.counterparty` or `tx.sender` to determine bank identity.
+- **Counterparty (`tx.counterparty` / `AppReasonLink.counterpartyName`)**: The human, merchant, or phone number on the other side of the transaction (e.g., Abebe Bikila, Ethio Telecom).
+- **Wallet Container (`AppSender`)**: Represents a bank account or wallet container in the Wallets screen and DB. `sender.bankName` provides a clean alias for `sender.senderName`.
+- **Reason vs Category (`AppReason`)**:
+  - `AppReason` with `parentId == null && !isSpecial` is a top-level **Category** (Food, Transport, Salary).
+  - `AppReason` with `parentId != null` is a **Subcategory** (Groceries, Fuel).
+  - `AppReason` with `isSpecial == true` represents **Flow Mechanics** (Internal Transfer, Cash Withdrawal/Deposit, Loan, Pass-Through).
+  - On `AppTransaction`, `tx.sourceTag` (with `category` as backward-compat alias) indicates transaction intake origin (`'Auto'` for SMS, `'Manual'` for user entry). The true user category is `tx.resolvedCategory` or resolved via `tx.categoryId`.
+- **Cash Transaction Types (`CashTransaction.isIncome` / `isExpense`)**:
+  - `CashTransaction` uses `'income'` for inflow and `'expense'` for outflow (with transparent backward-compat decoding of legacy `'addition'`). ALWAYS use `.isIncome` or `.isExpense` helpers.
+- **Auto-Link Direction (`AppReasonLink.isIncome` / `isExpense`)**:
+  - `linkType == 'sender'` means **Income** (counterparty was payer).
+  - `linkType == 'receiver'` means **Expense** (counterparty was recipient).
+  - ALWAYS use `.isIncome` or `.isExpense` getters on `AppReasonLink`.
+- **Loan Tracking (`LoanRecord.monitoredBanks` vs `LoanRepaymentRequest.counterpartyFound`)**:
+  - In `LoanRecord`, `monitoredBanks` (with `trackedSenderName` backward-compat alias) stores monitored **Bank Channels** (e.g. `"Telebirr, CBE"`).
+  - In `LoanRepaymentRequest`, `counterpartyFound` (with `senderFound` backward-compat alias) stores the **Counterparty / Borrower** name parsed from SMS.

@@ -77,7 +77,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   String _sortBy = 'Date: Newest';
   late AppDateFilterValue _dateFilterValue;
   String _bankFilter = 'All Banks';
-  String _senderFilter = 'All Senders';
+  String _senderFilter = 'All Counterparties';
   String _selectedSubcategory = 'All'; // 'All', 'Direct', or specific subcategory name
   int _displayLimit = 30;
 
@@ -164,20 +164,20 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
     for (final ctx in widget.allCashTransactions) {
       if (!_matchesDateFilter(ctx.date, _dateFilterValue)) continue;
-      if (ctx.type == 'addition' || ctx.type == 'income') {
+      if (ctx.isIncome) {
         totalInflow += ctx.amount;
       } else {
         totalOutflow += ctx.amount;
       }
     }
 
-    // ── 2. Collect Available Bank & Sender Filter Options ─────────────────────
+    // ── 2. Collect Available Bank & Counterparty Filter Options ──────────────
     final Set<String> banks = {'All Banks'};
-    final Set<String> senders = {'All Senders'};
+    final Set<String> senders = {'All Counterparties'};
 
     for (final tx in widget.allBankTransactions) {
-      if (tx.name.isNotEmpty) banks.add(tx.name);
-      if (tx.sender.isNotEmpty) senders.add(tx.sender);
+      if (tx.bankName.isNotEmpty) banks.add(tx.bankName);
+      if (tx.counterparty.isNotEmpty) senders.add(tx.counterparty);
     }
     if (widget.allCashTransactions.isNotEmpty) {
       banks.add('Cash');
@@ -192,7 +192,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     if (!allBanksList.contains(_bankFilter)) _bankFilter = 'All Banks';
 
     final allSendersList = senders.toList()..sort();
-    if (!allSendersList.contains(_senderFilter)) _senderFilter = 'All Senders';
+    if (!allSendersList.contains(_senderFilter)) _senderFilter = 'All Counterparties';
 
     // ── 3. Filter Bank & Cash Transactions with O(1) Set Lookups ──────────────
     Set<AppTransaction>? activeSubBankTxSet;
@@ -225,13 +225,14 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
       // Bank filter
       if (_bankFilter != 'All Banks' &&
-          tx.name.toLowerCase() != _bankFilter.toLowerCase()) {
+          tx.bankName.toLowerCase() != _bankFilter.toLowerCase()) {
         return false;
       }
 
-      // Sender filter
-      if (_senderFilter != 'All Senders' &&
-          tx.sender.toLowerCase() != _senderFilter.toLowerCase()) {
+      // Counterparty filter
+      if (_senderFilter != 'All Counterparties' &&
+          _senderFilter != 'All Senders' &&
+          tx.counterparty.toLowerCase() != _senderFilter.toLowerCase()) {
         return false;
       }
 
@@ -241,8 +242,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       // Search query filter
       if (_searchQuery.trim().isNotEmpty) {
         final query = _searchQuery.toLowerCase().trim();
-        final matchSender = tx.sender.toLowerCase().contains(query);
-        final matchBank = tx.name.toLowerCase().contains(query);
+        final matchSender = tx.counterparty.toLowerCase().contains(query);
+        final matchBank = tx.bankName.toLowerCase().contains(query);
         final matchReason = (tx.resolvedReason ?? tx.reason ?? '')
             .toLowerCase()
             .contains(query);
@@ -274,15 +275,16 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       if (_isBookmarkedOnly) return false;
 
       // Type filter
-      final isAddition = ctx.type == 'addition' || ctx.type == 'income';
-      if (_typeFilter == 'Expense' && isAddition) return false;
-      if (_typeFilter == 'Income' && !isAddition) return false;
+      final isIncome = ctx.isIncome;
+      if (_typeFilter == 'Expense' && isIncome) return false;
+      if (_typeFilter == 'Income' && !isIncome) return false;
 
       // Bank filter
       if (_bankFilter != 'All Banks' && _bankFilter != 'Cash') return false;
 
-      // Sender filter
-      if (_senderFilter != 'All Senders' &&
+      // Counterparty filter
+      if (_senderFilter != 'All Counterparties' &&
+          _senderFilter != 'All Senders' &&
           (ctx.description ?? '').toLowerCase() != _senderFilter.toLowerCase()) {
         return false;
       }
@@ -1155,10 +1157,10 @@ class _UnifiedTxItem {
   DateTime get date => isBank ? bankTx!.date : cashTx!.date;
   double get amount => isBank ? bankTx!.amount : cashTx!.amount;
   bool get isIncome =>
-      isBank ? bankTx!.type == 'income' : (cashTx!.type == 'addition' || cashTx!.type == 'income');
-  String get bankName => isBank ? bankTx!.name : 'CASH';
+      isBank ? bankTx!.type == 'income' : cashTx!.isIncome;
+  String get bankName => isBank ? bankTx!.bankName : 'CASH';
   String get displayName => isBank
-      ? (bankTx!.sender.isNotEmpty ? bankTx!.sender : bankTx!.name)
+      ? (bankTx!.counterparty.isNotEmpty ? bankTx!.counterparty : bankTx!.bankName)
       : (cashTx!.description ?? 'Cash');
   bool get isBookmarked => isBank ? bankTx!.isBookmarked : false;
   String? get reasonTag => isBank

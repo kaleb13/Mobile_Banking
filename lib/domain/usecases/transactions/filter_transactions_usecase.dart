@@ -3,9 +3,10 @@ import '../../../widgets/app_date_filter.dart';
 import '../../../utils/counterparty_matcher.dart';
 
 class FilterTransactionsParams {
-  final String? bankFilter; // Matches tx.name
-  final String? senderFilter; // Matches tx.sender
-  final String? categoryFilter; // Matches tx.resolvedReason / tx.category
+  final String? bankFilter; // Matches tx.bankName
+  final String? counterpartyFilter; // Matches tx.counterparty
+  final String? senderFilter; // Backward-compatible alias for counterpartyFilter
+  final String? categoryFilter; // Matches tx.resolvedCategory / tx.resolvedReason
   final String? typeFilter; // 'All', 'Income', 'Expense', 'Incoming', 'Outgoing', 'Bookmarked'
   final int? simSlotFilter; // null = All SIMs, 0 = SIM 1, 1 = SIM 2
   final String? searchQuery;
@@ -17,7 +18,8 @@ class FilterTransactionsParams {
 
   const FilterTransactionsParams({
     this.bankFilter,
-    this.senderFilter,
+    String? counterpartyFilter,
+    String? senderFilter,
     this.categoryFilter,
     this.typeFilter,
     this.simSlotFilter,
@@ -27,7 +29,8 @@ class FilterTransactionsParams {
     this.onlyBookmarked = false,
     this.sortBy,
     this.limit,
-  });
+  })  : counterpartyFilter = counterpartyFilter ?? senderFilter,
+        senderFilter = counterpartyFilter ?? senderFilter;
 }
 
 class FilterTransactionsUseCase {
@@ -46,11 +49,12 @@ class FilterTransactionsUseCase {
         ? params.bankFilter!.toUpperCase()
         : null;
 
-    final String? senderFilterLower = (params.senderFilter != null &&
-            params.senderFilter != 'All Senders' &&
-            params.senderFilter != 'All' &&
-            params.senderFilter!.isNotEmpty)
-        ? params.senderFilter!
+    final String? counterpartyFilter = (params.counterpartyFilter != null &&
+            params.counterpartyFilter != 'All Counterparties' &&
+            params.counterpartyFilter != 'All Senders' &&
+            params.counterpartyFilter != 'All' &&
+            params.counterpartyFilter!.isNotEmpty)
+        ? params.counterpartyFilter!
         : null;
 
     final String? categoryFilterLower = (params.categoryFilter != null &&
@@ -108,25 +112,26 @@ class FilterTransactionsUseCase {
         }
       }
 
-      // 2. Bank Filter (tx.name)
+      // 2. Bank Filter (tx.bankName)
       if (bankFilterUpper != null &&
-          tx.name.toUpperCase() != bankFilterUpper) {
+          tx.bankName.toUpperCase() != bankFilterUpper) {
         continue;
       }
 
-      // 3. Sender / Counterparty Filter (tx.sender)
-      if (senderFilterLower != null &&
-          !CounterpartyMatcher.matches(tx.sender, senderFilterLower)) {
+      // 3. Counterparty Filter (tx.counterparty)
+      if (counterpartyFilter != null &&
+          !CounterpartyMatcher.matches(tx.counterparty, counterpartyFilter)) {
         continue;
       }
 
       // 3.5 Category / Reason Filter
       if (categoryFilterLower != null) {
         final txReason =
-            (tx.resolvedReason ?? tx.category).trim().toLowerCase();
-        final isMatch = txReason == categoryFilterLower ||
-            txReason.contains(categoryFilterLower) ||
-            categoryFilterLower.contains(txReason) ||
+            (tx.resolvedReason ?? '').trim().toLowerCase();
+        final isMatch = (txReason.isNotEmpty &&
+                (txReason == categoryFilterLower ||
+                    txReason.contains(categoryFilterLower) ||
+                    categoryFilterLower.contains(txReason))) ||
             (tx.reason?.toLowerCase().contains(categoryFilterLower) ?? false) ||
             (tx.customReasonText?.toLowerCase().contains(categoryFilterLower) ??
                 false);
@@ -151,8 +156,8 @@ class FilterTransactionsUseCase {
 
       // 6. Search Query
       if (searchLower != null) {
-        final matches = tx.sender.toLowerCase().contains(searchLower) ||
-            tx.name.toLowerCase().contains(searchLower) ||
+        final matches = tx.counterparty.toLowerCase().contains(searchLower) ||
+            tx.bankName.toLowerCase().contains(searchLower) ||
             (tx.reason?.toLowerCase().contains(searchLower) ?? false) ||
             (tx.customReasonText?.toLowerCase().contains(searchLower) ??
                 false) ||
@@ -183,13 +188,13 @@ class FilterTransactionsUseCase {
     } else if (sort.contains('a-z') ||
         sort.contains('name: a-z') ||
         sort == 'name_asc') {
-      filtered
-          .sort((a, b) => a.sender.toLowerCase().compareTo(b.sender.toLowerCase()));
+      filtered.sort(
+          (a, b) => a.counterparty.toLowerCase().compareTo(b.counterparty.toLowerCase()));
     } else if (sort.contains('z-a') ||
         sort.contains('name: z-a') ||
         sort == 'name_desc') {
-      filtered
-          .sort((a, b) => b.sender.toLowerCase().compareTo(a.sender.toLowerCase()));
+      filtered.sort(
+          (a, b) => b.counterparty.toLowerCase().compareTo(a.counterparty.toLowerCase()));
     } else {
       // Default: Date Newest First
       filtered.sort((a, b) => b.date.compareTo(a.date));

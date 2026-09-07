@@ -18,6 +18,7 @@ import '../utils/counterparty_matcher.dart';
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
   static Database? _database;
+  static final RegExp _whitespaceRegex = RegExp(r'\s+');
 
   DatabaseService._init();
 
@@ -27,7 +28,6 @@ class DatabaseService {
     await _ensureSendersTableSchema(_database!);
     await _createIndexes(_database!);
     await _seedHierarchicalCategories(_database!);
-    await deduplicateTransactions();
     return _database!;
   }
 
@@ -39,6 +39,8 @@ class DatabaseService {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tx_reason ON transactions(reasonId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tx_bookmark ON transactions(isBookmarked)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tx_date_type ON transactions(date, type)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tx_bank_ref ON transactions(bankReference)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_notif_reason ON notifications(reason)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_cash_date ON cash_transactions(date)');
   }
 
@@ -809,7 +811,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
     // Check which banks actually have recorded transactions in the database
     final txMaps = await db.rawQuery(
-      'SELECT DISTINCT name FROM transactions WHERE name IS NOT NULL AND TRIM(name) != ""',
+      "SELECT DISTINCT name FROM transactions WHERE name IS NOT NULL AND TRIM(name) != ''",
     );
     final activeTxBankNames = <String>{};
     for (final row in txMaps) {
@@ -890,8 +892,11 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     final db = await instance.database;
     final idToUse =
         transaction.id ?? DateTime.now().millisecondsSinceEpoch.toString();
-    final map = transaction.toMap();
+    final map = Map<String, dynamic>.from(transaction.toMap());
     map['id'] = idToUse;
+    map.remove('bankName');
+    map.remove('counterparty');
+    map.remove('sourceTag');
 
     return await db.insert('transactions', map,
         conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -980,10 +985,25 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
         reasonMap[r.name.toLowerCase().trim()] = r;
       }
 
+      // Query recent transactions once outside the loop and build an authoritative normalized rawMessage map
+      final txRows = await db.rawQuery(
+        "SELECT id, rawMessage, reason FROM transactions ORDER BY date DESC, rowid DESC LIMIT 150",
+      );
+      final txByNormRaw = <String, Map<String, dynamic>>{};
+      for (final tx in txRows) {
+        final raw = tx['rawMessage'] as String?;
+        if (raw != null) {
+          final norm = raw.replaceAll(_whitespaceRegex, ' ').trim();
+          if (norm.isNotEmpty && !txByNormRaw.containsKey(norm)) {
+            txByNormRaw[norm] = tx;
+          }
+        }
+      }
+
       for (final notif in pendingNotifs) {
         final notifId = notif['id'] as String;
         final notifBody = (notif['body'] as String? ?? '')
-            .replaceAll(RegExp(r'\s+'), ' ')
+            .replaceAll(_whitespaceRegex, ' ')
             .trim();
         final reasonName = (notif['reason'] as String? ?? '').trim();
         if (notifBody.isEmpty || reasonName.isEmpty) continue;
@@ -997,35 +1017,21 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
             matchedReason?.isSubcategory == true ? matchedReason?.id : null;
         final resolvedReasonName = matchedReason?.name ?? reasonName;
 
-        final txRows = await db.rawQuery(
-          "SELECT id, rawMessage, reason FROM transactions ORDER BY date DESC, rowid DESC",
-        );
-
-        bool matched = false;
-        for (final tx in txRows) {
-          final txRaw = (tx['rawMessage'] as String? ?? '')
-              .replaceAll(RegExp(r'\s+'), ' ')
-              .trim();
-          if (txRaw == notifBody) {
-            await db.update(
-              'transactions',
-              {
-                'reason': resolvedReasonName,
-                'reasonId': reasonId,
-                'categoryId': categoryId,
-                'subcategoryId': subcategoryId,
-                'customReasonText': null,
-              },
-              where: 'id = ?',
-              whereArgs: [tx['id']],
-            );
-            reconciledCount++;
-            matched = true;
-            break;
-          }
-        }
-
-        if (matched) {
+        final matchedTx = txByNormRaw[notifBody];
+        if (matchedTx != null) {
+          await db.update(
+            'transactions',
+            {
+              'reason': resolvedReasonName,
+              'reasonId': reasonId,
+              'categoryId': categoryId,
+              'subcategoryId': subcategoryId,
+              'customReasonText': null,
+            },
+            where: 'id = ?',
+            whereArgs: [matchedTx['id']],
+          );
+          reconciledCount++;
           await db.delete('notifications', where: 'id = ?', whereArgs: [notifId]);
         }
       }
@@ -1036,7 +1042,11 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
   Future<int> updateTransaction(AppTransaction transaction) async {
     final db = await instance.database;
-    return await db.update('transactions', transaction.toMap(),
+    final map = Map<String, dynamic>.from(transaction.toMap());
+    map.remove('bankName');
+    map.remove('counterparty');
+    map.remove('sourceTag');
+    return await db.update('transactions', map,
         where: 'id = ?', whereArgs: [transaction.id]);
   }
 
@@ -1745,7 +1755,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   Future<List<AutoReasonRule>> getAutoReasonRules() async {
     final db = await instance.database;
     final rows = await db.rawQuery('''
-      SELECT r.id, r.name, rl.linkedName as sender, rl.linkType
+      SELECT r.id, r.name, rl.linkedName as counterparty, rl.linkedName as sender, rl.linkType
       FROM reason_links rl
       JOIN reasons r ON rl.reasonId = r.id
       ORDER BY r.isSystem DESC
@@ -1758,7 +1768,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       return AutoReasonRule(
         id: row['id'] as int,
         name: row['name'] as String,
-        sender: row['sender'] as String,
+        counterparty: (row['counterparty'] ?? row['sender'] ?? '') as String,
         type: txType,
       );
     }).toList();
@@ -1769,7 +1779,9 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   // ──────────────────────────────────────────────
   Future<int> insertLoanRecord(LoanRecord loan) async {
     final db = await instance.database;
-    return await db.insert('loan_records', loan.toMap());
+    final map = Map<String, dynamic>.from(loan.toMap());
+    map.remove('monitoredBanks');
+    return await db.insert('loan_records', map);
   }
 
   Future<List<LoanRecord>> getLoanRecords() async {
@@ -1788,7 +1800,9 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
   Future<int> updateLoanRecord(LoanRecord loan) async {
     final db = await instance.database;
-    return await db.update('loan_records', loan.toMap(),
+    final map = Map<String, dynamic>.from(loan.toMap());
+    map.remove('monitoredBanks');
+    return await db.update('loan_records', map,
         where: 'id = ?', whereArgs: [loan.id]);
   }
 
@@ -1854,7 +1868,9 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       whereArgs: [req.transactionId, req.loanId, 'rejected'],
     );
     if (existing.isNotEmpty) return existing.first['id'] as int;
-    return await db.insert('loan_repayment_requests', req.toMap());
+    final map = Map<String, dynamic>.from(req.toMap());
+    map.remove('counterpartyFound');
+    return await db.insert('loan_repayment_requests', map);
   }
 
   Future<List<LoanRepaymentRequest>> getPendingRepaymentRequests() async {
@@ -2146,7 +2162,7 @@ CREATE TABLE IF NOT EXISTS saving_goals (
     final db = await instance.database;
     return await db.delete(
       'transactions',
-      where: 'UPPER(name) = ? AND (reason IS NULL OR reason = "") AND reasonId IS NULL AND (customReasonText IS NULL OR customReasonText = "") AND (note IS NULL OR note = "") AND isBookmarked = 0',
+      where: "UPPER(name) = ? AND (reason IS NULL OR reason = '') AND reasonId IS NULL AND (customReasonText IS NULL OR customReasonText = '') AND (note IS NULL OR note = '') AND isBookmarked = 0",
       whereArgs: [bankName.toUpperCase()],
     );
   }
@@ -2156,7 +2172,7 @@ CREATE TABLE IF NOT EXISTS saving_goals (
     final db = await instance.database;
     return await db.delete(
       'notifications',
-      where: 'UPPER(sender) = ? AND (reason IS NULL OR reason = "")',
+      where: "UPPER(sender) = ? AND (reason IS NULL OR reason = '')",
       whereArgs: [bankName.toUpperCase()],
     );
   }

@@ -1,5 +1,7 @@
 class AppNotification {
   final String id;
+  /// The originating financial institution / bank address (e.g. '127', 'CBE').
+  /// Stored in column `sender` in the SQLite `notifications` table for schema compatibility.
   final String sender;
   final String body;
   final DateTime date;
@@ -8,12 +10,13 @@ class AppNotification {
 
   AppNotification({
     required this.id,
-    required this.sender,
+    String? sender,
+    String? bankName,
     required this.body,
     required this.date,
     this.isRead = false,
     this.reason,
-  });
+  }) : sender = (bankName ?? sender ?? '');
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -26,7 +29,7 @@ class AppNotification {
 
   factory AppNotification.fromMap(Map<String, dynamic> map) => AppNotification(
         id: map['id'] as String,
-        sender: map['sender'] as String,
+        sender: (map['bankName'] ?? map['sender'] ?? '') as String,
         body: map['body'] as String,
         date: DateTime.parse(map['date'] as String),
         isRead: (map['isRead'] as int) == 1,
@@ -57,6 +60,9 @@ class AppNotification {
     if (s == '127' || s.toLowerCase() == 'telebirr') return 'Telebirr';
     return s;
   }
+
+  /// Unified bank name alias for the SMS originating institution
+  String get bankName => displaySender;
 
   @override
   bool operator ==(Object other) =>

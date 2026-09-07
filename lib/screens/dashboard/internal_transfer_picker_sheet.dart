@@ -76,12 +76,12 @@ class InternalTransferPickerSheet extends StatelessWidget {
                       }
                     },
                     leading: BankAvatar(
-                      bankName: tx.name,
+                      bankName: tx.bankName,
                       size: 38,
                       iconSize: 20,
                     ),
                     title: Text(
-                      tx.name,
+                      tx.bankName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -93,12 +93,12 @@ class InternalTransferPickerSheet extends StatelessWidget {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (tx.sender.trim().isNotEmpty &&
-                            tx.sender.trim().toLowerCase() !=
-                                tx.name.trim().toLowerCase()) ...[
+                        if (tx.counterparty.trim().isNotEmpty &&
+                            tx.counterparty.trim().toLowerCase() !=
+                                tx.bankName.trim().toLowerCase()) ...[
                           const SizedBox(height: 2),
                           Text(
-                            tx.sender,
+                            tx.counterparty,
                             style: const TextStyle(
                               color: AppColors.textSoft,
                               fontSize: 12,

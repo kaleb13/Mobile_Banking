@@ -11,6 +11,7 @@ import '../../widgets/custom_progress_bar.dart';
 import '../../models/transaction_split.dart';
 import '../../services/database_service.dart';
 import '../../models/reason.dart';
+import '../../widgets/app_drawer.dart';
 import 'reason_link_drawer.dart';
 
 enum _QuickEditView {
@@ -151,11 +152,15 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
             data['transactionId'] as String? ??
             data['id'] as String? ??
             '';
-        _bankName = data['bankName'] as String? ?? '';
+        _bankName = data['bankName'] as String? ??
+            data['name'] as String? ??
+            '';
         _amount = data['amount'] as String? ?? '';
         _rawAmount = (data['rawAmount'] as num?)?.toDouble() ?? 0.0;
         _type = data['type'] as String? ?? 'expense';
-        _sender = data['sender'] as String? ?? '';
+        _sender = data['counterparty'] as String? ??
+            data['sender'] as String? ??
+            '';
         _dateStr = data['date'] as String? ?? '';
         _matchingTxCount = (data['matchingCount'] as num?)?.toInt() ?? 0;
 
@@ -441,6 +446,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
         'loanType': _loanType,
         'personName': personName,
         'trackedSenderName': _bankName,
+        'monitoredBanks': _bankName,
         'amount': _rawAmount > 0 ? _rawAmount : double.tryParse(_amount.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0,
         'loanDate': _dateStr.isNotEmpty ? _dateStr : DateTime.now().toIso8601String(),
         'dueDate': _loanDueDate.toIso8601String(),
@@ -1111,81 +1117,39 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
           lower != 'bounce';
     }).toList();
 
-    showModalBottomSheet(
+    AppDrawer.show(
       context: context,
-      backgroundColor: AppColors.surfaceElevated,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.category_outlined,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Select Category',
-                      style: TextStyle(
+        return AppDrawer(
+          heightFactor: 0.65,
+          headerCard: const AppDrawerHeaderCard(
+            icon: Icons.category_outlined,
+            title: 'Select Category',
+          ),
+          child: ListView.builder(
+            physics: const BouncingScrollPhysics(),
+            itemCount: filteredGroups.length,
+            itemBuilder: (c, i) {
+              final g = filteredGroups[i];
+              return ListTile(
+                dense: true,
+                leading: Icon(_getCategoryIcon(g.parent.name),
+                    color: AppColors.brandGreen, size: 20),
+                title: Text(g.parent.name,
+                    style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.3,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: filteredGroups.length,
-                  itemBuilder: (c, i) {
-                    final g = filteredGroups[i];
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(_getCategoryIcon(g.parent.name),
-                          color: AppColors.brandGreen, size: 20),
-                      title: Text(g.parent.name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600)),
-                      onTap: () {
-                        setState(() {
-                          item.reasonId = g.parent.id;
-                          item.reasonName = g.parent.name;
-                          item.categoryId = g.parent.id;
-                        });
-                        Navigator.pop(ctx);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+                onTap: () {
+                  setState(() {
+                    item.reasonId = g.parent.id;
+                    item.reasonName = g.parent.name;
+                    item.categoryId = g.parent.id;
+                  });
+                  Navigator.pop(ctx);
+                },
+              );
+            },
           ),
         );
       },
@@ -1808,7 +1772,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
               // Person Name Field
               AppTextField.modal(
                 controller: _loanPersonController,
-                hint: 'Contact or Person Name...',
+                hint: 'Counterparty Name...',
                 prefix: const Padding(
                   padding: EdgeInsets.only(left: 12, right: 8),
                   child: Icon(Icons.person_outline_rounded,
