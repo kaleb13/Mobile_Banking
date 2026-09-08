@@ -103,6 +103,18 @@ class SmsBroadcastReceiverTest {
             "One-Time Password: 9999"))
         assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
             "One time password for login is 4321"))
+        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
+            "Your OTP : 940026"))
+        assertTrue(SmsBroadcastReceiver.isSecurityOrAuthMessage(
+            "Dear Customer, You have logged in into your BOA Online Banking access on 28/07/2023 10:14:00."))
+    }
+
+    @Test
+    fun `detects marketing and greetings in isIgnoredMessage`() {
+        assertTrue(SmsBroadcastReceiver.isIgnoredMessage(
+            "We Wish You A Happy Ethiopian New Year. Thank you for Choosing Us.\nAwash Bank"))
+        assertTrue(SmsBroadcastReceiver.isIgnoredMessage(
+            "Borrow up to 50,000 ETB without collateral with Telebirr Sanduq"))
     }
 
     @Test
@@ -259,6 +271,31 @@ class SmsBroadcastReceiverTest {
         assertEquals(1000.0, parsed!!.amount, 0.001)
         assertFalse(parsed.isDebit)
         assertEquals(12345.67, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses BOA branch credit with Avail bal and counterparty`() {
+        val msg = "Dear Customer, A/C No. 8*****27 has been credited By BINALF FANTAHUN EMIRU with ETB 6,000.00 on 19/08/2023 @ALAMURA BRANCH. Info: Transfer-payment. Avail. bal: ETB 6,034.33. Join our telegram channel for latest updates https://t.me/BoAEth\n     Bank of Abyssinia. for further enquires please call us Toll free (24/7) on 8397."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("BOA", msg)
+
+        assertNotNull(parsed)
+        assertEquals(6000.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("BINALF FANTAHUN EMIRU", parsed.counterparty)
+        assertEquals(6034.33, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses BOA e-banking department credit with Telebirr`() {
+        val msg = "Dear Customer, A/C No. 8*****27 has been credited By A/R TELE BIRRwith ETB 700.00 on 05/08/2023 @E-BANKING DEPARTMENT. Info: Telebirr to BoA Account-20230805155052. Avail. bal: ETB 3,692.33."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("BOA", msg)
+
+        assertNotNull(parsed)
+        assertEquals(700.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("A/R TELE BIRR", parsed.counterparty)
+        assertEquals("20230805155052", parsed.txReference)
+        assertEquals(3692.33, parsed.totalBalance, 0.001)
     }
 
     @Test
@@ -431,5 +468,105 @@ Dashen Bank - Always one step ahead!"""
         assertFalse(parsed.isDebit)
         assertEquals("TELEBIRR RECEIVABLE ACCOUNT TELEINCOME", parsed.counterparty)
         assertEquals(219.47, parsed.totalBalance, 0.001)
+    }
+
+    // ── Awash Bank Tests ──────────────────────────────────────────────────
+
+    @Test
+    fun `parses Awash Bank outbound CBE transfer with ref and balance`() {
+        val msg = "Ref: 819285215216: Dear AMANUEL  ADEME , you have transfered 4000.00 to DAGMAWI GETACHEW DIGAFE in CBE .New balance is 985.92 as at 2023-08-12: 21:52.Transaction cost, 20.00.Thank You! Awash Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(4000.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("DAGMAWI GETACHEW DIGAFE", parsed.counterparty)
+        assertEquals("819285215216", parsed.txReference)
+        assertEquals(985.92, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Awash Bank mobile money transfer to telebirr`() {
+        val msg = "Ref: 811859163727:  Dear AMANUEL  ADEME , your mobile money transfer of 2800.00 to telebirr account 251928983855  is being processed. For any complaint or enquiry, please call 8980. Thank you! Awash Bank."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(2800.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("Telebirr (251928983855)", parsed.counterparty)
+        assertEquals("811859163727", parsed.txReference)
+    }
+
+    @Test
+    fun `parses Awash Bank third-party transfer to user account`() {
+        val msg = "Dear AMANUEL ADEMU DESALEW, AMANUEL  ADEME  has transferred 1400.00 birr to your ABYSSINIA account from Awash Bank. Thank you."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(1400.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("AMANUEL  ADEME", parsed.counterparty)
+    }
+
+    @Test
+    fun `parses Awash Bank inbound credit with ref`() {
+        val msg = "Ref: 85376317729 : Dear AMANUEL ADEME DESALEO, your account has been credited with 3000.00 from DAWIT TESFAYE. New balance is 3085.92 as at 2023-08-21: 17:07. Thank you! Awash Bank."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(3000.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("DAWIT TESFAYE", parsed.counterparty)
+        assertEquals("85376317729", parsed.txReference)
+        assertEquals(3085.92, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Awash Bank inbound transfer processing`() {
+        val msg = "Dear AMANUEL ADEME DESALEW, a transfer of 200.00 birr from EYOSIAS MEKBIB to your DASHEN account is being processed. Thank you. Awash Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(200.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("EYOSIAS MEKBIB", parsed.counterparty)
+    }
+
+    @Test
+    fun `parses Awash Bank school fee payment`() {
+        val msg = "Ref: 6Z8JHZF4YUGE : Dear AMANUEL  ADEME , school fee payment  of 12088.00 to BITS EDUCATION AND CONSLTING PLC for AMANUEL ADEME DESALEO has been paid successfully. Transaction Cost ETB 0.00. Thank You! Awash Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(12088.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals("BITS EDUCATION AND CONSLTING PLC", parsed.counterparty)
+        assertEquals("6Z8JHZF4YUGE", parsed.txReference)
+        assertEquals("School Fee", parsed.lockedReasonName)
+        assertFalse(parsed.isLocked)
+    }
+
+    @Test
+    fun `parses Awash Bank inbound telebirr received`() {
+        val msg = "Dear Customer, You have received 550.00 from Telebirr, service number 251928983855, on your account 01320xxxxx1300 by Ref: KNMLDN4YT74W, and your new balance is 609.34 as at 2022-12-27: 17:23. For any complaints or enquiries, please call 8980. Thank you! Awash Bank"
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(550.0, parsed!!.amount, 0.001)
+        assertFalse(parsed.isDebit)
+        assertEquals("Telebirr (251928983855)", parsed.counterparty)
+        assertEquals("KNMLDN4YT74W", parsed.txReference)
+        assertEquals(609.34, parsed.totalBalance, 0.001)
+    }
+
+    @Test
+    fun `parses Awash Bank account debited with negative amount`() {
+        val msg = "Dear Customer, your Account 01425xxxxxx3201 has been Debited with ETB -30500.00 on 2026-07-09 12:44:06. Your balance now is ETB 510269.25. For any complaint or enquiry, please call 8980. Thank You. Awash Bank."
+        val parsed = SmsBroadcastReceiver.parseBankingSms("Awash Bank", msg)
+
+        assertNotNull(parsed)
+        assertEquals(30500.0, parsed!!.amount, 0.001)
+        assertTrue(parsed.isDebit)
+        assertEquals(510269.25, parsed.totalBalance, 0.001)
     }
 }

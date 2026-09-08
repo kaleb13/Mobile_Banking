@@ -8,6 +8,7 @@ import 'package:mobile_banking_app/services/cbe_birr_parser.dart';
 import 'package:mobile_banking_app/services/ahadu_parser.dart';
 import 'package:mobile_banking_app/services/boa_parser.dart';
 import 'package:mobile_banking_app/services/dashen_parser.dart';
+import 'package:mobile_banking_app/services/awash_parser.dart';
 
 void main() {
   test('Verify all exported messages are handled (parsed or ignored)', () {
@@ -15,7 +16,11 @@ void main() {
     final files = dir
         .listSync()
         .whereType<File>()
-        .where((f) => f.path.contains('shibre_unrecognized_sms_'))
+        .where((f) =>
+            f.path.toLowerCase().contains('unrecognized_sms_') ||
+            f.path.toLowerCase().contains('unrade sms') ||
+            f.path.toLowerCase().contains('unread sms') ||
+            (f.path.endsWith('.json') && f.path.toLowerCase().contains('sms')))
         .toList();
     if (files.isEmpty) {
       print('No export files found to test.');
@@ -75,6 +80,12 @@ void main() {
           }
         } else if (bank == 'Dashen Bank') {
           final parsed = DashenParser.parse(body, date);
+          if (parsed != null) {
+            parsedCount++;
+            continue;
+          }
+        } else if (bank == 'Awash Bank') {
+          final parsed = AwashParser.parse(body, date);
           if (parsed != null) {
             parsedCount++;
             continue;

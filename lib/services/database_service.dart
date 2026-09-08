@@ -630,7 +630,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       'Goods': {'icon': 'shopping_bag', 'color': '#EC4899', 'subs': ['Clothing & Apparel', 'Electronics', 'Household Supplies', 'Supermarket Goods', 'Gifts']},
       'Entertainment': {'icon': 'movie', 'color': '#8B5CF6', 'subs': ['Movies', 'Gaming', 'Streaming & Subscriptions', 'Events & Concerts', 'Hobbies']},
       'Health & Personal Care': {'icon': 'medical_services', 'color': '#14B8A6', 'subs': ['Pharmacy & Medicine', 'Doctor & Hospital', 'Salon & Spa', 'Fitness & Gym']},
-      'Education': {'icon': 'school', 'color': '#2563EB', 'subs': ['Tuition', 'Books & Stationary', 'Online Courses']},
+      'Education': {'icon': 'school', 'color': '#2563EB', 'subs': ['School Fee', 'Tuition', 'Books & Stationary', 'Online Courses']},
       'Investment & Savings': {'icon': 'trending_up', 'color': '#10B981', 'subs': ['Stocks & Crypto', 'Fixed Deposit', 'Personal Savings']},
       'Salary': {'icon': 'account_balance_wallet', 'color': '#10B981', 'subs': ['Primary Salary', 'Bonus & Commission', 'Freelance']},
     };
@@ -1622,13 +1622,14 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
         final origNameLower = (r['name'] as String).trim().toLowerCase();
         final parentId = r['parentId'] as int?;
 
-        // Protect 'Mobile & Internet' top category from renaming
-        if (parentId == null && origNameLower == 'mobile & internet') {
+        // Protect 'Mobile & Internet' and 'Education' top categories from renaming
+        if (parentId == null &&
+            (origNameLower == 'mobile & internet' || origNameLower == 'education')) {
           return 0;
         }
-        // Protect 'Airtime' and 'Package' subcategories from renaming
+        // Protect 'Airtime', 'Package', and 'School Fee' subcategories from renaming
         if (parentId != null &&
-            (origNameLower == 'airtime' || origNameLower == 'package')) {
+            (origNameLower == 'airtime' || origNameLower == 'package' || origNameLower == 'school fee')) {
           return 0;
         }
       }
@@ -1646,13 +1647,14 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       final nameLower = (r['name'] as String).trim().toLowerCase();
       final parentId = r['parentId'] as int?;
 
-      // Protect 'Mobile & Internet' top category
-      if (parentId == null && nameLower == 'mobile & internet') {
+      // Protect 'Mobile & Internet' and 'Education' top categories
+      if (parentId == null &&
+          (nameLower == 'mobile & internet' || nameLower == 'education')) {
         return 0;
       }
-      // Protect 'Airtime' and 'Package' subcategories
+      // Protect 'Airtime', 'Package', and 'School Fee' subcategories
       if (parentId != null &&
-          (nameLower == 'airtime' || nameLower == 'package')) {
+          (nameLower == 'airtime' || nameLower == 'package' || nameLower == 'school fee')) {
         return 0;
       }
 

@@ -143,6 +143,12 @@ class BankSenders {
     if (lower.contains('otp is')) return true;
     if (lower.contains('your otp')) return true;
     if (lower.contains('otp:')) return true;
+    if (lower.contains('otp :')) return true;
+    if (RegExp(r'\botp\b', caseSensitive: false).hasMatch(body)) return true;
+    if (lower.contains('online banking access') ||
+        lower.contains('logged in into your')) {
+      return true;
+    }
     if (lower.contains('passcode')) return true;
     if (lower.contains('secret code')) return true;
     if (lower.contains('login code')) return true;
@@ -259,6 +265,9 @@ class BankSenders {
         lower.contains('loan balance') ||
         lower.contains('loan repayment') ||
         lower.contains('unpaid credit amount') ||
+        lower.contains('borrow up to') ||
+        lower.contains('without collateral') ||
+        lower.contains('financial service for all') ||
         lower.contains('repaid') ||
         lower.contains('penalty fee') ||
         lower.contains('facilitation fee')) {
@@ -304,7 +313,10 @@ class BankSenders {
         lower.contains('easily top-up your mobile airtime with telebirr') ||
         lower.contains('telebirr mobile app is now available on play store') ||
         lower.contains('due to a friend you invited') ||
-        lower.contains('redeem your pocket money')) {
+        lower.contains('redeem your pocket money') ||
+        lower.contains('happy ethiopian new year') ||
+        lower.contains('wish you a happy') ||
+        lower.contains('thank you for choosing us')) {
       return true;
     }
 

@@ -149,14 +149,15 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   }
 
   bool _isProtectedTopCategory(AppReason reason) {
-    return reason.isTopLevelCategory &&
-        reason.name.trim().toLowerCase() == 'mobile & internet';
+    if (!reason.isTopLevelCategory) return false;
+    final nameLower = reason.name.trim().toLowerCase();
+    return nameLower == 'mobile & internet' || nameLower == 'education';
   }
 
   bool _isProtectedSubcategory(AppReason reason) {
     if (!reason.isSubcategory) return false;
     final nameLower = reason.name.trim().toLowerCase();
-    return nameLower == 'airtime' || nameLower == 'package';
+    return nameLower == 'airtime' || nameLower == 'package' || nameLower == 'school fee';
   }
 
   void _showCategoryOptionsModal(BuildContext context, TransactionsViewModel txVM, AppReason reason) {

@@ -9,6 +9,9 @@ enum SmsPatternType {
   /// Data/voice package purchase or subscription (Locked system reason)
   telebirrPackage,
 
+  /// School or educational institutional fee payment (Unlocked auto-reason)
+  schoolFee,
+
   /// Internal transfer to Telebirr Sanduq / Savings account (Locked system reason)
   telebirrSanduq,
 
@@ -78,6 +81,8 @@ class ParsedSmsResult {
         return 'Airtime';
       case SmsPatternType.telebirrPackage:
         return 'Package';
+      case SmsPatternType.schoolFee:
+        return 'School Fee';
       case SmsPatternType.telebirrSanduq:
       case SmsPatternType.internalTransfer:
         return 'Internal Transfer';

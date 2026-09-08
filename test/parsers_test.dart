@@ -283,6 +283,21 @@ For help, call 8397 (24/7 Toll-Free). Bank of Abyssinia.''';
       expect(tx.patternType, equals(SmsPatternType.standardTransfer));
     });
 
+    test('parses branch credit notification with Avail. bal and Info', () {
+      const sms = "Dear Customer, A/C No. 8*****27 has been credited By BINALF FANTAHUN EMIRU with ETB 6,000.00 on 19/08/2023 @ALAMURA BRANCH. Info: Transfer-payment. Avail. bal: ETB 6,034.33. Join our telegram channel for latest updates https://t.me/BoAEth\n     Bank of Abyssinia. for further enquires please call us Toll free (24/7) on 8397.";
+      final tx = BoaParser.parse(sms, now);
+
+      expect(tx, isNotNull);
+      expect(tx!.amount, equals(6000.00));
+      expect(tx.type, equals('income'));
+      expect(tx.bankName, equals('BOA'));
+      expect(tx.counterparty, equals('BINALF FANTAHUN EMIRU'));
+      expect(tx.totalBalance, equals(6034.33));
+      expect(tx.date.year, equals(2023));
+      expect(tx.date.month, equals(8));
+      expect(tx.date.day, equals(19));
+    });
+
     test('parses debit transaction with ref ID', () {
       const sms = 'Dear Yohannes, your account 2*****36 was debited with ETB 10,000.00. Available Balance: ETB 21,818.29.\nReceipt: https://cs.bankofabyssinia.com/slip/?trx=TT262259CCQC91836';
       final tx = BoaParser.parse(sms, now);

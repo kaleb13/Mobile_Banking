@@ -130,6 +130,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (lower.contains("otp is")) return true
             if (lower.contains("your otp")) return true
             if (lower.contains("otp:")) return true
+            if (lower.contains("otp :")) return true
+            if (Regex("(?i)\\botp\\b").containsMatchIn(body)) return true
+            if (lower.contains("online banking access") ||
+                lower.contains("logged in into your")) return true
             if (lower.contains("passcode")) return true
             if (lower.contains("secret code")) return true
             if (lower.contains("login code")) return true
@@ -222,6 +226,9 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 lower.contains("loan balance") ||
                 lower.contains("loan repayment") ||
                 lower.contains("unpaid credit amount") ||
+                lower.contains("borrow up to") ||
+                lower.contains("without collateral") ||
+                lower.contains("financial service for all") ||
                 lower.contains("repaid") ||
                 lower.contains("penalty fee") ||
                 lower.contains("facilitation fee")) {
@@ -259,7 +266,10 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 lower.contains("congratulations, you have won") ||
                 lower.contains("you have won etb") ||
                 lower.contains("gotten all letters") ||
-                lower.contains("redeem your pocket money")) {
+                lower.contains("redeem your pocket money") ||
+                lower.contains("happy ethiopian new year") ||
+                lower.contains("wish you a happy") ||
+                lower.contains("thank you for choosing us")) {
                 return true
             }
 
@@ -847,7 +857,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 }
 
                 "BOA" -> {
-                    val boaBalMatch = Regex("(?i)(?:Available\\s+Balance|Current\\s+Balance|Balance)\\s*(?:is|:)?\\s*(?:ETB|Birr|Br\\.?)?\\s*([0-9,.]+)").find(singleLine)
+                    val boaBalMatch = Regex("(?i)(?:Available\\s+Balance|Current\\s+Balance|Balance|Avail\\.\\s*bal)\\s*(?:is|:)?\\s*(?:ETB|Birr|Br\\.?)?\\s*([0-9,.]+)").find(singleLine)
                     val boaTotalBal = if (boaBalMatch != null) {
                         val raw = boaBalMatch.groupValues[1].replace(",", "")
                         val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
@@ -855,11 +865,39 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                     } else 0.0
 
                     if (lower.contains("credited")) {
-                        val amount = parseAmount(Regex("(?i)credited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        var amount = parseAmount(Regex("(?i)credited\\s+with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) {
+                            amount = parseAmount(Regex("(?i)with\\s+ETB\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        }
                         if (amount <= 0) return null
-                        val byMatch = Regex("(?i)by\\s+(.*?)(?:\\s*\\.|\\s*available)").find(singleLine)
-                        val senderName = byMatch?.groupValues?.get(1)?.trim() ?: "BOA Deposit"
+
+                        val byWithMatch = Regex("(?i)credited\\s+By\\s*(.*?)\\s*with\\s+ETB").find(singleLine)
+                        var senderName = if (byWithMatch != null) {
+                            byWithMatch.groupValues[1].trim()
+                        } else {
+                            val byMatch = Regex("(?i)by\\s+(.*?)(?:\\s*\\.|\\s*available)").find(singleLine)
+                            byMatch?.groupValues?.get(1)?.trim() ?: ""
+                        }
+
+                        if (senderName.isEmpty()) {
+                            val infoMatch = Regex("(?i)Info:\\s*(.*?)(?=\\.\\s*Avail|\\.|$)").find(singleLine)
+                            if (infoMatch != null) {
+                                val info = infoMatch.groupValues[1].trim()
+                                senderName = if (info.contains("Cash Deposit-", ignoreCase = true)) {
+                                    info.split(Regex("(?i)Cash Deposit-"))[1].trim()
+                                } else {
+                                    info
+                                }
+                            }
+                        }
+
+                        senderName = senderName.replace("amp;", "&").trim()
+                        if (senderName.isEmpty() || senderName.equals("self", ignoreCase = true)) {
+                            senderName = "BOA Deposit"
+                        }
+
                         val refMatch = Regex("(?i)trx=([A-Za-z0-9]+)").find(singleLine)
+                            ?: Regex("(?i)Info:.*?-(20\\d{12})").find(singleLine)
                         val ref = refMatch?.groupValues?.get(1)?.trim()
 
                         return NativeParsedSms(
@@ -1085,7 +1123,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                 }
 
                 "Awash Bank" -> {
-                    val awashBalMatch = Regex("(?i)(?:Your\\s+(?:available\\s+)?[Bb]alance\\s+(?:now\\s+)?is\\s+(?:now\\s+)?(?:ETB\\s*)?|Your\\s+[Bb]alance\\s+now\\s+is\\s+ETB\\s*)([0-9,]+(?:\\.[0-9]+)?)").find(singleLine)
+                    val awashBalMatch = Regex("(?i)(?:Your\\s+(?:available\\s+)?[Bb]alance\\s+(?:now\\s+)?is\\s+(?:now\\s+)?(?:ETB\\s*)?|Your\\s+[Bb]alance\\s+now\\s+is\\s+ETB\\s*|New\\s+balance\\s+is\\s+(?:ETB\\s*)?)([0-9,]+(?:\\.[0-9]+)?)").find(singleLine)
                     val awashTotalBal = if (awashBalMatch != null) {
                         val raw = awashBalMatch.groupValues[1].replace(",", "")
                         val clean = if (raw.endsWith(".")) raw.substring(0, raw.length - 1) else raw
@@ -1197,10 +1235,105 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                         counterparty = agentMatch?.groupValues?.get(1)?.trim() ?: "Telebirr Agent"
                         val txnMatch = Regex("(?i)Transaction\\s+Id:\\s*([A-Za-z0-9]+)").find(singleLine)
                         ref = txnMatch?.groupValues?.get(1)?.trim()
+                    }
+                    // 9. Outbound Transfer to Other Bank / CBE: "Ref: ... you have transfer(r)ed ... to ... in CBE"
+                    else if (Regex("(?i)you\\s+have\\s+transferr?ed\\s+[0-9,.]+\\s+to").containsMatchIn(singleLine)) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)you\\s+have\\s+transferr?ed\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val toMatch = Regex("(?i)to\\s+(.*?)\\s+(?:in\\s+[A-Za-z]+|\\.New|\\.Transaction)").find(singleLine)
+                        counterparty = toMatch?.groupValues?.get(1)?.trim() ?: "Awash Transfer"
+
+                        val refMatch = Regex("(?i)Ref:\\s*([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
+                    // 10. Mobile Money Transfer to Telebirr: "Ref: ... mobile money transfer of ... to telebirr"
+                    else if (lower.contains("mobile money transfer of")) {
+                        isDebit = true
+                        amount = parseAmount(Regex("(?i)mobile\\s+money\\s+transfer\\s+of\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val phoneMatch = Regex("(?i)telebirr\\s+account\\s+(\\d+)").find(singleLine)
+                        counterparty = if (phoneMatch != null) "Telebirr (${phoneMatch.groupValues[1]})" else "Telebirr"
+
+                        val refMatch = Regex("(?i)Ref:\\s*([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
+                    // 11. Third-Party Transfer to User Account: "Dear ..., ... has transferred ... birr to your ... account"
+                    else if (Regex("(?i)has\\s+transferred\\s+[0-9,.]+\\s*birr\\s+to\\s+your").containsMatchIn(singleLine)) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)has\\s+transferred\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*birr"), singleLine)
+                        if (amount <= 0) return null
+
+                        val fromMatch = Regex("(?i)Dear\\s+[^,]+,\\s*(.*?)\\s+has\\s+transferred").find(singleLine)
+                        counterparty = fromMatch?.groupValues?.get(1)?.trim() ?: "Awash Deposit"
+                    }
+                    // 12. Inbound Credit with Ref: "Ref: ... your account has been credited with ..."
+                    else if (lower.contains("your account has been credited with")) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)credited\\s+with\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val fromMatch = Regex("(?i)from\\s+(.*?)(?=\\.New|\\.|\\n|$)").find(singleLine)
+                        counterparty = fromMatch?.groupValues?.get(1)?.trim() ?: "Awash Deposit"
+
+                        val refMatch = Regex("(?i)Ref:\\s*([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
+                    // 13. Inbound Transfer Processing: "a transfer of ... birr from ... to your ... account is being processed"
+                    else if (Regex("(?i)a\\s+transfer\\s+of\\s+[0-9,.]+\\s*birr\\s+from").containsMatchIn(singleLine)) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)a\\s+transfer\\s+of\\s*([0-9,]+(?:\\.[0-9]+)?)\\s*birr"), singleLine)
+                        if (amount <= 0) return null
+
+                        val fromMatch = Regex("(?i)from\\s+(.*?)\\s+to\\s+your").find(singleLine)
+                        counterparty = fromMatch?.groupValues?.get(1)?.trim() ?: "Awash Deposit"
+                    }
+                    // 14. School Fee / Merchant Payment: "school fee payment of ... to ..."
+                    else if (lower.contains("school fee payment") || (lower.contains("payment") && lower.contains("has been paid successfully"))) {
+                        isDebit = true
+                        isLocked = false
+                        lockedReason = "School Fee"
+                        amount = parseAmount(Regex("(?i)payment\\s+of\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val toMatch = Regex("(?i)to\\s+(.*?)\\s+for\\s+").find(singleLine)
+                        counterparty = toMatch?.groupValues?.get(1)?.trim() ?: "School Fee"
+
+                        val refMatch = Regex("(?i)Ref:\\s*([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
+                    // 15. Inbound Telebirr Received: "You have received ... from Telebirr"
+                    else if (lower.contains("you have received") && lower.contains("telebirr")) {
+                        isDebit = false
+                        amount = parseAmount(Regex("(?i)received\\s*([0-9,]+(?:\\.[0-9]+)?)"), singleLine)
+                        if (amount <= 0) return null
+
+                        val phoneMatch = Regex("(?i)service\\s+number\\s+(\\d+)").find(singleLine)
+                        counterparty = if (phoneMatch != null) "Telebirr (${phoneMatch.groupValues[1]})" else "Telebirr"
+
+                        val refMatch = Regex("(?i)Ref:\\s*([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
+                    // 16. Account Debited: "your Account ... has been Debited with ETB -..."
+                    else if (lower.contains("has been debited with etb")) {
+                        isDebit = true
+                        val amtMatch = Regex("(?i)debited\\s+with\\s+ETB\\s*(-?[0-9,]+(?:\\.[0-9]+)?)").find(singleLine)
+                        val rawAmt = amtMatch?.groupValues?.get(1)?.replace(",", "")?.trim() ?: "0"
+                        val cleanAmt = if (rawAmt.endsWith(".")) rawAmt.substring(0, rawAmt.length - 1) else rawAmt
+                        amount = (cleanAmt.toDoubleOrNull() ?: 0.0).let { if (it < 0) -it else it }
+                        if (amount <= 0) return null
+
+                        counterparty = "Awash Debit"
                     } else {
                         return null
                     }
 
+                    if (ref == null) {
+                        val refMatch = Regex("(?i)Ref:\\s*([A-Za-z0-9]+)").find(singleLine)
+                        ref = refMatch?.groupValues?.get(1)?.trim()
+                    }
                     if (ref == null) {
                         val receiptMatch = Regex("(?i)awashpay\\.awashbank\\.com:\\d+/(-[A-Za-z0-9-]+)").find(singleLine)
                         ref = receiptMatch?.groupValues?.get(1)?.trim()

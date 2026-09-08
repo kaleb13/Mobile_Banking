@@ -126,6 +126,106 @@ void main() {
       expect(result.id, '260822194176925');
     });
 
+    test('Pattern 9: Outbound Transfer to Other Bank / CBE with Ref', () {
+      const msg =
+          'Ref: 819285215216: Dear AMANUEL  ADEME , you have transfered 4000.00 to DAGMAWI GETACHEW DIGAFE in CBE .New balance is 985.92 as at 2023-08-12: 21:52.Transaction cost, 20.00.Thank You! Awash Bank';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'expense');
+      expect(result.amount, 4000.00);
+      expect(result.counterparty, 'DAGMAWI GETACHEW DIGAFE');
+      expect(result.id, '819285215216');
+      expect(result.totalBalance, 985.92);
+    });
+
+    test('Pattern 10: Mobile Money Transfer to Telebirr', () {
+      const msg =
+          'Ref: 811859163727:  Dear AMANUEL  ADEME , your mobile money transfer of 2800.00 to telebirr account 251928983855  is being processed. For any complaint or enquiry, please call 8980. Thank you! Awash Bank.';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'expense');
+      expect(result.amount, 2800.00);
+      expect(result.counterparty, 'Telebirr (251928983855)');
+      expect(result.id, '811859163727');
+    });
+
+    test('Pattern 11: Third-Party Transfer to User Account', () {
+      const msg =
+          'Dear AMANUEL ADEMU DESALEW, AMANUEL  ADEME  has transferred 1400.00 birr to your ABYSSINIA account from Awash Bank. Thank you.';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'income');
+      expect(result.amount, 1400.00);
+      expect(result.counterparty, 'AMANUEL  ADEME');
+    });
+
+    test('Pattern 12: Inbound Credit with Ref', () {
+      const msg =
+          'Ref: 85376317729 : Dear AMANUEL ADEME DESALEO, your account has been credited with 3000.00 from DAWIT TESFAYE. New balance is 3085.92 as at 2023-08-21: 17:07. Thank you! Awash Bank.';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'income');
+      expect(result.amount, 3000.00);
+      expect(result.counterparty, 'DAWIT TESFAYE');
+      expect(result.id, '85376317729');
+      expect(result.totalBalance, 3085.92);
+    });
+
+    test('Pattern 13: Inbound Transfer Processing', () {
+      const msg =
+          'Dear AMANUEL ADEME DESALEW, a transfer of 200.00 birr from EYOSIAS MEKBIB to your DASHEN account is being processed. Thank you. Awash Bank';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'income');
+      expect(result.amount, 200.00);
+      expect(result.counterparty, 'EYOSIAS MEKBIB');
+    });
+
+    test('Pattern 14: School Fee Payment', () {
+      const msg =
+          'Ref: 6Z8JHZF4YUGE : Dear AMANUEL  ADEME , school fee payment  of 12088.00 to BITS EDUCATION AND CONSLTING PLC for AMANUEL ADEME DESALEO has been paid successfully. Transaction Cost ETB 0.00. Thank You! Awash Bank';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'expense');
+      expect(result.amount, 12088.00);
+      expect(result.counterparty, 'BITS EDUCATION AND CONSLTING PLC');
+      expect(result.id, '6Z8JHZF4YUGE');
+      expect(result.patternType, SmsPatternType.schoolFee);
+      expect(result.lockedReasonName, 'School Fee');
+      expect(result.isSystemLocked, isFalse);
+    });
+
+    test('Pattern 15: Inbound Telebirr Received', () {
+      const msg =
+          'Dear Customer, You have received 550.00 from Telebirr, service number 251928983855, on your account 01320xxxxx1300 by Ref: KNMLDN4YT74W, and your new balance is 609.34 as at 2022-12-27: 17:23. For any complaints or enquiries, please call 8980. Thank you! Awash Bank';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'income');
+      expect(result.amount, 550.00);
+      expect(result.counterparty, 'Telebirr (251928983855)');
+      expect(result.id, 'KNMLDN4YT74W');
+      expect(result.totalBalance, 609.34);
+    });
+
+    test('Pattern 16: Account Debited with Negative Sign', () {
+      const msg =
+          'Dear Customer, your Account 01425xxxxxx3201 has been Debited with ETB -30500.00 on 2026-07-09 12:44:06. Your balance now is ETB 510269.25. For any complaint or enquiry, please call 8980. Thank You. Awash Bank.';
+      final result = AwashParser.parse(msg, testDate);
+      expect(result, isNotNull);
+      expect(result!.bankName, 'Awash Bank');
+      expect(result.type, 'expense');
+      expect(result.amount, 30500.00);
+      expect(result.totalBalance, 510269.25);
+      expect(result.date, DateTime(2026, 7, 9, 12, 44, 6));
+    });
+
     test('Extract Owner Name from Harmonization / Linking SMS', () {
       const harmonizationMsg =
           'Dear BISRAT TESFAYE ADEM, Thank you for submitting your request to harmonize your bank account with your National ID (fayda) information.\nAwash Bank!';

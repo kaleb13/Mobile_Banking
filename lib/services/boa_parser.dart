@@ -86,7 +86,7 @@ class BoaParser {
       return 0.0;
     }
 
-    // Extract Transaction Reference ID from Receipt URL or text
+    // Extract Transaction Reference ID from Receipt URL, text, or Info
     String? refId;
     final refMatch = RegExp(r'trx=([A-Za-z0-9]+)', caseSensitive: false).firstMatch(message);
     if (refMatch != null) {
@@ -95,12 +95,17 @@ class BoaParser {
       final textRef = RegExp(r'(?:Ref(?:\s*No)?|Txn(?:\s*ID)?)\s*:?\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(message);
       if (textRef != null) {
         refId = textRef.group(1)?.trim();
+      } else {
+        final infoRef = RegExp(r'Info:.*?-(20\d{12})', caseSensitive: false).firstMatch(message);
+        if (infoRef != null) {
+          refId = infoRef.group(1)?.trim();
+        }
       }
     }
 
     // Extract Total Available Balance
     final balMatch = RegExp(
-      r'(?:Available\s+Balance|Current\s+Balance|Balance)\s*(?:is|:)?\s*(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
+      r'(?:Available\s+Balance|Current\s+Balance|Balance|Avail\.\s*bal)\s*(?:is|:)?\s*(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
       caseSensitive: false,
     ).firstMatch(message);
     if (balMatch != null) {
@@ -168,15 +173,47 @@ class BoaParser {
         r'credited\s+(?:with\s+)?(?:ETB|Birr|Br\.?)?\s*([0-9,.]+)',
         caseSensitive: false,
       ));
+      if (amount <= 0) {
+        amount = extractAmount(RegExp(
+          r'with\s+ETB\s*([0-9,.]+)',
+          caseSensitive: false,
+        ));
+      }
 
-      final byMatch = RegExp(
-        r'by\s+(.*?)(?:\s*\.|\n|Available|Receipt|Link|Feedback)',
+      // Check format: "credited By <NAME>with ETB" or "credited By <NAME> with ETB"
+      final byWithMatch = RegExp(
+        r'credited\s+By\s*(.*?)\s*with\s+ETB',
         caseSensitive: false,
       ).firstMatch(message);
-      if (byMatch != null) {
-        recipientOrSender = byMatch.group(1)?.replaceAll('.', '').trim() ?? '';
+
+      if (byWithMatch != null) {
+        recipientOrSender = byWithMatch.group(1)?.replaceAll('.', '').trim() ?? '';
+      } else {
+        final byMatch = RegExp(
+          r'by\s+(.*?)(?:\s*\.|\n|Available|Receipt|Link|Feedback)',
+          caseSensitive: false,
+        ).firstMatch(message);
+        if (byMatch != null) {
+          recipientOrSender = byMatch.group(1)?.replaceAll('.', '').trim() ?? '';
+        }
       }
+
+      // If counterparty is empty after By (e.g. "credited By with ETB 3,000.00... Info: Cash Deposit-NAME")
       if (recipientOrSender.isEmpty) {
+        final infoMatch = RegExp(r'Info:\s*(.*?)(?=\.\s*Avail|\.|$)', caseSensitive: false).firstMatch(message);
+        if (infoMatch != null) {
+          final info = infoMatch.group(1)?.trim() ?? '';
+          if (info.toLowerCase().contains('cash deposit-')) {
+            recipientOrSender = info.split(RegExp(r'cash deposit-', caseSensitive: false)).last.trim();
+          } else {
+            recipientOrSender = info;
+          }
+        }
+      }
+
+      recipientOrSender = recipientOrSender.replaceAll('amp;', '&').trim();
+
+      if (recipientOrSender.isEmpty || recipientOrSender.toLowerCase() == 'self') {
         recipientOrSender = 'BOA Deposit';
       }
     } else {

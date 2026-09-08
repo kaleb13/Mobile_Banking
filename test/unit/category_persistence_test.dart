@@ -167,5 +167,39 @@ void main() {
       expect(subs.length, 1);
       expect(subs.first.name, 'Groceries');
     });
+
+    test('verifies protected top categories (Mobile & Internet, Education) and subcategories (Airtime, Package, School Fee)', () {
+      bool isProtectedTopCategory(AppReason reason) {
+        if (!reason.isTopLevelCategory) return false;
+        final nameLower = reason.name.trim().toLowerCase();
+        return nameLower == 'mobile & internet' || nameLower == 'education';
+      }
+
+      bool isProtectedSubcategory(AppReason reason) {
+        if (!reason.isSubcategory) return false;
+        final nameLower = reason.name.trim().toLowerCase();
+        return nameLower == 'airtime' || nameLower == 'package' || nameLower == 'school fee';
+      }
+
+      final mobileTop = AppReason(id: 1, name: 'Mobile & Internet', parentId: null);
+      final educationTop = AppReason(id: 2, name: 'Education', parentId: null);
+      final foodTop = AppReason(id: 3, name: 'Food', parentId: null);
+
+      expect(isProtectedTopCategory(mobileTop), isTrue);
+      expect(isProtectedTopCategory(educationTop), isTrue);
+      expect(isProtectedTopCategory(foodTop), isFalse);
+
+      final airtimeSub = AppReason(id: 4, name: 'Airtime', parentId: 1);
+      final packageSub = AppReason(id: 5, name: 'Package', parentId: 1);
+      final schoolFeeSub = AppReason(id: 6, name: 'School Fee', parentId: 2);
+      final tuitionSub = AppReason(id: 7, name: 'Tuition', parentId: 2);
+      final booksSub = AppReason(id: 8, name: 'Books & Stationary', parentId: 2);
+
+      expect(isProtectedSubcategory(airtimeSub), isTrue);
+      expect(isProtectedSubcategory(packageSub), isTrue);
+      expect(isProtectedSubcategory(schoolFeeSub), isTrue);
+      expect(isProtectedSubcategory(tuitionSub), isFalse);
+      expect(isProtectedSubcategory(booksSub), isFalse);
+    });
   });
 }

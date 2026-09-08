@@ -16,6 +16,9 @@ class AwashParser {
         !lowerMsg.contains('credited') &&
         !lowerMsg.contains('transferred') &&
         !lowerMsg.contains('transfer') &&
+        !lowerMsg.contains('debited') &&
+        !lowerMsg.contains('received') &&
+        !lowerMsg.contains('payment') &&
         !lowerMsg.contains('sent etb') &&
         !lowerMsg.contains('airtime')) {
       return null;
@@ -205,6 +208,117 @@ class AwashParser {
       if (txnMatch != null) {
         id = txnMatch.group(1)?.trim();
       }
+    }
+    // ── 9. Outbound Transfer to Other Bank / CBE (Ref: ... you have transfer(r)ed ... to ... in CBE) ──
+    else if (RegExp(r'you\s+have\s+transferr?ed\s+[0-9,.]+\s+to', caseSensitive: false).hasMatch(singleLine)) {
+      type = 'expense';
+      amount = parseAmount(RegExp(r'you\s+have\s+transferr?ed\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final toMatch = RegExp(r'to\s+(.*?)\s+(?:in\s+[A-Za-z]+|\.New|\.Transaction)', caseSensitive: false).firstMatch(singleLine);
+      counterparty = toMatch?.group(1)?.trim() ?? 'Awash Transfer';
+
+      final refMatch = RegExp(r'Ref:\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(singleLine);
+      if (refMatch != null) {
+        id = refMatch.group(1)?.trim();
+      }
+    }
+    // ── 10. Mobile Money Transfer to Telebirr (Ref: ... mobile money transfer of ...) ──
+    else if (lowerMsg.contains('mobile money transfer of')) {
+      type = 'expense';
+      amount = parseAmount(RegExp(r'mobile\s+money\s+transfer\s+of\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final phoneMatch = RegExp(r'telebirr\s+account\s+(\d+)', caseSensitive: false).firstMatch(singleLine);
+      counterparty = phoneMatch != null ? 'Telebirr (${phoneMatch.group(1)})' : 'Telebirr';
+
+      final refMatch = RegExp(r'Ref:\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(singleLine);
+      if (refMatch != null) {
+        id = refMatch.group(1)?.trim();
+      }
+    }
+    // ── 11. Third-Party Transfer to User Account (Dear ..., ... has transferred ... birr to your ... account) ──
+    else if (RegExp(r'has\s+transferred\s+[0-9,.]+\s*birr\s+to\s+your', caseSensitive: false).hasMatch(singleLine)) {
+      type = 'income';
+      amount = parseAmount(RegExp(r'has\s+transferred\s*([0-9,]+(?:\.[0-9]+)?)\s*birr', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final fromMatch = RegExp(r'Dear\s+[^,]+,\s*(.*?)\s+has\s+transferred', caseSensitive: false).firstMatch(singleLine);
+      counterparty = fromMatch?.group(1)?.trim() ?? 'Awash Deposit';
+    }
+    // ── 12. Inbound Credit with Ref (Ref: ... your account has been credited with ...) ──
+    else if (lowerMsg.contains('your account has been credited with')) {
+      type = 'income';
+      amount = parseAmount(RegExp(r'credited\s+with\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final fromMatch = RegExp(r'from\s+(.*?)(?=\.New|\.|\n|$)', caseSensitive: false).firstMatch(singleLine);
+      counterparty = fromMatch?.group(1)?.trim() ?? 'Awash Deposit';
+
+      final refMatch = RegExp(r'Ref:\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(singleLine);
+      if (refMatch != null) {
+        id = refMatch.group(1)?.trim();
+      }
+    }
+    // ── 13. Inbound Transfer Processing (a transfer of ... birr from ... to your ... account is being processed) ──
+    else if (RegExp(r'a\s+transfer\s+of\s+[0-9,.]+\s*birr\s+from', caseSensitive: false).hasMatch(singleLine)) {
+      type = 'income';
+      amount = parseAmount(RegExp(r'a\s+transfer\s+of\s*([0-9,]+(?:\.[0-9]+)?)\s*birr', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final fromMatch = RegExp(r'from\s+(.*?)\s+to\s+your', caseSensitive: false).firstMatch(singleLine);
+      counterparty = fromMatch?.group(1)?.trim() ?? 'Awash Deposit';
+    }
+    // ── 14. School Fee / Merchant Payment (school fee payment of ... to ...) ──
+    else if (lowerMsg.contains('school fee payment') || (lowerMsg.contains('payment') && lowerMsg.contains('has been paid successfully'))) {
+      type = 'expense';
+      patternType = SmsPatternType.schoolFee;
+      amount = parseAmount(RegExp(r'payment\s+of\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final toMatch = RegExp(r'to\s+(.*?)\s+for\s+', caseSensitive: false).firstMatch(singleLine);
+      counterparty = toMatch?.group(1)?.trim() ?? 'School Fee';
+
+      final refMatch = RegExp(r'Ref:\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(singleLine);
+      if (refMatch != null) {
+        id = refMatch.group(1)?.trim();
+      }
+    }
+    // ── 15. Inbound Telebirr Received (You have received ... from Telebirr) ──
+    else if (lowerMsg.contains('you have received') && lowerMsg.contains('telebirr')) {
+      type = 'income';
+      amount = parseAmount(RegExp(r'received\s*([0-9,]+(?:\.[0-9]+)?)', caseSensitive: false));
+      if (amount <= 0) return null;
+
+      final phoneMatch = RegExp(r'service\s+number\s+(\d+)', caseSensitive: false).firstMatch(singleLine);
+      counterparty = phoneMatch != null ? 'Telebirr (${phoneMatch.group(1)})' : 'Telebirr';
+
+      final refMatch = RegExp(r'Ref:\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(singleLine);
+      if (refMatch != null) {
+        id = refMatch.group(1)?.trim();
+      }
+    }
+    // ── 16. Account Debited (your Account ... has been Debited with ETB -...) ──
+    else if (lowerMsg.contains('has been debited with etb')) {
+      type = 'expense';
+      final match = RegExp(r'debited\s+with\s+ETB\s*(-?[0-9,]+(?:\.[0-9]+)?)', caseSensitive: false).firstMatch(singleLine);
+      if (match != null) {
+        String amtStr = match.group(1)?.replaceAll(',', '').trim() ?? '0';
+        if (amtStr.endsWith('.')) {
+          amtStr = amtStr.substring(0, amtStr.length - 1);
+        }
+        amount = (double.tryParse(amtStr) ?? 0.0).abs();
+      }
+      if (amount <= 0) return null;
+
+      counterparty = 'Awash Debit';
+
+      final dateMatch = RegExp(r'on\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', caseSensitive: false).firstMatch(singleLine);
+      if (dateMatch != null) {
+        try {
+          txDate = DateFormat('yyyy-MM-dd HH:mm:ss').parse(dateMatch.group(1)!);
+        } catch (_) {}
+      }
     } else {
       return null;
     }
@@ -213,9 +327,26 @@ class AwashParser {
 
     // ── Extract Receipt Link / Ref if ID is not yet found ──
     if (id == null || id.isEmpty) {
+      final refMatch = RegExp(r'Ref:\s*([A-Za-z0-9]+)', caseSensitive: false).firstMatch(singleLine);
+      if (refMatch != null) {
+        id = refMatch.group(1)?.trim();
+      }
+    }
+    if (id == null || id.isEmpty) {
       final receiptMatch = RegExp(r'awashpay\.awashbank\.com:\d+/(-[A-Za-z0-9-]+)', caseSensitive: false).firstMatch(singleLine);
       if (receiptMatch != null) {
         id = receiptMatch.group(1)?.trim();
+      }
+    }
+
+    // ── Extract Date from "as at YYYY-MM-DD: HH:mm" if txDate is still fallbackDate ──
+    if (txDate == fallbackDate) {
+      final asAtMatch = RegExp(r'as\s+at\s+(\d{4}-\d{2}-\d{2}:\s*\d{2}:\d{2})', caseSensitive: false).firstMatch(singleLine);
+      if (asAtMatch != null) {
+        try {
+          final dStr = asAtMatch.group(1)!.replaceAll(' ', '');
+          txDate = DateFormat('yyyy-MM-dd:HH:mm').parse(dStr);
+        } catch (_) {}
       }
     }
 
@@ -228,7 +359,7 @@ class AwashParser {
 
     // ── Extract Total / Available Balance ──
     final balanceMatch = RegExp(
-            r'(?:Your\s+(?:available\s+)?[Bb]alance\s+(?:now\s+)?is\s+(?:now\s+)?(?:ETB\s*)?|Your\s+[Bb]alance\s+now\s+is\s+ETB\s*)([0-9,]+(?:\.[0-9]+)?)',
+            r'(?:Your\s+(?:available\s+)?[Bb]alance\s+(?:now\s+)?is\s+(?:now\s+)?(?:ETB\s*)?|Your\s+[Bb]alance\s+now\s+is\s+ETB\s*|New\s+balance\s+is\s+(?:ETB\s*)?)([0-9,]+(?:\.[0-9]+)?)',
             caseSensitive: false)
         .firstMatch(singleLine);
     if (balanceMatch != null) {
@@ -264,6 +395,20 @@ class AwashParser {
     if (dearNameMatch != null) {
       final name = dearNameMatch.group(1)?.trim();
       if (name != null && name.isNotEmpty && !name.toLowerCase().contains('customer') && !name.toLowerCase().contains('valued')) {
+        return name;
+      }
+    }
+
+    final txNameMatch = RegExp(
+            r'Dear\s+([A-Za-z\s]{3,35})\s*,',
+            caseSensitive: false)
+        .firstMatch(singleLine);
+    if (txNameMatch != null) {
+      final name = txNameMatch.group(1)?.trim();
+      if (name != null &&
+          name.isNotEmpty &&
+          !name.toLowerCase().contains('customer') &&
+          !name.toLowerCase().contains('valued')) {
         return name;
       }
     }
