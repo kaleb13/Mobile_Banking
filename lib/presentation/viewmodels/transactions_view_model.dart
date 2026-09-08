@@ -12,6 +12,7 @@ import '../../models/reason.dart';
 import '../../models/bank_account_item.dart';
 import '../../models/transaction_attachment.dart';
 import '../../models/scan_window_option.dart';
+import '../../domain/services/sms_ingestion_service.dart';
 import '../../models/scan_progress_status.dart';
 import '../../services/telebirr_parser.dart';
 import '../../services/sms_service.dart';
@@ -32,12 +33,19 @@ import '../../utils/counterparty_matcher.dart';
 class TransactionsViewModel extends ChangeNotifier {
   final TransactionRepository _repository;
   final SettingsRepository? _settingsRepository;
+  final SmsIngestionService _smsIngestionService;
 
   TransactionsViewModel({
     required TransactionRepository repository,
     SettingsRepository? settingsRepository,
+    SmsIngestionService? smsIngestionService,
   })  : _repository = repository,
-        _settingsRepository = settingsRepository;
+        _settingsRepository = settingsRepository,
+        _smsIngestionService = smsIngestionService ??
+            SmsIngestionService(
+              repository: repository,
+              settingsRepository: settingsRepository,
+            );
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -807,13 +815,9 @@ class TransactionsViewModel extends ChangeNotifier {
   /// Discovers bank senders physically present in the phone's SMS inbox across all time and syncs them to SQLite.
   Future<void> discoverAndSyncPhoneSenders() async {
     try {
-      final detected = await SmsService().detectBankingSendersInInbox(
-        customSenders: _senders.map((s) => s.senderName).toList(),
+      _senders = await _smsIngestionService.discoverAndSyncPhoneSenders(
+        currentSenders: _senders,
       );
-      for (final bankName in detected) {
-        await _repository.insertSender(AppSender(senderName: bankName));
-      }
-      _senders = await _repository.getSenders();
       _rebuildAggregateIndices();
       notifyListeners();
     } catch (_) {}
@@ -832,143 +836,21 @@ class TransactionsViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final activeOption = scanWindowOption ??
-          await _settingsRepository?.getScanWindow() ??
-          ScanWindowOption.allTime;
-
-      onProgress?.call(const ScanProgressStatus(
-        progress: 0.05,
-        stage: 'Connecting to secure SMS inbox…',
-      ));
-
-      // Discover bank senders present on device across all time
-      try {
-        final detectedPhoneBanks = await SmsService().detectBankingSendersInInbox(
-          customSenders: _senders.map((s) => s.senderName).toList(),
-        );
-        for (final bankName in detectedPhoneBanks) {
-          await _repository.insertSender(AppSender(senderName: bankName));
-        }
-        _senders = await _repository.getSenders();
-      } catch (_) {}
-
-      // Strictly clamp since/anchorDate to never reach beyond active scan window fixed inception date
-      DateTime? boundaryAnchor;
-      if (activeOption != ScanWindowOption.allTime) {
-        boundaryAnchor = (await _settingsRepository?.getEffectiveScanWindowAnchorDate()) ??
-            activeOption.anchorDate;
-      }
-      DateTime? effectiveSince;
-      if (since != null) {
-        if (boundaryAnchor != null && since.isBefore(boundaryAnchor)) {
-          effectiveSince = boundaryAnchor;
-        } else {
-          effectiveSince = since;
-        }
-      } else {
-        effectiveSince = boundaryAnchor;
-      }
-      final cutoff = effectiveSince?.subtract(const Duration(minutes: 1));
-
-      final customSenderNames = _senders.map((s) => s.senderName).toList();
-      final rawMessages = await SmsService().getBankMessagesFast(
-        since: cutoff,
-        customSenders: customSenderNames,
+      final result = await _smsIngestionService.scanSms(
+        scanWindowOption: scanWindowOption,
+        since: since,
+        onProgress: onProgress,
+        currentSenders: _senders,
+        pausedBanks: _pausedBanks,
+        getBalanceForSender: (bankName) => balanceForSender(bankName),
+        insertNotificationsBatch: insertNotificationsBatch,
       );
 
-      if (rawMessages.isEmpty) {
-        onProgress?.call(const ScanProgressStatus(
-          progress: 1.0,
-          stage: 'No banking messages found in window',
-          scannedBanks: [],
-          isComplete: true,
-        ));
-        await loadAll();
-        return 0;
-      }
-
-      onProgress?.call(const ScanProgressStatus(
-        progress: 0.35,
-        stage: 'Reading & analyzing bank records…',
-      ));
-
-      final autoRules = await _repository.getAutoReasonRules();
-      final initialBalances = <String, double>{};
-      for (final s in _senders) {
-        initialBalances[s.senderName] = balanceForSender(s.senderName);
-      }
-
-      // ── Diagnostic: Raw message SIM distribution ──
-      final sim0Raw = rawMessages.where((m) => m.simSlot == 0).length;
-      final sim1Raw = rawMessages.where((m) => m.simSlot == 1).length;
-      debugPrint('[ShibreSIM-Dart] Raw messages: total=${rawMessages.length} SIM1(slot0)=$sim0Raw SIM2(slot1)=$sim1Raw');
-
-      final parseResult = await SmsBatchParser.parseInIsolate(BatchParseParams(
-        rawMessages: rawMessages,
-        pausedBanks: _pausedBanks.toList(),
-        customSenders: _senders,
-        autoReasonRules: autoRules,
-        initialBankBalances: initialBalances,
-      ));
-
-      // ── Diagnostic: Parsed transaction SIM distribution ──
-      final sim0Parsed = parseResult.transactions.where((t) => t.simSlot == 0).length;
-      final sim1Parsed = parseResult.transactions.where((t) => t.simSlot == 1).length;
-      debugPrint('[ShibreSIM-Dart] Parsed transactions: total=${parseResult.transactions.length} SIM1(slot0)=$sim0Parsed SIM2(slot1)=$sim1Parsed');
-
-      // Per-bank SIM breakdown
-      final Map<String, Map<int, int>> bankSimCounts = {};
-      for (final tx in parseResult.transactions) {
-        bankSimCounts.putIfAbsent(tx.bankName, () => {});
-        bankSimCounts[tx.bankName]![tx.simSlot] = (bankSimCounts[tx.bankName]![tx.simSlot] ?? 0) + 1;
-      }
-      for (final entry in bankSimCounts.entries) {
-        debugPrint('[ShibreSIM-Dart] ${entry.key}: ${entry.value}');
-      }
-
-      final Map<String, int> bankCounts = {};
-      final Map<String, double> bankLatestBalances = {};
-      for (final tx in parseResult.transactions) {
-        bankCounts[tx.bankName] = (bankCounts[tx.bankName] ?? 0) + 1;
-        if (tx.totalBalance > 0) {
-          bankLatestBalances[tx.bankName] = tx.totalBalance;
-        }
-      }
-      final List<ScannedBankProgress> scannedBankList = bankCounts.entries.map((e) {
-        return ScannedBankProgress(
-          bankName: e.key,
-          transactionCount: e.value,
-          latestBalance: bankLatestBalances[e.key],
-        );
-      }).toList();
-
-      onProgress?.call(ScanProgressStatus(
-        progress: 0.80,
-        stage: 'Storing verified transactions in database…',
-        scannedBanks: scannedBankList,
-      ));
-
-      final insertedCount = await _repository
-          .insertTransactionsBatch(parseResult.transactions);
-
-      await _repository.reconcilePendingNotificationReasons();
-
-      if (parseResult.unrecognizedNotifications.isNotEmpty) {
-        await insertNotificationsBatch?.call(
-            parseResult.unrecognizedNotifications);
-      }
-
+      _senders = result.updatedSenders;
       await loadAll(runMaintenance: true);
       onSmsEventReceived?.call();
 
-      onProgress?.call(ScanProgressStatus(
-        progress: 1.0,
-        stage: 'Calculated financial balance & tier',
-        scannedBanks: scannedBankList,
-        isComplete: true,
-      ));
-
-      return insertedCount;
+      return result.insertedCount;
     } catch (e) {
       debugPrint('Error during scanSms: $e');
       onProgress?.call(const ScanProgressStatus(
