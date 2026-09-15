@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/sender.dart';
@@ -28,7 +29,23 @@ class DatabaseService {
     await _ensureSendersTableSchema(_database!);
     await _createIndexes(_database!);
     await _seedHierarchicalCategories(_database!);
+    await _sanitizeUserData(_database!);
     return _database!;
+  }
+
+  Future<void> _sanitizeUserData(Database db) async {
+    try {
+      await db.execute('''
+        UPDATE transactions
+        SET note = NULL
+        WHERE note IS NOT NULL AND LOWER(TRIM(note)) IN (
+          'manual add',
+          'manually added',
+          'manual entry via ui',
+          'manual entry'
+        );
+      ''');
+    } catch (_) {}
   }
 
   Future<void> _createIndexes(Database db) async {
@@ -58,7 +75,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 30, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 33, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -489,6 +506,196 @@ CREATE TABLE IF NOT EXISTS app_settings (
     if (oldVersion < 30) {
       await _upgradeToVersion30(db);
     }
+    if (oldVersion < 31) {
+      await _upgradeToVersion31(db);
+    }
+    if (oldVersion < 32) {
+      await _upgradeToVersion32(db);
+    }
+    if (oldVersion < 33) {
+      await _upgradeToVersion33(db);
+    }
+  }
+
+  Future<void> _upgradeToVersion33(Database db) async {
+    try {
+      // 1. Check if any un-migrated cash_transactions exist and migrate them
+      final cashRows = await db.query('cash_transactions');
+      for (final r in cashRows) {
+        final id = r['id'];
+        final String newId = 'SHIBRE_CASH_$id';
+        final rawType = (r['type'] as String? ?? 'expense');
+        final type = rawType == 'addition' ? 'income' : rawType;
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        final date = r['date']?.toString() ?? DateTime.now().toIso8601String();
+        final desc = r['description']?.toString();
+        final reasonId = r['reasonId'] as int?;
+        final reasonName = r['reasonName']?.toString();
+        final linkedTxId = r['linkedTransactionId']?.toString();
+
+        final counterparty = (desc != null &&
+                desc.trim().isNotEmpty &&
+                desc.trim() != 'Manual Add' &&
+                desc.trim().toLowerCase() != 'manual add')
+            ? desc.trim()
+            : (type == 'income' ? 'Cash Inflow' : 'Cash Outflow');
+
+        final String? cleanNote = (desc != null &&
+                desc.trim().isNotEmpty &&
+                desc.trim().toLowerCase() != 'manual add' &&
+                desc.trim().toLowerCase() != 'manually added' &&
+                desc.trim().toLowerCase() != 'manual entry via ui' &&
+                desc.trim().toLowerCase() != 'manual entry')
+            ? desc.trim()
+            : null;
+
+        await db.rawInsert('''
+          INSERT OR IGNORE INTO transactions (
+            id, name, amount, type, date, sender, category, rawMessage,
+            isAutoDetected, totalBalance, reason, reasonId, customReasonText,
+            note, linkedTransactionId, isBookmarked, simSlot
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', [
+          newId,
+          'Cash Wallet',
+          amount,
+          type,
+          date,
+          counterparty,
+          'Manual',
+          '',
+          0,
+          0.0,
+          reasonName,
+          reasonId,
+          null,
+          cleanNote,
+          linkedTxId,
+          0,
+          0,
+        ]);
+      }
+
+      // 2. Permanently delete legacy cash_transactions rows to eliminate double-counting
+      await db.execute('DELETE FROM cash_transactions;');
+
+      // 3. Update any legacy 'Cash Expense' sender labels to 'Cash Outflow'
+      await db.execute('''
+        UPDATE transactions
+        SET sender = 'Cash Outflow'
+        WHERE name = 'Cash Wallet' AND sender = 'Cash Expense';
+      ''');
+
+      // 4. Update any empty or default sender labels to 'Cash Inflow' / 'Cash Outflow'
+      await db.execute('''
+        UPDATE transactions
+        SET sender = CASE WHEN type = 'income' THEN 'Cash Inflow' ELSE 'Cash Outflow' END
+        WHERE name = 'Cash Wallet' AND (sender IS NULL OR TRIM(sender) = '' OR sender = 'Manual Add');
+      ''');
+
+      // 5. Recalculate chronological running post-balance (totalBalance) for Cash Wallet
+      await recalculateCashWalletBalances(db);
+    } catch (e) {
+      debugPrint('Error upgrading to version 33: $e');
+    }
+  }
+
+  Future<void> _upgradeToVersion32(Database db) async {
+    try {
+      // 1. Sanitize user space: Clear out any default strings mistakenly written to personal note
+      await _sanitizeUserData(db);
+
+      // 2. Update any legacy 'SHIBARI_CSH_' IDs and references to 'SHIBRE_CASH_'
+      await db.execute('''
+        UPDATE transactions
+        SET id = 'SHIBRE_CASH_' || SUBSTR(id, 13)
+        WHERE id LIKE 'SHIBARI_CSH_%';
+      ''');
+
+      await db.execute('''
+        UPDATE transactions
+        SET bankReference = 'SHIBRE_CASH_' || SUBSTR(bankReference, 13)
+        WHERE bankReference LIKE 'SHIBARI_CSH_%';
+      ''');
+
+      await db.execute('''
+        UPDATE transactions
+        SET linkedTransactionId = 'SHIBRE_CASH_' || SUBSTR(linkedTransactionId, 13)
+        WHERE linkedTransactionId LIKE 'SHIBARI_CSH_%';
+      ''');
+
+      await db.execute('''
+        UPDATE transaction_splits
+        SET transactionId = 'SHIBRE_CASH_' || SUBSTR(transactionId, 13)
+        WHERE transactionId LIKE 'SHIBARI_CSH_%';
+      ''');
+
+      await db.execute('''
+        UPDATE transaction_attachments
+        SET transactionId = 'SHIBRE_CASH_' || SUBSTR(transactionId, 13)
+        WHERE transactionId LIKE 'SHIBARI_CSH_%';
+      ''');
+    } catch (_) {}
+  }
+
+  Future<void> _upgradeToVersion31(Database db) async {
+    try {
+      final cashRows = await db.query('cash_transactions');
+      for (final r in cashRows) {
+        final id = r['id'];
+        final String newId = 'SHIBRE_CASH_$id';
+        final rawType = (r['type'] as String? ?? 'expense');
+        final type = rawType == 'addition' ? 'income' : rawType;
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        final date = r['date']?.toString() ?? DateTime.now().toIso8601String();
+        final desc = r['description']?.toString();
+        final reasonId = r['reasonId'] as int?;
+        final reasonName = r['reasonName']?.toString();
+        final linkedTxId = r['linkedTransactionId']?.toString();
+
+        final counterparty = (desc != null &&
+                desc.trim().isNotEmpty &&
+                desc.trim() != 'Manual Add' &&
+                desc.trim().toLowerCase() != 'manual add')
+            ? desc.trim()
+            : (type == 'income' ? 'Cash Inflow' : 'Cash Expense');
+
+        final String? cleanNote = (desc != null &&
+                desc.trim().isNotEmpty &&
+                desc.trim().toLowerCase() != 'manual add' &&
+                desc.trim().toLowerCase() != 'manually added' &&
+                desc.trim().toLowerCase() != 'manual entry via ui' &&
+                desc.trim().toLowerCase() != 'manual entry')
+            ? desc.trim()
+            : null;
+
+        await db.rawInsert('''
+          INSERT OR IGNORE INTO transactions (
+            id, name, amount, type, date, sender, category, rawMessage,
+            isAutoDetected, totalBalance, reason, reasonId, customReasonText,
+            note, linkedTransactionId, isBookmarked, simSlot
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', [
+          newId,
+          'Cash Wallet',
+          amount,
+          type,
+          date,
+          counterparty,
+          'Manual',
+          '',
+          0,
+          0.0,
+          reasonName,
+          reasonId,
+          null,
+          cleanNote,
+          linkedTxId,
+          0,
+          0,
+        ]);
+      }
+    } catch (_) {}
   }
 
   Future<void> _upgradeToVersion30(Database db) async {
@@ -557,6 +764,10 @@ CREATE TABLE IF NOT EXISTS transaction_splits (
         WHERE id NOT IN (
           SELECT MIN(id) FROM senders GROUP BY UPPER(senderName)
         );
+      ''');
+      // Purge any accidental CASH WALLET row from senders table
+      await db.execute('''
+        DELETE FROM senders WHERE UPPER(TRIM(senderName)) = 'CASH WALLET';
       ''');
     } catch (_) {}
   }
@@ -811,14 +1022,17 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
     // Check which banks actually have recorded transactions in the database
     final txMaps = await db.rawQuery(
-      "SELECT DISTINCT name FROM transactions WHERE name IS NOT NULL AND TRIM(name) != ''",
+      "SELECT DISTINCT name FROM transactions WHERE name IS NOT NULL AND TRIM(name) != '' AND UPPER(TRIM(name)) != 'CASH WALLET'",
     );
     final activeTxBankNames = <String>{};
     for (final row in txMaps) {
       final n = row['name'] as String?;
       if (n != null && n.trim().isNotEmpty) {
         final canonical = BankSenders.match(n) ?? n.trim();
-        activeTxBankNames.add(canonical.toUpperCase());
+        final upper = canonical.toUpperCase();
+        if (upper != 'CASH WALLET') {
+          activeTxBankNames.add(upper);
+        }
       }
     }
 
@@ -828,8 +1042,9 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     for (final b in pausedBanks) {
       final base = b.contains(':') ? b.split(':').first : b;
       final canonical = BankSenders.match(base) ?? base.trim();
-      if (canonical.isNotEmpty) {
-        pausedCanonicalUpper.add(canonical.toUpperCase());
+      final upper = canonical.toUpperCase();
+      if (upper.isNotEmpty && upper != 'CASH WALLET') {
+        pausedCanonicalUpper.add(upper);
       }
     }
 
@@ -839,6 +1054,11 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     for (final s in rawList) {
       final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
       final key = canonical.toUpperCase();
+
+      if (key == 'CASH WALLET') {
+        if (s.id != null) toDeleteIds.add(s.id!);
+        continue;
+      }
 
       if (!uniqueMap.containsKey(key)) {
         uniqueMap[key] = AppSender(id: s.id, senderName: canonical);
@@ -856,6 +1076,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     // Ensure all banks with active transactions or in paused list exist in senders
     final criticalBanks = {...activeTxBankNames, ...pausedCanonicalUpper};
     for (final key in criticalBanks) {
+      if (key == 'CASH WALLET') continue;
       if (!uniqueMap.containsKey(key)) {
         final canonical = BankSenders.match(key) ?? key;
         try {
@@ -891,7 +1112,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   Future<int> insertTransaction(AppTransaction transaction) async {
     final db = await instance.database;
     final idToUse =
-        transaction.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+        transaction.id ?? AppTransaction.generateManualId('SHIBRE_CASH');
     final map = Map<String, dynamic>.from(transaction.toMap());
     map['id'] = idToUse;
     map.remove('bankName');
@@ -914,7 +1135,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       final batch = txn.batch();
       for (final tx in transactions) {
         final idToUse =
-            tx.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+            tx.id ?? AppTransaction.generateManualId('SHIBRE_CASH');
         final map = tx.toMap();
         map['id'] = idToUse;
         batch.rawInsert('''
@@ -2248,6 +2469,90 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       whereArgs: [transactionId],
     );
     return count;
+  }
+
+  // ──────────────────────────────────────────────
+  // Cash Wallet Running Balance Recalculation
+  // ──────────────────────────────────────────────
+
+  /// Recalculates the running post-balance (`totalBalance`) for all Cash Wallet
+  /// transactions in strict chronological order and persists them to SQLite.
+  Future<void> recalculateCashWalletBalances([Database? dbExecutor]) async {
+    try {
+      final db = dbExecutor ?? await instance.database;
+      
+      final rows = await db.rawQuery('''
+        SELECT id, name, type, amount, date, reason, customReasonText
+        FROM transactions
+        ORDER BY date ASC, id ASC
+      ''');
+
+      double runningBalance = 0.0;
+      final List<Map<String, dynamic>> cashWalletUpdates = [];
+
+      for (final r in rows) {
+        final id = r['id']?.toString();
+        final name = (r['name']?.toString() ?? '').toLowerCase();
+        final type = (r['type']?.toString() ?? '').toLowerCase();
+        final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        final reason = (r['customReasonText']?.toString() ?? r['reason']?.toString() ?? '').toLowerCase().trim();
+
+        if (name == 'cash wallet') {
+          if (type == 'income') {
+            runningBalance += amount;
+          } else {
+            runningBalance -= amount;
+          }
+          if (runningBalance < 0.0) runningBalance = 0.0;
+          if (id != null) {
+            cashWalletUpdates.add({
+              'id': id,
+              'balance': runningBalance,
+            });
+          }
+        } else if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
+          if (type == 'expense') {
+            // Bank cash withdrawal enters physical wallet
+            runningBalance += amount.abs();
+          } else if (type == 'income') {
+            // Bank cash deposit exits physical wallet
+            runningBalance -= amount.abs();
+          }
+          if (runningBalance < 0.0) runningBalance = 0.0;
+        }
+      }
+
+      final batch = db.batch();
+      for (final u in cashWalletUpdates) {
+        batch.rawUpdate(
+          'UPDATE transactions SET totalBalance = ? WHERE id = ?',
+          [u['balance'], u['id']],
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (e) {
+      debugPrint('Error recalculating cash wallet balances: $e');
+    }
+  }
+
+  /// Returns a map of transaction ID -> totalBalance for all Cash Wallet transactions.
+  Future<Map<String, double>> getCashWalletBalances([Database? dbExecutor]) async {
+    try {
+      final db = dbExecutor ?? await instance.database;
+      final rows = await db.rawQuery('''
+        SELECT id, totalBalance FROM transactions WHERE LOWER(name) = 'cash wallet'
+      ''');
+      final Map<String, double> map = {};
+      for (final r in rows) {
+        final id = r['id']?.toString();
+        if (id != null) {
+          map[id] = (r['totalBalance'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+      return map;
+    } catch (_) {
+      return {};
+    }
   }
 }
 

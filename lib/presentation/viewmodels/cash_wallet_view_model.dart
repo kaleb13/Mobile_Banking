@@ -57,32 +57,44 @@ class CashWalletViewModel extends ChangeNotifier {
 
   void _recalcBalance() {
     double balance = 0;
+    bool hasUnifiedCashTransactions = false;
 
-    // 1. Bank transactions categorized as Cash (Cash Withdrawal / Cash Deposit)
+    // 1. Transactions from TransactionsViewModel (Both Bank Cash Movements and direct Cash Wallet transactions)
     if (getTransactions != null) {
       final bankTxs = getTransactions!();
       for (final tx in bankTxs) {
-        final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
-            .toLowerCase()
-            .trim();
-        if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
-          if (tx.type == 'expense') {
-            // Bank withdrawal: physical cash IN to wallet (+)
-            balance += tx.amount.abs();
-          } else if (tx.type == 'income') {
-            // Bank deposit: physical cash OUT to bank (-)
-            balance -= tx.amount.abs();
+        if (tx.bankName.toLowerCase() == 'cash wallet') {
+          hasUnifiedCashTransactions = true;
+          if (tx.isIncome) {
+            balance += tx.amount;
+          } else {
+            balance -= tx.amount;
+          }
+        } else {
+          final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
+              .toLowerCase()
+              .trim();
+          if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
+            if (tx.type == 'expense') {
+              // Bank withdrawal: physical cash IN to wallet (+)
+              balance += tx.amount.abs();
+            } else if (tx.type == 'income') {
+              // Bank deposit: physical cash OUT to bank (-)
+              balance -= tx.amount.abs();
+            }
           }
         }
       }
     }
 
-    // 2. Manual cash additions and deductions
-    for (final tx in _cashTransactions) {
-      if (tx.isIncome) {
-        balance += tx.amount;
-      } else {
-        balance -= tx.amount;
+    // 2. Legacy / un-migrated cash transactions (if unified transactions haven't taken over)
+    if (!hasUnifiedCashTransactions) {
+      for (final tx in _cashTransactions) {
+        if (tx.isIncome) {
+          balance += tx.amount;
+        } else {
+          balance -= tx.amount;
+        }
       }
     }
     _cashBalance = balance < 0.0 ? 0.0 : balance;
@@ -186,10 +198,33 @@ class CashWalletViewModel extends ChangeNotifier {
 
   /// Returns spendings linked to a specific bank transaction.
   List<CashTransaction> spendingsForTransaction(String transactionId) {
-    return _cashTransactions
-        .where((ct) =>
-            ct.type == 'expense' && ct.linkedTransactionId == transactionId)
-        .toList();
+    final results = <CashTransaction>[];
+    if (getTransactions != null) {
+      final txs = getTransactions!();
+      for (final tx in txs) {
+        if (tx.isExpense &&
+            tx.linkedTransactionId == transactionId &&
+            tx.bankName.toLowerCase() == 'cash wallet') {
+          results.add(CashTransaction(
+            id: null,
+            type: 'expense',
+            amount: tx.amount,
+            date: tx.date,
+            description: tx.note ?? tx.counterparty,
+            reasonId: tx.reasonId,
+            reasonName: tx.resolvedReason,
+            linkedTransactionId: tx.linkedTransactionId,
+          ));
+        }
+      }
+    }
+    if (results.isEmpty) {
+      return _cashTransactions
+          .where((ct) =>
+              ct.type == 'expense' && ct.linkedTransactionId == transactionId)
+          .toList();
+    }
+    return results;
   }
 
   /// Total cash spent out of a specific bank cash withdrawal.

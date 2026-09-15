@@ -18,7 +18,6 @@ import '../../widgets/app_reset_filter_button.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/custom_progress_bar.dart';
-import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import '../../services/bank_senders.dart';
 import '../../widgets/bank_avatar.dart';
 import 'transaction_detail_screen.dart';
@@ -115,7 +114,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
 
     // 1. Compute full category inventory for this counterparty across active date & search
     final counterpartyTxs = isCounterpartyView
-        ? const FilterTransactionsUseCase().execute(
+        ? txVM.filterTransactions(
             transactions: allTransactions,
             params: FilterTransactionsParams(
               bankFilter: (_selectedBank != 'All Banks' && _selectedBank != 'All')
@@ -140,7 +139,7 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
     }
 
     // 2. Filter logic using domain usecase
-    final filteredTransactions = const FilterTransactionsUseCase().execute(
+    final filteredTransactions = txVM.filterTransactions(
       transactions: allTransactions,
       params: FilterTransactionsParams(
         bankFilter: (_selectedBank != 'All Banks' && _selectedBank != 'All')
@@ -911,8 +910,18 @@ class _AllTransactionsScreenState extends State<AllTransactionsScreen> {
   ) {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Income' : 'Expense';
-    final String subLabel =
-        isIncome ? 'From ${tx.counterparty}' : 'To ${tx.counterparty}';
+    final bool isCashWallet = tx.bankName.toLowerCase() == 'cash wallet';
+    final bool isGenericCashParty = isCashWallet && (
+        tx.counterparty.isEmpty ||
+        tx.counterparty == 'Cash Inflow' ||
+        tx.counterparty == 'Cash Outflow' ||
+        tx.counterparty == 'Cash Expense' ||
+        tx.counterparty == 'Cash' ||
+        tx.counterparty == 'Manual Entry'
+    );
+    final String subLabel = isGenericCashParty
+        ? (isIncome ? 'Cash Inflow' : 'Cash Outflow')
+        : (isIncome ? 'From ${tx.counterparty}' : 'To ${tx.counterparty}');
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
     final bool hasReason = tx.reasonId != null ||
         (tx.customReasonText != null &&

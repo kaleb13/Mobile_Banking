@@ -1547,12 +1547,11 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   const AppMenuItem<String>(
                     value: 'extend',
                     label: 'Extend Due Date',
-                    icon: Icons.calendar_today_rounded,
                   ),
                 const AppMenuItem<String>(
                   value: 'delete',
                   label: 'Delete Loan',
-                  icon: Icons.delete_outline_rounded,
+                  isDestructive: true,
                 ),
               ],
               onSelected: (value) async {

@@ -187,14 +187,14 @@ class SmsBroadcastReceiverTest {
     }
 
     @Test
-    fun `parses Telebirr Shamo internal savings transfer with locked Internal Transfer pattern`() {
+    fun `parses Telebirr Shamo internal savings transfer with unlocked Internal Transfer pattern`() {
         val msg = "Dear KALEB \nYou have reserved ETB 10.00 to your Shamo Account on 21/04/2024 22:01:10.The service fee is ETB 0.01. Your current E-Money Account balance is ETB 13.60."
         val parsed = SmsBroadcastReceiver.parseBankingSms("Telebirr", msg)
 
         assertNotNull(parsed)
         assertEquals(10.0, parsed!!.amount, 0.001)
         assertTrue(parsed.isDebit)
-        assertTrue(parsed.isLocked)
+        assertFalse(parsed.isLocked)
         assertEquals("Internal Transfer", parsed.lockedReasonName)
         assertEquals(13.60, parsed.totalBalance, 0.001)
     }

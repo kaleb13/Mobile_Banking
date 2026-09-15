@@ -117,5 +117,61 @@ void main() {
       expect(result.latestBalancesMap['CBE'], 1500.0);
       expect(result.totalBalance, 1700.0); // 1500 (CBE) + 200 (Cash)
     });
+
+    test('correctly calculates cash wallet from direct unified Cash Wallet transactions', () {
+      final senders = [
+        AppSender(id: '1', senderName: 'CBE'),
+      ];
+
+      final transactions = [
+        AppTransaction(
+          name: 'CBE',
+          sender: 'Transfer',
+          amount: 500,
+          type: 'income',
+          date: DateTime(2026, 8, 20),
+          category: 'Auto',
+          rawMessage: 'Received 500',
+          isAutoDetected: true,
+          totalBalance: 3000.0,
+        ),
+        // Unified Cash Wallet transactions
+        AppTransaction(
+          name: 'Cash Wallet',
+          sender: 'Cash Inflow',
+          amount: 1000000,
+          type: 'income',
+          date: DateTime(2026, 8, 21),
+          category: 'Manual',
+          rawMessage: '',
+          isAutoDetected: false,
+          totalBalance: 1000000.0,
+        ),
+        AppTransaction(
+          name: 'Cash Wallet',
+          sender: 'Cash Outflow',
+          amount: 287538,
+          type: 'expense',
+          date: DateTime(2026, 8, 22),
+          category: 'Manual',
+          rawMessage: '',
+          isAutoDetected: false,
+          totalBalance: 712462.0,
+        ),
+      ];
+
+      final result = useCase.execute(
+        senders: senders,
+        transactions: transactions,
+        cashTransactions: [], // Empty legacy list
+        pausedBanks: {},
+      );
+
+      // Cash balance should be 1,000,000 - 287,538 = 712,462
+      expect(result.cashBalance, 712462.0);
+      expect(result.latestBalancesMap['Cash Wallet'], 712462.0);
+      expect(result.latestBalancesMap['CBE'], 3000.0);
+      expect(result.totalBalance, 715462.0); // 3000 (CBE) + 712,462 (Cash)
+    });
   });
 }

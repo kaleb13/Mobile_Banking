@@ -831,36 +831,47 @@ class _AnalysisScreenState extends State<AnalysisScreen>
             ? _selectedDateRange!.start.year
             : _selectedYear;
 
-    if (!isCashOnly) {
-      for (var tx in txVM.transactions) {
-        final reasonStr = (tx.reason ??
-                tx.customReasonText ??
-                tx.resolvedReason ??
-                '')
-            .trim()
-            .toLowerCase();
-        if (reasonStr == 'pass-through' ||
-            reasonStr == 'pass through' ||
-            reasonStr == 'bounce' ||
-            reasonStr == 'internal transfer' ||
-            reasonStr == 'cash') {
-          continue;
+    final bool hasUnifiedCash = txVM.transactions
+        .any((t) => t.bankName.toLowerCase() == 'cash wallet');
+
+    for (var tx in txVM.transactions) {
+      final isCashTx = tx.bankName.toLowerCase() == 'cash wallet';
+      if (isCashOnly && !isCashTx) {
+        continue;
+      }
+      if (!isCashOnly && !isAll && isCashTx) {
+        continue;
+      }
+      final reasonStr = (tx.reason ??
+              tx.customReasonText ??
+              tx.resolvedReason ??
+              '')
+          .trim()
+          .toLowerCase();
+      if (reasonStr == 'pass-through' ||
+          reasonStr == 'pass through' ||
+          reasonStr == 'bounce' ||
+          reasonStr == 'internal transfer') {
+        continue;
+      }
+      // For bank transactions (not Cash Wallet), 'cash' reason is an internal transfer between bank and physical cash
+      if (!isCashTx && reasonStr == 'cash') {
+        continue;
+      }
+      if (_selectedSimSlot != null && tx.simSlot != _selectedSimSlot) {
+        continue;
+      }
+      if (_matchesBank(tx, _selectedBank)) {
+        if (tx.date.year == targetYear) {
+          heatmapBankTxs.add(tx);
         }
-        if (_selectedSimSlot != null && tx.simSlot != _selectedSimSlot) {
-          continue;
-        }
-        if (_matchesBank(tx, _selectedBank)) {
-          if (tx.date.year == targetYear) {
-            heatmapBankTxs.add(tx);
-          }
-          if (_matchesFilter(tx.date, now)) {
-            filteredBankTxs.add(tx);
-          }
+        if (_matchesFilter(tx.date, now)) {
+          filteredBankTxs.add(tx);
         }
       }
     }
 
-    if (isAll || isCashOnly) {
+    if ((isAll || isCashOnly) && !hasUnifiedCash) {
       for (var tx in cashVM.cashTransactions) {
         if (tx.date.year == targetYear) {
           heatmapCashTxs.add(tx);
@@ -1782,10 +1793,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         t.date.year == targetDate.year &&
         t.date.month == targetDate.month &&
         t.date.day == targetDate.day).toList();
-    final matchingCashTxs = cashVM.cashTransactions.where((c) =>
-        c.date.year == targetDate.year &&
-        c.date.month == targetDate.month &&
-        c.date.day == targetDate.day).toList();
+    final bool hasUnifiedCash = txVM.transactions
+        .any((t) => t.bankName.toLowerCase() == 'cash wallet');
+    final matchingCashTxs = hasUnifiedCash
+        ? <CashTransaction>[]
+        : cashVM.cashTransactions.where((c) =>
+            c.date.year == targetDate.year &&
+            c.date.month == targetDate.month &&
+            c.date.day == targetDate.day).toList();
     final totalCount = matchingBankTxs.length + matchingCashTxs.length;
 
     void openDateDetail() {
@@ -2941,8 +2956,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     }
 
     void processCashTx(CashTransaction ctx, [Map<String, _CategoryDataAccumulator>? targetMap]) {
+      if (ctx.isIncome) return;
       final map = targetMap ?? categoryMap;
-      final raw = (ctx.reasonName ?? ctx.description ?? 'Other Cash').trim();
+      final raw = (ctx.reasonName != null && ctx.reasonName!.trim().isNotEmpty
+              ? ctx.reasonName!
+              : 'Other Cash')
+          .trim();
       String? categoryName;
       AppReason? categoryReason;
       String? subName;
@@ -3085,10 +3104,14 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         processBankTx(t, allTimeCategoryMap);
       }
     }
-    final cashVM = Provider.of<CashWalletViewModel>(context, listen: false);
-    for (var ctx in cashVM.cashTransactions) {
-      if (_selectedBank == 'All Wallets' || _selectedBank == 'All Banks' || _selectedBank == 'All' || _selectedBank == 'Cash Wallet') {
-        processCashTx(ctx, allTimeCategoryMap);
+    final bool hasUnifiedCashAllTime = txVM.transactions
+        .any((t) => t.bankName.toLowerCase() == 'cash wallet');
+    if (!hasUnifiedCashAllTime) {
+      final cashVM = Provider.of<CashWalletViewModel>(context, listen: false);
+      for (var ctx in cashVM.cashTransactions) {
+        if (_selectedBank == 'All Wallets' || _selectedBank == 'All Banks' || _selectedBank == 'All' || _selectedBank == 'Cash Wallet') {
+          processCashTx(ctx, allTimeCategoryMap);
+        }
       }
     }
 

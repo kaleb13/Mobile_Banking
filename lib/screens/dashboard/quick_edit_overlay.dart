@@ -9,7 +9,7 @@ import '../../widgets/app_back_button.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../models/transaction_split.dart';
-import '../../services/database_service.dart';
+import '../../data/repositories/transaction_repository.dart';
 import '../../models/reason.dart';
 import '../../widgets/app_drawer.dart';
 import 'reason_link_drawer.dart';
@@ -1177,7 +1177,7 @@ class _QuickEditOverlayState extends State<QuickEditOverlay>
         ));
       }
       if (_transactionId.isNotEmpty) {
-        await DatabaseService.instance
+        await TransactionRepositoryImpl()
             .saveTransactionSplits(_transactionId, splits);
       }
       await _channel.invokeMethod('saveSplits');

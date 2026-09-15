@@ -167,8 +167,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
       }
 
       rawCashTransactions = cashVM.cashTransactions.where((ctx) {
-        final rName =
-            (ctx.reasonName ?? ctx.description ?? '').toLowerCase().trim();
+        final rName = (ctx.reasonName ?? '').toLowerCase().trim();
         if (rName.isEmpty) return false;
         return targetReasonNames.contains(rName);
       }).toList();
@@ -276,7 +275,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
         }
       }
       if (matchedSub == null) {
-        final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
+        final raw = (ctx.reasonName ?? '').trim();
         if (raw.isNotEmpty) {
           matchedSub = subcategoryNameExactMap[raw.toLowerCase()];
         }
@@ -367,7 +366,7 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
           }
         }
         if (ctxSub == null) {
-          final raw = (ctx.reasonName ?? ctx.description ?? '').trim();
+          final raw = (ctx.reasonName ?? '').trim();
           if (raw.isNotEmpty) ctxSub = raw;
         }
         if ((ctxSub ?? '').toLowerCase().trim() != subLower) return false;

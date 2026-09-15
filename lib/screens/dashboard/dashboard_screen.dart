@@ -25,7 +25,6 @@ import '../../widgets/app_dropdown.dart';
 import '../../widgets/app_date_filter.dart';
 import '../../widgets/app_reset_filter_button.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
 import '../../widgets/animated_balance_text.dart';
 import '../../widgets/interactive_balance_chart.dart';
 import '../../widgets/app_money_text.dart';
@@ -1106,7 +1105,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _bankFilter = 'All Banks';
     }
 
-    final transactionsList = const FilterTransactionsUseCase().execute(
+    final transactionsList = txVM.filterTransactions(
       transactions: txVM.transactions,
       params: FilterTransactionsParams(
         bankFilter: _bankFilter,
@@ -1524,7 +1523,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppTransaction tx, bool isLatest) {
     final bool isIncome = tx.type == 'income';
     final String label = isIncome ? 'Income' : 'Expense';
-    final subLabel = isIncome ? 'From ${tx.counterparty}' : 'To ${tx.counterparty}';
+    final bool isCashWallet = tx.bankName.toLowerCase() == 'cash wallet';
+    final bool isGenericCashParty = isCashWallet && (
+        tx.counterparty.isEmpty ||
+        tx.counterparty == 'Cash Inflow' ||
+        tx.counterparty == 'Cash Outflow' ||
+        tx.counterparty == 'Cash Expense' ||
+        tx.counterparty == 'Cash' ||
+        tx.counterparty == 'Manual Entry'
+    );
+    final subLabel = isGenericCashParty
+        ? (isIncome ? 'Cash Inflow' : 'Cash Outflow')
+        : (isIncome ? 'From ${tx.counterparty}' : 'To ${tx.counterparty}');
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
     final bool hasReason = tx.reasonId != null ||
         (tx.customReasonText != null &&

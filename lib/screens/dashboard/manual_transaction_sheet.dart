@@ -147,6 +147,7 @@ class _ManualTransactionSheetState extends State<ManualTransactionSheet> {
         : (currentBankBalance - amount);
 
     final tx = AppTransaction(
+      id: AppTransaction.generateManualId('SHIBRE_CASH'),
       bankName: _selectedSender!.senderName,
       amount: amount,
       type: _type,

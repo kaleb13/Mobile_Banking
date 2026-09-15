@@ -25,6 +25,8 @@ abstract class TransactionRepository {
   Future<DateTime?> getLastTransactionDate();
   Future<int> getTransactionCount();
   Future<void> checkpointWal();
+  Future<int> reconcileInternalTransfers();
+  Future<int> deduplicateTransactions();
 
   // ── Transaction Splits ──
   Future<List<TransactionSplit>> getAllTransactionSplits();
@@ -144,6 +146,12 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Future<int> getTransactionCount() => _db.getTransactionCount();
+
+  @override
+  Future<int> reconcileInternalTransfers() => _db.reconcileInternalTransfers();
+
+  @override
+  Future<int> deduplicateTransactions() => _db.deduplicateTransactions();
 
   // ── Transaction Splits ────────────────────────────────────────────────────
 

@@ -61,7 +61,8 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
                 pinned: true,
                 delegate: CashWalletHeaderDelegate(
                   topSafeArea: topSafeArea,
-                  onAddCash: () => showAddCashModal(context, cashVM),
+                  onAddCash: () => showAddCashModal(context, cashVM,
+                      transactionsViewModel: txVM),
                   onDeduct: () => showCashDeductModal(context,
                       cashViewModel: cashVM,
                       transactionsViewModel: txVM,
@@ -99,44 +100,69 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
     final List<Map<String, dynamic>> allTxs = [];
     final fmtShort = NumberFormat('#,##0');
 
+    final bool hasUnifiedCash = txVM.transactions
+        .any((t) => t.bankName.toLowerCase() == 'cash wallet');
+
     for (var tx in txVM.transactions) {
-      final isCash = (tx.reason?.toLowerCase() == 'cash' ||
-          tx.customReasonText?.toLowerCase() == 'cash' ||
-          tx.resolvedReason?.toLowerCase() == 'cash');
-      if (isCash) {
-        final isWithdrawal = tx.type == 'expense'; // Bank withdrawal = physical cash IN into wallet (+)
+      if (tx.bankName.toLowerCase() == 'cash wallet') {
         allTxs.add({
           'appTransaction': tx,
           'date': tx.date,
-          'title': isWithdrawal ? 'Bank Cash Withdrawal' : 'Bank Cash Deposit',
-          'subtitle': tx.bankName, // Bank name
+          'title': tx.isIncome ? 'Cash Added' : tx.resolvedReason,
+          'subtitle': tx.counterparty.isNotEmpty &&
+                  tx.counterparty != 'Cash Inflow' &&
+                  tx.counterparty != 'Cash Outflow' &&
+                  tx.counterparty != 'Cash Expense'
+              ? tx.counterparty
+              : (tx.note ?? (tx.isIncome ? 'Cash Inflow' : 'Cash Outflow')),
           'amount': tx.amount,
-          'isPositive': isWithdrawal,
+          'isPositive': tx.isIncome,
           'isCashTx': false,
         });
+      } else {
+        final isCash = (tx.reason?.toLowerCase() == 'cash' ||
+            tx.customReasonText?.toLowerCase() == 'cash' ||
+            tx.resolvedReason?.toLowerCase() == 'cash');
+        if (isCash) {
+          final isWithdrawal = tx.type ==
+              'expense'; // Bank withdrawal = physical cash IN into wallet (+)
+          allTxs.add({
+            'appTransaction': tx,
+            'date': tx.date,
+            'title': isWithdrawal
+                ? 'Bank Cash Withdrawal'
+                : 'Bank Cash Deposit',
+            'subtitle': tx.bankName, // Bank name
+            'amount': tx.amount,
+            'isPositive': isWithdrawal,
+            'isCashTx': false,
+          });
+        }
       }
     }
 
-    for (var ctx in cashVM.cashTransactions) {
-      String sub = ctx.description ?? '';
-      if (ctx.reasonName != null && ctx.reasonName!.isNotEmpty) {
-        sub = ctx.reasonName!;
-        if (ctx.description != null && ctx.description!.isNotEmpty) {
-          sub += ' (${ctx.description})';
+    if (!hasUnifiedCash) {
+      for (var ctx in cashVM.cashTransactions) {
+        String sub = ctx.description ?? '';
+        if (ctx.reasonName != null && ctx.reasonName!.isNotEmpty) {
+          sub = ctx.reasonName!;
+          if (ctx.description != null && ctx.description!.isNotEmpty) {
+            sub += ' (${ctx.description})';
+          }
         }
-      }
 
-      allTxs.add({
-        'id': ctx.id,
-        'date': ctx.date,
-        'title': ctx.isIncome
-            ? 'Cash Added'
-            : (ctx.reasonName ?? 'Cash Expense'),
-        'subtitle': sub,
-        'amount': ctx.amount,
-        'isPositive': ctx.isIncome,
-        'isCashTx': true,
-      });
+        allTxs.add({
+          'id': ctx.id,
+          'date': ctx.date,
+          'title': ctx.isIncome
+              ? 'Cash Added'
+              : (ctx.reasonName ?? 'Cash Expense'),
+          'subtitle': sub,
+          'amount': ctx.amount,
+          'isPositive': ctx.isIncome,
+          'isCashTx': true,
+        });
+      }
     }
 
     allTxs.sort(
@@ -182,7 +208,7 @@ class _CashWalletDetailScreenState extends State<CashWalletDetailScreen> {
           final isPositive = tx['isPositive'] as bool;
 
           return InkWell(
-            onTap: tx['isCashTx'] == false && tx['appTransaction'] != null
+            onTap: tx['appTransaction'] != null
                 ? () {
                     Navigator.push(
                       context,

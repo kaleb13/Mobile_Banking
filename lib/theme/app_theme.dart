@@ -102,6 +102,7 @@ class AppColors {
   static const Color textSecondary = Color(0xFF9CA3AF); // Secondary / muted text
   static const Color textDisabled  = Color(0xFFC7C7C7); // Disabled / faint text
   static const Color textSoft      = Color(0xCCFFFFFF); // 80% white soft label
+  static const Color textMutedWhite = Color(0x73FFFFFF); // ~45% white opacity for muted / delete text
   static const Color textPrimaryLight = Color(0xFF0F172A); // Dark slate text for light theme
   static const Color textSecondaryLight = Color(0xFF64748B); // Muted slate text for light theme
   static const Color textDisabledLight  = Color(0xFF94A3B8); // Faint slate text for light theme

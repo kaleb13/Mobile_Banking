@@ -235,12 +235,12 @@ void main() {
       expect(txOut.reason, 'Internal Transfer');
       expect(txOut.reasonId, 42);
       expect(txOut.linkedTransactionId, txIn.id);
-      expect(txOut.isReasonLocked, isTrue);
+      expect(txOut.isReasonLocked, isFalse);
 
       expect(txIn.reason, 'Internal Transfer');
       expect(txIn.reasonId, 42);
       expect(txIn.linkedTransactionId, txOut.id);
-      expect(txIn.isReasonLocked, isTrue);
+      expect(txIn.isReasonLocked, isFalse);
     });
   });
 }

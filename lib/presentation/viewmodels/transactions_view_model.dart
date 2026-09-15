@@ -18,10 +18,13 @@ import '../../services/telebirr_parser.dart';
 import '../../services/sms_service.dart';
 import '../../services/sms_batch_parser.dart';
 import '../../services/bank_senders.dart';
-import '../../services/database_service.dart';
+import '../../domain/usecases/transactions/filter_transactions_usecase.dart';
+export '../../domain/usecases/transactions/filter_transactions_usecase.dart'
+    show FilterTransactionsParams;
 import '../../models/app_notification.dart';
 import '../../models/transaction_split.dart';
 import '../../utils/counterparty_matcher.dart';
+import '../../services/database_service.dart';
 
 /// TransactionsViewModel — owns all transaction, sender, and reason state.
 ///
@@ -34,18 +37,21 @@ class TransactionsViewModel extends ChangeNotifier {
   final TransactionRepository _repository;
   final SettingsRepository? _settingsRepository;
   final SmsIngestionService _smsIngestionService;
+  final FilterTransactionsUseCase _filterTransactionsUseCase;
 
   TransactionsViewModel({
     required TransactionRepository repository,
     SettingsRepository? settingsRepository,
     SmsIngestionService? smsIngestionService,
+    FilterTransactionsUseCase filterTransactionsUseCase = const FilterTransactionsUseCase(),
   })  : _repository = repository,
         _settingsRepository = settingsRepository,
         _smsIngestionService = smsIngestionService ??
             SmsIngestionService(
               repository: repository,
               settingsRepository: settingsRepository,
-            );
+            ),
+        _filterTransactionsUseCase = filterTransactionsUseCase;
 
   // ── State ─────────────────────────────────────────────────────────────────
 
@@ -365,9 +371,38 @@ class TransactionsViewModel extends ChangeNotifier {
 
   /// Calculates total balance for a sender in O(1) time.
   /// For multi-account banks, sums up the latest balance of each active account.
-  double balanceForSender(String senderName, {double cashBalance = 0.0}) {
+  double balanceForSender(String senderName, {double? cashBalance}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
-      return cashBalance;
+      if (isTrackingPaused('Cash Wallet')) return 0.0;
+      if (cashBalance != null && cashBalance > 0) return cashBalance;
+      // 1. Use latest totalBalance from cached sender balances
+      final cached = _cachedSenderBalances['CASH WALLET'];
+      if (cached != null && cached > 0) return cached;
+      // 2. Fallback: compute net cash movements from transactions
+      double inflow = 0.0;
+      double outflow = 0.0;
+      for (final tx in _transactions) {
+        if (tx.bankName.toLowerCase() == 'cash wallet') {
+          if (tx.isIncome) {
+            inflow += tx.amount.abs();
+          } else {
+            outflow += tx.amount.abs();
+          }
+        } else {
+          final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
+              .toLowerCase()
+              .trim();
+          if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
+            if (tx.type == 'expense') {
+              inflow += tx.amount.abs();
+            } else if (tx.type == 'income') {
+              outflow += tx.amount.abs();
+            }
+          }
+        }
+      }
+      final net = inflow - outflow;
+      return net > 0 ? net : 0.0;
     }
     if (isTrackingPaused(senderName)) return 0.0;
 
@@ -396,9 +431,10 @@ class TransactionsViewModel extends ChangeNotifier {
   double getLatestBalanceForBank(String bankName) => balanceForSender(bankName);
 
   /// Calculates total balance across all active banks for a specific SIM slot (or combined if [simSlot] is null).
-  double totalBalanceForSim(int? simSlot, {double cashBalance = 0.0}) {
+  double totalBalanceForSim(int? simSlot, {double? cashBalance}) {
+    final effectiveCash = cashBalance ?? balanceForSender('Cash Wallet');
     if (simSlot == null) {
-      double sum = cashBalance;
+      double sum = effectiveCash;
       for (final sender in _cachedActiveSenders) {
         sum += balanceForSender(sender.senderName);
       }
@@ -463,7 +499,8 @@ class TransactionsViewModel extends ChangeNotifier {
   /// Returns transaction count for a sender in O(1) time.
   int txCountForSender(String senderName, {int cashTxCount = 0}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
-      return _cachedCashTxCount + cashTxCount;
+      final unifiedCount = _cachedSenderTxCounts['CASH WALLET'] ?? 0;
+      return unifiedCount + cashTxCount + _cachedCashTxCount;
     }
     final canonical = BankSenders.match(senderName) ?? senderName.trim();
     final key = canonical.toUpperCase();
@@ -583,10 +620,15 @@ class TransactionsViewModel extends ChangeNotifier {
   }
 
   void _recomputeActiveAndPausedSenders() {
-    _cachedActiveSenders = _senders.where((s) => !isTrackingPaused(s.senderName)).toList();
+    _cachedActiveSenders = _senders
+        .where((s) =>
+            !isTrackingPaused(s.senderName) &&
+            s.senderName.trim().toUpperCase() != 'CASH WALLET')
+        .toList();
 
     final Map<String, AppSender> map = {};
     for (final s in _senders) {
+      if (s.senderName.trim().toUpperCase() == 'CASH WALLET') continue;
       if (isTrackingPaused(s.senderName)) {
         final canonical = BankSenders.match(s.senderName) ?? s.senderName.trim();
         map[canonical.toUpperCase()] = s;
@@ -596,6 +638,7 @@ class TransactionsViewModel extends ChangeNotifier {
       final base = paused.contains(':') ? paused.split(':').first : paused;
       final canonical = BankSenders.match(base) ?? base.trim();
       final key = canonical.toUpperCase();
+      if (key == 'CASH WALLET') continue;
       if (key.isNotEmpty && !map.containsKey(key)) {
         map[key] = AppSender(senderName: canonical);
       }
@@ -607,6 +650,9 @@ class TransactionsViewModel extends ChangeNotifier {
     double sum = 0.0;
     for (final sender in _cachedActiveSenders) {
       sum += balanceForSender(sender.senderName);
+    }
+    if (!isTrackingPaused('Cash Wallet')) {
+      sum += balanceForSender('Cash Wallet');
     }
     _cachedTotalBalance = sum;
   }
@@ -709,6 +755,11 @@ class TransactionsViewModel extends ChangeNotifier {
   Future<void> Function(List<AppNotification> notifications)?
       insertNotificationsBatch;
 
+  /// Optional callback triggered when two counterpart transactions are linked as an internal transfer.
+  /// Wired by main.dart to clear notifications for both counterpart transactions from Notification Center.
+  Future<void> Function(AppTransaction tx1, AppTransaction tx2)?
+      onInternalTransferLinked;
+
   void initEventListener() {
     _smsSubscription?.cancel();
     const channel = EventChannel('com.shibre/sms_events');
@@ -727,6 +778,17 @@ class TransactionsViewModel extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Filters transactions using the domain usecase.
+  List<AppTransaction> filterTransactions({
+    required List<AppTransaction> transactions,
+    required FilterTransactionsParams params,
+  }) {
+    return _filterTransactionsUseCase.execute(
+      transactions: transactions,
+      params: params,
+    );
+  }
+
   Future<void> loadData() => loadAll();
 
   Future<void> loadAll({bool runMaintenance = false}) async {
@@ -735,8 +797,8 @@ class TransactionsViewModel extends ChangeNotifier {
     try {
       if (runMaintenance) {
         try {
-          await DatabaseService.instance.reconcileInternalTransfers();
-          await DatabaseService.instance.deduplicateTransactions();
+          await _repository.reconcileInternalTransfers();
+          await _repository.deduplicateTransactions();
         } catch (_) {}
       }
 
@@ -761,16 +823,37 @@ class TransactionsViewModel extends ChangeNotifier {
         _repository.getAllTransactionSplits(),
       ]);
       _transactions = results[0] as List<AppTransaction>;
-      _senders = results[1] as List<AppSender>;
+
+      // Auto-heal any Cash Wallet transaction with missing / 0.0 post-balance
+      final bool needsCashBalRecalc = _transactions.any(
+        (t) => t.bankName.toLowerCase() == 'cash wallet' && t.totalBalance == 0.0,
+      );
+      if (needsCashBalRecalc) {
+        await DatabaseService.instance.recalculateCashWalletBalances();
+        final updatedBalances = await DatabaseService.instance.getCashWalletBalances();
+        for (int i = 0; i < _transactions.length; i++) {
+          final tx = _transactions[i];
+          if (tx.id != null && updatedBalances.containsKey(tx.id)) {
+            _transactions[i] = tx.copyWith(totalBalance: updatedBalances[tx.id]!);
+          }
+        }
+      }
+
+      _senders = (results[1] as List<AppSender>)
+          .where((s) => s.senderName.trim().toUpperCase() != 'CASH WALLET')
+          .toList();
       if (_senders.isEmpty) {
         try {
           final bool hasPermission = await Permission.sms.status.isGranted;
           if (hasPermission) {
             final detected = await SmsService().detectBankingSendersInInbox();
             for (final bankName in detected) {
+              if (bankName.trim().toUpperCase() == 'CASH WALLET') continue;
               await _repository.insertSender(AppSender(senderName: bankName));
             }
-            _senders = await _repository.getSenders();
+            _senders = (await _repository.getSenders())
+                .where((s) => s.senderName.trim().toUpperCase() != 'CASH WALLET')
+                .toList();
           }
         } catch (_) {}
       }
@@ -1174,11 +1257,23 @@ class TransactionsViewModel extends ChangeNotifier {
   // ── Transaction CRUD ──────────────────────────────────────────────────────
 
   Future<void> addTransaction(AppTransaction transaction) async {
-    await _repository.insertTransaction(transaction);
-    _transactions.insert(0, transaction);
-    await _ensureSenderExists(transaction.bankName);
-    _rebuildAggregateIndices();
-    notifyListeners();
+    final effectiveTx = transaction.id != null
+        ? transaction
+        : transaction.copyWith(
+            id: AppTransaction.generateManualId('SHIBRE_CASH'),
+          );
+    await _repository.insertTransaction(effectiveTx);
+    _transactions.insert(0, effectiveTx);
+    await _ensureSenderExists(effectiveTx.bankName);
+    
+    if (effectiveTx.bankName.toLowerCase() == 'cash wallet' ||
+        effectiveTx.resolvedReason?.toLowerCase() == 'cash') {
+      await DatabaseService.instance.recalculateCashWalletBalances();
+      await syncCashWalletBalancesInMemory();
+    } else {
+      _rebuildAggregateIndices();
+      notifyListeners();
+    }
   }
 
   Future<void> addTransactionsBatch(List<AppTransaction> transactions) async {
@@ -1206,8 +1301,35 @@ class TransactionsViewModel extends ChangeNotifier {
   }
 
   Future<void> deleteTransaction(String id) async {
+    final tx = _transactions.where((t) => t.id == id).firstOrNull;
+    final isCashRelated = tx != null &&
+        (tx.bankName.toLowerCase() == 'cash wallet' ||
+            tx.resolvedReason?.toLowerCase() == 'cash');
+
     await _repository.deleteTransaction(id);
     _transactions.removeWhere((t) => t.id == id);
+    
+    if (isCashRelated) {
+      await DatabaseService.instance.recalculateCashWalletBalances();
+      await syncCashWalletBalancesInMemory();
+    } else {
+      _rebuildAggregateIndices();
+      notifyListeners();
+    }
+  }
+
+  Future<void> syncCashWalletBalancesInMemory() async {
+    final updatedBalances =
+        await DatabaseService.instance.getCashWalletBalances();
+    for (int i = 0; i < _transactions.length; i++) {
+      final tx = _transactions[i];
+      if (tx.id != null && updatedBalances.containsKey(tx.id)) {
+        final newBal = updatedBalances[tx.id]!;
+        if (tx.totalBalance != newBal) {
+          _transactions[i] = tx.copyWith(totalBalance: newBal);
+        }
+      }
+    }
     _rebuildAggregateIndices();
     notifyListeners();
   }
@@ -1246,13 +1368,37 @@ class TransactionsViewModel extends ChangeNotifier {
 
     final idx = _transactions.indexWhere((t) => t.id == id);
     if (idx != -1) {
-      final updated = _transactions[idx].copyWith(
+      final oldTx = _transactions[idx];
+      final isNowInternalTransfer =
+          (resolvedReason?.toLowerCase().trim() == 'internal transfer');
+      String? updatedLinkedId = oldTx.linkedTransactionId;
+      bool clearLinked = false;
+
+      // If this transaction was linked as internal transfer and reason is changed away, decouple both sides
+      if (oldTx.linkedTransactionId != null && !isNowInternalTransfer) {
+        final counterpartId = oldTx.linkedTransactionId;
+        updatedLinkedId = null;
+        clearLinked = true;
+        if (counterpartId != null) {
+          final cIdx = _transactions.indexWhere((t) => t.id == counterpartId);
+          if (cIdx != -1) {
+            final unlinkedCounterpart =
+                _transactions[cIdx].copyWith(clearLinkedTransactionId: true);
+            _transactions[cIdx] = unlinkedCounterpart;
+            await _repository.updateTransaction(unlinkedCounterpart);
+          }
+        }
+      }
+
+      final updated = oldTx.copyWith(
         reasonId: resolvedReasonId,
         categoryId: resolvedCategoryId,
         subcategoryId: resolvedSubcategoryId,
         note: note,
         reason: resolvedReason,
         customReasonText: customReasonText ?? (resolvedReasonId == null ? resolvedReason : null),
+        linkedTransactionId: updatedLinkedId,
+        clearLinkedTransactionId: clearLinked,
       );
       _transactions[idx] = updated;
       _rebuildAggregateIndices();
@@ -1320,6 +1466,38 @@ class TransactionsViewModel extends ChangeNotifier {
       _rebuildAggregateIndices();
       notifyListeners();
       await _repository.updateTransaction(_transactions[idx]);
+    }
+  }
+
+  Future<void> updateTransactionDate(
+      String transactionId, DateTime newDate) async {
+    final idx = _transactions.indexWhere((t) => t.id == transactionId);
+    if (idx != -1) {
+      _transactions[idx] = _transactions[idx].copyWith(
+        date: newDate,
+      );
+      _transactions.sort((a, b) => b.date.compareTo(a.date));
+      _rebuildAggregateIndices();
+      notifyListeners();
+      final updatedTx = _transactions.firstWhere((t) => t.id == transactionId);
+      await _repository.updateTransaction(updatedTx);
+    }
+  }
+
+  Future<void> updateManualTransaction(AppTransaction transaction) async {
+    final idx = _transactions.indexWhere((t) => t.id == transaction.id);
+    if (idx != -1) {
+      _transactions[idx] = transaction;
+      _transactions.sort((a, b) => b.date.compareTo(a.date));
+      await _repository.updateTransaction(transaction);
+      if (transaction.bankName.toLowerCase() == 'cash wallet' ||
+          transaction.resolvedReason?.toLowerCase() == 'cash') {
+        await DatabaseService.instance.recalculateCashWalletBalances();
+        await syncCashWalletBalancesInMemory();
+      } else {
+        _rebuildAggregateIndices();
+        notifyListeners();
+      }
     }
   }
 
@@ -1401,7 +1579,30 @@ class TransactionsViewModel extends ChangeNotifier {
     _transactions[idx1] = newTx1;
     _transactions[idx2] = newTx2;
 
+    _rebuildAggregateIndices();
     notifyListeners();
+
+    // Cancel phone notifications for both counterpart transactions
+    try {
+      const channel = MethodChannel('com.shibre/quick_edit');
+      if (tx1.id != null && tx1.id!.isNotEmpty) {
+        channel.invokeMethod('cancelPhoneNotification', {'id': tx1.id});
+      }
+      if (tx1.bankReference != null && tx1.bankReference!.isNotEmpty) {
+        channel.invokeMethod('cancelPhoneNotification', {'id': tx1.bankReference});
+      }
+      if (tx2.id != null && tx2.id!.isNotEmpty) {
+        channel.invokeMethod('cancelPhoneNotification', {'id': tx2.id});
+      }
+      if (tx2.bankReference != null && tx2.bankReference!.isNotEmpty) {
+        channel.invokeMethod('cancelPhoneNotification', {'id': tx2.bankReference});
+      }
+    } catch (_) {}
+
+    // Clear matching notifications from in-app Notification Center
+    if (onInternalTransferLinked != null) {
+      await onInternalTransferLinked!(newTx1, newTx2);
+    }
   }
 
   Future<void> unlinkInternalTransfer(String txId) async {
@@ -1425,6 +1626,7 @@ class TransactionsViewModel extends ChangeNotifier {
       }
     }
 
+    _rebuildAggregateIndices();
     notifyListeners();
   }
 
@@ -1458,6 +1660,7 @@ class TransactionsViewModel extends ChangeNotifier {
       final oldTx = _transactions[idx];
       final newAttachments = [...oldTx.attachments, attachment];
       _transactions[idx] = oldTx.copyWith(attachments: newAttachments);
+      _rebuildAggregateIndices();
       notifyListeners();
     }
   }
@@ -1471,6 +1674,7 @@ class TransactionsViewModel extends ChangeNotifier {
       final newAttachments =
           oldTx.attachments.where((a) => a.id != attachmentId).toList();
       _transactions[idx] = oldTx.copyWith(attachments: newAttachments);
+      _rebuildAggregateIndices();
       notifyListeners();
     }
   }

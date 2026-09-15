@@ -512,7 +512,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
                             counterparty = if (lower.contains("shamo")) "Shamo Account" else "Sanduq Savings",
                             directionHeader = if (lower.contains("shamo")) "To: Shamo Account" else "To: Sanduq Savings",
                             title = "Expense",
-                            isLocked = true,
+                            isLocked = false,
                             lockedReasonName = "Internal Transfer",
                             txReference = ref,
                             totalBalance = telebirrTotalBal
@@ -1907,8 +1907,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
 
-        val isInternalTransfer = attachedReason?.equals("Internal Transfer", ignoreCase = true) == true
-        val isReasonLocked = parsed.isLocked || isInternalTransfer
+        val isReasonLocked = parsed.isLocked && parsed.lockedReasonName?.equals("Loan", ignoreCase = true) == true
         val realTxId = parsed.txReference ?: txId
 
         val openIntent = if (isReasonLocked) {

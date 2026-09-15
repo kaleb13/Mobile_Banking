@@ -33,6 +33,19 @@ class AppTransaction {
   /// True if this transaction represents outgoing funds (expense).
   bool get isExpense => type == 'expense';
 
+  /// True if this is a manual entry (manual cash, manual bank entry, or not auto-detected from SMS).
+  bool get isManual =>
+      sourceTag.toLowerCase() == 'manual' ||
+      !isAutoDetected ||
+      bankName.toLowerCase() == 'cash wallet';
+
+  /// Generates a non-colliding unique ID for manual transactions.
+  static String generateManualId([String prefix = 'SHIBRE_CASH']) {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final rand = (1000 + (DateTime.now().microsecond % 9000)).toString();
+    return '${prefix}_${ts}_$rand';
+  }
+
   // Reason & Hierarchy system
   final int? reasonId; // points to reasons table (reusable)
   final int? categoryId; // points to top-level category in reasons table
@@ -131,27 +144,10 @@ class AppTransaction {
   /// True if this transaction's raw message body contains any web links.
   bool get hasLinks => extractedLinks.isNotEmpty;
 
-  /// True when this transaction was auto-created with an immutable system reason from SMS
-  /// (Telebirr Sanduq/Savings, or actively linked transaction).
-  bool get isReasonLocked {
-    // 1. Actively linked to another transaction (e.g. linked internal transfer pair)
-    if (linkedTransactionId != null && linkedTransactionId!.isNotEmpty) {
-      return true;
-    }
-
-    final lower = rawMessage.toLowerCase();
-    final isTelebirr = bankName.toLowerCase().contains('telebirr');
-    if (!isTelebirr) return false;
-
-    // 2. Sanduq / Savings account transfer
-    if (lower.contains('saving account') ||
-        lower.contains('saving balance') ||
-        lower.contains('sanduq')) {
-      return true;
-    }
-
-    return false;
-  }
+  /// True when this transaction was auto-created with an immutable system reason from SMS.
+  /// Only managed loans have locked reasons. Internal transfers, Sanduq, and savings
+  /// are NOT locked to keep reason assignment flexible and editable.
+  bool get isReasonLocked => false;
 
   Map<String, dynamic> toMap() {
     return {
@@ -211,6 +207,7 @@ class AppTransaction {
   }
 
   AppTransaction copyWith({
+    String? id,
     String? bankName,
     String? name,
     double? amount,
@@ -244,7 +241,7 @@ class AppTransaction {
     bool clearAccountIdentifier = false,
   }) {
     return AppTransaction(
-      id: id,
+      id: id ?? this.id,
       bankName: bankName ?? name ?? this.bankName,
       amount: amount ?? this.amount,
       type: type ?? this.type,

@@ -79,31 +79,45 @@ class GetWalletBalancesUseCase {
     // 2. Cash Transactions: calculate net cash balance
     double cashInflows = 0;
     double cashOutflows = 0;
+    final bool hasUnifiedCash = transactions.any((t) => t.bankName.toLowerCase() == 'cash wallet');
 
-    // 2a. Bank transactions categorized as Cash (Withdrawals = Inflows, Deposits = Outflows)
+    // 2a. Direct unified Cash Wallet transactions & Bank Cash Movements (Withdrawals / Deposits)
     for (final tx in transactions) {
-      final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
-          .toLowerCase()
-          .trim();
-      if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
-        if (tx.type == 'expense') {
+      if (tx.bankName.toLowerCase() == 'cash wallet') {
+        if (tx.isIncome) {
           cashInflows += tx.amount.abs();
-        } else if (tx.type == 'income') {
+        } else {
           cashOutflows += tx.amount.abs();
+        }
+      } else {
+        final reason = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '')
+            .toLowerCase()
+            .trim();
+        if (reason == 'cash' || reason == 'cash withdrawal' || reason == 'atm') {
+          if (tx.type == 'expense') {
+            // Bank withdrawal: physical cash IN to wallet (+)
+            cashInflows += tx.amount.abs();
+          } else if (tx.type == 'income') {
+            // Bank deposit: physical cash OUT to bank (-)
+            cashOutflows += tx.amount.abs();
+          }
         }
       }
     }
 
-    // 2b. Manual cash additions and deductions
-    for (final ctx in cashTransactions) {
-      if (ctx.isIncome) {
-        cashInflows += ctx.amount;
-      } else if (ctx.isExpense) {
-        cashOutflows += ctx.amount;
+    // 2b. Legacy cash transactions (fallback only if unified transactions haven't taken over)
+    if (!hasUnifiedCash) {
+      for (final ctx in cashTransactions) {
+        if (ctx.isIncome) {
+          cashInflows += ctx.amount;
+        } else if (ctx.isExpense) {
+          cashOutflows += ctx.amount;
+        }
       }
     }
 
-    final cashBalance = cashInflows - cashOutflows;
+    final double rawCashBalance = cashInflows - cashOutflows;
+    final double cashBalance = rawCashBalance > 0 ? rawCashBalance : 0.0;
     if (cashBalance > 0 && !pausedUpper.contains('CASH WALLET')) {
       latestBalancesMap['Cash Wallet'] = cashBalance;
       totalBalance += cashBalance;

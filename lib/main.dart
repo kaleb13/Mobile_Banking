@@ -147,6 +147,27 @@ void main() async {
               await notificationRepo.insertNotificationsBatch(notifications);
               await notifsVM.loadNotifications();
             };
+            // Wire internal transfer link callback to clear notifications for both transactions
+            txVM.onInternalTransferLinked = (tx1, tx2) async {
+              await notifsVM.removeNotificationsWhere((n) {
+                final matchesTx1 = (tx1.id != null && n.id == tx1.id) ||
+                    (tx1.bankReference != null &&
+                        tx1.bankReference!.isNotEmpty &&
+                        n.body.contains(tx1.bankReference!)) ||
+                    (tx1.id != null &&
+                        tx1.id!.isNotEmpty &&
+                        n.body.contains(tx1.id!));
+                final matchesTx2 = (tx2.id != null && n.id == tx2.id) ||
+                    (tx2.bankReference != null &&
+                        tx2.bankReference!.isNotEmpty &&
+                        n.body.contains(tx2.bankReference!)) ||
+                    (tx2.id != null &&
+                        tx2.id!.isNotEmpty &&
+                        n.body.contains(tx2.id!));
+                return matchesTx1 || matchesTx2;
+              });
+              await notifsVM.loadNotifications();
+            };
             return vm;
           },
         ),

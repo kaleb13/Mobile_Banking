@@ -23,6 +23,7 @@ class AppMenuItem<T> {
   final Color? iconColor;
   final Color? textColor;
   final bool enabled;
+  final bool isDestructive;
 
   const AppMenuItem({
     required this.value,
@@ -32,6 +33,7 @@ class AppMenuItem<T> {
     this.iconColor,
     this.textColor,
     this.enabled = true,
+    this.isDestructive = false,
   });
 }
 
@@ -146,7 +148,7 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
         : Colors.white.withValues(alpha: 0.50);
     final Color defaultTextColor = isLight
         ? AppColors.darkCharcoal
-        : Colors.white.withValues(alpha: 0.85);
+        : AppColors.textPrimary;
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -181,52 +183,57 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
         itemBuilder: (context) {
           return widget.items.map((item) {
             final hasSubtitle = item.subtitle != null && item.subtitle!.isNotEmpty;
+            final bool isDelete = item.isDestructive ||
+                item.value.toString().toLowerCase().contains('delete') ||
+                item.label.toLowerCase().contains('delete') ||
+                item.textColor == AppColors.negative ||
+                item.textColor == AppColors.error ||
+                item.textColor == AppColors.textMutedWhite;
+
+            final Color itemTextColor = isDelete
+                ? (isLight
+                    ? AppColors.darkCharcoal.withValues(alpha: 0.45)
+                    : AppColors.textMutedWhite)
+                : (item.textColor ?? defaultTextColor);
+
             return PopupMenuItem<T>(
               value: item.value,
               enabled: item.enabled,
               height: hasSubtitle ? 52 : 42,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (item.icon != null) ...[
-                    Icon(
-                      item.icon,
-                      size: hasSubtitle ? 19 : 17,
-                      color: item.iconColor ?? defaultIconColor,
+                  Text(
+                    item.label,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: itemTextColor,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(width: 10),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          item.label,
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: item.textColor ?? defaultTextColor,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (hasSubtitle) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            item.subtitle!,
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  if (hasSubtitle) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.subtitle!,
+                      style: AppTypography.caption.copyWith(
+                        color: isDelete
+                            ? (isLight
+                                ? AppColors.darkCharcoal.withValues(alpha: 0.3)
+                                : AppColors.textMutedWhite.withValues(alpha: 0.4))
+                            : (isLight
+                                ? AppColors.textSecondaryLight
+                                : AppColors.textSecondary),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
               ),
             );

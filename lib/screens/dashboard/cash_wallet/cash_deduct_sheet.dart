@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../../models/cash_transaction.dart';
 import '../../../models/expense_definition.dart';
 import '../../../models/reason.dart';
 import '../../../models/transaction.dart';
@@ -17,6 +16,7 @@ import '../../../widgets/app_drawer.dart';
 import '../../../widgets/app_note_card.dart';
 import '../../../widgets/app_text_field.dart';
 import '../../../widgets/app_toast.dart';
+import '../../../widgets/counterparty_selector_modal.dart';
 import '../reason_selection_sheet.dart';
 
 /// Shows the unified cash expense deduction drawer with amount validation,
@@ -34,9 +34,11 @@ void showCashDeductModal(
   final amountController = TextEditingController();
   final noteController = TextEditingController();
   final pendingAttachments = <TransactionAttachment>[];
+  String? selectedCounterparty;
   AppReason? selectedReason;
   ExpenseDefinition? selectedTemplate;
   AppTransaction? selectedWithdrawal;
+  DateTime selectedDate = DateTime.now();
   bool isRecurring = false;
   final fmtShort = NumberFormat('#,##0.00');
 
@@ -109,19 +111,33 @@ void showCashDeductModal(
                         if (amt > rem) return;
                       }
 
-                      // Create the transaction
-                      final tx = CashTransaction(
-                        type: 'expense',
+                      // Create the unified transaction
+                      final postBal = (cashVM.cashBalance - amt).clamp(0.0, double.infinity);
+                      final tx = AppTransaction(
+                        id: AppTransaction.generateManualId('SHIBRE_CASH'),
+                        bankName: 'Cash Wallet',
                         amount: amt,
-                        date: DateTime.now(),
-                        description: noteController.text.trim(),
+                        type: 'expense',
+                        date: selectedDate,
+                        counterparty: selectedCounterparty != null &&
+                                selectedCounterparty!.trim().isNotEmpty
+                            ? selectedCounterparty!.trim()
+                            : 'Cash Outflow',
+                        sourceTag: 'Manual',
+                        rawMessage: '',
+                        isAutoDetected: false,
+                        totalBalance: postBal,
                         reasonId: selectedReason?.id,
-                        reasonName: selectedReason?.name,
-                        expenseDefinitionId: selectedTemplate?.id,
+                        reason: selectedReason?.name,
+                        note: noteController.text.trim().isEmpty
+                            ? null
+                            : noteController.text.trim(),
+                        attachments: List.from(pendingAttachments),
                         linkedTransactionId: selectedWithdrawal?.id,
                       );
 
-                      await cashVM.addCashTransaction(tx);
+                      await txVM.addTransaction(tx);
+                      cashVM.recalcBalance();
 
                       // If "Save as Template" is on, and no template selected, create it
                       if (isRecurring && selectedTemplate == null) {
@@ -135,6 +151,9 @@ void showCashDeductModal(
                           reasonId: selectedReason?.id,
                         );
                         await cashVM.addExpenseDefinition(newDef);
+                      } else if (selectedTemplate != null && selectedTemplate!.isRecurring) {
+                        final updatedDef = selectedTemplate!.copyWith(lastAppliedDate: selectedDate);
+                        await cashVM.updateExpenseDefinition(updatedDef);
                       }
 
                       if (!context.mounted) return;
@@ -241,6 +260,67 @@ void showCashDeductModal(
                 ],
                 const SizedBox(height: 24),
 
+                // Counterparty Selection (Recipient / Paid To)
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await CounterpartySelectorModal.show(
+                      context: context,
+                      existingCounterparties: txVM.uniqueCounterparties,
+                      currentCounterparty: selectedCounterparty,
+                      title: 'Paid To (Recipient)',
+                    );
+                    if (picked != null) {
+                      setModalState(() {
+                        selectedCounterparty = picked;
+                      });
+                    }
+                  },
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: selectedCounterparty != null
+                          ? AppColors.surfaceElevated
+                          : AppColors.drawerCard,
+                      borderRadius: AppRadius.cardRadius,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.person_outline_rounded,
+                          color: selectedCounterparty != null
+                              ? AppColors.positive
+                              : AppColors.textSecondary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            selectedCounterparty ?? 'Select Recipient (Optional)',
+                            style: TextStyle(
+                              color: selectedCounterparty != null
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: selectedCounterparty != null
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textSoft,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Reason Selector
                 GestureDetector(
                   onTap: () {
@@ -304,6 +384,69 @@ void showCashDeductModal(
                 ),
                 const SizedBox(height: 16),
 
+                // Date & Time Picker
+                GestureDetector(
+                  onTap: () async {
+                    final pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (pickedDate != null && context.mounted) {
+                      final pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(selectedDate),
+                      );
+                      if (pickedTime != null) {
+                        setModalState(() {
+                          selectedDate = DateTime(
+                            pickedDate.year,
+                            pickedDate.month,
+                            pickedDate.day,
+                            pickedTime.hour,
+                            pickedTime.minute,
+                          );
+                        });
+                      }
+                    }
+                  },
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.drawerCard,
+                      borderRadius: AppRadius.cardRadius,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          color: AppColors.textSecondary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            DateFormat('MMM dd, yyyy • HH:mm').format(selectedDate),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.edit_calendar_rounded,
+                          color: AppColors.textSoft,
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // Note & Receipt Card
                 AppNoteCard(
                   controller: noteController,
@@ -313,6 +456,7 @@ void showCashDeductModal(
                   isCollapsible: true,
                   initialExpanded: false,
                   accentColor: AppColors.gold,
+                  backgroundColor: AppColors.drawerCard,
                   onAttachMedia: (filePath, fileType, fileName) async {
                     setModalState(() {
                       pendingAttachments.add(

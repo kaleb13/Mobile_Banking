@@ -81,7 +81,12 @@ class _WalletsScreenState extends State<WalletsScreen>
     final txVM = Provider.of<TransactionsViewModel>(context);
     final cashVM = Provider.of<CashWalletViewModel>(context);
     final settingsVM = Provider.of<SettingsViewModel>(context);
-    final senders = txVM.senders;
+    final senders = txVM.senders
+        .where((s) => s.senderName.trim().toUpperCase() != 'CASH WALLET')
+        .toList();
+    final activeSenders = txVM.activeSenders
+        .where((s) => s.senderName.trim().toUpperCase() != 'CASH WALLET')
+        .toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -203,7 +208,7 @@ class _WalletsScreenState extends State<WalletsScreen>
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
                     sliver: SliverReorderableList(
-                      itemCount: txVM.activeSenders.length,
+                      itemCount: activeSenders.length,
                       onReorderStart: (index) {
                         HapticFeedback.heavyImpact();
                       },
@@ -333,7 +338,7 @@ class _WalletsScreenState extends State<WalletsScreen>
                             onEnterReorderMode: _enterReorderMode,
                           );
                         },
-                        childCount: txVM.activeSenders.length,
+                        childCount: activeSenders.length,
                       ),
                     ),
                   ),

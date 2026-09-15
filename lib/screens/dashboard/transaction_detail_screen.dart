@@ -36,6 +36,7 @@ import 'internal_transfer_picker_sheet.dart';
 import 'reason_selection_sheet.dart';
 import 'reason_link_drawer.dart';
 import 'split_transaction_sheet.dart';
+import 'edit_manual_transaction_sheet.dart';
 import '../../models/transaction_split.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
@@ -59,7 +60,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   void initState() {
     super.initState();
     _noteController =
-        TextEditingController(text: widget.transaction.note ?? widget.transaction.customReasonText ?? '');
+        TextEditingController(text: widget.transaction.note ?? '');
     if (_noteController.text.trim().isNotEmpty || widget.transaction.attachments.isNotEmpty) {
       _isPersonalNoteExpanded = true;
     }
@@ -163,6 +164,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         context: context,
         builder: (_) => InternalTransferPickerSheet(
           sourceTransaction: latestTx,
+          txVM: txVM,
         ),
       );
     }
@@ -449,15 +451,32 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ],
             AppMenuButton<String>.dark(
               minWidth: 170,
-              items: const [
-                AppMenuItem<String>(
+              items: [
+                if (currentTx.isManual)
+                  const AppMenuItem<String>(
+                    value: 'edit',
+                    label: 'Edit Transaction',
+                  ),
+                const AppMenuItem<String>(
                   value: 'delete',
                   label: 'Delete Transaction',
-                  icon: Icons.delete_outline_rounded,
+                  isDestructive: true,
                 ),
               ],
-              onSelected: (value) {
-                if (value == 'delete') {
+              onSelected: (value) async {
+                if (value == 'edit') {
+                  await EditManualTransactionSheet.show(
+                    context: context,
+                    transaction: currentTx,
+                    txVM: txVM,
+                    cashVM: cashVM,
+                  );
+                  if (mounted) {
+                    setState(() {
+                      _selectedReason = null;
+                    });
+                  }
+                } else if (value == 'delete') {
                   _confirmDeleteFromApp(context, txVM);
                 }
               },
@@ -559,7 +578,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           _buildCreateLoanPromptCard(context, currentTx),
                           const SizedBox(height: 14),
                         ] else if (activeReasonName == 'internal transfer' || activeReasonName.contains('internal transfer') || activeReasonName == 'transfer') ...[
-                          _buildLinkInternalTransferPromptCard(context, currentTx),
+                          _buildLinkInternalTransferPromptCard(context, txVM, currentTx),
                           const SizedBox(height: 14),
                         ] else if ((currentLabel?.toLowerCase() == 'cash' || currentTx.reason?.toLowerCase() == 'cash') && currentTx.type == 'expense') ...[
                           _buildCashSpendingBreakdownCard(context, cashVM, settingsVM, txVM),
@@ -737,7 +756,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
 
     String subtitleText = '';
-    if (counterpartyStr.isNotEmpty && counterpartyStr.toUpperCase() != bankName.toUpperCase()) {
+    final bool isCashWallet = bankStr.toUpperCase().contains('CASH');
+    if (isCashWallet &&
+        (counterpartyStr.isEmpty ||
+            counterpartyStr == 'Cash Inflow' ||
+            counterpartyStr == 'Cash Outflow' ||
+            counterpartyStr == 'Cash Expense' ||
+            counterpartyStr == 'Cash' ||
+            counterpartyStr == 'Manual Entry')) {
+      subtitleText = widget.transaction.isIncome ? 'Cash Inflow' : 'Cash Outflow';
+    } else if (counterpartyStr.isNotEmpty && counterpartyStr.toUpperCase() != bankName.toUpperCase()) {
       subtitleText = counterpartyStr;
     } else if (widget.transaction.customReasonText?.isNotEmpty == true) {
       subtitleText = widget.transaction.customReasonText!;
@@ -758,9 +786,31 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     ({Widget icon, String name, String shortName, String subtitle, Color bgColor}) bankInfo,
     bool isIncome,
   ) {
-    final String counterparty = widget.transaction.counterparty.isNotEmpty
-        ? widget.transaction.counterparty
-        : 'External Party';
+    final txVM = Provider.of<TransactionsViewModel>(context);
+    final currentTx = txVM.transactions
+        .where((t) => t.id == widget.transaction.id)
+        .firstOrNull ?? widget.transaction;
+
+    final bool isCashWallet = currentTx.bankName.toLowerCase() == 'cash wallet';
+    final bool isGenericCashParty = isCashWallet && (
+        currentTx.counterparty.isEmpty ||
+        currentTx.counterparty == 'Cash Inflow' ||
+        currentTx.counterparty == 'Cash Outflow' ||
+        currentTx.counterparty == 'Cash Expense' ||
+        currentTx.counterparty == 'Cash' ||
+        currentTx.counterparty == 'Manual Entry' ||
+        currentTx.counterparty == 'External Party'
+    );
+
+    final String counterpartyLabel = isGenericCashParty
+        ? (isIncome ? 'Cash Inflow' : 'Cash Outflow')
+        : (isIncome ? 'From (Sender)' : 'To (Recipient)');
+
+    final String counterparty = isGenericCashParty
+        ? (isIncome ? 'Cash Inflow' : 'Cash Outflow')
+        : (currentTx.counterparty.isNotEmpty
+            ? currentTx.counterparty
+            : 'External Party');
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
@@ -801,7 +851,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'SMS received from ${bankInfo.shortName}',
+                      currentTx.isManual
+                          ? 'Manual entry in ${bankInfo.name}'
+                          : 'SMS received from ${bankInfo.shortName}',
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,
@@ -823,38 +875,79 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           // Details List (Person/Counterparty, Transaction ID, Category, Date & Balance)
           _buildCollapsibleInfoRow(
             isIncome ? Icons.call_received_rounded : Icons.call_made_rounded,
-            isIncome ? 'From (Sender)' : 'To (Recipient)',
-            _limitWords(
-              CounterpartyMatcher.normalize(counterparty).isNotEmpty
-                  ? CounterpartyMatcher.normalize(counterparty)
-                  : counterparty,
-              maxWords: 3,
-            ),
-            onTap: widget.transaction.counterparty.isNotEmpty &&
-                    widget.transaction.counterparty != 'Manual Entry' &&
-                    widget.transaction.counterparty != 'Cash'
+            counterpartyLabel,
+            isGenericCashParty
+                ? counterparty
+                : _limitWords(
+                    CounterpartyMatcher.normalize(counterparty).isNotEmpty
+                        ? CounterpartyMatcher.normalize(counterparty)
+                        : counterparty,
+                    maxWords: 3,
+                  ),
+            onTap: !isGenericCashParty &&
+                    currentTx.counterparty.isNotEmpty &&
+                    currentTx.counterparty != 'Manual Entry' &&
+                    currentTx.counterparty != 'Cash' &&
+                    currentTx.counterparty != 'Cash Inflow' &&
+                    currentTx.counterparty != 'Cash Outflow' &&
+                    currentTx.counterparty != 'Cash Expense'
                 ? () {
                     CounterpartyInsightSheet.show(
                       context,
-                      personName: widget.transaction.counterparty,
+                      personName: currentTx.counterparty,
                     );
                   }
                 : null,
           ),
           _buildCollapsibleInfoRow(
-              Icons.fingerprint, 'Transaction ID', widget.transaction.id ?? 'Pending'),
+              Icons.fingerprint, 'Transaction ID', currentTx.id ?? 'Pending'),
           _buildCollapsibleInfoRow(
-              Icons.tag_rounded, 'Source Tag', widget.transaction.sourceTag),
+              Icons.tag_rounded, 'Source Tag', currentTx.sourceTag),
           _buildCollapsibleInfoRow(
-              Icons.calendar_today_outlined,
-              'Date & Time',
-              DateFormat('MMMM dd, yyyy • HH:mm').format(widget.transaction.date)),
+            Icons.calendar_today_outlined,
+            'Date & Time',
+            DateFormat('MMMM dd, yyyy • HH:mm').format(currentTx.date),
+            onTap: currentTx.isManual
+                ? () async {
+                    final pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate: currentTx.date,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (pickedDate != null && context.mounted) {
+                      final pickedTime = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay.fromDateTime(currentTx.date),
+                      );
+                      if (pickedTime != null && context.mounted) {
+                        final newDateTime = DateTime(
+                          pickedDate.year,
+                          pickedDate.month,
+                          pickedDate.day,
+                          pickedTime.hour,
+                          pickedTime.minute,
+                        );
+                        final cashVM = context.read<CashWalletViewModel>();
+                        await txVM.updateTransactionDate(currentTx.id!, newDateTime);
+                        cashVM.recalcBalance();
+                        setState(() {});
+                        AppToast.success(
+                          context,
+                          message: 'Date Updated',
+                          subtitle: DateFormat('MMM dd, yyyy • HH:mm').format(newDateTime),
+                        );
+                      }
+                    }
+                  }
+                : null,
+          ),
           _buildCollapsibleInfoRow(
             Icons.account_balance_wallet_outlined,
             'Post Balance',
             '',
             customValue: CurrencyTextWidget(
-              amount: widget.transaction.totalBalance,
+              amount: currentTx.totalBalance,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
@@ -1881,6 +1974,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCollapsibleRawMessageCard(BuildContext context) {
+    if (widget.transaction.isManual ||
+        widget.transaction.rawMessage.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -1992,6 +2090,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCollapsibleReceiptLinkCard(BuildContext context) {
+    if (widget.transaction.isManual) return const SizedBox.shrink();
     final links = widget.transaction.extractedLinks;
     if (links.isEmpty) return const SizedBox.shrink();
 
@@ -2615,7 +2714,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildLinkInternalTransferPromptCard(
-      BuildContext context, AppTransaction currentTx) {
+      BuildContext context, TransactionsViewModel txVM, AppTransaction currentTx) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -2672,6 +2771,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 context: context,
                 builder: (_) => InternalTransferPickerSheet(
                   sourceTransaction: currentTx,
+                  txVM: txVM,
                 ),
               );
             },
@@ -2715,7 +2815,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header Row (Title, Icon & Locked Badge - No Unlink Button) ──
+          // ── Header Row (Title, Icon & Unlink Action Button) ──
           Row(
             children: [
               Container(
@@ -2760,10 +2860,34 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ],
                 ),
               ),
-              const AppBadge.warning(
-                text: 'Locked',
-                icon: Icons.lock_rounded,
-                size: AppBadgeSize.small,
+              AppButton.secondary(
+                text: 'Unlink',
+                icon: Icons.link_off_rounded,
+                height: 32,
+                fullWidth: false,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                fontSize: 11.5,
+                iconSize: 14,
+                onPressed: () async {
+                  final shouldUnlink = await AppConfirmDialog.show(
+                    context: context,
+                    title: 'Unlink Transfer?',
+                    message:
+                        'This will unlink this transaction from its counterpart. Both transactions will retain the Internal Transfer reason until you change it.',
+                    confirmText: 'Unlink',
+                    cancelText: 'Cancel',
+                    isDestructive: true,
+                    onConfirm: () {},
+                  );
+                  if (shouldUnlink == true && context.mounted) {
+                    await txVM.unlinkInternalTransfer(currentTx.id!);
+                    if (context.mounted) {
+                      AppToast.success(context,
+                          message: 'Internal transfer unlinked');
+                    }
+                  }
+                },
               ),
             ],
           ),
