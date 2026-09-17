@@ -35,7 +35,7 @@ class AppPrimaryTabBar extends StatelessWidget {
     this.selectedIndex,
     this.onTabChanged,
     this.controller,
-    this.height = 32,
+    this.height = 34,
     this.fontSize = 11,
     this.margin,
     this.padding = const EdgeInsets.all(2.5),
@@ -146,16 +146,19 @@ class AppPrimaryTabBar extends StatelessWidget {
                       ]
                     : null,
               ),
-              child: Text(
-                tabs[index],
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: isSelected ? activeTextColor : inactiveTextColor,
-                  fontSize: fontSize,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  letterSpacing: -0.2,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  tabs[index],
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected ? activeTextColor : inactiveTextColor,
+                    fontSize: fontSize,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    letterSpacing: -0.2,
+                  ),
                 ),
               ),
             ),

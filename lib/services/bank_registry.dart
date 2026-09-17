@@ -195,7 +195,7 @@ class BankRegistry {
   static const String _defaultFallbackJson = r'''
 {
   "schemaVersion": 1,
-  "rulesVersion": 2026091601,
+  "rulesVersion": 2026091701,
   "minSupportedAppVersion": "1.0.0",
   "banks": [
     {
@@ -211,9 +211,9 @@ class BankRegistry {
         "numericShortCode": "127"
       },
       "branding": {
-        "gradientColors": ["#10B981", "#88BF47"],
+        "gradientColors": ["#0BA751", "#88BF47"],
         "isDarkTextTheme": false,
-        "iconAssetFallback": "assets/images/Telebirr.svg"
+        "iconAssetFallback": "assets/images/Telebirr_Logo.svg"
       },
       "parsing": {"patterns": []}
     },

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import '../config/app_config.dart';
 import 'bank_registry.dart';
 
 /// Service for checking and downloading OTA bank rule and branding updates.
@@ -15,17 +16,13 @@ class BankSyncService {
   BankSyncService._();
   static final BankSyncService instance = BankSyncService._();
 
-  /// Primary backend endpoint (e.g. Laravel API: https://api.shibre.app/api/v1/banks/manifest).
+  /// Primary backend endpoint (defaults to AppConfig.banksManifestUrl: https://api.shibre.com/api/v1/banks/manifest).
   /// Can be overridden at build-time via --dart-define=BANK_MANIFEST_URL=...
   /// or at runtime via [setPrimaryEndpoint].
-  String primaryManifestUrl = const String.fromEnvironment(
-    'BANK_MANIFEST_URL',
-    defaultValue: 'https://raw.githubusercontent.com/kaleb13/Mobile_Banking/main/assets/banks_manifest.json',
-  );
+  String primaryManifestUrl = AppConfig.banksManifestUrl;
 
   /// Secondary fallback mirror (CDN / GitHub raw) if primary backend is unreachable.
-  static const String fallbackManifestUrl =
-      'https://raw.githubusercontent.com/kaleb13/Mobile_Banking/main/assets/banks_manifest.json';
+  static String get fallbackManifestUrl => AppConfig.fallbackManifestUrl;
 
   /// Configures the primary remote endpoint dynamically at runtime.
   void setPrimaryEndpoint(String url) {
