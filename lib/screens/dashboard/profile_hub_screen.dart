@@ -13,6 +13,9 @@ import '../../widgets/app_header.dart';
 import '../../theme/app_theme.dart';
 import '../../presentation/viewmodels/analytics_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
+import '../../presentation/viewmodels/auth_view_model.dart';
+import '../../widgets/app_toast.dart';
+import '../../widgets/app_card.dart';
 import 'saving_goals_screen.dart';
 import 'settings_screen.dart';
 
@@ -63,14 +66,61 @@ class ProfileHubScreen extends StatelessWidget {
                     title: 'Profile Hub',
                     showBackButton: false,
                     padding: EdgeInsets.zero,
-                    trailing: AppButton.secondary(
-                      text: 'Levels',
-                      trailingIcon: Icons.arrow_forward_ios_rounded,
-                      fullWidth: false,
-                      height: 28,
-                      fontSize: 11.5,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      onPressed: () => _showLevelsInfoDialog(context),
+                    trailing: Consumer<AuthViewModel>(
+                      builder: (context, authVM, _) {
+                        return Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AppButton.secondary(
+                              text: 'Levels',
+                              trailingIcon: Icons.arrow_forward_ios_rounded,
+                              fullWidth: false,
+                              height: 28,
+                              fontSize: 11.5,
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              onPressed: () => _showLevelsInfoDialog(context),
+                            ),
+                            const SizedBox(width: 8),
+                            if (authVM.isAuthenticated && authVM.avatarUrl != null)
+                              GestureDetector(
+                                onTap: () => _showAccountDetailsSheet(context, authVM),
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.surfaceElevated,
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.network(
+                                      authVM.avatarUrl!,
+                                      width: 28,
+                                      height: 28,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.account_circle,
+                                        size: 28,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              AppButton.secondary(
+                                text: authVM.isLoading ? '...' : 'Sign In',
+                                icon: Icons.login_rounded,
+                                fullWidth: false,
+                                height: 28,
+                                fontSize: 11.5,
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                onPressed: authVM.isLoading
+                                    ? null
+                                    : () => _handleGoogleSignIn(context, authVM),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -558,6 +608,162 @@ class ProfileHubScreen extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _handleGoogleSignIn(BuildContext context, AuthViewModel authVM) async {
+    final success = await authVM.signInWithGoogle();
+    if (context.mounted) {
+      if (success) {
+        AppToast.success(
+          context,
+          message: 'Signed in with Google',
+          subtitle: authVM.email ?? 'Welcome to Shibre Cloud',
+        );
+      } else if (authVM.errorMessage != null) {
+        AppToast.error(
+          context,
+          message: 'Sign In Failed',
+          subtitle: authVM.errorMessage,
+        );
+      }
+    }
+  }
+
+  void _showAccountDetailsSheet(BuildContext context, AuthViewModel authVM) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        decoration: BoxDecoration(
+          color: ctx.themeBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pill handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ctx.themeTextSecondary.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Large Google Avatar
+              Container(
+                width: 68,
+                height: 68,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surfaceElevated,
+                ),
+                child: ClipOval(
+                  child: authVM.avatarUrl != null
+                      ? Image.network(
+                          authVM.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.account_circle,
+                            size: 68,
+                            color: AppColors.textPrimary,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.account_circle,
+                          size: 68,
+                          color: AppColors.textPrimary,
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Text(
+                authVM.displayName ?? 'Shibre User',
+                style: AppTypography.heading2.copyWith(
+                  color: ctx.themeTextPrimary,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 4),
+
+              Text(
+                authVM.email ?? '',
+                style: AppTypography.bodySmall.copyWith(
+                  color: ctx.themeTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Account & Device Status Card
+              AppCard(
+                padding: const EdgeInsets.all(16),
+                customColor: ctx.themeSurface,
+                borderRadius: AppRadius.card,
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Plan Status', style: AppTypography.bodySmall.copyWith(color: ctx.themeTextSecondary)),
+                        const AppBadge.success(text: '30-DAY TRIAL'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Trial Remaining', style: AppTypography.bodySmall.copyWith(color: ctx.themeTextSecondary)),
+                        Text(
+                          '${authVM.trialRemainingDays} days',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: ctx.themeTextPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Hardware Device', style: AppTypography.bodySmall.copyWith(color: ctx.themeTextSecondary)),
+                        Text(
+                          authVM.deviceModel,
+                          style: AppTypography.caption.copyWith(color: ctx.themeTextSecondary),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Sign Out Button (Destructive 100% Pill)
+              AppButton.destructive(
+                text: 'Sign Out',
+                icon: Icons.logout_rounded,
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  await authVM.signOut();
+                  if (context.mounted) {
+                    AppToast.info(context, message: 'Signed Out');
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

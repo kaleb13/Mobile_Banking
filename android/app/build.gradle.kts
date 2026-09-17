@@ -50,6 +50,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+
         release {
             // Enable code shrinking, obfuscation, and optimization for release builds.
             isMinifyEnabled = true

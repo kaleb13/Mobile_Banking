@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'dart:ui' show lerpDouble;
 import 'dart:math' as math;
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
+import '../../presentation/viewmodels/auth_view_model.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_toast.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,13 +182,19 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
                           inactiveWidth: inactiveW,
                           onTap: () => widget.onTap?.call(3),
                         ),
-                        _NavItem(
-                          label: 'Profile Hub',
-                          svgPath: 'assets/images/Profile_Icon.svg',
-                          activationT: _getItemActivation(4, page),
-                          activeWidth: activeW,
-                          inactiveWidth: inactiveW,
-                          onTap: () => widget.onTap?.call(4),
+                        Consumer<AuthViewModel>(
+                          builder: (context, authVM, _) {
+                            return _NavItem(
+                              label: 'Profile Hub',
+                              svgPath: 'assets/images/Profile_Icon.svg',
+                              networkAvatarUrl: authVM.avatarUrl,
+                              activationT: _getItemActivation(4, page),
+                              activeWidth: activeW,
+                              inactiveWidth: inactiveW,
+                              onTap: () => widget.onTap?.call(4),
+                              onLongPress: () => _showNavAuthMenu(context, authVM),
+                            );
+                          },
                         ),
                       ],
                     );
@@ -192,6 +202,141 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
                 );
               },
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNavAuthMenu(BuildContext context, AuthViewModel authVM) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        decoration: BoxDecoration(
+          color: ctx.themeBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ctx.themeTextSecondary.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (authVM.isAuthenticated) ...[
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.surfaceElevated,
+                      ),
+                      child: ClipOval(
+                        child: authVM.avatarUrl != null
+                            ? Image.network(
+                                authVM.avatarUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(
+                                  Icons.account_circle,
+                                  size: 44,
+                                  color: AppColors.textPrimary,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.account_circle,
+                                size: 44,
+                                color: AppColors.textPrimary,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            authVM.displayName ?? 'Shibre User',
+                            style: AppTypography.heading2.copyWith(
+                              color: ctx.themeTextPrimary,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            authVM.email ?? '',
+                            style: AppTypography.caption.copyWith(
+                              color: ctx.themeTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                AppButton.destructive(
+                  text: 'Sign Out',
+                  icon: Icons.logout_rounded,
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await authVM.signOut();
+                    if (context.mounted) {
+                      AppToast.info(context, message: 'Signed Out');
+                    }
+                  },
+                ),
+              ] else ...[
+                Text(
+                  'Cloud Account',
+                  style: AppTypography.heading2.copyWith(
+                    color: ctx.themeTextPrimary,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Sign in with Google to backup your financial records and sync across devices.',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: ctx.themeTextSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                AppButton.primary(
+                  text: authVM.isLoading ? 'Signing In...' : 'Sign In with Google',
+                  icon: Icons.login_rounded,
+                  onPressed: authVM.isLoading
+                      ? null
+                      : () async {
+                          Navigator.of(ctx).pop();
+                          final success = await authVM.signInWithGoogle();
+                          if (context.mounted) {
+                            if (success) {
+                              AppToast.success(context, message: 'Signed in with Google');
+                            } else if (authVM.errorMessage != null) {
+                              AppToast.error(
+                                context,
+                                message: 'Sign in failed',
+                                subtitle: authVM.errorMessage,
+                              );
+                            }
+                          }
+                        },
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -205,8 +350,10 @@ class _NavItem extends StatelessWidget {
   final double activeWidth;
   final double inactiveWidth;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final String? assetPath;
   final String? svgPath;
+  final String? networkAvatarUrl;
 
   const _NavItem({
     required this.label,
@@ -214,11 +361,56 @@ class _NavItem extends StatelessWidget {
     required this.activeWidth,
     required this.inactiveWidth,
     required this.onTap,
+    this.onLongPress,
     this.assetPath,
     this.svgPath,
+    this.networkAvatarUrl,
   });
 
   Widget _buildIcon(Color color) {
+    if (networkAvatarUrl != null && networkAvatarUrl!.isNotEmpty) {
+      return SizedBox(
+        width: 20,
+        height: 20,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Full 20x20 circular avatar
+            ClipOval(
+              child: Image.network(
+                networkAvatarUrl!,
+                width: 20,
+                height: 20,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => SvgPicture.asset(
+                  svgPath ?? 'assets/images/Profile_Icon.svg',
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                ),
+              ),
+            ),
+            // Outer outline ring (YouTube-style outer border without altering layout bounds)
+            Positioned(
+              top: -2,
+              left: -2,
+              right: -2,
+              bottom: -2,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: color,
+                    width: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     if (svgPath != null) {
       return SvgPicture.asset(
         svgPath!,
@@ -260,6 +452,12 @@ class _NavItem extends StatelessWidget {
               HapticFeedback.selectionClick();
               onTap();
             },
+            onLongPress: onLongPress != null
+                ? () {
+                    HapticFeedback.mediumImpact();
+                    onLongPress!();
+                  }
+                : null,
             behavior: HitTestBehavior.opaque,
             child: SizedBox(
               width: activeWidth,

@@ -25,6 +25,11 @@ import 'presentation/viewmodels/analytics_view_model.dart';
 
 import 'services/bank_registry.dart';
 import 'services/bank_sync_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config/app_config.dart';
+import 'services/device_security_service.dart';
+import 'presentation/viewmodels/auth_view_model.dart';
+import 'widgets/trial_paywall_sheet.dart';
 
 /// Global navigator key — allows non-widget code to push routes or show
 /// modals without needing a BuildContext.
@@ -36,7 +41,18 @@ void main() async {
 
   // Initialize dynamic BankRegistry (loads OTA manifest or bundled fallback)
   await BankRegistry.instance.init();
-  // Asynchronously check for newer bank rules or newly added banks in background
+  // 0. Initialize Supabase Backend & Hardware Anti-Fraud Security
+  try {
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      publishableKey: AppConfig.supabaseAnonKey,
+    );
+    await DeviceSecurityService.instance.initialize();
+  } catch (e) {
+    debugPrint('Supabase/DeviceSecurity init failed: $e');
+  }
+
+  // 1. Asynchronously check for OTA bank rule updates (non-blocking)
   BankSyncService.instance.checkForUpdates().catchError((_) => false);
 
   // SMS handling is now done natively by SmsBroadcastReceiver.kt —
@@ -98,6 +114,7 @@ void main() async {
         Provider<SavingsRepository>.value(value: savingsRepo),
         Provider<CashWalletRepository>.value(value: cashWalletRepo),
         Provider<TransactionRepository>.value(value: transactionRepo),
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(
           create: (_) => NotificationsViewModel(repository: notificationRepo)
             ..loadNotifications(),
@@ -282,11 +299,32 @@ class _MobileBankingAppState extends State<MobileBankingApp>
         _isLocked = locked;
         _checkedOnStart = true;
       });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_isLocked && mounted) {
+          final authVM = context.read<AuthViewModel>();
+          if (!authVM.isTrialActive || authVM.isDeviceBlocked) {
+            final navContext = appNavigatorKey.currentContext;
+            if (navContext != null) {
+              TrialPaywallSheet.show(navContext);
+            }
+          }
+        }
+      });
     }
   }
 
   void _unlock() {
     setState(() => _isLocked = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authVM = context.read<AuthViewModel>();
+      if (!authVM.isTrialActive || authVM.isDeviceBlocked) {
+        final navContext = appNavigatorKey.currentContext;
+        if (navContext != null) {
+          TrialPaywallSheet.show(navContext);
+        }
+      }
+    });
   }
 
   @override

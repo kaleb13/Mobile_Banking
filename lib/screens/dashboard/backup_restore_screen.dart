@@ -276,8 +276,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
             color: AppColors.gold,
             title: 'Create a Backup',
             body:
-                'Your backup will be saved to a "Shibre_Backups" folder on your device storage. '
-                'The backup includes all senders, transactions, reasons, and linked rules.',
+                'Your backup includes all bank & cash transactions, full categories and subcategories hierarchies, '
+                'saving goals, loans & repayments, custom links, and app settings.',
           ),
 
           const SizedBox(height: 24),
@@ -881,13 +881,21 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen>
   String _typeLabel(String type) {
     switch (type) {
       case 'transaction':
-        return 'Transaction';
+        return 'Bank Transaction';
+      case 'cash_transaction':
+        return 'Cash Transaction';
       case 'sender':
-        return 'Sender';
+        return 'Sender / Wallet';
       case 'reason':
-        return 'Reason';
+        return 'Category';
       case 'reason_link':
-        return 'Reason Rule';
+        return 'Auto-Category Rule';
+      case 'saving_goal':
+        return 'Saving Goal';
+      case 'loan':
+        return 'Loan Record';
+      case 'loan_payment':
+        return 'Loan Repayment';
       default:
         return type;
     }

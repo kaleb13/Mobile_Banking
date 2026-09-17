@@ -36,4 +36,31 @@ class AppConfig {
   static const String websiteUrl = 'https://shibre.com';
   static const String privacyPolicyUrl = 'https://shibre.com/privacy';
   static const String termsUrl = 'https://shibre.com/terms';
+
+  /// Supabase Cloud Configuration
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://ysjhhbjnrzrgynzovwey.supabase.co',
+  );
+
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzamhoYmpucnpyZ3luem92d2V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NDAwOTMsImV4cCI6MjEwNTIxNjA5M30.tyvoIWUx8_zeV8SFhMy8Tsoo_dmDDP-NbDop9A-4OZY',
+  );
+
+  /// Google OAuth Client IDs
+  static const String googleAndroidClientId = String.fromEnvironment(
+    'GOOGLE_ANDROID_CLIENT_ID',
+    defaultValue: '801642797876-a18he8o60t14frsf1v756ru4vc2sh3s6.apps.googleusercontent.com',
+  );
+
+  static const String googleAndroidReleaseClientId = String.fromEnvironment(
+    'GOOGLE_ANDROID_RELEASE_CLIENT_ID',
+    defaultValue: '801642797876-6aeo924a0ead9mho6sa86rbf5isjqrjq.apps.googleusercontent.com',
+  );
+
+  static const String googleWebClientId = String.fromEnvironment(
+    'GOOGLE_WEB_CLIENT_ID',
+    defaultValue: '801642797876-hh33mt126n8r6q0bk4d4tf6pjis9ic1c.apps.googleusercontent.com',
+  );
 }

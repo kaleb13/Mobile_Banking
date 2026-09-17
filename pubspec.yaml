@@ -27,6 +27,9 @@ dependencies:
   local_auth: any
   crypto: any
   share_plus: ^12.0.2
+  supabase_flutter: any
+  google_sign_in: any
+  device_info_plus: any
 
 dev_dependencies:
   flutter_test:

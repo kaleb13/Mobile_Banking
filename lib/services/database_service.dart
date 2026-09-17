@@ -2554,5 +2554,87 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       return {};
     }
   }
+
+  /// Returns all deleted default category tombstones.
+  Future<List<Map<String, dynamic>>> getDeletedDefaultReasons() async {
+    try {
+      final db = await instance.database;
+      return await db.query('deleted_default_reasons');
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Inserts a deleted default category tombstone.
+  Future<void> insertDeletedDefaultReason(
+      String name, String parentName, String deletedAt) async {
+    try {
+      final db = await instance.database;
+      await db.insert('deleted_default_reasons', {
+        'name': name.trim().toLowerCase(),
+        'parentName': parentName.trim().toLowerCase(),
+        'deletedAt': deletedAt,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {}
+  }
+
+  /// Returns all app_settings key-value pairs.
+  Future<Map<String, String>> getAllAppSettings() async {
+    try {
+      final db = await instance.database;
+      final maps = await db.query('app_settings');
+      final Map<String, String> res = {};
+      for (final m in maps) {
+        final k = m['key'] as String?;
+        final v = m['value'] as String?;
+        if (k != null && v != null) res[k] = v;
+      }
+      return res;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Smart upsert for imported backup transactions.
+  /// If the transaction exists: merges user fields (note, reason, reasonId, categoryId, subcategoryId, customReasonText, isBookmarked, linkedTransactionId).
+  /// If it does not exist: inserts the transaction cleanly.
+  Future<void> upsertTransactionFromBackup(AppTransaction tx) async {
+    final db = await instance.database;
+    final idToUse = tx.id ?? AppTransaction.generateManualId('SHIBRE_CASH');
+    final existing = await db.query('transactions', where: 'id = ?', whereArgs: [idToUse]);
+    if (existing.isNotEmpty) {
+      final Map<String, dynamic> updateValues = {};
+      if (tx.note != null && tx.note!.isNotEmpty) {
+        updateValues['note'] = tx.note;
+      }
+      if (tx.reasonId != null) {
+        updateValues['reasonId'] = tx.reasonId;
+      }
+      if (tx.categoryId != null) {
+        updateValues['categoryId'] = tx.categoryId;
+      }
+      if (tx.subcategoryId != null) {
+        updateValues['subcategoryId'] = tx.subcategoryId;
+      }
+      if (tx.customReasonText != null && tx.customReasonText!.isNotEmpty) {
+        updateValues['customReasonText'] = tx.customReasonText;
+      }
+      if (tx.reason != null && tx.reason!.isNotEmpty) {
+        updateValues['reason'] = tx.reason;
+      }
+      if (tx.isBookmarked) {
+        updateValues['isBookmarked'] = 1;
+      }
+      if (tx.linkedTransactionId != null && tx.linkedTransactionId!.isNotEmpty) {
+        updateValues['linkedTransactionId'] = tx.linkedTransactionId;
+      }
+
+      if (updateValues.isNotEmpty) {
+        await db.update('transactions', updateValues, where: 'id = ?', whereArgs: [idToUse]);
+      }
+    } else {
+      await insertTransaction(tx);
+    }
+  }
 }
 

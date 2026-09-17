@@ -23,3 +23,10 @@
 -keep class com.shibre.app.** { *; }
 -keepclassmembers class com.shibre.app.** { *; }
 
+# Google Sign-In & Android Credential Manager
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.gms.auth.** { *; }
+-keep class com.google.android.gms.common.** { *; }
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn androidx.credentials.**
+
