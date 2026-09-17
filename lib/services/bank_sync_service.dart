@@ -15,15 +15,40 @@ class BankSyncService {
   BankSyncService._();
   static final BankSyncService instance = BankSyncService._();
 
-  /// Default remote endpoint URL for bank manifests.
-  /// Can be overridden or configured via remote config / settings.
-  String defaultManifestUrl = 'https://raw.githubusercontent.com/kaleb13/Mobile_Banking/main/assets/banks_manifest.json';
+  /// Primary backend endpoint (e.g. Laravel API: https://api.shibre.app/api/v1/banks/manifest).
+  /// Can be overridden at build-time via --dart-define=BANK_MANIFEST_URL=...
+  /// or at runtime via [setPrimaryEndpoint].
+  String primaryManifestUrl = const String.fromEnvironment(
+    'BANK_MANIFEST_URL',
+    defaultValue: 'https://raw.githubusercontent.com/kaleb13/Mobile_Banking/main/assets/banks_manifest.json',
+  );
+
+  /// Secondary fallback mirror (CDN / GitHub raw) if primary backend is unreachable.
+  static const String fallbackManifestUrl =
+      'https://raw.githubusercontent.com/kaleb13/Mobile_Banking/main/assets/banks_manifest.json';
+
+  /// Configures the primary remote endpoint dynamically at runtime.
+  void setPrimaryEndpoint(String url) {
+    if (url.trim().isNotEmpty) {
+      primaryManifestUrl = url.trim();
+    }
+  }
 
   /// Checks the cloud endpoint for newer bank rules or newly added banks.
-  ///
-  /// Returns `true` if an update was successfully applied, `false` otherwise.
+  /// First tries the primary endpoint, then automatically fails over to the fallback mirror.
   Future<bool> checkForUpdates({String? customUrl}) async {
-    final urlString = customUrl ?? defaultManifestUrl;
+    final targetUrl = customUrl ?? primaryManifestUrl;
+    final success = await _fetchAndApply(targetUrl);
+    if (success) return true;
+
+    // Failover: if primary endpoint was not the fallback mirror, try the fallback mirror
+    if (targetUrl != fallbackManifestUrl && customUrl == null) {
+      return await _fetchAndApply(fallbackManifestUrl);
+    }
+    return false;
+  }
+
+  Future<bool> _fetchAndApply(String urlString) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 10);
 

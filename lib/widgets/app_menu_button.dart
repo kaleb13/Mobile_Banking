@@ -143,9 +143,6 @@ class _AppMenuButtonState<T> extends State<AppMenuButton<T>> {
         (isLight ? AppColors.darkCharcoal : Colors.white);
 
     final Color popupBgColor = isLight ? Colors.white : AppColors.surface;
-    final Color defaultIconColor = isLight
-        ? AppColors.darkCharcoal.withValues(alpha: 0.60)
-        : Colors.white.withValues(alpha: 0.50);
     final Color defaultTextColor = isLight
         ? AppColors.darkCharcoal
         : AppColors.textPrimary;

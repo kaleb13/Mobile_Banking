@@ -17,3 +17,9 @@
 -dontwarn com.google.android.play.core.**
 -dontwarn com.google.android.gms.common.**
 
+# Native Kotlin components (BroadcastReceivers, QuickEditActivity, Parsers, Registries)
+-keep class com.example.mobile_banking_app.** { *; }
+-keepclassmembers class com.example.mobile_banking_app.** { *; }
+-keep class com.shibre.app.** { *; }
+-keepclassmembers class com.shibre.app.** { *; }
+

@@ -811,7 +811,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         ),
                         _buildTermsSection(
                           'SMS Permission & Scan Window',
-                          'By granting SMS access, you allow Shibre to read banking messages from recognized senders (CBE, Telebirr, CBE Birr, Ahadu Bank, BOA, Dashen Bank, Awash Bank, Zemen Bank, Nib Bank) within your chosen window (${_selectedScanOption.title}). This permission is used exclusively for transaction detection, level estimation, and expense tracking.',
+                          'By granting SMS access, you allow Shibre to read banking messages from recognized bank and wallet senders within your chosen window (${_selectedScanOption.title}). This permission is used exclusively for transaction detection, balance calculation, and expense tracking. All SMS processing is performed 100% on-device and your messages are never uploaded to any server.',
                         ),
                         _buildTermsSection(
                           'Local Storage & Backups',

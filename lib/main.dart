@@ -61,6 +61,34 @@ void main() async {
   final bool initialOnboardingDone = await settingsRepo.getIsOnboardingComplete();
   final AppThemeMode initialThemeMode = await settingsRepo.getThemeMode();
 
+  // Global Flutter Error Boundary - prevents raw gray/red error screens in production
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: Colors.transparent,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 28, color: AppColors.textSecondary),
+              const SizedBox(height: 8),
+              Text(
+                'Unable to display this view',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
   runApp(
     MultiProvider(
       providers: [
