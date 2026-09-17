@@ -280,9 +280,6 @@ class TransactionsViewModel extends ChangeNotifier {
     if (oldIndex < 0 || oldIndex >= active.length) return;
     if (newIndex < 0 || newIndex > active.length) return;
 
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
     final movedSender = active.removeAt(oldIndex);
     active.insert(newIndex, movedSender);
 

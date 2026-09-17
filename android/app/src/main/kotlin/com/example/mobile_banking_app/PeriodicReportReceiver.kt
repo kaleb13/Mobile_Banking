@@ -124,7 +124,7 @@ class PeriodicReportReceiver : BroadcastReceiver() {
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
+                    alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         calendar.timeInMillis,
                         pendingIntent
@@ -172,7 +172,7 @@ class PeriodicReportReceiver : BroadcastReceiver() {
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
+                    alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         calendar.timeInMillis,
                         pendingIntent
@@ -220,7 +220,7 @@ class PeriodicReportReceiver : BroadcastReceiver() {
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
+                    alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         calendar.timeInMillis,
                         pendingIntent

@@ -103,9 +103,6 @@ class SavingsViewModel extends ChangeNotifier {
     if (oldIndex < 0 || oldIndex >= _savingGoals.length) return;
 
     final goals = List<SavingGoal>.from(_savingGoals);
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
     if (newIndex < 0) newIndex = 0;
     if (newIndex >= goals.length) newIndex = goals.length - 1;
 

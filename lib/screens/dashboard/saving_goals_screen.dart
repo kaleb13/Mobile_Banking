@@ -167,7 +167,7 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                           parent: BouncingScrollPhysics(),
                         ),
                         itemCount: sortedGoals.length,
-                        onReorder: (oldIndex, newIndex) {
+                        onReorderItem: (oldIndex, newIndex) {
                           savingsVM.reorderGoals(oldIndex, newIndex);
                         },
                         proxyDecorator: (child, index, animation) {

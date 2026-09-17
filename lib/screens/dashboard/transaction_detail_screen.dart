@@ -931,6 +931,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         final cashVM = context.read<CashWalletViewModel>();
                         await txVM.updateTransactionDate(currentTx.id!, newDateTime);
                         cashVM.recalcBalance();
+                        if (!context.mounted) return;
                         setState(() {});
                         AppToast.success(
                           context,

@@ -215,7 +215,7 @@ class _WalletsScreenState extends State<WalletsScreen>
                       onReorderEnd: (index) {
                         HapticFeedback.mediumImpact();
                       },
-                      onReorder: (oldIndex, newIndex) {
+                      onReorderItem: (oldIndex, newIndex) {
                         HapticFeedback.selectionClick();
                         txVM.reorderActiveSenders(oldIndex, newIndex);
                       },
