@@ -47,6 +47,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/banks_manifest.json
   fonts:
     - family: Inter
       fonts:

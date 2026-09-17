@@ -8,6 +8,8 @@ import '../models/sender.dart';
 import '../utils/counterparty_matcher.dart';
 import 'sms_service.dart';
 import 'bank_senders.dart';
+import 'bank_registry.dart';
+import 'dynamic_rule_parser.dart';
 import 'telebirr_parser.dart';
 import 'cbe_parser.dart';
 import 'cbe_birr_parser.dart';
@@ -188,9 +190,19 @@ class SmsBatchParser {
 
       ParsedSmsResult? parsed;
 
-      if (bank == 'Telebirr') {
-        parsed = TelebirrParser.parse(body, date);
-      } else if (bank == 'CBE') {
+      // 1. Dynamic parsing via BankRegistry
+      if (bank != null) {
+        final def = BankRegistry.instance.getBankByName(bank);
+        if (def != null && def.parsing.patterns.isNotEmpty) {
+          parsed = DynamicRuleParser.parse(def, body, date);
+        }
+      }
+
+      // 2. Fallback to existing parsers if dynamic parser didn't yield a result
+      if (parsed == null) {
+        if (bank == 'Telebirr') {
+          parsed = TelebirrParser.parse(body, date);
+        } else if (bank == 'CBE') {
         parsed = CbeParser.parse(body, date);
         if (parsed == null && body.toLowerCase().contains('br.')) {
           parsed = CbeBirrParser.parse(body, date);
@@ -220,6 +232,7 @@ class SmsBatchParser {
         if (customSender.senderName.isNotEmpty) {
           parsed = _parseCustomSender(customSender, body, date);
         }
+      }
       }
 
       if (parsed != null) {

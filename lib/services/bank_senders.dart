@@ -1,3 +1,4 @@
+import 'bank_registry.dart';
 import 'telebirr_parser.dart';
 
 /// Decides whether an SMS genuinely originates from a trusted bank, based ONLY
@@ -65,6 +66,12 @@ class BankSenders {
     // Reject ordinary phone-number senders outright (a person, not a bank).
     if (_phoneNumber.hasMatch(s) && s != TelebirrParser.senderNumber) {
       return null;
+    }
+
+    // Dynamic check via BankRegistry (OTA / Bundled)
+    final dynamicBank = BankRegistry.instance.matchBankBySender(s);
+    if (dynamicBank != null) {
+      return dynamicBank.bankName;
     }
 
     final up = s.toUpperCase();

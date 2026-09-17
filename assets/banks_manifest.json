@@ -1,0 +1,294 @@
+{
+  "schemaVersion": 1,
+  "rulesVersion": 2026091601,
+  "minSupportedAppVersion": "1.0.0",
+  "banks": [
+    {
+      "id": "telebirr",
+      "bankName": "Telebirr",
+      "officialTitle": "Ethio Telecom",
+      "subtitle": "Ethio Telecom , E- money",
+      "accountType": "wallet",
+      "senderIdentifiers": {
+        "canonical": "Telebirr",
+        "keywords": ["telebirr", "127"],
+        "exactSenders": ["TELEBIRR", "127"],
+        "numericShortCode": "127"
+      },
+      "branding": {
+        "gradientColors": ["#10B981", "#88BF47"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/Telebirr.svg"
+      },
+      "metadata": {
+        "supportPhone": "127",
+        "ussdCode": "*127#",
+        "website": "https://www.ethiotelecom.et/telebirr/"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code|never share|security code)",
+        "ignoreFilterRegex": "(?i)(?:airtime package.*(?:successfully bought|unlimited))",
+        "patterns": [
+          {
+            "patternId": "telebirr_airtime_self",
+            "name": "Airtime Self Recharge",
+            "type": "expense",
+            "patternType": "telebirrAirtime",
+            "triggerKeywords": ["airtime", "recharged"],
+            "regex": "(?i)(?:recharged|bought)\\s+(?:ETB|Birr)?\\s*([0-9,.]+)\\s+airtime.*?balance\\s+is\\s+ETB\\s*([0-9,.]+).*?transaction\\s+(?:number|id|ref)\\s+(?:is\\s+)?([A-Za-z0-9]+)",
+            "amountGroup": 1,
+            "counterpartyGroup": 0,
+            "counterpartyDefault": "Airtime Recharge",
+            "balanceGroup": 2,
+            "idGroup": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "cbe",
+      "bankName": "CBE",
+      "officialTitle": "Commercial Bank of Ethiopia",
+      "subtitle": "Commercial Bank of Ethiopia",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "CBE",
+        "keywords": ["cbe", "commercial bank"],
+        "exactSenders": ["CBE"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#3D1B0F", "#6E482F"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/CBE.svg"
+      },
+      "metadata": {
+        "supportPhone": "951",
+        "ussdCode": "*847#",
+        "website": "https://www.combanketh.et"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code|never share your pin)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "cbebirr",
+      "bankName": "CBE Birr",
+      "officialTitle": "CBE Birr Mobile Wallet",
+      "subtitle": "CBE Birr Mobile Wallet",
+      "accountType": "wallet",
+      "senderIdentifiers": {
+        "canonical": "CBE Birr",
+        "keywords": ["cbebirr", "cbe birr"],
+        "exactSenders": ["CBEBIRR", "CBE BIRR"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#5E1268", "#9C27B0"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/CBE.svg"
+      },
+      "metadata": {
+        "supportPhone": "951",
+        "ussdCode": "*847#",
+        "website": "https://www.combanketh.et"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "ahadu",
+      "bankName": "Ahadu Bank",
+      "officialTitle": "Ahadu Bank S.C.",
+      "subtitle": "Ahadu Bank S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "Ahadu Bank",
+        "keywords": ["ahadu"],
+        "exactSenders": ["AHADU", "AHADUBANK"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#6B031F", "#C71545"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/AhaduBank_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "9444",
+        "website": "https://www.ahadubank.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "boa",
+      "bankName": "BOA",
+      "officialTitle": "Bank of Abyssinia",
+      "subtitle": "Bank of Abyssinia S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "BOA",
+        "keywords": ["boa", "abyssinia"],
+        "exactSenders": ["BOA", "ABYSSINIA"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#C68000", "#FFB800"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/Bank_of_Abyssinia_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "8397",
+        "website": "https://www.bankofabyssinia.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "dashen",
+      "bankName": "Dashen Bank",
+      "officialTitle": "Dashen Bank S.C.",
+      "subtitle": "Dashen Bank S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "Dashen Bank",
+        "keywords": ["dashen", "amole"],
+        "exactSenders": ["DASHEN", "AMOLE"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#2563EB", "#162068"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/Dashen_Bank_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "6333",
+        "website": "https://dashenbanksc.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "awash",
+      "bankName": "Awash Bank",
+      "officialTitle": "Awash Bank S.C.",
+      "subtitle": "Awash Bank S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "Awash Bank",
+        "keywords": ["awash", "awashbirr"],
+        "exactSenders": ["AWASH", "AWASH BANK", "AWASHBIRR"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#1E1B9A", "#010066"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/Awash_Bank_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "8980",
+        "website": "https://awashbank.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "zemen",
+      "bankName": "Zemen Bank",
+      "officialTitle": "Zemen Bank S.C.",
+      "subtitle": "Zemen Bank S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "Zemen Bank",
+        "keywords": ["zemen"],
+        "exactSenders": ["ZEMEN", "ZEMEN BANK"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#F43F5E", "#D12048"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/ZemenBank_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "6500",
+        "website": "https://www.zemenbank.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "nib",
+      "bankName": "Nib Bank",
+      "officialTitle": "Nib International Bank S.C.",
+      "subtitle": "Nib International Bank S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "Nib Bank",
+        "keywords": ["nib"],
+        "exactSenders": ["NIB", "NIB BANK", "NIBBANK"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#B86B35", "#8B4D20"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/NIB_Bank_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "7075",
+        "website": "https://www.nibbanksc.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    },
+    {
+      "id": "bunna",
+      "bankName": "Bunna Bank",
+      "officialTitle": "Bunna Bank S.C.",
+      "subtitle": "Bunna Bank S.C.",
+      "accountType": "bank",
+      "senderIdentifiers": {
+        "canonical": "Bunna Bank",
+        "keywords": ["bunna", "buna"],
+        "exactSenders": ["BUNNA", "BUNNA BANK", "BUNA", "BUNA BANK"],
+        "numericShortCode": null
+      },
+      "branding": {
+        "gradientColors": ["#852A2A", "#551919"],
+        "isDarkTextTheme": false,
+        "iconAssetFallback": "assets/images/Buna_Bank_Logo.svg"
+      },
+      "metadata": {
+        "supportPhone": "8505",
+        "website": "https://bunnabanksc.com"
+      },
+      "parsing": {
+        "securityFilterRegex": "(?i)(?:OTP|verification code)",
+        "ignoreFilterRegex": null,
+        "patterns": []
+      }
+    }
+  ]
+}

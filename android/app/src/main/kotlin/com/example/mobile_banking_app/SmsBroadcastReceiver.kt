@@ -96,8 +96,15 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             "BUNA BANK" to "Bunna Bank",
         )
 
-        fun matchBankSender(sender: String?): String? {
+        fun matchBankSender(sender: String?, context: Context? = null): String? {
             if (sender.isNullOrBlank()) return null
+            if (context != null) {
+                BankRegistry.init(context)
+            }
+            val dynamicMatch = BankRegistry.matchBank(sender)
+            if (dynamicMatch != null) {
+                return dynamicMatch.bankName
+            }
             val s = sender.trim()
 
             // Reject personal phone numbers (but allow "127" short code)
@@ -413,7 +420,16 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         /**
          * Pure Fact Extraction Engine (Mirrors Dart Bank Parsers)
          */
-        fun parseBankingSms(bankName: String, body: String): NativeParsedSms? {
+        fun parseBankingSms(bankName: String, body: String, context: Context? = null): NativeParsedSms? {
+            if (context != null) {
+                BankRegistry.init(context)
+            }
+            val dynamicBank = BankRegistry.getBank(bankName)
+            if (dynamicBank != null && dynamicBank.patterns.isNotEmpty()) {
+                val dynamicParsed = DynamicRuleParser.parse(dynamicBank, body)
+                if (dynamicParsed != null) return dynamicParsed
+            }
+
             val singleLine = body.replace("\n", " ").replace("\r", " ")
             val lower = singleLine.lowercase()
 
@@ -1488,14 +1504,15 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         if (body.isBlank()) return
 
-        val bankName = matchBankSender(sender) ?: return
+        BankRegistry.init(context)
+        val bankName = matchBankSender(sender, context) ?: return
         if (isAmharicMessage(body)) return
         if (isIgnoredMessage(body)) return
 
         val txId = generateId(sender, timestampMs, body)
 
         // 1. Parse into structured banking facts. Drop non-transaction messages or broken SMS parts!
-        val parsed = parseBankingSms(bankName, body)
+        val parsed = parseBankingSms(bankName, body, context)
         if (parsed == null) {
             // Unrecognized or unparsed banking SMS: save to notifications table for manual user setup
             insertNotificationIntoDb(context, txId, bankName, body, timestampMs)

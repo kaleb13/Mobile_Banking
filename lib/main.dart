@@ -23,6 +23,9 @@ import 'presentation/viewmodels/cash_wallet_view_model.dart';
 import 'presentation/viewmodels/transactions_view_model.dart';
 import 'presentation/viewmodels/analytics_view_model.dart';
 
+import 'services/bank_registry.dart';
+import 'services/bank_sync_service.dart';
+
 /// Global navigator key — allows non-widget code to push routes or show
 /// modals without needing a BuildContext.
 final GlobalKey<NavigatorState> appNavigatorKey =
@@ -30,6 +33,11 @@ final GlobalKey<NavigatorState> appNavigatorKey =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize dynamic BankRegistry (loads OTA manifest or bundled fallback)
+  await BankRegistry.instance.init();
+  // Asynchronously check for newer bank rules or newly added banks in background
+  BankSyncService.instance.checkForUpdates().catchError((_) => false);
 
   // SMS handling is now done natively by SmsBroadcastReceiver.kt —
   // no Dart-side background service startup needed.

@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/bank_registry.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -52,6 +54,25 @@ class BankCardWidget extends StatelessWidget {
   });
 
   static Widget bankLogo(String name, [double size = 34.0, Color? iconColor, bool onLightSurface = false]) {
+    // Check BankRegistry for dynamic cached SVG icon
+    final branding = BankRegistry.instance.getBranding(name);
+    if (branding != null && branding.localIconPath != null) {
+      final file = File(branding.localIconPath!);
+      if (file.existsSync()) {
+        return SvgPicture.file(
+          file,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          colorFilter: iconColor != null
+              ? ColorFilter.mode(iconColor, BlendMode.srcIn)
+              : (!onLightSurface && !branding.isDarkTextTheme
+                  ? const ColorFilter.mode(Colors.white, BlendMode.srcIn)
+                  : null),
+        );
+      }
+    }
+
     final nameUp = name.toUpperCase();
 
     // 1. CBE: ALWAYS the original full-color CBE logo SVG regardless of background
@@ -351,6 +372,10 @@ class BankCardWidget extends StatelessWidget {
   }
 
   static String subtitle(String name) {
+    final dynamicSub = BankRegistry.instance.getSubtitle(name);
+    if (dynamicSub != null && dynamicSub.isNotEmpty) {
+      return dynamicSub;
+    }
     final n = name.toUpperCase();
     if (n == 'TELEBIRR') return 'Ethio Telecom , E- money';
     if (n == 'CBE') return 'Commercial Bank of Ethiopia';
@@ -373,6 +398,10 @@ class BankCardWidget extends StatelessWidget {
         AppColors.cardCbeBirrSilver,
         AppColors.cardCbeBirrWhite,
       ];
+    }
+    final dynamicGradient = BankRegistry.instance.getGradient(name);
+    if (dynamicGradient != null && dynamicGradient.length >= 2) {
+      return dynamicGradient;
     }
     final nameUp = name.toUpperCase();
     if (nameUp == 'TELEBIRR') {
@@ -449,7 +478,10 @@ class BankCardWidget extends StatelessWidget {
 
   static bool isDarkTextTheme(String name, {bool isPaused = false, bool isTopCard = false}) {
     if (isPaused) return false;
-    return isTopCard;
+    if (isTopCard) return true;
+    final dynamicDark = BankRegistry.instance.isDarkTextTheme(name);
+    if (dynamicDark != null) return dynamicDark;
+    return false;
   }
 
   @override
