@@ -196,8 +196,17 @@ class FilterTransactionsUseCase {
       filtered.sort(
           (a, b) => b.counterparty.toLowerCase().compareTo(a.counterparty.toLowerCase()));
     } else {
-      // Default: Date Newest First
-      filtered.sort((a, b) => b.date.compareTo(a.date));
+      // Default: Date Newest First. Source transactions are already sorted newest-first by SQLite.
+      bool isAlreadySorted = true;
+      for (int j = 0; j < filtered.length - 1; j++) {
+        if (filtered[j].date.isBefore(filtered[j + 1].date)) {
+          isAlreadySorted = false;
+          break;
+        }
+      }
+      if (!isAlreadySorted) {
+        filtered.sort((a, b) => b.date.compareTo(a.date));
+      }
     }
 
     if (params.limit != null && filtered.length > params.limit!) {

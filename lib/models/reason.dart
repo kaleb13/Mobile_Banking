@@ -142,6 +142,20 @@ class AppReasonLink {
     );
   }
 
+  AppReasonLink copyWith({
+    int? id,
+    int? reasonId,
+    String? linkedName,
+    String? linkType,
+  }) {
+    return AppReasonLink(
+      id: id ?? this.id,
+      reasonId: reasonId ?? this.reasonId,
+      linkedName: linkedName ?? this.linkedName,
+      linkType: linkType ?? this.linkType,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

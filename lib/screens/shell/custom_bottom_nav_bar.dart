@@ -5,8 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../../presentation/viewmodels/auth_view_model.dart';
-import '../../widgets/app_button.dart';
-import '../../widgets/app_toast.dart';
+import '../../widgets/profile_account_menu_modal.dart';
 import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,7 +191,7 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
                               activeWidth: activeW,
                               inactiveWidth: inactiveW,
                               onTap: () => widget.onTap?.call(4),
-                              onLongPress: () => _showNavAuthMenu(context, authVM),
+                              onLongPress: () => ProfileAccountMenuModal.show(context, authVM),
                             );
                           },
                         ),
@@ -202,141 +201,6 @@ class _CustomBottomNavBarState extends State<CustomBottomNavBar>
                 );
               },
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showNavAuthMenu(BuildContext context, AuthViewModel authVM) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        decoration: BoxDecoration(
-          color: ctx.themeBackground,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: ctx.themeTextSecondary.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (authVM.isAuthenticated) ...[
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.surfaceElevated,
-                      ),
-                      child: ClipOval(
-                        child: authVM.avatarUrl != null
-                            ? Image.network(
-                                authVM.avatarUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.account_circle,
-                                  size: 44,
-                                  color: AppColors.textPrimary,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.account_circle,
-                                size: 44,
-                                color: AppColors.textPrimary,
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            authVM.displayName ?? 'Shibre User',
-                            style: AppTypography.heading2.copyWith(
-                              color: ctx.themeTextPrimary,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            authVM.email ?? '',
-                            style: AppTypography.caption.copyWith(
-                              color: ctx.themeTextSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                AppButton.destructive(
-                  text: 'Sign Out',
-                  icon: Icons.logout_rounded,
-                  onPressed: () async {
-                    Navigator.of(ctx).pop();
-                    await authVM.signOut();
-                    if (context.mounted) {
-                      AppToast.info(context, message: 'Signed Out');
-                    }
-                  },
-                ),
-              ] else ...[
-                Text(
-                  'Cloud Account',
-                  style: AppTypography.heading2.copyWith(
-                    color: ctx.themeTextPrimary,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Sign in with Google to backup your financial records and sync across devices.',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: ctx.themeTextSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                AppButton.primary(
-                  text: authVM.isLoading ? 'Signing In...' : 'Sign In with Google',
-                  icon: Icons.login_rounded,
-                  onPressed: authVM.isLoading
-                      ? null
-                      : () async {
-                          Navigator.of(ctx).pop();
-                          final success = await authVM.signInWithGoogle();
-                          if (context.mounted) {
-                            if (success) {
-                              AppToast.success(context, message: 'Signed in with Google');
-                            } else if (authVM.errorMessage != null) {
-                              AppToast.error(
-                                context,
-                                message: 'Sign in failed',
-                                subtitle: authVM.errorMessage,
-                              );
-                            }
-                          }
-                        },
-                ),
-              ],
-            ],
           ),
         ),
       ),
@@ -370,14 +234,15 @@ class _NavItem extends StatelessWidget {
   Widget _buildIcon(Color color) {
     if (networkAvatarUrl != null && networkAvatarUrl!.isNotEmpty) {
       return SizedBox(
-        width: 20,
-        height: 20,
+        width: 22,
+        height: 22,
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            // Full 20x20 circular avatar
-            ClipOval(
+            // Inner profile picture with rounded rectangle
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8.5),
               child: Image.network(
                 networkAvatarUrl!,
                 width: 20,
@@ -391,18 +256,18 @@ class _NavItem extends StatelessWidget {
                 ),
               ),
             ),
-            // Outer outline ring (YouTube-style outer border without altering layout bounds)
+            // Outer rounded rectangle stroke reacting dynamically to active/inactive color change
             Positioned(
-              top: -2,
-              left: -2,
-              right: -2,
-              bottom: -2,
+              top: -2.5,
+              left: -2.5,
+              right: -2.5,
+              bottom: -2.5,
               child: Container(
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(11),
                   border: Border.all(
                     color: color,
-                    width: 1.4,
+                    width: 1.6,
                   ),
                 ),
               ),

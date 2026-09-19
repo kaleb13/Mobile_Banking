@@ -195,6 +195,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final txVM = Provider.of<TransactionsViewModel>(context, listen: false);
 
     settingsVM.setScanWindowOption(_selectedScanOption);
+    if (!_isSmsGranted) {
+      // Completed immediately without SMS access (Cloud / Manual mode)
+      settingsVM.setSmsListeningEnabled(false);
+      settingsVM.updateScanProgress(const ScanProgressStatus(
+        progress: 1.0,
+        stage: 'Ready for Cloud Sync & manual records',
+        isComplete: true,
+      ));
+      txVM.loadAll();
+      return;
+    }
+
     txVM.scanSms(
       scanWindowOption: _selectedScanOption,
       onProgress: (status) {
@@ -995,15 +1007,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const AppBadge.success(
-                                  text: 'REQUIRED',
+                                const AppBadge.neutral(
+                                  text: 'AUTO-DETECT',
                                   size: AppBadgeSize.small,
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Reads official bank transactions',
+                              'Reads bank SMS or use Cloud Sync',
                               style: AppTypography.caption.copyWith(
                                 color: context.themeTextSecondary,
                               ),
@@ -1015,7 +1027,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Shibre reads transaction messages from supported Ethiopian banks to track balances, calculate your financial level, and classify expenses.',
+                    'Shibre reads official Ethiopian bank messages on this phone to track balances and expenses automatically. Skip this if you are using Cloud Sync from another device or prefer manual tracking.',
                     style: AppTypography.bodySmall.copyWith(
                       color: context.themeTextSecondary,
                       height: 1.45,
@@ -1047,7 +1059,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             ],
                           ),
                         )
-                      else
+                      else ...[
+                        AppButton.secondary(
+                          text: 'Use Cloud Only',
+                          height: 38,
+                          fontSize: 12.0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            _kickOffBackgroundInit();
+                            _nextPage();
+                          },
+                        ),
+                        const SizedBox(width: 8),
                         AppButton.primary(
                           text: 'Allow SMS Access',
                           icon: Icons.security_rounded,
@@ -1056,6 +1080,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 18),
                           onPressed: _requestSmsPermission,
                         ),
+                      ],
                     ],
                   ),
                 ],
@@ -1626,7 +1651,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 3:
         return 'Continue to Permissions';
       case 4:
-        return 'See Your Level';
+        return _isSmsGranted ? 'See Your Level' : 'Continue without SMS';
       case 5:
         return 'Open App';
       default:
@@ -1645,7 +1670,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 3:
         return _isTermsAccepted;
       case 4:
-        return _isSmsGranted;
+        return true; // Always enabled so users can proceed in Cloud Mode
       case 5:
         return true;
       default:

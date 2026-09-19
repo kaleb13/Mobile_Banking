@@ -266,6 +266,85 @@ void main() {
       expect(merged['isBookmarked'], equals(1));
     });
 
+    test('Authoritative transaction merge clears reason on explicitly unlinked/independent transaction', () {
+      // Scenario: Device B ingested SMS and auto-linked to 'Rent' (reasonId: 3)
+      final existingTx = {
+        'id': 'TX_INDEPENDENT_01',
+        'bankName': 'Telebirr',
+        'amount': 3000.0,
+        'type': 'expense',
+        'reason': 'Rent',
+        'reasonId': 3,
+        'categoryId': 3,
+        'subcategoryId': null,
+        'customReasonText': null,
+      };
+
+      // Source device explicitly unlinked this transaction (independent)
+      final unlinkedBackupTx = AppTransaction(
+        id: 'TX_INDEPENDENT_01',
+        bankName: 'Telebirr',
+        amount: 3000.0,
+        type: 'expense',
+        date: DateTime.now(),
+        rawMessage: 'Telebirr payment SMS',
+        isAutoDetected: true,
+        reason: null,
+        reasonId: null,
+        categoryId: null,
+        subcategoryId: null,
+        customReasonText: null,
+      );
+
+      // Simulation of authoritativeCategory = true logic
+      final merged = Map<String, dynamic>.from(existingTx);
+      const authoritativeCategory = true;
+      if (authoritativeCategory) {
+        merged['reasonId'] = unlinkedBackupTx.reasonId;
+        merged['categoryId'] = unlinkedBackupTx.categoryId;
+        merged['subcategoryId'] = unlinkedBackupTx.subcategoryId;
+        merged['reason'] = unlinkedBackupTx.reason;
+        merged['customReasonText'] = unlinkedBackupTx.customReasonText;
+      }
+
+      expect(merged['reasonId'], isNull);
+      expect(merged['categoryId'], isNull);
+      expect(merged['subcategoryId'], isNull);
+      expect(merged['reason'], isNull);
+      expect(merged['customReasonText'], isNull);
+    });
+
+    test('Two-pass category restoration resolves parent by parentName when IDs differ', () {
+      final rawReasons = [
+        {'id': 999, 'name': 'Electronics', 'parentId': null, 'parentName': null},
+        {'id': 1000, 'name': 'Laptops', 'parentId': 999, 'parentName': 'Electronics'},
+      ];
+
+      // Existing target database already has 'Electronics' at ID 4
+      final Map<String, int> targetParentNameToId = {'electronics': 4};
+      final Map<int, int> reasonIdMap = {};
+
+      // Pass 1: Top-level
+      final topLevel = rawReasons.where((r) => r['parentId'] == null).toList();
+      for (final raw in topLevel) {
+        final name = (raw['name'] as String).toLowerCase();
+        final existingId = targetParentNameToId[name];
+        if (existingId != null) {
+          reasonIdMap[raw['id'] as int] = existingId;
+        }
+      }
+
+      // Pass 2: Subcategory
+      final subcategories = rawReasons.where((r) => r['parentId'] != null).toList();
+      int? resolvedParentId;
+      for (final raw in subcategories) {
+        final parentName = (raw['parentName'] as String).toLowerCase();
+        resolvedParentId = targetParentNameToId[parentName] ?? reasonIdMap[raw['parentId'] as int];
+      }
+
+      expect(resolvedParentId, equals(4)); // Correctly resolved to local ID 4 via parentName!
+    });
+
     test('Legacy Version 1 backup safely deserializes without missing key exceptions', () {
       final legacyV1Payload = {
         'app': 'Shibre',

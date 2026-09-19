@@ -22,6 +22,9 @@ class Interactive3DBadge extends StatefulWidget {
   final String badgePath;
   final Color glowColor;
   final double size;
+  final bool showAmbientGlow;
+  final bool showBackText;
+  final VoidCallback? onTap;
 
   const Interactive3DBadge({
     super.key,
@@ -30,6 +33,9 @@ class Interactive3DBadge extends StatefulWidget {
     required this.badgePath,
     required this.glowColor,
     this.size = 130.0,
+    this.showAmbientGlow = false,
+    this.showBackText = false,
+    this.onTap,
   });
 
   @override
@@ -100,6 +106,10 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
   }
 
   void _onTap() async {
+    if (widget.onTap != null) {
+      widget.onTap!();
+      return;
+    }
     if (_snapController.isAnimating) return;
 
     _animationY = Tween<double>(
@@ -164,26 +174,27 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
               children: [
                 // 1. Ambient Level Radial Glow — static, lives outside AnimatedBuilder
                 //    so it is never rebuilt during drag/animation frames.
-                OverflowBox(
-                  maxWidth: widget.size * 2.2,
-                  maxHeight: widget.size * 2.2,
-                  child: Container(
-                    width: widget.size * 2.2,
-                    height: widget.size * 2.2,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          widget.glowColor.withValues(alpha: 0.40),
-                          widget.glowColor.withValues(alpha: 0.18),
-                          widget.glowColor.withValues(alpha: 0.04),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.0, 0.35, 0.70, 1.0],
+                if (widget.showAmbientGlow)
+                  OverflowBox(
+                    maxWidth: widget.size * 2.2,
+                    maxHeight: widget.size * 2.2,
+                    child: Container(
+                      width: widget.size * 2.2,
+                      height: widget.size * 2.2,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            widget.glowColor.withValues(alpha: 0.40),
+                            widget.glowColor.withValues(alpha: 0.18),
+                            widget.glowColor.withValues(alpha: 0.04),
+                            Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.35, 0.70, 1.0],
+                        ),
                       ),
                     ),
                   ),
-                ),
 
                 // 2. 3D Perspective Matrix — rebuilt only when angles change.
                 AnimatedBuilder(
@@ -271,9 +282,9 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
               ),
             ),
 
-            // 2. Engraved Metallic Content: Silver Star & Level Typography
+            // 2. Engraved Metallic Content: Center Star Emblem (and optional text)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
@@ -281,7 +292,7 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                 children: [
                   // Engraved Silver Star Emblem Pill
                   Container(
-                    padding: const EdgeInsets.all(5),
+                    padding: EdgeInsets.all(widget.size * (widget.showBackText ? 0.05 : 0.07)),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.dragHandleDark.withValues(alpha: 0.88),
@@ -297,51 +308,53 @@ class _Interactive3DBadgeState extends State<Interactive3DBadge>
                     child: Icon(
                       Icons.star_rounded,
                       color: AppColors.slateSurface,
-                      size: widget.size * 0.20,
+                      size: widget.size * (widget.showBackText ? 0.20 : 0.38),
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  if (widget.showBackText) ...[
+                    const SizedBox(height: 4),
 
-                  // Engraved Level Label (e.g. "LEVEL 1")
-                  Text(
-                    'LEVEL ${widget.level}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.dragHandleDark,
-                      fontSize: widget.size * 0.105,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.0,
-                      shadows: const [
-                        Shadow(
-                          color: Colors.white,
-                          offset: Offset(0.5, 0.8),
-                          blurRadius: 0.8,
-                        ),
-                      ],
+                    // Engraved Level Label (e.g. "LEVEL 1")
+                    Text(
+                      'LEVEL ${widget.level}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.dragHandleDark,
+                        fontSize: widget.size * 0.105,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.0,
+                        shadows: const [
+                          Shadow(
+                            color: Colors.white,
+                            offset: Offset(0.5, 0.8),
+                            blurRadius: 0.8,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 1),
+                    const SizedBox(height: 1),
 
-                  // Engraved Level Rank Title (e.g. "SURVIVOR", "BUILDER")
-                  Text(
-                    widget.levelName.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.slateBorder,
-                      fontSize: widget.size * 0.07,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                      shadows: const [
-                        Shadow(
-                          color: Colors.white,
-                          offset: Offset(0.3, 0.5),
-                          blurRadius: 0.5,
-                        ),
-                      ],
+                    // Engraved Level Rank Title (e.g. "SURVIVOR", "BUILDER")
+                    Text(
+                      widget.levelName.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.slateBorder,
+                        fontSize: widget.size * 0.07,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        shadows: const [
+                          Shadow(
+                            color: Colors.white,
+                            offset: Offset(0.3, 0.5),
+                            blurRadius: 0.5,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

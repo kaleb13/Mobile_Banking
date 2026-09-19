@@ -4,13 +4,13 @@ import 'package:provider/provider.dart';
 import '../../models/reason.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_back_button.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_modal_dialog.dart';
 import '../../widgets/app_text_field.dart';
 import '../../widgets/app_badges.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_scroll_header_bar.dart';
 import 'category_linked_persons_drawer.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
@@ -25,6 +25,7 @@ typedef ReasonManagementScreen = CategoryManagementScreen;
 
 class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
   int? _expandedCategoryId;
+  late final ScrollController _scrollController = ScrollController();
 
   static const Map<String, String> _specialReasonDescriptions = {
     'loan': 'Track loans, credit lines & debt repayments',
@@ -41,6 +42,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TransactionsViewModel>().loadReasons();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   bool _isSpecial(AppReason r) {
@@ -282,55 +289,50 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
           onPressed: () => _showAddCategoryDialog(context, txVM),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        body: SafeArea(
-          bottom: true,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            padding: const EdgeInsets.only(left: 0, right: 0, top: 16, bottom: 80),
-            children: [
-              // ── Header ───────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 16, 20),
-                child: Row(
-                  children: [
-                    const AppBackButton(),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Category Management',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
+        body: Stack(
+          children: [
+            SafeArea(
+              bottom: true,
+              child: ListView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.only(left: 0, right: 0, top: 60, bottom: 80),
+                children: [
+                  // ── Special Reasons (Read-only System Core) ─────────
+                  if (specialReasons.isNotEmpty) ...[
+                    _sectionHeader('SPECIAL REASONS', Icons.star_outline_rounded),
+                    const SizedBox(height: 10),
+                    ...specialReasons.map((r) => _buildSpecialReasonCard(r)),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // ── Top-Level Categories & Subcategories ─────────────
+                  _sectionHeader('CATEGORIES & SUBCATEGORIES', Icons.category_outlined),
+                  const SizedBox(height: 10),
+                  if (topCategories.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text('No categories created yet.', style: TextStyle(color: AppColors.textSoft, fontSize: 13)),
                       ),
                     ),
-                  ],
-                ),
+                  ...topCategories.map((cat) => _buildCategoryCard(context, txVM, cat)),
+                ],
               ),
-
-              // ── Special Reasons (Read-only System Core) ─────────
-              if (specialReasons.isNotEmpty) ...[
-                _sectionHeader('SPECIAL REASONS', Icons.star_outline_rounded),
-                const SizedBox(height: 10),
-                ...specialReasons.map((r) => _buildSpecialReasonCard(r)),
-                const SizedBox(height: 24),
-              ],
-
-              // ── Top-Level Categories & Subcategories ─────────────
-              _sectionHeader('CATEGORIES & SUBCATEGORIES', Icons.category_outlined),
-              const SizedBox(height: 10),
-              if (topCategories.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: Text('No categories created yet.', style: TextStyle(color: AppColors.textSoft, fontSize: 13)),
-                  ),
-                ),
-              ...topCategories.map((cat) => _buildCategoryCard(context, txVM, cat)),
-            ],
-          ),
+            ),
+            // Pinned Collapsing Header Bar on Scroll
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AppScrollHeaderBar(
+                scrollController: _scrollController,
+                title: 'Category Management',
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -54,6 +54,14 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         const val DB_NAME = "finance_v3.db"
         const val DEDUPE_WINDOW_MS = 15000L // 15 seconds debounce window
 
+        fun getActiveDbName(context: Context): String {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            return prefs.getString("flutter.active_db_name", null)
+                ?: prefs.getString("flutter.flutter.active_db_name", null)
+                ?: prefs.getString("active_db_name", null)
+                ?: DB_NAME
+        }
+
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_TX_ID = "extra_tx_id"
         const val EXTRA_SMS_BODY = "extra_sms_body"
@@ -1495,6 +1503,15 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
+        // Check if SMS reading on this device is enabled in user settings
+        try {
+            val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val isSmsListeningEnabled = prefs.getBoolean("flutter.is_sms_listening_enabled", true)
+                && prefs.getBoolean("flutter.flutter.is_sms_listening_enabled", true)
+                && prefs.getBoolean("is_sms_listening_enabled", true)
+            if (!isSmsListeningEnabled) return
+        } catch (_: Exception) {}
+
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         if (messages.isNullOrEmpty()) return
 
@@ -1516,6 +1533,11 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         if (parsed == null) {
             // Unrecognized or unparsed banking SMS: save to notifications table for manual user setup
             insertNotificationIntoDb(context, txId, bankName, body, timestampMs)
+            try {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    MainActivity.smsEventSink?.success("newNotification")
+                }
+            } catch (_: Exception) {}
             return
         }
 
@@ -1578,7 +1600,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         if (!parsed.txReference.isNullOrBlank() && parsed.txReference.length >= 4) {
             val oppositeType = if (parsed.isDebit) "income" else "expense"
             try {
-                val dbPath = File(context.getDatabasePath(DB_NAME).path)
+                val dbPath = File(context.getDatabasePath(getActiveDbName(context)).path)
                 if (dbPath.exists()) {
                     val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
                     val cursorMatch = db.rawQuery(
@@ -1613,7 +1635,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
 
         try {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                MainActivity.smsEventSink?.success("newTransaction")
+                MainActivity.smsEventSink?.success("newTransaction:$txId")
             }
         } catch (_: Exception) {}
     }
@@ -1632,7 +1654,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         body: String
     ): ResolvedReason? {
         return try {
-            val dbPath = File(context.getDatabasePath(DB_NAME).path)
+            val dbPath = File(context.getDatabasePath(getActiveDbName(context)).path)
             if (!dbPath.exists()) {
                 return if (!reasonNameOrNull.isNullOrBlank()) {
                     ResolvedReason(name = reasonNameOrNull, id = null, categoryId = null, subcategoryId = null)
@@ -1726,7 +1748,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         counterpartId: String? = null
     ): Boolean {
         return try {
-            val dbPath = File(context.getDatabasePath(DB_NAME).path)
+            val dbPath = File(context.getDatabasePath(getActiveDbName(context)).path)
             if (!dbPath.exists()) return false
 
             val db = SQLiteDatabase.openDatabase(
@@ -1859,7 +1881,7 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
         timestampMs: Long
     ): Boolean {
         return try {
-            val dbPath = File(context.getDatabasePath(DB_NAME).path)
+            val dbPath = File(context.getDatabasePath(getActiveDbName(context)).path)
             if (!dbPath.exists()) return false
 
             val db = SQLiteDatabase.openDatabase(

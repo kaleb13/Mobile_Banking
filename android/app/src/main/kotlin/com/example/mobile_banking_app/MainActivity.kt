@@ -12,6 +12,9 @@ import android.content.Intent
 import android.provider.Telephony
 import android.telephony.SubscriptionManager
 import android.text.TextUtils
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import androidx.core.app.NotificationCompat
 import io.flutter.plugin.common.EventChannel
 import android.net.Uri
 
@@ -105,6 +108,25 @@ class MainActivity : FlutterFragmentActivity() {
                     val explicitBalance = call.argument<Double>("totalBalance")
                     val explicitCurrency = call.argument<String>("currency")
                     PeriodicReportReceiver.fireTestReport(this, reportType, explicitBalance, explicitCurrency)
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.shibre/sync_notification").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "showSyncNotification" -> {
+                    val title = call.argument<String>("title") ?: "Cloud Sync"
+                    val message = call.argument<String>("message") ?: "Syncing transactions..."
+                    val progress = call.argument<Int>("progress") ?: 0
+                    val max = call.argument<Int>("max") ?: 0
+                    val isIndeterminate = call.argument<Boolean>("isIndeterminate") ?: true
+                    showSyncNotification(title, message, progress, max, isIndeterminate)
+                    result.success(true)
+                }
+                "dismissSyncNotification" -> {
+                    dismissSyncNotification()
                     result.success(true)
                 }
                 else -> result.notImplemented()
@@ -366,5 +388,48 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             }, 500)
         }
+    }
+
+    private val SYNC_NOTIFICATION_ID = 998822
+    private val SYNC_CHANNEL_ID = "cloud_sync_channel"
+
+    private fun showSyncNotification(title: String, message: String, progress: Int, max: Int, isIndeterminate: Boolean) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                SYNC_CHANNEL_ID,
+                "Cloud Synchronization",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows live cloud syncing progress and active status"
+                setShowBadge(false)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val builder = NotificationCompat.Builder(this, SYNC_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        if (max > 0 && !isIndeterminate) {
+            builder.setProgress(max, progress, false)
+        } else {
+            builder.setProgress(0, 0, true)
+        }
+
+        try {
+            notificationManager.notify(SYNC_NOTIFICATION_ID, builder.build())
+        } catch (_: Throwable) {}
+    }
+
+    private fun dismissSyncNotification() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        try {
+            notificationManager.cancel(SYNC_NOTIFICATION_ID)
+        } catch (_: Throwable) {}
     }
 }

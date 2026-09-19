@@ -6,13 +6,26 @@ import '../../presentation/viewmodels/transactions_view_model.dart';
 import '../../models/expense_definition.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_button.dart';
-import '../../widgets/app_back_button.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_badges.dart';
+import '../../widgets/app_scroll_header_bar.dart';
 import 'add_edit_expense_definition_screen.dart';
 
-class ExpenseDefinitionsScreen extends StatelessWidget {
+class ExpenseDefinitionsScreen extends StatefulWidget {
   const ExpenseDefinitionsScreen({super.key});
+
+  @override
+  State<ExpenseDefinitionsScreen> createState() => _ExpenseDefinitionsScreenState();
+}
+
+class _ExpenseDefinitionsScreenState extends State<ExpenseDefinitionsScreen> {
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   String _getRecurringText(ExpenseDefinition def) {
     if (!def.isRecurring) return 'One-time template';
@@ -56,58 +69,41 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AppColors.background,
         extendBody: true,
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
-                child: Row(
-                  children: [
-                    const AppBackButton(),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Expense Definitions',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Consumer2<CashWalletViewModel, TransactionsViewModel>(
-                  builder: (context, cashVM, txVM, child) {
-                    final defs = cashVM.expenseDefinitions;
+        body: Stack(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Consumer2<CashWalletViewModel, TransactionsViewModel>(
+                builder: (context, cashVM, txVM, child) {
+                  final defs = cashVM.expenseDefinitions;
 
-                    if (defs.isEmpty) {
-                      return SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        child: Container(
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.fromLTRB(32, 120, 32, 32),
-                          child: const Text(
-                            'No Expense Templates Defined.\n\nCreate templates for manual or recurring cash expenses.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: AppColors.textSoft,
-                                fontSize: 15,
-                                height: 1.5),
-                          ),
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
+                  if (defs.isEmpty) {
+                    return SingleChildScrollView(
+                      controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
-                      padding: const EdgeInsets.only(top: 16, bottom: 120),
+                      child: Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.fromLTRB(32, 174, 32, 32),
+                        child: const Text(
+                          'No Expense Templates Defined.\n\nCreate templates for manual or recurring cash expenses.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: AppColors.textSoft,
+                              fontSize: 15,
+                              height: 1.5),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(top: 60, bottom: 120),
                       itemCount: defs.length,
                       itemBuilder: (context, index) {
                         final def = defs[index];
@@ -301,8 +297,17 @@ class ExpenseDefinitionsScreen extends StatelessWidget {
                   },
                 ),
               ),
-            ],
-          ),
+            // Pinned Collapsing Header Bar on Scroll
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AppScrollHeaderBar(
+                scrollController: _scrollController,
+                title: 'Expense Definitions',
+              ),
+            ),
+          ],
         ),
         bottomNavigationBar: SafeArea(
           child: Padding(

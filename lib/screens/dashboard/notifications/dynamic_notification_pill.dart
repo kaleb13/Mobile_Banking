@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../presentation/viewmodels/notifications_view_model.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/cloud_sync_service.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/hold_to_refresh.dart';
 import 'notifications_panel_overlay.dart';
@@ -25,6 +28,10 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
   late AnimationController _unfurlCtrl;
   late Animation<double> _unfurlAnim;
   bool _isCircle = false;
+
+  // ── Dynamic Feed Cycling (Notifications ⟷ Cloud Sync & Offline) ───────────
+  Timer? _feedTimer;
+  int _feedIndex = 0; // 0: Phone SMS Notifications, 1: Cloud Sync & Offline
 
   @override
   void initState() {
@@ -53,6 +60,36 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
     );
 
     _triggerUnfurlAnimation();
+    _startFeedTimer();
+    CloudSyncService.instance.statusNotifier.addListener(_onSyncStatusChanged);
+  }
+
+  void _onSyncStatusChanged() {
+    if (!mounted) return;
+    final status = CloudSyncService.instance.statusNotifier.value;
+    if (status == CloudSyncStatus.syncing || status == CloudSyncStatus.offline) {
+      setState(() => _feedIndex = 1);
+      _restartFeedTimer();
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _startFeedTimer() {
+    _feedTimer?.cancel();
+    _feedTimer = Timer.periodic(const Duration(milliseconds: 4800), (_) {
+      if (!mounted) return;
+      if (refreshStateNotifier.value.phase != RefreshPhase.idle) return;
+      if (_overlayEntry != null || _isCircle || _unfurlCtrl.isAnimating) return;
+      setState(() {
+        _feedIndex = (_feedIndex == 0) ? 1 : 0;
+      });
+    });
+  }
+
+  void _restartFeedTimer() {
+    _feedTimer?.cancel();
+    _startFeedTimer();
   }
 
   void _triggerUnfurlAnimation() async {
@@ -77,6 +114,8 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
 
   @override
   void dispose() {
+    CloudSyncService.instance.statusNotifier.removeListener(_onSyncStatusChanged);
+    _feedTimer?.cancel();
     if (_overlayEntry != null) {
       try {
         Provider.of<NotificationsViewModel>(context, listen: false)
@@ -95,6 +134,7 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
       notifVM.requestPermission();
       return;
     }
+    _feedTimer?.cancel();
     _unfurlCtrl.stop();
     _isCircle = false;
 
@@ -141,6 +181,7 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
       await _animController.reverse();
       _removeOverlay();
       _triggerUnfurlAnimation();
+      _startFeedTimer();
     } finally {
       _isClosing = false;
     }
@@ -151,10 +192,119 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
     _overlayEntry = null;
   }
 
+  Widget _buildAnimatedText({
+    required double targetWidth,
+    required String text,
+    required Color textColor,
+    required FontWeight fontWeight,
+  }) {
+    return AnimatedBuilder(
+      animation: _unfurlAnim,
+      builder: (context, _) {
+        if (targetWidth < 60.0) {
+          return const SizedBox.shrink();
+        }
+        final double textOpacity;
+        if (_isCircle || _unfurlCtrl.isAnimating) {
+          final double unfurlT = _unfurlAnim.value;
+          if (unfurlT < 0.25) {
+            textOpacity = 0.0;
+          } else {
+            textOpacity = ((unfurlT - 0.25) / 0.75).clamp(0.0, 1.0);
+          }
+        } else {
+          textOpacity = 1.0;
+        }
+
+        return Opacity(
+          opacity: textOpacity,
+          child: Text(
+            text,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: fontWeight,
+              letterSpacing: -0.1,
+            ),
+            maxLines: 1,
+            softWrap: false,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final notifsVM = context.watch<NotificationsViewModel>();
     final unreadCount = notifsVM.unreadCount;
+    final syncStatus = CloudSyncService.instance.statusNotifier.value;
+    final isAuthenticated = AuthService.instance.isAuthenticated;
+
+    // ── Feed Item 0: Phone SMS Notifications ──
+    final String notifText = !notifsVM.hasPermission
+        ? 'Tap to enable SMS tracking'
+        : unreadCount > 0
+            ? '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}'
+            : 'No unread notifications';
+    final Color notifColor = !notifsVM.hasPermission
+        ? AppColors.positive
+        : AppColors.textSoft;
+    final double notifWidth = !notifsVM.hasPermission
+        ? 198.0
+        : (unreadCount > 0 ? 186.0 : 178.0);
+
+    // ── Feed Item 1: Cloud Sync & Offline Status ──
+    String syncText;
+    IconData syncIcon;
+    Color syncIconColor = AppColors.textSoft;
+    Color syncTextColor = AppColors.textSoft;
+    double syncWidth = 178.0;
+
+    switch (syncStatus) {
+      case CloudSyncStatus.syncing:
+        syncText = 'Syncing is active';
+        syncIcon = Icons.cloud_done;
+        syncIconColor = AppColors.textSoft;
+        syncTextColor = AppColors.textSoft;
+        syncWidth = 172.0;
+        break;
+      case CloudSyncStatus.offline:
+        syncText = 'Offline • Local storage';
+        syncIcon = Icons.cloud_off_rounded;
+        syncIconColor = AppColors.textSoft;
+        syncTextColor = AppColors.textSoft;
+        syncWidth = 182.0;
+        break;
+      case CloudSyncStatus.success:
+        syncText = 'Cloud backup up to date';
+        syncIcon = Icons.cloud_done_rounded;
+        syncIconColor = AppColors.textSoft;
+        syncTextColor = AppColors.textSoft;
+        syncWidth = 184.0;
+        break;
+      case CloudSyncStatus.error:
+        syncText = 'Sync error • Local storage';
+        syncIcon = Icons.cloud_off_rounded;
+        syncIconColor = AppColors.textSoft;
+        syncTextColor = AppColors.textSoft;
+        syncWidth = 182.0;
+        break;
+      case CloudSyncStatus.disabled:
+      case CloudSyncStatus.idle:
+        if (isAuthenticated) {
+          syncText = 'Cloud backup is active';
+          syncIcon = Icons.cloud_done_rounded;
+          syncIconColor = AppColors.textSoft;
+          syncWidth = 180.0;
+        } else {
+          syncText = 'Local device storage';
+          syncIcon = Icons.cloud_queue_rounded;
+          syncIconColor = AppColors.textSoft;
+          syncWidth = 180.0;
+        }
+        break;
+    }
 
     return AnimatedBuilder(
       animation: Listenable.merge([_expandAnim, _unfurlAnim]),
@@ -170,11 +320,8 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
         builder: (context, refreshState, _) {
           final isRefreshing = refreshState.phase != RefreshPhase.idle;
           final double maxPillWidth = MediaQuery.of(context).size.width - 32.0;
-          final double idlePillWidth = !notifsVM.hasPermission
-              ? 210.0
-              : unreadCount > 0
-                  ? 195.0
-                  : 180.0;
+          final double idlePillWidth =
+              _feedIndex == 0 ? notifWidth : syncWidth;
 
           final double baseWidth;
           if (_isCircle || _unfurlCtrl.isAnimating) {
@@ -226,92 +373,102 @@ class _DynamicNotificationPillState extends State<DynamicNotificationPill>
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           physics: const NeverScrollableScrollPhysics(),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 22,
-                                height: 38,
-                                child: Center(
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    alignment: Alignment.center,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 320),
+                            transitionBuilder: (child, anim) {
+                              return FadeTransition(
+                                opacity: anim,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.35),
+                                    end: Offset.zero,
+                                  ).animate(CurvedAnimation(
+                                    parent: anim,
+                                    curve: Curves.easeOutCubic,
+                                  )),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _feedIndex == 0
+                                ? Row(
+                                    key: const ValueKey<int>(0),
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      const Icon(
-                                        Icons.notifications,
-                                        color: AppColors.textSoft,
-                                        size: 16,
-                                      ),
-                                      if (unreadCount > 0)
-                                        Positioned(
-                                          right: 0,
-                                          top: 2,
-                                          child: Container(
-                                            width: 6,
-                                            height: 6,
-                                            decoration: const BoxDecoration(
-                                              color: AppColors.gold,
-                                              shape: BoxShape.circle,
-                                            ),
+                                      SizedBox(
+                                        width: 20,
+                                        height: 38,
+                                        child: Center(
+                                          child: Stack(
+                                            clipBehavior: Clip.none,
+                                            alignment: Alignment.center,
+                                            children: [
+                                              const Icon(
+                                                Icons.notifications,
+                                                color: AppColors.textSoft,
+                                                size: 16,
+                                              ),
+                                              if (unreadCount > 0)
+                                                Positioned(
+                                                  right: 0,
+                                                  top: 2,
+                                                  child: Container(
+                                                    width: 6,
+                                                    height: 6,
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                      color: AppColors.gold,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              AnimatedBuilder(
-                                animation: _unfurlAnim,
-                                builder: (context, _) {
-                                  if (targetWidth < 60.0) {
-                                    return const SizedBox.shrink();
-                                  }
-
-                                  final double textOpacity;
-                                  if (_isCircle || _unfurlCtrl.isAnimating) {
-                                    final double unfurlT = _unfurlAnim.value;
-                                    if (unfurlT < 0.25) {
-                                      textOpacity = 0.0;
-                                    } else {
-                                      textOpacity = ((unfurlT - 0.25) / 0.75)
-                                          .clamp(0.0, 1.0);
-                                    }
-                                  } else {
-                                    textOpacity = 1.0;
-                                  }
-
-                                  return Opacity(
-                                    opacity: textOpacity,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
+                                      ),
+                                      if (targetWidth >= 60.0 && !_isCircle) ...[
                                         const SizedBox(width: 8),
-                                        Text(
-                                          !notifsVM.hasPermission
-                                              ? 'Tap to enable SMS tracking'
-                                              : unreadCount > 0
-                                                  ? '$unreadCount unread notification${unreadCount > 1 ? 's' : ''}'
-                                                  : 'No new notifications',
-                                          style: TextStyle(
-                                            color: !notifsVM.hasPermission
-                                                ? AppColors.positive
-                                                : AppColors.textSoft,
-                                            fontSize: 12,
-                                            fontWeight: !notifsVM.hasPermission
-                                                ? FontWeight.w600
-                                                : FontWeight.w400,
-                                            letterSpacing: -0.1,
-                                          ),
-                                          maxLines: 1,
-                                          softWrap: false,
+                                        _buildAnimatedText(
+                                          targetWidth: targetWidth,
+                                          text: notifText,
+                                          textColor: notifColor,
+                                          fontWeight: !notifsVM.hasPermission
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
                                         ),
                                       ],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
+                                    ],
+                                  )
+                                : Row(
+                                    key: const ValueKey<int>(1),
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 20,
+                                        height: 38,
+                                        child: Center(
+                                          child: Icon(
+                                            syncIcon,
+                                            color: syncIconColor,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                      if (targetWidth >= 60.0 && !_isCircle) ...[
+                                        const SizedBox(width: 8),
+                                        _buildAnimatedText(
+                                          targetWidth: targetWidth,
+                                          text: syncText,
+                                          textColor: syncTextColor,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                           ),
                         ),
                       ),

@@ -30,60 +30,32 @@ class GetWalletBalancesUseCase {
     final Map<String, double> latestBalancesMap = {};
     double totalBalance = 0.0;
 
-    // 1. Bank Accounts: Match latest transaction balance by bank name (tx.bankName)
-    for (final sender in senders) {
-      // Check if whole bank is paused (i.e. 'CBE' without colon)
-      if (pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, sender.senderName))) {
-        continue;
-      }
-
-      final senderTxs = transactions.where((t) => BankSenders.isSameBank(t.bankName, sender.senderName));
-
-      final slots = senderTxs.map((t) => t.simSlot).toSet().toList();
-      double bankTotal = 0.0;
-
-      if (slots.length <= 1) {
-        final slot = slots.isNotEmpty ? slots.first : 0;
-        final isSlotPaused = pausedBanks.any((b) {
-          if (!b.contains(':')) return false;
-          final parts = b.split(':');
-          return BankSenders.isSameBank(parts[0], sender.senderName) && parts[1] == '$slot';
-        });
-        if (!isSlotPaused) {
-          final withBal = senderTxs.where((t) => t.totalBalance > 0);
-          bankTotal = withBal.isNotEmpty ? withBal.first.totalBalance : 0.0;
-        }
+    // Fast O(1) Sets for paused banks and bank:slot accounts
+    final wholePausedBanks = <String>{};
+    final pausedBankSlots = <String>{};
+    for (final b in pausedBanks) {
+      if (b.contains(':')) {
+        final parts = b.split(':');
+        final c = BankSenders.match(parts[0]) ?? parts[0].trim();
+        pausedBankSlots.add('${c.toUpperCase()}:${parts[1]}');
       } else {
-        // Multi-account / Dual-SIM bank: sum the latest balance of each separate unpaused account
-        for (final slot in slots) {
-          final isSlotPaused = pausedBanks.any((b) {
-            if (!b.contains(':')) return false;
-            final parts = b.split(':');
-            return BankSenders.isSameBank(parts[0], sender.senderName) && parts[1] == '$slot';
-          });
-          if (!isSlotPaused) {
-            final slotTxs = senderTxs.where((t) => t.simSlot == slot && t.totalBalance > 0);
-            if (slotTxs.isNotEmpty) {
-              bankTotal += slotTxs.first.totalBalance;
-            }
-          }
-        }
-      }
-
-      if (bankTotal > 0) {
-        latestBalancesMap[sender.senderName] = bankTotal;
-        totalBalance += bankTotal;
+        final c = BankSenders.match(b) ?? b.trim();
+        wholePausedBanks.add(c.toUpperCase());
       }
     }
 
-    // 2. Cash Transactions: calculate net cash balance
+    // Single O(N) pass across all transactions to aggregate latest balances and cash movements
+    final bankSlotBalances = <String, Map<int, double>>{};
     double cashInflows = 0;
     double cashOutflows = 0;
-    final bool hasUnifiedCash = transactions.any((t) => t.bankName.toLowerCase() == 'cash wallet');
+    bool hasUnifiedCash = false;
 
-    // 2a. Direct unified Cash Wallet transactions & Bank Cash Movements (Withdrawals / Deposits)
-    for (final tx in transactions) {
+    for (int i = 0; i < transactions.length; i++) {
+      final tx = transactions[i];
+
+      // Cash tracking
       if (tx.bankName.toLowerCase() == 'cash wallet') {
+        hasUnifiedCash = true;
         if (tx.isIncome) {
           cashInflows += tx.amount.abs();
         } else {
@@ -102,6 +74,39 @@ class GetWalletBalancesUseCase {
             cashOutflows += tx.amount.abs();
           }
         }
+      }
+
+      // Bank balances: capture latest totalBalance per bank & simSlot (first occurrence = newest)
+      if (tx.totalBalance > 0) {
+        final canonicalBank = BankSenders.match(tx.bankName) ?? tx.bankName.trim();
+        final bankKey = canonicalBank.toUpperCase();
+        final slotMap = bankSlotBalances.putIfAbsent(bankKey, () => <int, double>{});
+        slotMap.putIfAbsent(tx.simSlot, () => tx.totalBalance);
+      }
+    }
+
+    // 1. Bank Accounts: Match latest transaction balance by registered sender
+    for (final sender in senders) {
+      final canonicalSender = BankSenders.match(sender.senderName) ?? sender.senderName.trim();
+      final senderKey = canonicalSender.toUpperCase();
+
+      if (wholePausedBanks.contains(senderKey)) {
+        continue;
+      }
+
+      final slotMap = bankSlotBalances[senderKey];
+      if (slotMap == null || slotMap.isEmpty) continue;
+
+      double bankTotal = 0.0;
+      slotMap.forEach((slot, bal) {
+        if (!pausedBankSlots.contains('$senderKey:$slot')) {
+          bankTotal += bal;
+        }
+      });
+
+      if (bankTotal > 0) {
+        latestBalancesMap[sender.senderName] = bankTotal;
+        totalBalance += bankTotal;
       }
     }
 

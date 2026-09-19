@@ -51,6 +51,14 @@ class BankSenders {
   /// 3 digits, so it never matches this and stays valid below.
   static final RegExp _phoneNumber = RegExp(r'^\+?[0-9]{7,15}$');
 
+  /// Fast in-memory cache for bank sender resolution to avoid redundant regex/manifest lookups.
+  static final Map<String, String?> _matchCache = {};
+
+  /// Clears the internal match memoization cache (e.g. after OTA manifest updates).
+  static void clearCache() {
+    _matchCache.clear();
+  }
+
   /// Returns the canonical bank name ('Telebirr' | 'CBE' | 'CBE Birr' | 'Ahadu Bank' | 'BOA' | 'Dashen Bank' | 'Awash Bank') when
   /// [sender] is a trusted bank sender ID, otherwise null.
   static String? match(String? sender) {
@@ -58,6 +66,16 @@ class BankSenders {
     final s = sender.trim();
     if (s.isEmpty) return null;
 
+    if (_matchCache.containsKey(s)) {
+      return _matchCache[s];
+    }
+
+    final result = _computeMatch(s);
+    _matchCache[s] = result;
+    return result;
+  }
+
+  static String? _computeMatch(String s) {
     // Reject compound bank:slot keys (internal pause identifiers, not sender IDs)
     if (s.contains(':')) {
       return null;

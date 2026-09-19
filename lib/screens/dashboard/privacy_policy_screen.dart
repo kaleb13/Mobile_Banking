@@ -1,76 +1,77 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_back_button.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_scroll_header_bar.dart';
 
-class PrivacyPolicyScreen extends StatelessWidget {
+class PrivacyPolicyScreen extends StatefulWidget {
   const PrivacyPolicyScreen({super.key});
+
+  @override
+  State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
+}
+
+class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.themeBackground,
-      body: SafeArea(
-        bottom: true,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
-              child: Row(
-                children: [
-                  const AppBackButton(),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Privacy Policy',
-                    style: AppTypography.heading1.copyWith(
-                      color: context.themeTextPrimary,
-                    ),
-                  ),
-                ],
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 48),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header banner card
-                    AppCard(
-                      padding: const EdgeInsets.all(20),
-                      borderRadius: AppRadius.card,
-                      customColor: context.themeSurface,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Your Privacy Matters',
-                            style: AppTypography.heading2.copyWith(
-                              color: context.themeTextPrimary,
-                            ),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Spacer for the pinned scroll header bar
+                  const SizedBox(height: 54),
+                  const SizedBox(height: 8),
+                        // Header banner card
+                        AppCard(
+                          padding: const EdgeInsets.all(20),
+                          borderRadius: AppRadius.card,
+                          customColor: context.themeSurface,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your Privacy Matters',
+                                style: AppTypography.heading2.copyWith(
+                                  color: context.themeTextPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Last updated: March 2026',
+                                style: AppTypography.caption.copyWith(
+                                  color: context.themeTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Shibre is built on a single core promise: your financial data never leaves your device.',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: context.themeTextSecondary,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Last updated: March 2026',
-                            style: AppTypography.caption.copyWith(
-                              color: context.themeTextSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Shibre is built on a single core promise: your financial data never leaves your device.',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: context.themeTextSecondary,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                        ),
+                        const SizedBox(height: 16),
 
                     _buildSection(
                       context,
@@ -148,8 +149,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
+          // Pinned Collapsing Header Bar on Scroll
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AppScrollHeaderBar(
+              scrollController: _scrollController,
+              title: 'Privacy Policy',
+            ),
+          ),
+        ],
       ),
     );
   }

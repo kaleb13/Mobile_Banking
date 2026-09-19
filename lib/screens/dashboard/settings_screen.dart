@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../theme/app_theme.dart';
-import 'backup_restore_screen.dart';
+import 'cloud_sync_screen.dart';
+import 'local_backup_screen.dart';
 import 'package:provider/provider.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../presentation/viewmodels/transactions_view_model.dart';
-import '../settings/data_maintenance_screen.dart';
 import '../settings/expense_definitions_screen.dart';
-import '../../widgets/app_header.dart';
+import '../settings/data_maintenance_screen.dart';
+import '../../widgets/app_scroll_header_bar.dart';
 import 'reason_management_screen.dart';
 import 'about_app_screen.dart';
 import '../../models/app_currency.dart';
@@ -33,11 +35,18 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  late final ScrollController _scrollController = ScrollController();
   final bool _isResetting = false;
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
 
@@ -75,22 +84,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Stack(
             children: [
               SafeArea(
-              bottom: false,
+                bottom: false,
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Header ────────────────────────────────────────
-                    const AppHeader(
-                      title: 'Settings',
-                      showBackButton: true,
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    ),
-
-                    const SizedBox(height: 4),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Spacer for the pinned scroll header bar
+                      const SizedBox(height: 54),
 
                     // ── Section: Financial Logic ────────────────────────
                     _sectionLabel('Core Finance'),
@@ -170,6 +174,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildCardBase([
                       Consumer<SettingsViewModel>(
                         builder: (context, provider, _) {
+                          final isEnabled = provider.isSmsListeningEnabled;
+                          return _settingsTile(
+                            context,
+                            icon: Icons.sms_outlined,
+                            iconColor: isEnabled ? AppColors.brandGreen : AppColors.textSecondary,
+                            label: 'Device SMS Reading',
+                            subtitle: isEnabled
+                                ? 'Auto-detecting bank SMS on this phone'
+                                : 'Paused (Operating in Cloud Sync / manual mode)',
+                            trailing: AppSwitch(
+                              value: isEnabled,
+                              onChanged: (val) async {
+                                if (val) {
+                                  final status = await Permission.sms.request();
+                                  if (status.isGranted) {
+                                    await provider.setSmsListeningEnabled(true);
+                                  } else {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('SMS permission is required to enable SMS reading on this device'),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } else {
+                                  await provider.setSmsListeningEnabled(false);
+                                }
+                              },
+                            ),
+                            onTap: () {},
+                            showDivider: true,
+                          );
+                        },
+                      ),
+                      Consumer<SettingsViewModel>(
+                        builder: (context, provider, _) {
                           return _settingsTile(
                             context,
                             icon: Icons.history_rounded,
@@ -183,14 +224,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       _settingsTile(
                         context,
-                        icon: Icons.cloud_upload_outlined,
+                        icon: Icons.cloud_sync_rounded,
                         iconColor: AppColors.infoLight,
-                        label: 'Backup & Restore',
-                        subtitle: 'Export or import your financial data',
+                        label: 'Cloud Backup & Sync',
+                        subtitle: 'Multi-device cloud synchronization & progress',
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => const BackupRestoreScreen()),
+                              builder: (_) => const CloudSyncScreen()),
+                        ),
+                        showDivider: true,
+                      ),
+                      _settingsTile(
+                        context,
+                        icon: Icons.save_alt_rounded,
+                        iconColor: AppColors.positive,
+                        label: 'Local Backup & Restore',
+                        subtitle: 'Export or import offline JSON backup files',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const LocalBackupScreen()),
                         ),
                         showDivider: false,
                       ),
@@ -339,6 +393,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 120),
                   ],
                 ),
+              ),
+            ),
+
+            // Pinned Collapsing Header Bar on Scroll
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AppScrollHeaderBar(
+                scrollController: _scrollController,
+                title: 'Settings',
+                solidBackgroundColor: AppColors.background,
+                scrollThreshold: 55.0,
               ),
             ),
 

@@ -209,13 +209,19 @@ class BackupService {
     // ── 4. Categories & Subcategories (2-Pass Hierarchy) ─────────
     final reasonsRaw = (data['reasons'] as List<dynamic>?) ?? [];
     final Map<int, int> reasonIdMap = {};
+    final Map<String, int> parentNameToNewId = {};
 
-    // Pass 1: Top-level reasons (parentId == null)
-    final topLevel = reasonsRaw.where((r) => r['parentId'] == null).toList();
+    // Pass 1: Top-level reasons (parentId == null and parentName is empty)
+    final topLevel = reasonsRaw.where((r) {
+      final pId = r['parentId'];
+      final pName = r['parentName'] as String?;
+      return (pId == null || pId == 0) && (pName == null || pName.trim().isEmpty);
+    }).toList();
+
     for (final raw in topLevel) {
       try {
         final oldId = raw['id'] as int?;
-        final name = raw['name'] as String;
+        final name = (raw['name'] as String).trim();
         final isSystem = (raw['isSystem'] as int? ?? (raw['isSystem'] == true ? 1 : 0)) == 1;
         final isSpecial = (raw['isSpecial'] as int? ?? 0) == 1;
         final icon = raw['icon'] as String?;
@@ -223,12 +229,13 @@ class BackupService {
 
         final existing = await DatabaseService.instance.getReasons();
         final match = existing.firstWhere(
-          (r) => r.name.toLowerCase().trim() == name.toLowerCase().trim() && r.parentId == null,
+          (r) => r.name.toLowerCase().trim() == name.toLowerCase() && r.parentId == null,
           orElse: () => AppReason(id: null, name: name),
         );
 
+        int resolvedId;
         if (match.id != null) {
-          if (oldId != null) reasonIdMap[oldId] = match.id!;
+          resolvedId = match.id!;
           if ((icon != null || color != null) && (match.icon == null || match.color == null)) {
             await DatabaseService.instance.updateReason(match.copyWith(
               icon: icon ?? match.icon,
@@ -245,9 +252,11 @@ class BackupService {
             'icon': icon,
             'color': color,
           };
-          final newId = await db.insert('reasons', map);
-          if (oldId != null) reasonIdMap[oldId] = newId;
+          resolvedId = await db.insert('reasons', map);
         }
+
+        if (oldId != null) reasonIdMap[oldId] = resolvedId;
+        parentNameToNewId[name.toLowerCase()] = resolvedId;
 
         results.add(ImportResult(type: 'reason', label: name, success: true));
       } catch (e) {
@@ -261,27 +270,47 @@ class BackupService {
       }
     }
 
-    // Pass 2: Subcategories (parentId != null)
-    final subcategories = reasonsRaw.where((r) => r['parentId'] != null).toList();
+    // Pass 2: Subcategories (has parentName or parentId)
+    final subcategories = reasonsRaw.where((r) {
+      final pId = r['parentId'];
+      final pName = r['parentName'] as String?;
+      return (pId != null && pId != 0) || (pName != null && pName.trim().isNotEmpty);
+    }).toList();
+
     for (final raw in subcategories) {
       try {
         final oldId = raw['id'] as int?;
-        final oldParentId = raw['parentId'] as int;
-        final newParentId = reasonIdMap[oldParentId] ?? oldParentId;
-        final name = raw['name'] as String;
+        final oldParentId = raw['parentId'] as int?;
+        final parentName = (raw['parentName'] as String? ?? '').toLowerCase().trim();
+        final name = (raw['name'] as String).trim();
         final isSystem = (raw['isSystem'] as int? ?? 0) == 1;
         final isSpecial = (raw['isSpecial'] as int? ?? 0) == 1;
         final icon = raw['icon'] as String?;
         final color = raw['color'] as String?;
 
+        int? newParentId;
+        if (parentName.isNotEmpty && parentNameToNewId.containsKey(parentName)) {
+          newParentId = parentNameToNewId[parentName];
+        } else if (oldParentId != null && reasonIdMap.containsKey(oldParentId)) {
+          newParentId = reasonIdMap[oldParentId];
+        } else if (parentName.isNotEmpty) {
+          final matchedParent = await DatabaseService.instance.findReasonByName(parentName);
+          newParentId = matchedParent?.id;
+        } else {
+          newParentId = oldParentId;
+        }
+
+        if (newParentId == null) continue;
+
         final existing = await DatabaseService.instance.getReasons();
         final match = existing.firstWhere(
-          (r) => r.name.toLowerCase().trim() == name.toLowerCase().trim() && r.parentId == newParentId,
+          (r) => r.name.toLowerCase().trim() == name.toLowerCase() && r.parentId == newParentId,
           orElse: () => AppReason(id: null, name: name),
         );
 
+        int resolvedSubId;
         if (match.id != null) {
-          if (oldId != null) reasonIdMap[oldId] = match.id!;
+          resolvedSubId = match.id!;
         } else {
           final db = await DatabaseService.instance.database;
           final map = {
@@ -292,9 +321,10 @@ class BackupService {
             'icon': icon,
             'color': color,
           };
-          final newId = await db.insert('reasons', map);
-          if (oldId != null) reasonIdMap[oldId] = newId;
+          resolvedSubId = await db.insert('reasons', map);
         }
+
+        if (oldId != null) reasonIdMap[oldId] = resolvedSubId;
 
         results.add(ImportResult(type: 'reason', label: name, success: true));
       } catch (e) {
@@ -308,12 +338,27 @@ class BackupService {
       }
     }
 
-    // ── 5. Reason Links ──────────────────────────────────────────
+    // ── 5. Reason Links (Contact Auto-Rules) ──────────────────────
     final linksRaw = (data['reason_links'] as List<dynamic>?) ?? [];
     for (final raw in linksRaw) {
       try {
-        final oldReasonId = raw['reasonId'] as int;
-        final newReasonId = reasonIdMap[oldReasonId] ?? oldReasonId;
+        final oldReasonId = raw['reasonId'] as int?;
+        final reasonName = (raw['reasonName'] as String?)?.trim();
+        final parentReasonName = (raw['parentReasonName'] as String?)?.trim();
+
+        int? newReasonId;
+        if (reasonName != null && reasonName.isNotEmpty) {
+          final matched = await DatabaseService.instance.findReasonByName(
+            reasonName,
+            parentName: parentReasonName,
+          );
+          if (matched != null && matched.id != null) {
+            newReasonId = matched.id;
+          }
+        }
+        newReasonId ??= (oldReasonId != null ? (reasonIdMap[oldReasonId] ?? oldReasonId) : null);
+        if (newReasonId == null) continue;
+
         final link = AppReasonLink(
           reasonId: newReasonId,
           linkedName: raw['linkedName'] as String,
@@ -336,28 +381,44 @@ class BackupService {
       }
     }
 
-    // ── 6. Transactions (Smart Merge / Upsert) ───────────────────
+    // ── 6. Transactions (Smart Merge & Preservation of Unlinked State) ──
     final transactionsRaw = (data['transactions'] as List<dynamic>?) ?? [];
     DateTime? latestDate;
 
     for (final raw in transactionsRaw) {
       try {
         final rawMap = Map<String, dynamic>.from(raw);
-        if (rawMap['reasonId'] != null) {
-          final oldId = rawMap['reasonId'] as int;
-          rawMap['reasonId'] = reasonIdMap[oldId] ?? oldId;
-        }
-        if (rawMap['categoryId'] != null) {
-          final oldCatId = rawMap['categoryId'] as int;
-          rawMap['categoryId'] = reasonIdMap[oldCatId] ?? oldCatId;
-        }
-        if (rawMap['subcategoryId'] != null) {
-          final oldSubId = rawMap['subcategoryId'] as int;
-          rawMap['subcategoryId'] = reasonIdMap[oldSubId] ?? oldSubId;
+        final reasonName = (rawMap['reason'] as String?)?.trim();
+        final customReason = (rawMap['customReasonText'] as String?)?.trim();
+
+        if (reasonName != null && reasonName.isNotEmpty) {
+          final hierarchy = await DatabaseService.instance.resolveReasonHierarchy(reasonName);
+          if (hierarchy['reasonId'] != null) {
+            rawMap['reasonId'] = hierarchy['reasonId'];
+            rawMap['categoryId'] = hierarchy['categoryId'];
+            rawMap['subcategoryId'] = hierarchy['subcategoryId'];
+          } else if (rawMap['reasonId'] != null) {
+            final oldId = rawMap['reasonId'] as int;
+            rawMap['reasonId'] = reasonIdMap[oldId] ?? oldId;
+          }
+        } else if (customReason != null && customReason.isNotEmpty) {
+          rawMap['reasonId'] = null;
+          rawMap['categoryId'] = null;
+          rawMap['subcategoryId'] = null;
+        } else {
+          // Explicitly unlinked / independent transaction
+          rawMap['reason'] = null;
+          rawMap['reasonId'] = null;
+          rawMap['categoryId'] = null;
+          rawMap['subcategoryId'] = null;
+          rawMap['customReasonText'] = null;
         }
 
         final tx = AppTransaction.fromMap(rawMap);
-        await DatabaseService.instance.upsertTransactionFromBackup(tx);
+        await DatabaseService.instance.upsertTransactionFromBackup(
+          tx,
+          authoritativeCategory: true,
+        );
 
         if (latestDate == null || tx.date.isAfter(latestDate)) {
           latestDate = tx.date;
@@ -645,6 +706,35 @@ class BackupService {
       'biometrics_enabled': prefs.getBool('biometrics_enabled'),
     };
 
+    final Map<int, String> reasonIdToName = {
+      for (final r in reasons)
+        if (r.id != null) r.id!: r.name
+    };
+    final Map<int, AppReason> reasonMap = {
+      for (final r in reasons)
+        if (r.id != null) r.id!: r
+    };
+
+    final reasonsExport = reasons.map((r) {
+      final map = r.toMap();
+      if (r.parentId != null && reasonIdToName.containsKey(r.parentId)) {
+        map['parentName'] = reasonIdToName[r.parentId];
+      }
+      return map;
+    }).toList();
+
+    final linksExport = links.map((l) {
+      final map = l.toMap();
+      final reason = reasonMap[l.reasonId];
+      if (reason != null) {
+        map['reasonName'] = reason.name;
+        if (reason.parentId != null && reasonMap.containsKey(reason.parentId)) {
+          map['parentReasonName'] = reasonMap[reason.parentId]?.name;
+        }
+      }
+      return map;
+    }).toList();
+
     return {
       'app': _appName,
       'version': 2,
@@ -652,9 +742,9 @@ class BackupService {
       'user_preferences': userPreferences,
       'app_settings': appSettings,
       'senders': senders.map((s) => s.toMap()).toList(),
-      'reasons': reasons.map((r) => r.toMap()).toList(),
+      'reasons': reasonsExport,
       'deleted_default_reasons': deletedReasons,
-      'reason_links': links.map((l) => l.toMap()).toList(),
+      'reason_links': linksExport,
       'transactions': transactions.map((t) => t.toMap()).toList(),
       'cash_transactions': cashTransactions.map((c) => c.toMap()).toList(),
       'saving_goals': savingGoals.map((g) => g.toMap()).toList(),

@@ -184,5 +184,67 @@ void main() {
       expect(txVM.senders.length, 4);
       expect(txVM.senders.any((s) => s.senderName == 'Dashen Bank'), isTrue);
     });
+
+    test('Arbitrary database order places Telebirr #1, CBE #2, and low-activity banks like Nib on bottom', () async {
+      final repo = FakeTxRepo();
+      // Simulate raw SQLite insertion order where Nib Bank is first and Telebirr is last
+      repo.senders = [
+        AppSender(id: '1', senderName: 'Nib Bank'),
+        AppSender(id: '2', senderName: 'CBE'),
+        AppSender(id: '3', senderName: 'Ahadu Bank'),
+        AppSender(id: '4', senderName: 'Telebirr'),
+      ];
+
+      // Give Telebirr and CBE transactions and balances
+      repo.transactions = [
+        AppTransaction(
+          id: 'tx_telebirr',
+          bankName: 'Telebirr',
+          amount: 500.0,
+          type: 'income',
+          date: DateTime.now(),
+          counterparty: 'Sender',
+          totalBalance: 2480.0,
+          rawMessage: 'Telebirr income',
+          isAutoDetected: true,
+        ),
+        AppTransaction(
+          id: 'tx_cbe',
+          bankName: 'CBE',
+          amount: 100.0,
+          type: 'income',
+          date: DateTime.now(),
+          counterparty: 'Sender',
+          totalBalance: 100.0,
+          rawMessage: 'CBE income',
+          isAutoDetected: true,
+        ),
+        AppTransaction(
+          id: 'tx_ahadu',
+          bankName: 'Ahadu Bank',
+          amount: 50.0,
+          type: 'income',
+          date: DateTime.now(),
+          counterparty: 'Sender',
+          totalBalance: 50.0,
+          rawMessage: 'Ahadu income',
+          isAutoDetected: true,
+        ),
+      ];
+
+      final txVM = TransactionsViewModel(repository: repo);
+      await txVM.loadAll();
+
+      // Telebirr MUST be at index 0 (#1), CBE at index 1 (#2), Ahadu at index 2, and Nib Bank at index 3
+      final activeNames = txVM.activeSenders.map((s) => s.senderName).toList();
+      expect(activeNames, [
+        'Telebirr',
+        'CBE',
+        'Ahadu Bank',
+        'Nib Bank',
+      ]);
+      expect(txVM.activeSenders.first.senderName, 'Telebirr');
+      expect(txVM.activeSenders.last.senderName, 'Nib Bank');
+    });
   });
 }

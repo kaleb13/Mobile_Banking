@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/sender.dart';
@@ -20,17 +23,173 @@ class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
   static Database? _database;
   static final RegExp _whitespaceRegex = RegExp(r'\s+');
+  static String _activeDbName = 'finance_v3.db';
+  static String? _currentUserId;
+  static Future<void>? _switchingTask;
 
   DatabaseService._init();
 
+  /// Callback triggered when transactions are inserted or updated, used by CloudSyncService.
+  void Function(List<AppTransaction> transactions)? onTransactionsChanged;
+
+  /// Callback triggered when a transaction is deleted, used by CloudSyncService.
+  void Function(String txId)? onTransactionDeleted;
+
+  /// Callback triggered when transaction splits are saved or deleted, used by CloudSyncService.
+  void Function(String transactionId, List<TransactionSplit> splits)? onSplitsChanged;
+
+  /// Callback triggered when a reason link is inserted or deleted, used by CloudSyncService.
+  void Function(AppReasonLink link, bool isDeleted)? onReasonLinkChanged;
+
+  String get activeDbName => _activeDbName;
+  String? get currentUserId => _currentUserId;
+
+  @visibleForTesting
+  static void setTestState({String? currentUserId, String? activeDbName, Database? database, Future<void>? switchingTask}) {
+    _currentUserId = currentUserId;
+    if (activeDbName != null) _activeDbName = activeDbName;
+    _database = database;
+    _switchingTask = switchingTask;
+  }
+
+  @visibleForTesting
+  static Future<void>? get switchingTaskForTest => _switchingTask;
+
   Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('finance_v3.db');
+    // If an account/database switch is in progress, await the mutex before proceeding
+    if (_switchingTask != null) {
+      await _switchingTask;
+    }
+    if (_database != null && _database!.isOpen) return _database!;
+    _database = await _initDB(_activeDbName);
     await _ensureSendersTableSchema(_database!);
+    await _ensureDeletedTransactionsTable(_database!);
     await _createIndexes(_database!);
     await _seedHierarchicalCategories(_database!);
     await _sanitizeUserData(_database!);
     return _database!;
+  }
+
+  /// Switches active local database to isolate data for [userId].
+  /// If [userId] is null, falls back to default 'finance_v3.db'.
+  /// Protected by an asynchronous mutex lock to eliminate query race conditions and DatabaseClosedException.
+  Future<void> switchUser(String? userId) async {
+    final previousSwitch = _switchingTask;
+    final completer = Completer<void>();
+    _switchingTask = completer.future;
+
+    if (previousSwitch != null) {
+      try {
+        await previousSwitch;
+      } catch (_) {}
+    }
+
+    try {
+      final sanitizedId = userId?.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+      final targetDb = (sanitizedId == null || sanitizedId.isEmpty)
+          ? 'finance_v3.db'
+          : 'finance_$sanitizedId.db';
+
+      if (_currentUserId == userId && _activeDbName == targetDb && _database != null && _database!.isOpen) {
+        return;
+      }
+
+      _currentUserId = userId;
+
+      // 1. Snapshot device-level notifications before closing current DB so they persist across accounts
+      List<Map<String, dynamic>> deviceNotifications = [];
+      if (_database != null && _database!.isOpen) {
+        try {
+          deviceNotifications = await _database!.query('notifications');
+        } catch (_) {}
+        try {
+          await _database!.close();
+        } catch (_) {}
+        _database = null;
+      }
+
+      // 2. Also check if the base device DB (finance_v3.db) contains notifications
+      try {
+        final dbDir = await getDatabasesPath();
+        final baseDbFile = io.File(join(dbDir, 'finance_v3.db'));
+        if (await baseDbFile.exists() && targetDb != 'finance_v3.db') {
+          final baseDb = await openReadOnlyDatabase(baseDbFile.path);
+          final baseNotifs = await baseDb.query('notifications');
+          await baseDb.close();
+          for (final bn in baseNotifs) {
+            if (!deviceNotifications.any((d) => d['id'] == bn['id'])) {
+              deviceNotifications.add(bn);
+            }
+          }
+        }
+      } catch (_) {}
+
+      // Migrate initial database if first time authenticated user
+      if (targetDb != 'finance_v3.db') {
+        await _migrateExistingDatabaseIfFirstTime(targetDb);
+      }
+
+      _activeDbName = targetDb;
+
+      // Update SharedPreferences for Android native Kotlin SMS receivers
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('active_db_name', targetDb);
+        await prefs.setString('flutter.active_db_name', targetDb);
+      } catch (_) {}
+
+      // Initialize the new database (internal initialization while lock is active)
+      if (_database == null || !_database!.isOpen) {
+        _database = await _initDB(_activeDbName);
+        await _ensureSendersTableSchema(_database!);
+        await _ensureDeletedTransactionsTable(_database!);
+        await _createIndexes(_database!);
+        await _seedHierarchicalCategories(_database!);
+        await _sanitizeUserData(_database!);
+      }
+      final newDb = _database!;
+
+      // 3. Hydrate device-level notifications into the target database so they are never lost on account switch
+      if (deviceNotifications.isNotEmpty) {
+        final batch = newDb.batch();
+        for (final n in deviceNotifications) {
+          batch.insert('notifications', n,
+              conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+        await batch.commit(noResult: true);
+      }
+    } finally {
+      completer.complete();
+      if (_switchingTask == completer.future) {
+        _switchingTask = null;
+      }
+    }
+  }
+
+  Future<void> _migrateExistingDatabaseIfFirstTime(String targetDbName) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasClaimedGuestData = prefs.getBool('initial_guest_data_claimed') ?? false;
+      if (hasClaimedGuestData) {
+        // Subsequent accounts receive a completely fresh, isolated database
+        return;
+      }
+
+      final dbDir = await getDatabasesPath();
+      final targetPath = join(dbDir, targetDbName);
+      final targetFile = io.File(targetPath);
+      if (!await targetFile.exists()) {
+        final srcPath = join(dbDir, 'finance_v3.db');
+        final srcFile = io.File(srcPath);
+        if (await srcFile.exists()) {
+          await srcFile.copy(targetPath);
+          await prefs.setBool('initial_guest_data_claimed', true);
+          debugPrint('DatabaseService: Successfully claimed initial guest data from finance_v3.db to $targetDbName');
+        }
+      }
+    } catch (e) {
+      debugPrint('DatabaseService._migrateExistingDatabaseIfFirstTime error: $e');
+    }
   }
 
   Future<void> _sanitizeUserData(Database db) async {
@@ -75,7 +234,7 @@ class DatabaseService {
     final path = join(dbPath, filePath);
 
     return await openDatabase(path,
-        version: 33, onCreate: _createDB, onUpgrade: _upgradeDB);
+        version: 34, onCreate: _createDB, onUpgrade: _upgradeDB);
   }
 
   // ──────────────────────────────────────────────
@@ -111,7 +270,10 @@ CREATE TABLE transactions (
   bankReference TEXT,
   isBookmarked INTEGER NOT NULL DEFAULT 0,
   simSlot INTEGER NOT NULL DEFAULT 0,
-  accountIdentifier TEXT
+  accountIdentifier TEXT,
+  originDeviceId TEXT,
+  originDeviceModel TEXT,
+  isRemoteSync INTEGER NOT NULL DEFAULT 0
 )
 ''');
 
@@ -209,6 +371,14 @@ CREATE TABLE IF NOT EXISTS deleted_default_reasons (
   parentName TEXT NOT NULL,
   deletedAt TEXT NOT NULL,
   PRIMARY KEY (name, parentName)
+)
+''');
+
+    // Deleted transactions tombstone table (prevents cloud & inbox resurrection)
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS deleted_transactions (
+  id TEXT PRIMARY KEY,
+  deleted_at TEXT NOT NULL
 )
 ''');
 
@@ -515,6 +685,21 @@ CREATE TABLE IF NOT EXISTS app_settings (
     if (oldVersion < 33) {
       await _upgradeToVersion33(db);
     }
+    if (oldVersion < 34) {
+      await _upgradeToVersion34(db);
+    }
+  }
+
+  Future<void> _upgradeToVersion34(Database db) async {
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN originDeviceId TEXT;');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN originDeviceModel TEXT;');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN isRemoteSync INTEGER NOT NULL DEFAULT 0;');
+    } catch (_) {}
   }
 
   Future<void> _upgradeToVersion33(Database db) async {
@@ -768,6 +953,17 @@ CREATE TABLE IF NOT EXISTS transaction_splits (
       // Purge any accidental CASH WALLET row from senders table
       await db.execute('''
         DELETE FROM senders WHERE UPPER(TRIM(senderName)) = 'CASH WALLET';
+      ''');
+    } catch (_) {}
+  }
+
+  Future<void> _ensureDeletedTransactionsTable(Database db) async {
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS deleted_transactions (
+          id TEXT PRIMARY KEY,
+          deleted_at TEXT NOT NULL
+        );
       ''');
     } catch (_) {}
   }
@@ -1119,8 +1315,13 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     map.remove('counterparty');
     map.remove('sourceTag');
 
-    return await db.insert('transactions', map,
+    final result = await db.insert('transactions', map,
         conflictAlgorithm: ConflictAlgorithm.ignore);
+    // Break the echo re-upload feedback loop: do not push transactions that were downloaded from the cloud
+    if (result > 0 && !transaction.isRemoteSync) {
+      onTransactionsChanged?.call([transaction]);
+    }
+    return result;
   }
 
   /// High-performance atomic batch insert for large volumes of transactions.
@@ -1129,11 +1330,20 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   Future<int> insertTransactionsBatch(List<AppTransaction> transactions) async {
     if (transactions.isEmpty) return 0;
     final db = await instance.database;
+
+    // Filter out transactions that have been intentionally deleted by the user
+    final deletedRows = await db.query('deleted_transactions', columns: ['id']);
+    final deletedSet = deletedRows.map((r) => r['id'] as String).toSet();
+    final validTransactions = deletedSet.isEmpty
+        ? transactions
+        : transactions.where((t) => t.id == null || !deletedSet.contains(t.id)).toList();
+    if (validTransactions.isEmpty) return 0;
+
     int insertedCount = 0;
 
     await db.transaction((txn) async {
       final batch = txn.batch();
-      for (final tx in transactions) {
+      for (final tx in validTransactions) {
         final idToUse =
             tx.id ?? AppTransaction.generateManualId('SHIBRE_CASH');
         final map = tx.toMap();
@@ -1143,12 +1353,15 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
             id, name, amount, type, date, sender, category, rawMessage,
             isAutoDetected, totalBalance, reason, reasonId, categoryId,
             subcategoryId, customReasonText, note, linkedTransactionId,
-            bankReference, isBookmarked, simSlot, accountIdentifier
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            bankReference, isBookmarked, simSlot, accountIdentifier,
+            originDeviceId, originDeviceModel, isRemoteSync
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             simSlot = excluded.simSlot,
             accountIdentifier = COALESCE(excluded.accountIdentifier, transactions.accountIdentifier),
-            totalBalance = CASE WHEN excluded.totalBalance > 0 THEN excluded.totalBalance ELSE transactions.totalBalance END
+            totalBalance = CASE WHEN excluded.totalBalance > 0 THEN excluded.totalBalance ELSE transactions.totalBalance END,
+            originDeviceId = COALESCE(transactions.originDeviceId, excluded.originDeviceId),
+            originDeviceModel = COALESCE(transactions.originDeviceModel, excluded.originDeviceModel)
         ''', [
           map['id'],
           map['name'],
@@ -1171,6 +1384,9 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
           map['isBookmarked'] ?? 0,
           map['simSlot'] ?? 0,
           map['accountIdentifier'],
+          map['originDeviceId'],
+          map['originDeviceModel'],
+          map['isRemoteSync'] ?? 0,
         ]);
       }
       final results = await batch.commit(noResult: false);
@@ -1181,6 +1397,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       await checkpointWal();
       await reconcilePendingNotificationReasons();
       await deduplicateTransactions();
+      onTransactionsChanged?.call(transactions);
     }
 
     return insertedCount;
@@ -1193,6 +1410,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   Future<int> reconcilePendingNotificationReasons() async {
     final db = await instance.database;
     int reconciledCount = 0;
+    final reconciledTxs = <AppTransaction>[];
 
     try {
       final pendingNotifs = await db.rawQuery(
@@ -1253,8 +1471,15 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
             whereArgs: [matchedTx['id']],
           );
           reconciledCount++;
+          final updatedTx = await getTransactionById(matchedTx['id'] as String);
+          if (updatedTx != null) {
+            reconciledTxs.add(updatedTx);
+          }
           await db.delete('notifications', where: 'id = ?', whereArgs: [notifId]);
         }
+      }
+      if (reconciledTxs.isNotEmpty) {
+        onTransactionsChanged?.call(reconciledTxs);
       }
     } catch (_) {}
 
@@ -1267,13 +1492,48 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     map.remove('bankName');
     map.remove('counterparty');
     map.remove('sourceTag');
-    return await db.update('transactions', map,
+    final count = await db.update('transactions', map,
         where: 'id = ?', whereArgs: [transaction.id]);
+    if (count > 0) {
+      onTransactionsChanged?.call([transaction]);
+    }
+    return count;
   }
 
   Future<int> deleteTransaction(String id) async {
     final db = await instance.database;
-    return await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    // Record tombstone so sync and inbox scans never resurrect it
+    await db.rawInsert('''
+      INSERT OR REPLACE INTO deleted_transactions (id, deleted_at)
+      VALUES (?, ?)
+    ''', [id, DateTime.now().toUtc().toIso8601String()]);
+
+    final count =
+        await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    if (count > 0) {
+      onTransactionDeleted?.call(id);
+    }
+    return count;
+  }
+
+  /// Returns all deleted transaction IDs recorded as tombstones.
+  Future<List<String>> getDeletedTransactionIds() async {
+    final db = await instance.database;
+    final rows = await db.query('deleted_transactions', columns: ['id']);
+    return rows.map((r) => r['id'] as String).toList();
+  }
+
+  /// Checks if a transaction ID is marked as deleted.
+  Future<bool> isTransactionDeleted(String id) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'deleted_transactions',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   /// Updates ONLY the reason/reasonId on an existing transaction by its ID.
@@ -1281,12 +1541,19 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   Future<int> updateTransactionReason(
       String id, String reason, int? reasonId) async {
     final db = await instance.database;
-    return await db.update(
+    final count = await db.update(
       'transactions',
       {'reason': reason, 'reasonId': reasonId},
       where: 'id = ?',
       whereArgs: [id],
     );
+    if (count > 0) {
+      final tx = await getTransactionById(id);
+      if (tx != null) {
+        onTransactionsChanged?.call([tx]);
+      }
+    }
+    return count;
   }
 
   /// Finds a transaction whose rawMessage matches [rawMessage] and updates
@@ -1295,12 +1562,24 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
   Future<int> updateTransactionReasonByRawMessage(
       String rawMessage, String reason, int? reasonId) async {
     final db = await instance.database;
-    return await db.update(
+    final count = await db.update(
       'transactions',
       {'reason': reason, 'reasonId': reasonId},
       where: 'rawMessage = ? AND rawMessage != \'\'',
       whereArgs: [rawMessage],
     );
+    if (count > 0) {
+      final maps = await db.query(
+        'transactions',
+        where: 'rawMessage = ? AND rawMessage != \'\'',
+        whereArgs: [rawMessage],
+        limit: 1,
+      );
+      if (maps.isNotEmpty) {
+        onTransactionsChanged?.call([AppTransaction.fromMap(maps.first)]);
+      }
+    }
+    return count;
   }
 
   /// Clears/unlinks the reason and category metadata for a single transaction.
@@ -1403,6 +1682,20 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
       offset: offset,
     );
     return maps.map((map) => AppTransaction.fromMap(map)).toList();
+  }
+
+  Future<AppTransaction?> getTransactionById(String id) async {
+    final db = await instance.database;
+    final maps = await db.query(
+      'transactions',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return AppTransaction.fromMap(maps.first);
+    }
+    return null;
   }
 
   /// Fast indexed query returning unique bank names across all transactions (< 1ms).
@@ -1667,10 +1960,11 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
     return (result.first['count'] as int?) ?? 0;
   }
 
-  /// Wipes every row from the transactions table.
+  /// Wipes every row from the transactions table and clears tombstones.
   Future<void> deleteAllTransactions() async {
     final db = await instance.database;
     await db.delete('transactions');
+    await db.delete('deleted_transactions');
   }
 
   /// Deletes transactions that occurred strictly before [cutoff].
@@ -1942,13 +2236,23 @@ CREATE TABLE IF NOT EXISTS transaction_attachments (
 
   Future<int> insertReasonLink(AppReasonLink link) async {
     final db = await instance.database;
-    return await db.insert('reason_links', link.toMap(),
+    final id = await db.insert('reason_links', link.toMap(),
         conflictAlgorithm: ConflictAlgorithm.ignore);
+    if (id > 0) {
+      onReasonLinkChanged?.call(link.copyWith(id: id), false);
+    }
+    return id;
   }
 
   Future<int> deleteReasonLink(int id) async {
     final db = await instance.database;
-    return await db.delete('reason_links', where: 'id = ?', whereArgs: [id]);
+    final maps = await db.query('reason_links',
+        where: 'id = ?', whereArgs: [id], limit: 1);
+    final count = await db.delete('reason_links', where: 'id = ?', whereArgs: [id]);
+    if (count > 0 && maps.isNotEmpty) {
+      onReasonLinkChanged?.call(AppReasonLink.fromMap(maps.first), true);
+    }
+    return count;
   }
 
   /// Auto-categorize: find a matching reason for a given senderName.
@@ -2452,6 +2756,11 @@ CREATE TABLE IF NOT EXISTS saving_goals (
         );
       }
     });
+    onSplitsChanged?.call(transactionId, splits);
+    final tx = await getTransactionById(transactionId);
+    if (tx != null) {
+      onTransactionsChanged?.call([tx]);
+    }
   }
 
   /// Deletes all split allocations for a specific transaction.
@@ -2468,6 +2777,11 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       where: 'id = ?',
       whereArgs: [transactionId],
     );
+    onSplitsChanged?.call(transactionId, []);
+    final tx = await getTransactionById(transactionId);
+    if (tx != null) {
+      onTransactionsChanged?.call([tx]);
+    }
     return count;
   }
 
@@ -2595,10 +2909,74 @@ CREATE TABLE IF NOT EXISTS saving_goals (
     }
   }
 
+  /// Looks up an existing reason by its name (and optional parent category name).
+  /// Correctly distinguishes subcategories from top-level categories.
+  Future<AppReason?> findReasonByName(String name, {String? parentName}) async {
+    final db = await instance.database;
+    final cleanName = name.trim().toLowerCase();
+
+    if (parentName != null && parentName.trim().isNotEmpty) {
+      final cleanParent = parentName.trim().toLowerCase();
+      final parents = await db.query(
+        'reasons',
+        where: 'LOWER(TRIM(name)) = ? AND parentId IS NULL',
+        whereArgs: [cleanParent],
+      );
+      if (parents.isNotEmpty) {
+        final parentId = parents.first['id'] as int;
+        final children = await db.query(
+          'reasons',
+          where: 'LOWER(TRIM(name)) = ? AND parentId = ?',
+          whereArgs: [cleanName, parentId],
+        );
+        if (children.isNotEmpty) {
+          return AppReason.fromMap(children.first);
+        }
+      }
+    }
+
+    final matches = await db.query(
+      'reasons',
+      where: 'LOWER(TRIM(name)) = ?',
+      whereArgs: [cleanName],
+      orderBy: 'parentId ASC',
+    );
+    if (matches.isNotEmpty) {
+      return AppReason.fromMap(matches.first);
+    }
+    return null;
+  }
+
+  /// Resolves the local SQLite reasonId, categoryId, and subcategoryId for a given reason name.
+  Future<Map<String, int?>> resolveReasonHierarchy(String reasonName, {String? parentName}) async {
+    final reason = await findReasonByName(reasonName, parentName: parentName);
+    if (reason == null || reason.id == null) {
+      return {'reasonId': null, 'categoryId': null, 'subcategoryId': null};
+    }
+
+    if (reason.isSubcategory) {
+      return {
+        'reasonId': reason.id,
+        'categoryId': reason.parentId,
+        'subcategoryId': reason.id,
+      };
+    } else {
+      return {
+        'reasonId': reason.id,
+        'categoryId': reason.id,
+        'subcategoryId': null,
+      };
+    }
+  }
+
   /// Smart upsert for imported backup transactions.
   /// If the transaction exists: merges user fields (note, reason, reasonId, categoryId, subcategoryId, customReasonText, isBookmarked, linkedTransactionId).
+  /// When [authoritativeCategory] is true: faithfully persists both linked and explicitly unlinked/independent states.
   /// If it does not exist: inserts the transaction cleanly.
-  Future<void> upsertTransactionFromBackup(AppTransaction tx) async {
+  Future<void> upsertTransactionFromBackup(
+    AppTransaction tx, {
+    bool authoritativeCategory = false,
+  }) async {
     final db = await instance.database;
     final idToUse = tx.id ?? AppTransaction.generateManualId('SHIBRE_CASH');
     final existing = await db.query('transactions', where: 'id = ?', whereArgs: [idToUse]);
@@ -2607,26 +2985,49 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       if (tx.note != null && tx.note!.isNotEmpty) {
         updateValues['note'] = tx.note;
       }
-      if (tx.reasonId != null) {
+
+      if (authoritativeCategory) {
+        // Authoritative sync from Cloud or Backup:
+        // Preserves both categorized AND intentionally unlinked/independent states.
         updateValues['reasonId'] = tx.reasonId;
-      }
-      if (tx.categoryId != null) {
         updateValues['categoryId'] = tx.categoryId;
-      }
-      if (tx.subcategoryId != null) {
         updateValues['subcategoryId'] = tx.subcategoryId;
-      }
-      if (tx.customReasonText != null && tx.customReasonText!.isNotEmpty) {
-        updateValues['customReasonText'] = tx.customReasonText;
-      }
-      if (tx.reason != null && tx.reason!.isNotEmpty) {
         updateValues['reason'] = tx.reason;
+        updateValues['customReasonText'] = tx.customReasonText;
+      } else {
+        // Non-destructive merge: only overwrite if backup has non-null category fields
+        if (tx.reasonId != null) {
+          updateValues['reasonId'] = tx.reasonId;
+        }
+        if (tx.categoryId != null) {
+          updateValues['categoryId'] = tx.categoryId;
+        }
+        if (tx.subcategoryId != null) {
+          updateValues['subcategoryId'] = tx.subcategoryId;
+        }
+        if (tx.customReasonText != null && tx.customReasonText!.isNotEmpty) {
+          updateValues['customReasonText'] = tx.customReasonText;
+        }
+        if (tx.reason != null && tx.reason!.isNotEmpty) {
+          updateValues['reason'] = tx.reason;
+        }
       }
+
       if (tx.isBookmarked) {
         updateValues['isBookmarked'] = 1;
       }
       if (tx.linkedTransactionId != null && tx.linkedTransactionId!.isNotEmpty) {
         updateValues['linkedTransactionId'] = tx.linkedTransactionId;
+      }
+      if (tx.originDeviceId != null && tx.originDeviceId!.isNotEmpty) {
+        if (existing.first['originDeviceId'] == null) {
+          updateValues['originDeviceId'] = tx.originDeviceId;
+        }
+      }
+      if (tx.originDeviceModel != null && tx.originDeviceModel!.isNotEmpty) {
+        if (existing.first['originDeviceModel'] == null) {
+          updateValues['originDeviceModel'] = tx.originDeviceModel;
+        }
       }
 
       if (updateValues.isNotEmpty) {
@@ -2634,6 +3035,113 @@ CREATE TABLE IF NOT EXISTS saving_goals (
       }
     } else {
       await insertTransaction(tx);
+    }
+  }
+
+  /// Batch upsert for imported or cloud-synced transactions.
+  /// Pre-queries existing IDs in chunks and commits all inserts/updates via native txn.batch(),
+  /// preventing SQLite write-lock contention and UI stuttering.
+  Future<void> batchUpsertTransactionsFromBackup(
+    List<AppTransaction> transactions, {
+    bool authoritativeCategory = false,
+  }) async {
+    if (transactions.isEmpty) return;
+    final db = await instance.database;
+
+    final idMap = <String, AppTransaction>{};
+    for (final tx in transactions) {
+      final id = tx.id ?? AppTransaction.generateManualId('SHIBRE_CASH');
+      idMap[id] = tx;
+    }
+    final allIds = idMap.keys.toList();
+
+    // 1. Pre-query existing records in batches of 500 outside the write transaction
+    final existingMap = <String, Map<String, dynamic>>{};
+    const idChunkSize = 500;
+    for (int i = 0; i < allIds.length; i += idChunkSize) {
+      final chunk = allIds.sublist(
+        i,
+        (i + idChunkSize > allIds.length) ? allIds.length : i + idChunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final rows = await db.query(
+        'transactions',
+        columns: ['id', 'originDeviceId', 'originDeviceModel'],
+        where: 'id IN ($placeholders)',
+        whereArgs: chunk,
+      );
+      for (final r in rows) {
+        final rid = r['id'] as String?;
+        if (rid != null) {
+          existingMap[rid] = r;
+        }
+      }
+    }
+
+    // 2. Commit all updates and inserts in a single native SQLite batch
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+
+      for (final entry in idMap.entries) {
+        final idToUse = entry.key;
+        final tx = entry.value;
+        final existing = existingMap[idToUse];
+
+        if (existing != null) {
+          final Map<String, dynamic> updateValues = {};
+          if (tx.note != null && tx.note!.isNotEmpty) {
+            updateValues['note'] = tx.note;
+          }
+
+          if (authoritativeCategory) {
+            updateValues['reasonId'] = tx.reasonId;
+            updateValues['categoryId'] = tx.categoryId;
+            updateValues['subcategoryId'] = tx.subcategoryId;
+            updateValues['reason'] = tx.reason;
+            updateValues['customReasonText'] = tx.customReasonText;
+          } else {
+            if (tx.reasonId != null) updateValues['reasonId'] = tx.reasonId;
+            if (tx.categoryId != null) updateValues['categoryId'] = tx.categoryId;
+            if (tx.subcategoryId != null) updateValues['subcategoryId'] = tx.subcategoryId;
+            if (tx.customReasonText != null && tx.customReasonText!.isNotEmpty) {
+              updateValues['customReasonText'] = tx.customReasonText;
+            }
+            if (tx.reason != null && tx.reason!.isNotEmpty) {
+              updateValues['reason'] = tx.reason;
+            }
+          }
+
+          if (tx.isBookmarked) updateValues['isBookmarked'] = 1;
+          if (tx.linkedTransactionId != null && tx.linkedTransactionId!.isNotEmpty) {
+            updateValues['linkedTransactionId'] = tx.linkedTransactionId;
+          }
+          if (tx.originDeviceId != null && tx.originDeviceId!.isNotEmpty) {
+            if (existing['originDeviceId'] == null) {
+              updateValues['originDeviceId'] = tx.originDeviceId;
+            }
+          }
+          if (tx.originDeviceModel != null && tx.originDeviceModel!.isNotEmpty) {
+            if (existing['originDeviceModel'] == null) {
+              updateValues['originDeviceModel'] = tx.originDeviceModel;
+            }
+          }
+
+          if (updateValues.isNotEmpty) {
+            batch.update('transactions', updateValues, where: 'id = ?', whereArgs: [idToUse]);
+          }
+        } else {
+          final row = Map<String, dynamic>.from(tx.toMap());
+          row['id'] = idToUse;
+          batch.insert('transactions', row, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
+      await batch.commit(noResult: true);
+    });
+
+    final localChanged = transactions.where((t) => !t.isRemoteSync).toList();
+    if (localChanged.isNotEmpty) {
+      onTransactionsChanged?.call(localChanged);
     }
   }
 }

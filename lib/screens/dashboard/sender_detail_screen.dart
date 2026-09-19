@@ -58,7 +58,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         return AppDrawer(
           headerCard: const AppDrawerHeaderCard(
             icon: Icons.analytics_outlined,
-            title: "30D PnL",
+            title: "Overall PnL",
           ),
           bottomAction: AppButton.primary(
             text: "OK",
@@ -68,7 +68,7 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              "This 30-Day Profit or Loss calculation for this specific account = (Income) - (Expense) over the last 30 days.\n\nIt reflects the recent net performance of this wallet or account.",
+              "Profit or Loss calculation for this specific account = (Income) - (Expense) over the selected period.\n\nIt reflects the net performance of this wallet or account.",
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 13.5,
@@ -177,30 +177,18 @@ class _SenderDetailScreenState extends State<SenderDetailScreen> {
         ? accountItems[_selectedAccountIndex].balance
         : txVM.balanceForSender(widget.sender.senderName);
 
-    // Trend calculation
-    double monthChange = 0;
-    double monthPercent = 0;
-    if (allTxForSender.isNotEmpty) {
-      final now = DateTime.now();
-      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-      final thisMonthTx =
-          allTxForSender.where((tx) => tx.date.isAfter(thirtyDaysAgo)).toList();
-      for (var tx in thisMonthTx) {
-        if (tx.type == 'income') {
-          monthChange += tx.amount;
-        } else {
-          monthChange -= tx.amount;
-        }
-      }
-      if (currentBalance != 0) {
-        monthPercent =
-            (monthChange / (currentBalance - monthChange).abs()) * 100;
-        if (monthPercent.isInfinite || monthPercent.isNaN) monthPercent = 0;
-      }
-    }
     final int? activeSimSlot = (accountItems.isNotEmpty && _selectedAccountIndex > 0)
         ? accountItems[_selectedAccountIndex].simSlot
         : null;
+
+    // Trend calculation cleanly delegated to ViewModel (Pure MVVM)
+    final (monthChange, monthPercent) = txVM.pnlForSender(
+      senderName: widget.sender.senderName,
+      filter: _chartFilter,
+      simSlot: activeSimSlot,
+      currentBalance: currentBalance,
+    );
+
     final double telebirrSavings = txVM.telebirrSavingBalanceForAccount(activeSimSlot);
 
     final String senderName = widget.sender.senderName;

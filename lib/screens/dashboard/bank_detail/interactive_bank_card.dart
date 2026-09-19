@@ -479,20 +479,10 @@ class _InteractiveBankCardState extends State<InteractiveBankCard>
                                                     maxLines: 1,
                                                   ),
                                                   const SizedBox(width: 6),
-                                                  IconButton(
-                                                    icon: Icon(
-                                                      Icons.visibility_off_outlined,
-                                                      color: textColorSub,
-                                                      size: 18,
-                                                    ),
-                                                    splashRadius: 18,
-                                                    padding: EdgeInsets.zero,
-                                                    constraints:
-                                                        const BoxConstraints(),
-                                                    onPressed: () {
-                                                      HapticFeedback.selectionClick();
-                                                      settingsVM.toggleBankBalanceVisibility(widget.sender.senderName);
-                                                    },
+                                                  Icon(
+                                                    Icons.visibility_off_outlined,
+                                                    color: textColorSub,
+                                                    size: 18,
                                                   ),
                                                 ],
                                               ),

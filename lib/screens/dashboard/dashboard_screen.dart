@@ -59,6 +59,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double? _measuredTopSectionHeight;
   double _lastDynamicRestSize = 0.55;
   int _lastOverdueCount = -1;
+  List<AppTransaction>? _cachedTransactionsList;
+  int _lastTxListLength = -1;
+  String _lastTxListFirstId = '';
+  String _lastFilterKey = '';
 
   @override
   void initState() {
@@ -153,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Text(
               isToday
                   ? "Today's PNL = (Today's Income + Cash Additions) - (Today's Expenses + Cash Spending).\n\nIt represents your net increase or decrease in wealth today."
-                  : "Overall PNL = (All-time Income + Cash Additions) - (All-time Expenses + Cash Spending).\n\nThis shows your cumulative financial progress since using the app.",
+                  : "Overall PNL = (Income + Cash Additions) - (Expenses + Cash Spending) over the selected period.\n\nThis shows your financial progress across your accounts.",
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.70),
                 fontSize: 13,
@@ -332,9 +336,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Consumer3<AnalyticsViewModel, SettingsViewModel, TransactionsViewModel>(
       builder: (context, analyticsVM, settingsVM, txVM, _) {
         final cashVM = Provider.of<CashWalletViewModel>(context, listen: false);
-        final netVal = _isShowingTodayOnly ? analyticsVM.netForSelectedDate : analyticsVM.netOverall;
-        final pctVal = _isShowingTodayOnly ? analyticsVM.incomePercentageChange : analyticsVM.percentageChangeOverall;
-        final bool isPositive = netVal >= 0;
+        final String activeFilter = _isShowingTodayOnly ? '1D' : _chartFilter;
+        final netVal = analyticsVM.pnlForFilter(activeFilter);
+        final pctVal = analyticsVM.percentageChangeForFilter(activeFilter);
+        final bool isZero = netVal == 0.0;
+        final bool isPositive = netVal > 0.0;
+        final Color pnlColor = isZero
+            ? AppColors.textSecondary
+            : (isPositive ? AppColors.positive : AppColors.negative);
 
         return SizedBox(
           width: double.infinity,
@@ -506,9 +515,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}',
+                                    isZero
+                                        ? '0'
+                                        : '${isPositive ? '+' : '-'}${NumberFormat('#,##0').format(netVal.abs())}',
                                     style: TextStyle(
-                                      color: isPositive ? AppColors.positive : AppColors.negative,
+                                      color: pnlColor,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -517,22 +528,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Text(
                                     '(',
                                     style: TextStyle(
-                                      color: isPositive ? AppColors.positive : AppColors.negative,
+                                      color: pnlColor,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  const SizedBox(width: 2),
-                                  Icon(
-                                    isPositive ? Icons.trending_up : Icons.trending_down,
-                                    color: isPositive ? AppColors.positive : AppColors.negative,
-                                    size: 12,
-                                  ),
+                                  if (!isZero) ...[
+                                    const SizedBox(width: 2),
+                                    Icon(
+                                      isPositive ? Icons.trending_up : Icons.trending_down,
+                                      color: pnlColor,
+                                      size: 12,
+                                    ),
+                                  ],
                                   const SizedBox(width: 2),
                                   Text(
                                     '${pctVal.abs().toStringAsFixed(2)}%)',
                                     style: TextStyle(
-                                      color: isPositive ? AppColors.positive : AppColors.negative,
+                                      color: pnlColor,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1105,18 +1118,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _bankFilter = 'All Banks';
     }
 
-    final transactionsList = txVM.filterTransactions(
-      transactions: txVM.transactions,
-      params: FilterTransactionsParams(
-        bankFilter: _bankFilter,
-        senderFilter: _senderFilter,
-        typeFilter: _typeFilter,
-        dateFilter: _dateFilterValue,
-        searchQuery: _searchQuery,
-        sortBy: _sortBy,
-        onlyBookmarked: _isBookmarkedOnly,
-      ),
-    );
+    final String filterKey =
+        '$_bankFilter|$_senderFilter|$_typeFilter|${_dateFilterValue.label}|$_searchQuery|$_sortBy|$_isBookmarkedOnly';
+    final int currentTxCount = txVM.transactions.length;
+    final String currentFirstId = txVM.transactions.isNotEmpty ? (txVM.transactions.first.id ?? '') : '';
+
+    final bool isFilterFresh = _cachedTransactionsList != null &&
+        _lastFilterKey == filterKey &&
+        _lastTxListLength == currentTxCount &&
+        _lastTxListFirstId == currentFirstId;
+
+    final List<AppTransaction> transactionsList;
+    if (isFilterFresh) {
+      transactionsList = _cachedTransactionsList!;
+    } else {
+      transactionsList = txVM.filterTransactions(
+        transactions: txVM.transactions,
+        params: FilterTransactionsParams(
+          bankFilter: _bankFilter,
+          senderFilter: _senderFilter,
+          typeFilter: _typeFilter,
+          dateFilter: _dateFilterValue,
+          searchQuery: _searchQuery,
+          sortBy: _sortBy,
+          onlyBookmarked: _isBookmarkedOnly,
+        ),
+      );
+      _cachedTransactionsList = transactionsList;
+      _lastFilterKey = filterKey;
+      _lastTxListLength = currentTxCount;
+      _lastTxListFirstId = currentFirstId;
+    }
 
     final int visibleCount = _displayedLimit.clamp(0, transactionsList.length);
     final bool hasMore = transactionsList.length > visibleCount;
@@ -1152,8 +1184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: AppRadius.sheetRadius,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.18),

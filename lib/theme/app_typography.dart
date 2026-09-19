@@ -23,6 +23,9 @@ class AppTypography {
     letterSpacing: -0.5,
   );
 
+  /// Backward-compatible alias for heading1
+  static const TextStyle headline = heading1;
+
   /// Heading 2 — 18px Bold (-0.3 tracking) for section headers & card titles
   static const TextStyle heading2 = TextStyle(
     fontFamily: fontFamily,

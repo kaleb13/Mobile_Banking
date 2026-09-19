@@ -4,12 +4,12 @@ import 'package:provider/provider.dart';
 import '../../presentation/viewmodels/analytics_view_model.dart';
 import '../../presentation/viewmodels/settings_view_model.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_back_button.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_toast.dart';
 import '../../widgets/app_info_section.dart';
 import '../../widgets/app_banner_card.dart';
+import '../../widgets/app_scroll_header_bar.dart';
 import '../dashboard/reason_selection_sheet.dart';
 
 /// Compact Notification Settings Detail Screen.
@@ -28,6 +28,13 @@ class NotificationSettingsScreen extends StatefulWidget {
 
 class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
   bool _isDismissedInSession = false;
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,46 +47,30 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Row(
-                  children: [
-                    const AppBackButton(),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Notification Settings',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Consumer<SettingsViewModel>(
-                  builder: (context, settings, _) {
-                    final isSmsListening = settings.isSmsListeningEnabled;
-                    final isPushEnabled = settings.isPushNotificationsEnabled;
-                    final isDailyReport = settings.isDailyReportEnabled;
-                    final isWeeklyReport = settings.isWeeklyReportEnabled;
-                    final isMonthlyReport = settings.isMonthlyReportEnabled;
+        body: Stack(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Consumer<SettingsViewModel>(
+                builder: (context, settings, _) {
+                  final isSmsListening = settings.isSmsListeningEnabled;
+                  final isPushEnabled = settings.isPushNotificationsEnabled;
+                  final isDailyReport = settings.isDailyReportEnabled;
+                  final isWeeklyReport = settings.isWeeklyReportEnabled;
+                  final isMonthlyReport = settings.isMonthlyReportEnabled;
 
-                    return SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                  return SingleChildScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Spacer for the pinned scroll header bar
+                        const SizedBox(height: 54),
+                        const SizedBox(height: 8),
                           // ── ONBOARDING / TIP BANNER ──
                           if (!settings.isNotifGuideDismissed && !_isDismissedInSession) ...[
                             _buildOnboardingCard(context, settings),
@@ -217,14 +208,23 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                           ),
 
                           const SizedBox(height: 24),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                      ],
+                    ),
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+            // Pinned Collapsing Header Bar on Scroll
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AppScrollHeaderBar(
+                scrollController: _scrollController,
+                title: 'Notification Settings',
+              ),
+            ),
+          ],
         ),
       ),
     );

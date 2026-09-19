@@ -63,14 +63,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val smsBody = intent.getStringExtra(EXTRA_SMS_BODY)
                 val reasonName = intent.getStringExtra(EXTRA_REASON_NAME) ?: return
 
-                val updated = setTransactionReasonOnRealTransaction(context, txId, smsBody, reasonName)
-                if (updated) {
+                val updatedId = setTransactionReasonOnRealTransaction(context, txId, smsBody, reasonName)
+                if (updatedId != null) {
                     // Set a dirty flag so Flutter's _reconcileOnResume() knows to
                     // force-reload even when row counts haven't changed.
                     setReasonUpdatePending(context)
 
                     try {
-                        MainActivity.smsEventSink?.success("reasonUpdated")
+                        MainActivity.smsEventSink?.success("reasonUpdated:$updatedId")
                     } catch (_: Exception) {}
                 }
             }
@@ -106,10 +106,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
         txId: String,
         intentSmsBody: String?,
         reasonName: String
-    ): Boolean {
+    ): String? {
         return try {
-            val dbPath = File(context.getDatabasePath(DB_NAME).path)
-            if (!dbPath.exists()) return false
+            val activeDb = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString("flutter.active_db_name", DB_NAME) ?: DB_NAME
+            val dbPath = File(context.getDatabasePath(activeDb).path)
+            if (!dbPath.exists()) return null
 
             val db = SQLiteDatabase.openDatabase(
                 dbPath.path,
@@ -151,6 +153,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
             // 3. Search transactions table — PRIORITIZE rawMessage matching
             var realTxFound = false
+            var matchedTxId: String? = null
 
             val values = android.content.ContentValues().apply {
                 put("reason", reasonName)
@@ -179,6 +182,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     if (normalizedTxMsg == normalizedNotifBody) {
                         db.update("transactions", values, "id = ?", arrayOf(realId))
                         realTxFound = true
+                        matchedTxId = realId
                         break
                     }
                 }
@@ -196,6 +200,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     cursorById.close()
                     db.update("transactions", values, "id = ?", arrayOf(targetId))
                     realTxFound = true
+                    matchedTxId = targetId
                 } else {
                     cursorById.close()
                 }
@@ -241,10 +246,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
             }
 
             db.close()
-            true
+            if (realTxFound) matchedTxId else txId
         } catch (e: Exception) {
             Log.e(TAG, "setTransactionReasonOnRealTransaction failed for txId=$txId", e)
-            false
+            null
         }
     }
 }

@@ -268,24 +268,37 @@ class AnalyticsViewModel extends ChangeNotifier {
     }
     final rawPnl = income - expense;
     final liabilityDrag = getTotalBorrowedLiability?.call() ?? 0.0;
-    if (liabilityDrag > income) {
-      return rawPnl - liabilityDrag;
-    }
-    return rawPnl.clamp(0.0, double.infinity);
+    return rawPnl - liabilityDrag;
+  }
+
+  double pnlForFilter(String filter) {
+    return _calculatePnlUseCase.calculatePeriodPnl(
+      transactions: getTransactions?.call() ?? [],
+      cashTransactions: getCashTransactions?.call() ?? [],
+      filter: filter,
+      currentAssets: _totalBalance,
+      totalBorrowedLiability: getTotalBorrowedLiability?.call() ?? 0.0,
+    );
+  }
+
+  double percentageChangeForFilter(String filter) {
+    final pnl = pnlForFilter(filter);
+    return _calculatePnlUseCase.calculatePercentageChange(
+      pnl: pnl,
+      totalAssets: _totalBalance,
+    );
   }
 
   double get overallPnl => _calculatePnlUseCase.calculateOverallPnl(
         transactions: getTransactions?.call() ?? [],
+        cashTransactions: getCashTransactions?.call() ?? [],
         currentAssets: _totalBalance,
         totalBorrowedLiability: getTotalBorrowedLiability?.call() ?? 0.0,
       );
 
-  double get netOverall => monthlyPnl;
+  double get netOverall => pnlForFilter('30D');
 
-  double get percentageChangeOverall {
-    if (_totalBalance <= 0) return 0.0;
-    return ((netOverall / _totalBalance) * 100).clamp(-100.0, 100.0);
-  }
+  double get percentageChangeOverall => percentageChangeForFilter('30D');
 
   double get netForSelectedDate => dailyPnl;
 

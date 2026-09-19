@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +16,7 @@ import '../../models/reason.dart';
 import '../../models/scan_window_option.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dropdown.dart';
-import '../../widgets/app_header.dart';
+import '../../widgets/app_back_button.dart';
 import '../../widgets/app_reset_filter_button.dart';
 import '../../widgets/currency_symbol_widget.dart';
 import '../../widgets/bank_card_widget.dart';
@@ -64,6 +65,7 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   int _selectedSubPeriodIndex = 0;
   int _selectedYear = DateTime.now().year;
   late PageController _subPeriodScrollController;
+  late final ScrollController _scrollController = ScrollController();
 
   DateTime? _selectedHeatmapDay;
 
@@ -239,6 +241,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     _fadeCtrl.forward();
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _subPeriodScrollController.dispose();
+    _morphCtrl.dispose();
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
   String _normalizeBankName(String raw) {
     final up = raw.toUpperCase();
     if (up.contains('TELEBIRR')) return 'Telebirr';
@@ -304,13 +315,6 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     return result;
   }
 
-  @override
-  void dispose() {
-    _morphCtrl.dispose();
-    _fadeCtrl.dispose();
-    _subPeriodScrollController.dispose();
-    super.dispose();
-  }
 
   List<int> _getMonthsInWindow(DateTime now, int lookback) {
     if (lookback == 0) {
@@ -694,9 +698,12 @@ class _AnalysisScreenState extends State<AnalysisScreen>
   }
 
   String _resolveTxCategoryName(AppTransaction tx, TransactionsViewModel txVM) {
-    if (tx.categoryId != null) {
-      final cat = txVM.reasons.where((r) => r.id == tx.categoryId).firstOrNull;
-      if (cat != null) return cat.name;
+    if (tx.subcategoryId != null) {
+      final sub = txVM.reasons.where((r) => r.id == tx.subcategoryId).firstOrNull;
+      if (sub != null && sub.parentId != null) {
+        final p = txVM.reasons.where((pr) => pr.id == sub.parentId).firstOrNull;
+        if (p != null) return p.name;
+      }
     }
 
     if (tx.reasonId != null) {
@@ -708,6 +715,11 @@ class _AnalysisScreenState extends State<AnalysisScreen>
         }
         return r.name;
       }
+    }
+
+    if (tx.categoryId != null) {
+      final cat = txVM.reasons.where((r) => r.id == tx.categoryId).firstOrNull;
+      if (cat != null) return cat.name;
     }
 
     final raw = (tx.resolvedReason ?? tx.reason ?? tx.customReasonText ?? '').trim();
@@ -999,18 +1011,15 @@ class _AnalysisScreenState extends State<AnalysisScreen>
     } else if (_selectedAnalysisType == 'Income') {
       categorySums.addAll(categoryIncome);
     } else {
-      // 'All' mode -> Net mode: Gross Expense minus Matching Category Income (always include active categories)
+      // 'All' mode -> Net mode: Absolute Net Difference (|Gross Expense - Matching Category Income|)
+      // Perfectly matches Category Analysis section logic: (catExp - catInc).abs()
       final allCategories = {...categoryExpenses.keys, ...categoryIncome.keys};
       for (final cat in allCategories) {
         final exp = categoryExpenses[cat] ?? 0.0;
         final inc = categoryIncome[cat] ?? 0.0;
-        final net = exp - inc;
+        final net = (exp - inc).abs();
         if (net > 0) {
           categorySums[cat] = net;
-        } else if (exp > 0) {
-          categorySums[cat] = exp;
-        } else if (inc > 0) {
-          categorySums[cat] = inc;
         }
       }
     }
@@ -1368,97 +1377,19 @@ class _AnalysisScreenState extends State<AnalysisScreen>
           ),
           child: FadeTransition(
             opacity: _fadeAnim,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── 1. Top Header & Filters Surface Section with Overscroll Stretch ──
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Upward extension filling the pull-down overscroll region seamlessly
-                      Positioned(
-                        top: -1000,
-                        left: 0,
-                        right: 0,
-                        bottom: 28,
-                        child: Container(
-                          color: AppColors.surface,
-                        ),
-                      ),
-                      Container(
-                        width: double.infinity,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.vertical(
-                            bottom: Radius.circular(28),
-                          ),
-                        ),
-                        child: SafeArea(
-                          bottom: false,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Header title & filter action button
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                                child: AppHeader(
-                                  title: _selectedBank != 'All Wallets' &&
-                                          _selectedBank != 'All Banks' &&
-                                          _selectedBank != 'All'
-                                      ? '$_selectedBank Analytics'
-                                      : 'Spending Charts',
-                                  showBackButton: Navigator.canPop(context),
-                                  padding: EdgeInsets.zero,
-                                  trailing: GestureDetector(
-                                    onTap: () {
-                                      HapticFeedback.selectionClick();
-                                      setState(() {
-                                        _isFilterExpanded = !_isFilterExpanded;
-                                      });
-                                    },
-                                    behavior: HitTestBehavior.opaque,
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: _isFilterExpanded
-                                            ? AppColors.buttonPrimary
-                                            : AppColors.heatmapNeutral,
-                                        borderRadius: BorderRadius.circular(100),
-                                      ),
-                                      child: Center(
-                                        child: Icon(
-                                          Icons.filter_list_rounded,
-                                          color: _isFilterExpanded
-                                              ? AppColors.buttonPrimaryText
-                                              : AppColors.textSoft,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              // Expandable dropdown filter pills
-                              _buildDropdownFiltersSection(txVM, cashVM),
-                              const SizedBox(height: 12),
-
-                              // Reacting Sub-Period Filter Selector
-                              _buildSubPeriodSelector(),
-                              const SizedBox(height: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+            child: Stack(
+              children: [
+                SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
                   ),
-                  const SizedBox(height: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top spacer so content starts cleanly below the dynamic collapsing header
+                      _buildAnalysisTopSpacer(context),
+                      const SizedBox(height: 16),
 
                   // ── 2. Daily Net Calendar Heatmap Card Section (Edge-to-Edge) ──
                   if (_selectedPeriod != PeriodFilter.allTime) ...[
@@ -1585,9 +1516,196 @@ class _AnalysisScreenState extends State<AnalysisScreen>
                 ],
               ),
             ),
-          ),
+
+            // ── Dynamic Collapsing / Extending Top Header ──
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildDynamicSpendingTopHeader(context, txVM, cashVM),
+            ),
+          ],
         ),
       ),
+    ),
+  ),
+);
+}
+
+  Widget _buildAnalysisTopSpacer(BuildContext context) {
+    final topSafe = MediaQuery.paddingOf(context).top;
+    final double restingHeight = topSafe + (_isFilterExpanded ? 180.0 : 124.0);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      height: restingHeight,
+    );
+  }
+
+  Widget _buildDynamicSpendingTopHeader(
+    BuildContext context,
+    TransactionsViewModel txVM,
+    CashWalletViewModel cashVM,
+  ) {
+    final canPop = Navigator.canPop(context);
+
+    return AnimatedBuilder(
+      animation: _scrollController,
+      builder: (context, _) {
+        final double offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+        final double progress = (offset / 65.0).clamp(0.0, 1.0);
+
+        final titleText = _selectedBank != 'All Wallets' &&
+                _selectedBank != 'All Banks' &&
+                _selectedBank != 'All'
+            ? '$_selectedBank Analytics'
+            : 'Spending Charts';
+
+        // Title font size shrinks on scroll when filter is not open
+        final double currentFontSize = _isFilterExpanded
+            ? 20.0
+            : lerpDouble(22.5, 17.0, progress)!;
+
+        // Sub-period selector (Months listing) disappears slowly on scroll unless filter is expanded
+        final double subPeriodHeight = _isFilterExpanded
+            ? 48.0
+            : 48.0 * (1.0 - progress);
+        final double subPeriodOpacity = _isFilterExpanded
+            ? 1.0
+            : (1.0 - progress * 1.5).clamp(0.0, 1.0);
+        final double bottomPadding = _isFilterExpanded
+            ? 16.0
+            : 16.0 * (1.0 - progress);
+
+        final double cornerRadius = _isFilterExpanded
+            ? 24.0
+            : lerpDouble(28.0, 18.0, progress)!;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Upward extension filling the pull-down overscroll region seamlessly
+            Positioned(
+              top: -1000,
+              left: 0,
+              right: 0,
+              bottom: 24,
+              child: Container(
+                color: AppColors.surface,
+              ),
+            ),
+
+            Container(
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(cornerRadius),
+                ),
+                boxShadow: (progress > 0.04 || _isFilterExpanded)
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: _isFilterExpanded ? 0.32 : (0.22 * progress),
+                          ),
+                          blurRadius: _isFilterExpanded ? 16 : (8 * progress),
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Pinned Title Row: Text on left, Filter on right
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        lerpDouble(10, 8, progress)!,
+                        16,
+                        lerpDouble(6, 8, progress)!,
+                      ),
+                      child: Row(
+                        children: [
+                          if (canPop) ...[
+                            const AppBackButton(),
+                            const SizedBox(width: 8),
+                          ],
+                          Expanded(
+                            child: Text(
+                              titleText,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: currentFontSize,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.4,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() {
+                                _isFilterExpanded = !_isFilterExpanded;
+                              });
+                            },
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: _isFilterExpanded
+                                    ? AppColors.buttonPrimary
+                                    : AppColors.heatmapNeutral,
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.filter_list_rounded,
+                                  color: _isFilterExpanded
+                                      ? AppColors.buttonPrimaryText
+                                      : AppColors.textSoft,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Expandable dropdown filter pills
+                    _buildDropdownFiltersSection(txVM, cashVM),
+                    if (_isFilterExpanded) const SizedBox(height: 12),
+
+                    // Reacting Sub-Period Filter Selector (Months listing)
+                    if (subPeriodHeight > 1.0)
+                      ClipRect(
+                        child: SizedBox(
+                          height: subPeriodHeight,
+                          child: Opacity(
+                            opacity: subPeriodOpacity,
+                            child: SingleChildScrollView(
+                              physics: const NeverScrollableScrollPhysics(),
+                              child: _buildSubPeriodSelector(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: bottomPadding),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

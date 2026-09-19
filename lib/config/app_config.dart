@@ -22,7 +22,8 @@ class AppConfig {
   /// Endpoint for Over-The-Air bank definitions, regex rules, and branding metadata.
   static String get banksManifestUrl => String.fromEnvironment(
     'BANK_MANIFEST_URL',
-    defaultValue: '$apiBaseUrl/banks/manifest',
+    defaultValue:
+        '$supabaseUrl/storage/v1/object/public/bank-manifests/banks_manifest.json',
   );
 
   /// CDN / Mirror fallback URL if the primary shibre.com backend is temporarily offline.

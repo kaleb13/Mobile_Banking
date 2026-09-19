@@ -23,6 +23,7 @@ class _WalletsScreenState extends State<WalletsScreen>
   bool _isPausedSectionExpanded = false;
   bool _isReorderMode = false;
   late AnimationController _jiggleController;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _WalletsScreenState extends State<WalletsScreen>
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _jiggleController.dispose();
     super.dispose();
   }
@@ -114,52 +116,23 @@ class _WalletsScreenState extends State<WalletsScreen>
                   )
                 : AppColors.screenBackgroundGradient,
           ),
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              // ── Header Title & Add New / Done Button ───────────────────────
-              SliverToBoxAdapter(
-                child: SafeArea(
-                  bottom: false,
-                  child: AppHeader(
-                    title: 'Wallet Manager',
-                    showBackButton: false,
-                    trailing: _isReorderMode
-                        ? AppButton.primary(
-                            text: 'Done',
-                            icon: Icons.check_rounded,
-                            fullWidth: false,
-                            height: 28,
-                            fontSize: 11.5,
-                            iconSize: 14,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            onPressed: _exitReorderMode,
-                          )
-                        : AppButton.primary(
-                            text: 'Add New',
-                            icon: Icons.add,
-                            fullWidth: false,
-                            height: 28,
-                            fontSize: 11.5,
-                            iconSize: 13,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            onPressed: () {
-                              AppToast.info(
-                                context,
-                                message: 'Add New Wallet',
-                                subtitle:
-                                    'Multi-bank linking feature is coming soon!',
-                              );
-                            },
-                          ),
-                  ),
+          child: Stack(
+            children: [
+              CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
                 ),
-              ),
+                slivers: [
+                  // Top spacer for the pinned collapsing header bar
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: MediaQuery.paddingOf(context).top + 64.0,
+                    ),
+                  ),
 
-              // ── Reorder Mode Instruction Pill ────────────────────────────
-              if (_isReorderMode)
+                  // ── Reorder Mode Instruction Pill ────────────────────────────
+                  if (_isReorderMode)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
@@ -366,6 +339,53 @@ class _WalletsScreenState extends State<WalletsScreen>
               ],
             ],
           ),
+
+            // Pinned Collapsing Header Bar on Scroll
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AppScrollHeaderBar(
+                scrollController: _scrollController,
+                mode: AppScrollHeaderMode.collapsingTitle,
+                showBackButton: false,
+                initialHeight: 64.0,
+                collapsedHeight: 52.0,
+                initialFontSize: 23.5,
+                scrolledFontSize: 17.0,
+                title: 'Wallet Manager',
+                trailing: _isReorderMode
+                    ? AppButton.primary(
+                        text: 'Done',
+                        icon: Icons.check_rounded,
+                        fullWidth: false,
+                        height: 28,
+                        fontSize: 11.5,
+                        iconSize: 14,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        onPressed: _exitReorderMode,
+                      )
+                    : AppButton.primary(
+                        text: 'Add New',
+                        icon: Icons.add,
+                        fullWidth: false,
+                        height: 28,
+                        fontSize: 11.5,
+                        iconSize: 13,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        onPressed: () {
+                          AppToast.info(
+                            context,
+                            message: 'Add New Wallet',
+                            subtitle:
+                                'Multi-bank linking feature is coming soon!',
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
         ),
       ),
     );

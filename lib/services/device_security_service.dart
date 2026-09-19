@@ -5,6 +5,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/account_device_session.dart';
 
 /// Hardware-backed device anti-fraud and trial enforcement engine.
 ///
@@ -171,6 +172,155 @@ class DeviceSecurityService {
       }).eq('device_fingerprint', fingerprint);
     } catch (e) {
       debugPrint('DeviceSecurityService.bindDeviceToUser error: $e');
+    }
+  }
+
+  /// Fetches all logged-in device sessions for [userId] from Supabase,
+  /// merging `device_accounts` with `user_devices` hardware info.
+  Future<List<AccountDeviceSession>> fetchAccountDevices(String userId) async {
+    final currentFingerprint =
+        _cachedFingerprint ?? await _generateDeviceFingerprint();
+
+    try {
+      final accountsData = await _supabase
+          .from('device_accounts')
+          .select()
+          .eq('user_id', userId)
+          .order('last_used_at', ascending: false);
+
+      final List<dynamic> accountsList = accountsData as List<dynamic>;
+
+      // Query user_devices to get hardware model for all discovered fingerprints
+      final fingerprints = accountsList
+          .map((item) =>
+              (item as Map<String, dynamic>)['device_fingerprint'] as String?)
+          .whereType<String>()
+          .toList();
+
+      final Map<String, String> deviceModels = {};
+      if (fingerprints.isNotEmpty) {
+        try {
+          final devicesData = await _supabase
+              .from('user_devices')
+              .select('device_fingerprint, device_model')
+              .inFilter('device_fingerprint', fingerprints);
+
+          for (final row in (devicesData as List<dynamic>)) {
+            final m = row as Map<String, dynamic>;
+            final fp = m['device_fingerprint'] as String?;
+            final model = m['device_model'] as String?;
+            if (fp != null && model != null && model.isNotEmpty) {
+              deviceModels[fp] = model;
+            }
+          }
+        } catch (e) {
+          debugPrint(
+              'DeviceSecurityService: Failed to query user_devices models: $e');
+        }
+      }
+
+      final List<AccountDeviceSession> sessions = accountsList.map((item) {
+        final map = item as Map<String, dynamic>;
+        final fp = map['device_fingerprint'] as String? ?? '';
+        final model = deviceModels[fp] ??
+            (fp == currentFingerprint ? _deviceModel : 'Unknown Device');
+        return AccountDeviceSession.fromMap(
+          map,
+          currentFingerprint: currentFingerprint,
+          fallbackModel: model,
+        );
+      }).toList();
+
+      // Ensure current device is represented even if network sync is delayed
+      final hasCurrent = sessions.any((s) => s.isCurrentDevice);
+      if (!hasCurrent) {
+        sessions.insert(
+          0,
+          AccountDeviceSession(
+            deviceFingerprint: currentFingerprint,
+            userId: userId,
+            deviceModel: _deviceModel,
+            platform: Platform.isAndroid
+                ? 'Android'
+                : Platform.isIOS
+                    ? 'iOS'
+                    : 'Desktop',
+            isActive: true,
+            isCurrentDevice: true,
+            lastUsedAt: DateTime.now().toUtc(),
+          ),
+        );
+      }
+
+      // Sort: Current device first, then active devices by lastUsedAt DESC, then inactive devices
+      sessions.sort((a, b) {
+        if (a.isCurrentDevice) return -1;
+        if (b.isCurrentDevice) return 1;
+        if (a.isInactive != b.isInactive) {
+          return a.isInactive ? 1 : -1;
+        }
+        return b.lastUsedAt.compareTo(a.lastUsedAt);
+      });
+
+      return sessions;
+    } catch (e) {
+      debugPrint('DeviceSecurityService.fetchAccountDevices error: $e');
+      // Fallback: Return current device session
+      return [
+        AccountDeviceSession(
+          deviceFingerprint: currentFingerprint,
+          userId: userId,
+          deviceModel: _deviceModel,
+          platform: Platform.isAndroid
+              ? 'Android'
+              : Platform.isIOS
+                  ? 'iOS'
+                  : 'Desktop',
+          isActive: true,
+          isCurrentDevice: true,
+          lastUsedAt: DateTime.now().toUtc(),
+        ),
+      ];
+    }
+  }
+
+  /// Terminates a specific device session for [userId].
+  Future<bool> terminateDeviceSession(
+      String userId, String targetFingerprint) async {
+    final currentFingerprint = _cachedFingerprint;
+    if (currentFingerprint != null &&
+        currentFingerprint == targetFingerprint) {
+      return false; // Cannot terminate current session through remote session manager
+    }
+
+    try {
+      await _supabase
+          .from('device_accounts')
+          .delete()
+          .eq('user_id', userId)
+          .eq('device_fingerprint', targetFingerprint);
+      return true;
+    } catch (e) {
+      debugPrint('DeviceSecurityService.terminateDeviceSession error: $e');
+      return false;
+    }
+  }
+
+  /// Terminates all device sessions for [userId] except this physical device.
+  Future<bool> terminateAllOtherSessions(String userId) async {
+    final currentFingerprint =
+        _cachedFingerprint ?? await _generateDeviceFingerprint();
+
+    try {
+      await _supabase
+          .from('device_accounts')
+          .delete()
+          .eq('user_id', userId)
+          .neq('device_fingerprint', currentFingerprint);
+      return true;
+    } catch (e) {
+      debugPrint('DeviceSecurityService.terminateAllOtherSessions error: $e');
+      return false;
     }
   }
 }

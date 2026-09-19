@@ -700,7 +700,12 @@ class PeriodicReportReceiver : BroadcastReceiver() {
 
     private fun openDatabase(context: Context): SQLiteDatabase? {
         return try {
-            val dbPath = File(context.getDatabasePath(DB_NAME).path)
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val activeDb = prefs.getString("flutter.active_db_name", null)
+                ?: prefs.getString("flutter.flutter.active_db_name", null)
+                ?: prefs.getString("active_db_name", null)
+                ?: DB_NAME
+            val dbPath = File(context.getDatabasePath(activeDb).path)
             if (!dbPath.exists()) return null
             SQLiteDatabase.openDatabase(
                 dbPath.path,
@@ -708,7 +713,7 @@ class PeriodicReportReceiver : BroadcastReceiver() {
                 SQLiteDatabase.OPEN_READONLY
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to open $DB_NAME", e)
+            Log.e(TAG, "Failed to open database", e)
             null
         }
     }

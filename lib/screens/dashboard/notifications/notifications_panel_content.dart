@@ -6,6 +6,7 @@ import '../../../presentation/viewmodels/notifications_view_model.dart';
 import '../../../widgets/app_back_button.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/app_toast.dart';
+import '../../../widgets/app_bottom_sheet.dart';
 import '../manual_transaction_sheet.dart';
 import 'notification_card.dart';
 import 'notification_action_dialogs.dart';
@@ -28,7 +29,6 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
   bool _showBankFilters = false;
   bool _isShowingSendModal = false;
   AppNotification? _selectedNotificationForMenu;
-  AppNotification? _selectedNotificationForManualInsert;
   bool _isConfirmingIgnoreAll = false;
   bool _isExporting = false;
 
@@ -55,10 +55,6 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
 
   bool _handleBack() {
     if (!mounted) return false;
-    if (_selectedNotificationForManualInsert != null) {
-      setState(() => _selectedNotificationForManualInsert = null);
-      return true;
-    }
     if (_selectedNotificationForMenu != null) {
       setState(() => _selectedNotificationForMenu = null);
       return true;
@@ -330,10 +326,14 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
                         setState(() => _selectedNotificationForMenu = null),
                     onManualInsert: () {
                       final n = _selectedNotificationForMenu!;
-                      setState(() {
-                        _selectedNotificationForMenu = null;
-                        _selectedNotificationForManualInsert = n;
-                      });
+                      setState(() => _selectedNotificationForMenu = null);
+                      AppBottomSheet.show(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (_) => ManualTransactionSheet(
+                          notification: n,
+                        ),
+                      );
                     },
                     onIgnore: () {
                       final id = _selectedNotificationForMenu!.id;
@@ -359,38 +359,6 @@ class _NotificationsPanelContentState extends State<NotificationsPanelContent> {
               setState(() => _isConfirmingIgnoreAll = false);
               await notifsVM.ignoreAllNotifications();
             },
-          ),
-
-        // ── Manual Transaction Sheet Overlay ──
-        if (_selectedNotificationForManualInsert != null)
-          Positioned.fill(
-            child: Stack(
-              children: [
-                GestureDetector(
-                  onTap: () => setState(
-                      () => _selectedNotificationForManualInsert = null),
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.55),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  top: 0,
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: ManualTransactionSheet(
-                      notification: _selectedNotificationForManualInsert!,
-                      onClose: () {
-                        setState(() =>
-                            _selectedNotificationForManualInsert = null);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
       ],
     );

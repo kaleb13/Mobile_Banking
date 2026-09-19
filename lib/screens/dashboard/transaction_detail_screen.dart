@@ -389,7 +389,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        extendBodyBehindAppBar: true,
         appBar: AppBar(
           centerTitle: false,
           titleSpacing: 10,
@@ -401,8 +400,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
-          backgroundColor: AppColors.background.withValues(alpha: 0.85),
+          backgroundColor: AppColors.surface,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: const Padding(
@@ -884,6 +884,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         : counterparty,
                     maxWords: 3,
                   ),
+            valueColor: AppColors.positive,
             onTap: !isGenericCashParty &&
                     currentTx.counterparty.isNotEmpty &&
                     currentTx.counterparty != 'Manual Entry' &&
@@ -956,6 +957,20 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ),
             ),
           ),
+          if (currentTx.originDeviceModel != null && currentTx.originDeviceModel!.isNotEmpty)
+            _buildCollapsibleInfoRow(
+              Icons.smartphone_outlined,
+              'Source Device',
+              currentTx.isRemoteSync
+                  ? '${currentTx.originDeviceModel} (Cloud Sync)'
+                  : '${currentTx.originDeviceModel} (This Device)',
+            )
+          else if (currentTx.isRemoteSync)
+            _buildCollapsibleInfoRow(
+              Icons.cloud_done_outlined,
+              'Source',
+              'Cloud Sync Replica',
+            ),
         ],
       ),
     );
@@ -1317,6 +1332,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     Widget? customValue,
     String? tooltipText,
     VoidCallback? onTap,
+    Color? valueColor,
   }) {
     final effectiveTooltip = tooltipText ?? (value.isNotEmpty ? value : null);
 
@@ -1362,8 +1378,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                     ),
                                   ],
                                 ),
-                                textStyle: const TextStyle(
-                                  color: Colors.white,
+                                textStyle: TextStyle(
+                                  color: valueColor ?? Colors.white,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -1372,9 +1388,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 child: Text(
                                   value,
                                   style: TextStyle(
-                                    color: onTap != null
-                                        ? AppColors.brandGreen
-                                        : Colors.white,
+                                    color: valueColor ?? Colors.white,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1386,9 +1400,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             : Text(
                                 value,
                                 style: TextStyle(
-                                  color: onTap != null
-                                      ? AppColors.brandGreen
-                                      : Colors.white,
+                                  color: valueColor ?? Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1399,10 +1411,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ),
                   if (onTap != null) ...[
                     const SizedBox(width: 5),
-                    const Icon(
+                    Icon(
                       Icons.insights_rounded,
                       size: 13,
-                      color: AppColors.brandGreen,
+                      color: valueColor ?? Colors.white.withValues(alpha: 0.8),
                     ),
                   ],
                 ],
@@ -1597,12 +1609,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(
-                  color: AppColors.brandGreen.withValues(alpha: 0.15),
+                decoration: const BoxDecoration(
+                  color: AppColors.buttonSecondary,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.call_split_rounded,
-                    color: AppColors.brandGreen, size: 20),
+                    color: Colors.white, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1649,7 +1661,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 children: [
                   Icon(
                     _getReasonCategoryIcon(reasonLabel, txVM),
-                    color: AppColors.brandGreen,
+                    color: Colors.white,
                     size: 16,
                   ),
                   const SizedBox(width: 10),
@@ -2822,14 +2834,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 width: 36,
                 height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.brandGreen.withValues(alpha: 0.14),
+                decoration: const BoxDecoration(
+                  color: AppColors.buttonSecondary,
                   shape: BoxShape.circle,
                 ),
                 child: const Center(
                   child: Icon(
                     Icons.sync_alt_rounded,
-                    color: AppColors.brandGreen,
+                    color: Colors.white,
                     size: 19,
                   ),
                 ),

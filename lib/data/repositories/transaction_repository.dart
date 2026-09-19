@@ -14,6 +14,7 @@ import '../../services/sms_batch_parser.dart';
 abstract class TransactionRepository {
   // ── Transactions ──
   Future<List<AppTransaction>> getTransactions({int? limit, int? offset});
+  Future<AppTransaction?> getTransactionById(String id);
   Future<List<AppTransaction>> getTransactionsSince(DateTime since, {int? limit, int? offset});
   Future<int> insertTransaction(AppTransaction transaction);
   Future<int> insertTransactionsBatch(List<AppTransaction> transactions);
@@ -107,6 +108,10 @@ class TransactionRepositoryImpl implements TransactionRepository {
   @override
   Future<List<AppTransaction>> getTransactions({int? limit, int? offset}) =>
       _db.getTransactions(limit: limit, offset: offset);
+
+  @override
+  Future<AppTransaction?> getTransactionById(String id) =>
+      _db.getTransactionById(id);
 
   @override
   Future<List<AppTransaction>> getTransactionsSince(DateTime since, {int? limit, int? offset}) =>

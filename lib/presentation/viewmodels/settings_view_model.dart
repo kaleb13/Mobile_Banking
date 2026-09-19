@@ -209,6 +209,11 @@ class SettingsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Reloads all user-scoped settings and preferences from repository upon account switch.
+  Future<void> reloadSettings() async {
+    await init();
+  }
+
   Future<void> setThemeMode(AppThemeMode mode) async {
     _currentThemeMode = mode;
     notifyListeners();

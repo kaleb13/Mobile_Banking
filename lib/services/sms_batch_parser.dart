@@ -45,6 +45,8 @@ class BatchParseParams {
   final List<AppSender> customSenders;
   final List<AutoReasonRule> autoReasonRules;
   final Map<String, double> initialBankBalances;
+  final String? deviceFingerprint;
+  final String? deviceModel;
 
   const BatchParseParams({
     required this.rawMessages,
@@ -52,6 +54,8 @@ class BatchParseParams {
     required this.customSenders,
     required this.autoReasonRules,
     required this.initialBankBalances,
+    this.deviceFingerprint,
+    this.deviceModel,
   });
 }
 
@@ -302,6 +306,9 @@ class SmsBatchParser {
           reason: resolvedReasonName,
           simSlot: msg.simSlot,
           accountIdentifier: msg.accountIdentifier,
+          originDeviceId: params.deviceFingerprint,
+          originDeviceModel: params.deviceModel,
+          isRemoteSync: false,
         ).copyWith(totalBalance: effectiveBal);
 
         final txId = tx.id ?? '${tx.bankName}_${tx.date.millisecondsSinceEpoch}_${tx.amount}';

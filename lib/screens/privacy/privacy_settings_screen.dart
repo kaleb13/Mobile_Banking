@@ -20,6 +20,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
   bool _canUseBiometrics = false;
   bool _hasPin = false;
 
+  late final ScrollController _scrollController = ScrollController();
+
   // PIN entry overlay state
   bool _showPinEntry = false;
   _PinFlowMode _flowMode = _PinFlowMode.setNew;
@@ -357,6 +359,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _shakeController.dispose();
     super.dispose();
   }
@@ -372,31 +375,15 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
             SafeArea(
               bottom: false,
               child: SingleChildScrollView(
+                controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      child: Row(
-                        children: [
-                          const AppBackButton(),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Privacy & Security',
-                            style: TextStyle(
-                              color: context.themeTextPrimary,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    // Spacer for the pinned scroll header bar
+                    const SizedBox(height: 54),
 
                     // ── App Lock Section ──────────────────────────────────
                     _sectionLabel(context, 'App Lock'),
@@ -497,6 +484,18 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen>
                 ),
               ),
             ),
+
+            // Pinned Collapsing Header Bar on Scroll
+            if (!_showPinEntry)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: AppScrollHeaderBar(
+                  scrollController: _scrollController,
+                  title: 'Privacy & Security',
+                ),
+              ),
 
             // ── In-page PIN numpad overlay ────────────────────────────────
             if (_showPinEntry) _buildPinOverlay(context),

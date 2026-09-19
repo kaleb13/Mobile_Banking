@@ -1,3 +1,4 @@
+import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,7 @@ class LoanManagementScreen extends StatefulWidget {
 class _LoanManagementScreenState extends State<LoanManagementScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
+  final ValueNotifier<double> _loanScrollOffsetNotifier = ValueNotifier<double>(0.0);
   // 0 = Lent (I gave money), 1 = Borrowed (I owe), 2 = Paid
   static const _lentColor = AppColors.positive; // green
   static const _borrowColor = AppColors.warning; // amber
@@ -42,11 +44,13 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
 
   void _onTabChanged() {
     if (_tabCtrl.indexIsChanging) return;
+    _loanScrollOffsetNotifier.value = 0.0;
     context.read<LoansViewModel>().setLoanTabIndex(_tabCtrl.index);
   }
 
   @override
   void dispose() {
+    _loanScrollOffsetNotifier.dispose();
     _tabCtrl.removeListener(_onTabChanged);
     _tabCtrl.dispose();
     super.dispose();
@@ -61,6 +65,11 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
     ScrollNotification notification,
     SettingsViewModel settingsVM,
   ) {
+    if (notification.metrics.axis == Axis.vertical) {
+      final double offset = notification.metrics.pixels;
+      _loanScrollOffsetNotifier.value = offset.clamp(0.0, 70.0);
+      return false;
+    }
     if (notification.metrics.axis != Axis.horizontal) return false;
 
     if (notification is ScrollStartNotification) {
@@ -181,6 +190,8 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
 
     final bool hasPending = loansVM.pendingRepaymentRequests.isNotEmpty;
     final double cardRestingHeight = topSafeArea + (hasPending ? 218.0 : 172.0);
+    final double cardCollapsedHeight = topSafeArea + 98.0;
+    final double deltaHeight = cardRestingHeight - cardCollapsedHeight;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -207,9 +218,9 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
           ),
           child: Stack(
             children: [
-              // ── Tab views (Rendered underneath, padded by card resting height) ──
+              // ── Tab views (Rendered underneath, padded by card collapsed height) ──
               Padding(
-                padding: EdgeInsets.only(top: cardRestingHeight),
+                padding: EdgeInsets.only(top: cardCollapsedHeight),
                 child: NotificationListener<ScrollNotification>(
                   onNotification: (notification) =>
                       _handleLoanTabScrollNotification(
@@ -223,12 +234,14 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                         accentColor: _lentColor,
                         emptyTitle: 'No active loans given',
                         emptySubtitle: 'Track money you\'ve lent to others',
+                        topPadding: deltaHeight + 10.0,
                       ),
                       _LoanList(
                         loans: borrowedLoans,
                         accentColor: _borrowColor,
                         emptyTitle: 'No active debts',
                         emptySubtitle: 'Track money you\'ve borrowed from others',
+                        topPadding: deltaHeight + 10.0,
                       ),
                       _LoanList(
                         loans: paidLoans,
@@ -237,6 +250,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                         emptySubtitle:
                             'Paid loans will appear here automatically',
                         showPaid: true,
+                        topPadding: deltaHeight + 10.0,
                       ),
                     ],
                   ),
@@ -257,6 +271,7 @@ class _LoanManagementScreenState extends State<LoanManagementScreen>
                   tabController: _tabCtrl,
                   settingsVM: settingsVM,
                   loansVM: loansVM,
+                  verticalScrollNotifier: _loanScrollOffsetNotifier,
                 ),
               ),
             ],
@@ -279,6 +294,7 @@ class _InteractiveLoanCard extends StatefulWidget {
   final TabController tabController;
   final SettingsViewModel settingsVM;
   final LoansViewModel loansVM;
+  final ValueNotifier<double> verticalScrollNotifier;
 
   const _InteractiveLoanCard({
     required this.totalLent,
@@ -289,6 +305,7 @@ class _InteractiveLoanCard extends StatefulWidget {
     required this.tabController,
     required this.settingsVM,
     required this.loansVM,
+    required this.verticalScrollNotifier,
   });
 
   @override
@@ -338,22 +355,32 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
   void _togglePeek() {
     if (_animCtrl.isAnimating) return;
 
-    // Quick subtle bounce (~5-6% slide down) to act as a clue that the card can be dragged
-    _animCtrl
-        .animateTo(
-          0.06,
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-        )
-        .then((_) {
-      if (mounted) {
-        _animCtrl.animateTo(
-          0.0,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutBack,
-        );
-      }
-    });
+    if (_animCtrl.value > 0.1) {
+      _animCtrl.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      HapticFeedback.mediumImpact();
+      _animCtrl
+          .animateTo(
+            1.0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+          )
+          .then((_) {
+        Future.delayed(const Duration(milliseconds: 1400), () {
+          if (mounted) {
+            _animCtrl.animateTo(
+              0.0,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+            );
+          }
+        });
+      });
+    }
   }
 
   void _handleCardHorizontalSwipe(DragEndDetails details) {
@@ -384,7 +411,7 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
     final infoData = BankInfoData.forBank('Loan Tracker');
 
     return AnimatedBuilder(
-      animation: _animCtrl,
+      animation: Listenable.merge([_animCtrl, widget.verticalScrollNotifier]),
       builder: (context, _) {
         final double animatedSlide = _animCtrl.value * _maxSlideDown;
         final double currentSlide =
@@ -393,6 +420,33 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
             (currentSlide / _maxSlideDown).clamp(0.0, 1.0);
         final double topCornerRadius =
             (currentSlide / 20.0).clamp(0.0, 1.0) * 24.0;
+
+        // Dynamic scroll collapse driven by vertical list scrolling:
+        final double shrinkProgress =
+            (widget.verticalScrollNotifier.value / 60.0).clamp(0.0, 1.0);
+
+        final double currentTitleSize =
+            lerpDouble(24.0, 17.5, shrinkProgress)!;
+        final double headerPaddingTop =
+            lerpDouble(10.0, 4.0, shrinkProgress)!;
+        final double headerPaddingBottom =
+            lerpDouble(12.0, 4.0, shrinkProgress)!;
+        final double addLoanOpacity =
+            (1.0 - shrinkProgress * 2.2).clamp(0.0, 1.0);
+
+        // Sub-metric pills collapse
+        final double pillsHeight = 38.0 * (1.0 - shrinkProgress);
+        final double pillsOpacity =
+            (1.0 - shrinkProgress * 1.8).clamp(0.0, 1.0);
+
+        // Grab handle collapses
+        final double handleHeight = 18.0 * (1.0 - shrinkProgress);
+        final double handleOpacity =
+            (1.0 - shrinkProgress * 2.0).clamp(0.0, 1.0);
+
+        // Card bottom radius
+        final double bottomRadius =
+            lerpDouble(28.0, 20.0, shrinkProgress)!;
 
         return Stack(
           alignment: Alignment.topCenter,
@@ -420,200 +474,254 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                     borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(topCornerRadius),
                       topRight: Radius.circular(topCornerRadius),
-                      bottomLeft: const Radius.circular(28),
-                      bottomRight: const Radius.circular(28),
+                      bottomLeft: Radius.circular(bottomRadius),
+                      bottomRight: Radius.circular(bottomRadius),
                     ),
+                    boxShadow: shrinkProgress > 0.05
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: 0.25 * shrinkProgress,
+                              ),
+                              blurRadius: 10 * shrinkProgress,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
+                        : null,
                   ),
-                child: SafeArea(
+                  child: SafeArea(
                     bottom: false,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+                      padding: EdgeInsets.fromLTRB(
+                        18,
+                        headerPaddingTop,
+                        18,
+                        lerpDouble(12.0, 8.0, shrinkProgress)!,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Header: AppHeader with Page Title & Add Loan Action in top right
-                          AppHeader(
-                            title: 'Loan Tracker',
-                            showBackButton: false,
-                            padding: EdgeInsets.zero,
-                            trailing: AppButton.primary(
-                              text: 'Add Loan',
-                              icon: Icons.add_rounded,
-                              fullWidth: false,
-                              height: 28,
-                              fontSize: 11.5,
-                              iconSize: 13,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 10),
-                              onPressed: () {
-                                AppBottomSheet.show(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  builder: (_) => const AddLoanSheet(),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Compact Sub-metric Pills (Lent Out & Borrowed)
+                          // Header: Page Title on left & Add Loan Action on right (shrinks on scroll)
                           Row(
                             children: [
                               Expanded(
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      widget.tabController.animateTo(0),
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white
-                                          .withValues(alpha: 0.08),
-                                      borderRadius:
-                                          BorderRadius.circular(100),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 7,
-                                          height: 7,
-                                          decoration:
-                                              const BoxDecoration(
-                                            color: AppColors.positive,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        const Text(
-                                          'Lent: ',
-                                          style: TextStyle(
-                                            color:
-                                                AppColors.textSecondary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisSize:
-                                                MainAxisSize.min,
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  fmt.format(widget.totalLent),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11.5,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow
-                                                          .ellipsis,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 3),
-                                              const CurrencySymbolWidget(
-                                                color: Colors.white,
-                                                size: 10,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                child: Text(
+                                  'Loan Tracker',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: currentTitleSize,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.4,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      widget.tabController.animateTo(1),
-                                  behavior: HitTestBehavior.opaque,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white
-                                          .withValues(alpha: 0.08),
-                                      borderRadius:
-                                          BorderRadius.circular(100),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 7,
-                                          height: 7,
-                                          decoration:
-                                              const BoxDecoration(
-                                            color: AppColors.warning,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        const Text(
-                                          'Owed: ',
-                                          style: TextStyle(
-                                            color:
-                                                AppColors.textSecondary,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisSize:
-                                                MainAxisSize.min,
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  fmt.format(widget.totalBorrowed),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 11.5,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow
-                                                          .ellipsis,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 3),
-                                              const CurrencySymbolWidget(
-                                                color: Colors.white,
-                                                size: 10,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                              if (addLoanOpacity > 0.05)
+                                Opacity(
+                                  opacity: addLoanOpacity,
+                                  child: AppButton.primary(
+                                    text: 'Add Loan',
+                                    icon: Icons.add_rounded,
+                                    fullWidth: false,
+                                    height: 28,
+                                    fontSize: 11.5,
+                                    iconSize: 13,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    onPressed: () {
+                                      AppBottomSheet.show(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        builder: (_) => const AddLoanSheet(),
+                                      );
+                                    },
                                   ),
                                 ),
-                              ),
                             ],
                           ),
+                          SizedBox(height: headerPaddingBottom),
+
+                          // Compact Sub-metric Pills (Lent Out & Borrowed - shrinks on scroll)
+                          if (pillsHeight > 1.0) ...[
+                            ClipRect(
+                              child: SizedBox(
+                                height: pillsHeight,
+                                child: Opacity(
+                                  opacity: pillsOpacity,
+                                  child: SingleChildScrollView(
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () =>
+                                                widget.tabController.animateTo(0),
+                                            behavior: HitTestBehavior.opaque,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.08),
+                                                borderRadius:
+                                                    BorderRadius.circular(100),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 7,
+                                                    height: 7,
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                      color: AppColors.positive,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  const Text(
+                                                    'Lent: ',
+                                                    style: TextStyle(
+                                                      color:
+                                                          AppColors.textSecondary,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Flexible(
+                                                          child: Text(
+                                                            fmt.format(widget.totalLent),
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontSize: 11.5,
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 3),
+                                                        const CurrencySymbolWidget(
+                                                          color: Colors.white,
+                                                          size: 10,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () =>
+                                                widget.tabController.animateTo(1),
+                                            behavior: HitTestBehavior.opaque,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.08),
+                                                borderRadius:
+                                                    BorderRadius.circular(100),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 7,
+                                                    height: 7,
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                      color: AppColors.warning,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  const Text(
+                                                    'Owed: ',
+                                                    style: TextStyle(
+                                                      color:
+                                                          AppColors.textSecondary,
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Flexible(
+                                                          child: Text(
+                                                            fmt.format(widget.totalBorrowed),
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontSize: 11.5,
+                                                              fontWeight:
+                                                                  FontWeight.bold,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 3),
+                                                        const CurrencySymbolWidget(
+                                                          color: Colors.white,
+                                                          size: 10,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 12.0 * (1.0 - shrinkProgress)),
+                          ],
 
                           // Pending approvals banner inside card
                           if (widget.loansVM.pendingRepaymentRequests
-                              .isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            _PendingApprovalsBanner(
-                              requests: widget
-                                  .loansVM.pendingRepaymentRequests,
-                              loans: widget.loansVM.loanRecords,
+                              .isNotEmpty && shrinkProgress < 0.9) ...[
+                            ClipRect(
+                              child: SizedBox(
+                                height: 44.0 * (1.0 - shrinkProgress),
+                                child: Opacity(
+                                  opacity: (1.0 - shrinkProgress * 1.8).clamp(0.0, 1.0),
+                                  child: SingleChildScrollView(
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    child: _PendingApprovalsBanner(
+                                      requests: widget
+                                          .loansVM.pendingRepaymentRequests,
+                                      loans: widget.loansVM.loanRecords,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
+                            SizedBox(height: 12.0 * (1.0 - shrinkProgress)),
                           ],
 
-                          const SizedBox(height: 12),
-
-                          // Primary Tab Bar inside the card
+                          // Primary Tab Bar inside the card (Always fully docked & visible)
                           AppPrimaryTabBar(
                             tabs: const [
                               'Lent Out',
@@ -625,28 +733,37 @@ class _InteractiveLoanCardState extends State<_InteractiveLoanCard>
                             margin: EdgeInsets.zero,
                           ),
 
-                          // Grab Handle at Bottom of Card (Just like Bank Detail Page)
-                          Center(
-                            child: InteractiveDragHandle(
-                              onTap: _togglePeek,
-                              onVerticalDragUpdate: _onDragUpdate,
-                              onVerticalDragEnd: _onDragEnd,
-                              padding: const EdgeInsets.only(
-                                  top: 10, bottom: 2),
+                          // Grab Handle at Bottom of Card (shrinks on scroll)
+                          if (handleHeight > 1.0)
+                            ClipRect(
+                              child: SizedBox(
+                                height: handleHeight,
+                                child: Opacity(
+                                  opacity: handleOpacity,
+                                  child: Center(
+                                    child: InteractiveDragHandle(
+                                      onTap: _togglePeek,
+                                      onVerticalDragUpdate: _onDragUpdate,
+                                      onVerticalDragEnd: _onDragEnd,
+                                      padding: const EdgeInsets.only(
+                                          top: 10, bottom: 2),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
               ),
-              ),
-            ],
-          );
-        },
-      );
-    }
+            ),
+          ],
+        );
+      },
+    );
+  }
   }
 
 
@@ -659,6 +776,7 @@ class _LoanList extends StatelessWidget {
   final String emptyTitle;
   final String emptySubtitle;
   final bool showPaid;
+  final double topPadding;
 
   const _LoanList({
     required this.loans,
@@ -666,6 +784,7 @@ class _LoanList extends StatelessWidget {
     required this.emptyTitle,
     required this.emptySubtitle,
     this.showPaid = false,
+    this.topPadding = 12.0,
   });
 
   @override
@@ -677,7 +796,7 @@ class _LoanList extends StatelessWidget {
         ),
         child: Container(
           alignment: Alignment.center,
-          padding: const EdgeInsets.only(top: 80, bottom: 40),
+          padding: EdgeInsets.only(top: 60 + topPadding, bottom: 40),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -701,7 +820,7 @@ class _LoanList extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(0, 12, 0, 140),
+      padding: EdgeInsets.fromLTRB(0, topPadding, 0, 140),
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),

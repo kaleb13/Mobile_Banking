@@ -22,13 +22,17 @@ import 'presentation/viewmodels/savings_view_model.dart';
 import 'presentation/viewmodels/cash_wallet_view_model.dart';
 import 'presentation/viewmodels/transactions_view_model.dart';
 import 'presentation/viewmodels/analytics_view_model.dart';
+import 'presentation/viewmodels/cloud_sync_view_model.dart';
 
 import 'services/bank_registry.dart';
 import 'services/bank_sync_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/app_config.dart';
 import 'services/device_security_service.dart';
+import 'services/auth_service.dart';
 import 'presentation/viewmodels/auth_view_model.dart';
+import 'services/cloud_sync_service.dart';
+import 'services/app_session_coordinator.dart';
 import 'widgets/trial_paywall_sheet.dart';
 
 /// Global navigator key — allows non-widget code to push routes or show
@@ -48,6 +52,8 @@ void main() async {
       publishableKey: AppConfig.supabaseAnonKey,
     );
     await DeviceSecurityService.instance.initialize();
+    await AuthService.instance.initialize();
+    await CloudSyncService.instance.initialize();
   } catch (e) {
     debugPrint('Supabase/DeviceSecurity init failed: $e');
   }
@@ -129,6 +135,9 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => SavingsViewModel(repository: savingsRepo)
             ..fetchSavingGoals(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => CloudSyncViewModel()..refreshState(),
         ),
         ChangeNotifierProvider(
           create: (context) {
@@ -233,12 +242,39 @@ void main() async {
             vm.getSenders = () => txVM.senders;
             vm.getTotalBalance = () => txVM.totalBalance;
             vm.getTotalBorrowedLiability = () => loansVM.totalBorrowedLiability;
-            // Recalculate wallet balances, levels, and expense highlights
-            vm.recalculate(
-              pausedBanks: txVM.pausedBanks,
-              getTopLevelCategory: txVM.getTopLevelCategoryForTransaction,
-              isDateInMonthOf: (d, ref) => d.year == ref.year && d.month == ref.month,
+            final authVM = context.read<AuthViewModel>();
+            final notifsVM = context.read<NotificationsViewModel>();
+            final savingsVM = context.read<SavingsViewModel>();
+            final settingsVM = context.read<SettingsViewModel>();
+            final cloudSyncVM = context.read<CloudSyncViewModel>();
+
+            // Attach all ViewModels to the centralized session coordinator
+            AppSessionCoordinator.instance.attachViewModels(
+              txVM: txVM,
+              cashVM: cashVM,
+              loansVM: loansVM,
+              savingsVM: savingsVM,
+              notifsVM: notifsVM,
+              settingsVM: settingsVM,
+              analyticsVM: vm,
+              cloudSyncVM: cloudSyncVM,
             );
+
+            // Wire Cloud Sync completion callback to reload all view models via session coordinator
+            CloudSyncService.instance.onSyncCompleted = () {
+              AppSessionCoordinator.instance.reloadAllData();
+            };
+            authVM.onAccountSwitched = () async {
+              await AppSessionCoordinator.instance.reloadAllData();
+            };
+            // Recalculate wallet balances, levels, and expense highlights once loading completes
+            if (!txVM.isLoading && !cashVM.isLoading) {
+              vm.recalculate(
+                pausedBanks: txVM.pausedBanks,
+                getTopLevelCategory: txVM.getTopLevelCategoryForTransaction,
+                isDateInMonthOf: (d, ref) => d.year == ref.year && d.month == ref.month,
+              );
+            }
             return vm;
           },
         ),

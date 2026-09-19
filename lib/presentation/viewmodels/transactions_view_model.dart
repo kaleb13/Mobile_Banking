@@ -25,6 +25,10 @@ import '../../models/app_notification.dart';
 import '../../models/transaction_split.dart';
 import '../../utils/counterparty_matcher.dart';
 import '../../services/database_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/cloud_sync_service.dart';
+import '../../services/device_security_service.dart';
+import '../../domain/usecases/analytics/calculate_pnl_usecase.dart';
 
 /// TransactionsViewModel — owns all transaction, sender, and reason state.
 ///
@@ -90,6 +94,8 @@ class TransactionsViewModel extends ChangeNotifier {
   List<AppTransaction> _cachedRecent30DaysTransactions = [];
   double _cachedTotalBalance = 0.0;
   int _cachedCashTxCount = 0;
+  Map<int, AppReason> _cachedReasonsById = {};
+  Map<String, AppReason> _cachedReasonsByNameLower = {};
 
   // ── Transactions Access ───────────────────────────────────────────────────
 
@@ -319,6 +325,9 @@ class TransactionsViewModel extends ChangeNotifier {
       }
     } catch (_) {
       _senders.sort(_defaultBankComparator);
+    } finally {
+      _recomputeActiveAndPausedSenders();
+      _recomputeTotalBalance();
     }
   }
 
@@ -327,26 +336,50 @@ class TransactionsViewModel extends ChangeNotifier {
     final bName = b.senderName.trim().toUpperCase();
     if (aName == bName) return 0;
 
-    final aIsTelebirr = aName == 'TELEBIRR';
-    final bIsTelebirr = bName == 'TELEBIRR';
+    // 1. Telebirr is always first (#1)
+    final aIsTelebirr =
+        aName == 'TELEBIRR' || BankSenders.isSameBank(a.senderName, 'Telebirr');
+    final bIsTelebirr =
+        bName == 'TELEBIRR' || BankSenders.isSameBank(b.senderName, 'Telebirr');
     if (aIsTelebirr && !bIsTelebirr) return -1;
     if (!aIsTelebirr && bIsTelebirr) return 1;
 
-    final aIsCbe = aName == 'CBE' || aName.contains('COMMERCIAL');
-    final bIsCbe = bName == 'CBE' || bName.contains('COMMERCIAL');
+    // Distinguish CBE Birr to avoid collision with CBE
+    final aIsCbeBirr = aName == 'CBE BIRR' ||
+        aName == 'CBEBIRR' ||
+        BankSenders.isSameBank(a.senderName, 'CBE Birr');
+    final bIsCbeBirr = bName == 'CBE BIRR' ||
+        bName == 'CBEBIRR' ||
+        BankSenders.isSameBank(b.senderName, 'CBE Birr');
+
+    // 2. CBE is always second (#2)
+    final aIsCbe = !aIsCbeBirr &&
+        (aName == 'CBE' ||
+            aName.contains('COMMERCIAL') ||
+            BankSenders.isSameBank(a.senderName, 'CBE'));
+    final bIsCbe = !bIsCbeBirr &&
+        (bName == 'CBE' ||
+            bName.contains('COMMERCIAL') ||
+            BankSenders.isSameBank(b.senderName, 'CBE'));
     if (aIsCbe && !bIsCbe) return -1;
     if (!aIsCbe && bIsCbe) return 1;
 
-    final aIsCbeBirr = aName == 'CBE BIRR' || aName == 'CBEBIRR';
-    final bIsCbeBirr = bName == 'CBE BIRR' || bName == 'CBEBIRR';
+    // 3. CBE Birr is always third (#3)
     if (aIsCbeBirr && !bIsCbeBirr) return -1;
     if (!aIsCbeBirr && bIsCbeBirr) return 1;
 
-    // Place based on total balance (higher balance first)
+    // 4. Place based on total balance (higher balance first)
     final balA = balanceForSender(a.senderName);
     final balB = balanceForSender(b.senderName);
     if (balA != balB) {
       return balB.compareTo(balA);
+    }
+
+    // 5. Place based on transaction count (higher count first)
+    final countA = txCountForSender(a.senderName);
+    final countB = txCountForSender(b.senderName);
+    if (countA != countB) {
+      return countB.compareTo(countA);
     }
 
     return 0;
@@ -356,14 +389,12 @@ class TransactionsViewModel extends ChangeNotifier {
   bool get hasClassicTopThreeDeck {
     final active = _cachedActiveSenders;
     if (active.length < 3) return false;
-    final firstThree =
-        active.take(3).map((s) => s.senderName.trim().toUpperCase()).toList();
-    final isTelebirr = firstThree[0] == 'TELEBIRR';
-    final isCbe =
-        firstThree[1] == 'CBE' || firstThree[1].contains('COMMERCIAL');
-    final isCbeBirr =
-        firstThree[2] == 'CBE BIRR' || firstThree[2] == 'CBEBIRR';
-    return isTelebirr && isCbe && isCbeBirr;
+    final isTelebirr = BankSenders.isSameBank(active[0].senderName, 'Telebirr');
+    final isCbeBirr2 = BankSenders.isSameBank(active[2].senderName, 'CBE Birr');
+    final isCbe1 = !BankSenders.isSameBank(active[1].senderName, 'CBE Birr') &&
+        (BankSenders.isSameBank(active[1].senderName, 'CBE') ||
+            active[1].senderName.toUpperCase().contains('COMMERCIAL'));
+    return isTelebirr && isCbe1 && isCbeBirr2;
   }
 
   /// Calculates total balance for a sender in O(1) time.
@@ -371,10 +402,10 @@ class TransactionsViewModel extends ChangeNotifier {
   double balanceForSender(String senderName, {double? cashBalance}) {
     if (senderName.trim().toUpperCase() == 'CASH WALLET') {
       if (isTrackingPaused('Cash Wallet')) return 0.0;
-      if (cashBalance != null && cashBalance > 0) return cashBalance;
+      if (cashBalance != null) return cashBalance;
       // 1. Use latest totalBalance from cached sender balances
       final cached = _cachedSenderBalances['CASH WALLET'];
-      if (cached != null && cached > 0) return cached;
+      if (cached != null) return cached;
       // 2. Fallback: compute net cash movements from transactions
       double inflow = 0.0;
       double outflow = 0.0;
@@ -425,7 +456,28 @@ class TransactionsViewModel extends ChangeNotifier {
     return sum;
   }
 
+  static const CalculatePnlUseCase _pnlUseCase = CalculatePnlUseCase();
+
   double getLatestBalanceForBank(String bankName) => balanceForSender(bankName);
+
+  /// Calculates (periodChange, periodPercent) for a specific sender / account over [filter].
+  (double change, double percent) pnlForSender({
+    required String senderName,
+    required String filter,
+    int? simSlot,
+    required double currentBalance,
+  }) {
+    final rawBankTx = transactionsForSender(senderName);
+    final txList = simSlot != null
+        ? rawBankTx.where((tx) => tx.simSlot == simSlot).toList()
+        : rawBankTx;
+
+    return _pnlUseCase.calculateAccountPeriodPnl(
+      transactions: txList,
+      filter: filter,
+      currentBalance: currentBalance,
+    );
+  }
 
   /// Calculates total balance across all active banks for a specific SIM slot (or combined if [simSlot] is null).
   double totalBalanceForSim(int? simSlot, {double? cashBalance}) {
@@ -528,6 +580,30 @@ class TransactionsViewModel extends ChangeNotifier {
     final allSimSlots = <int>{};
     int cashReasonCount = 0;
 
+    // Fast indexed reason lookup maps
+    final reasonsById = <int, AppReason>{};
+    final reasonsByNameLower = <String, AppReason>{};
+    for (final r in _reasons) {
+      if (r.id != null) reasonsById[r.id!] = r;
+      reasonsByNameLower[r.name.trim().toLowerCase()] = r;
+    }
+    _cachedReasonsById = reasonsById;
+    _cachedReasonsByNameLower = reasonsByNameLower;
+
+    // Fast O(1) Sets for paused banks and bank:slot accounts
+    final wholePausedBanks = <String>{};
+    final pausedBankSlots = <String>{};
+    for (final b in _pausedBanks) {
+      if (b.contains(':')) {
+        final parts = b.split(':');
+        final c = BankSenders.match(parts[0]) ?? parts[0].trim();
+        pausedBankSlots.add('${c.toUpperCase()}:${parts[1]}');
+      } else {
+        final c = BankSenders.match(b) ?? b.trim();
+        wholePausedBanks.add(c.toUpperCase());
+      }
+    }
+
     final unpausedList = <AppTransaction>[];
     final recent30DaysList = <AppTransaction>[];
     final cutoff30Days = DateTime.now().subtract(const Duration(days: 30));
@@ -577,19 +653,9 @@ class TransactionsViewModel extends ChangeNotifier {
         cashReasonCount++;
       }
 
-      // Check paused
-      bool isTxPaused = false;
-      if (_pausedBanks.isNotEmpty) {
-        if (_pausedBanks.any((b) => !b.contains(':') && BankSenders.isSameBank(b, tx.bankName))) {
-          isTxPaused = true;
-        } else {
-          isTxPaused = _pausedBanks.any((b) {
-            if (!b.contains(':')) return false;
-            final parts = b.split(':');
-            return BankSenders.isSameBank(parts[0], tx.bankName) && parts[1] == '${tx.simSlot}';
-          });
-        }
-      }
+      // Check paused via fast O(1) set lookups
+      final bool isTxPaused = wholePausedBanks.contains(bankKey) ||
+          pausedBankSlots.contains('$bankKey:${tx.simSlot}');
 
       if (!isTxPaused) {
         unpausedList.add(tx);
@@ -612,6 +678,7 @@ class TransactionsViewModel extends ChangeNotifier {
     _cachedUnpausedTransactions = unpausedList;
     _cachedRecent30DaysTransactions = recent30DaysList;
 
+    _senders.sort(_defaultBankComparator);
     _recomputeActiveAndPausedSenders();
     _recomputeTotalBalance();
   }
@@ -656,43 +723,38 @@ class TransactionsViewModel extends ChangeNotifier {
 
   // ── Category Resolution ─────────────────────────────────────────────────
 
-  /// Resolves a transaction's reason to its top-level category name.
+  /// Resolves a transaction's reason to its top-level category name in O(1) time.
   /// Used by AnalyticsViewModel to compute expense highlights (carousel pills).
   String getTopLevelCategoryForTransaction(AppTransaction tx) {
-    // 1. Resolve by reasonId → walk up to parent if subcategory
+    // 1. Resolve by reasonId → walk up to parent if subcategory (O(1))
     if (tx.reasonId != null) {
-      final r = _reasons.where((item) => item.id == tx.reasonId).firstOrNull;
+      final r = _cachedReasonsById[tx.reasonId];
       if (r != null) {
         if (r.isSpecial || r.name.toLowerCase() == 'loan') return r.name;
         if (r.isSubcategory && r.parentId != null) {
-          final parent =
-              _reasons.where((p) => p.id == r.parentId).firstOrNull;
+          final parent = _cachedReasonsById[r.parentId];
           if (parent != null) return parent.name;
         }
         if (r.isTopLevelCategory) return r.name;
       }
     }
 
-    // 2. Resolve by categoryId
+    // 2. Resolve by categoryId (O(1))
     if (tx.categoryId != null) {
-      final cat =
-          _reasons.where((c) => c.id == tx.categoryId).firstOrNull;
+      final cat = _cachedReasonsById[tx.categoryId];
       if (cat != null) return cat.name;
     }
 
-    // 3. Fallback: match by resolved reason string
+    // 3. Fallback: match by resolved reason string (O(1))
     final reasonStr = tx.resolvedReason?.trim();
     if (reasonStr != null && reasonStr.isNotEmpty) {
-      final matched = _reasons
-          .where((r) => r.name.toLowerCase() == reasonStr.toLowerCase())
-          .firstOrNull;
+      final matched = _cachedReasonsByNameLower[reasonStr.toLowerCase()];
       if (matched != null) {
         if (matched.isSpecial || matched.name.toLowerCase() == 'loan') {
           return matched.name;
         }
         if (matched.isSubcategory && matched.parentId != null) {
-          final parent =
-              _reasons.where((p) => p.id == matched.parentId).firstOrNull;
+          final parent = _cachedReasonsById[matched.parentId];
           if (parent != null) return parent.name;
         }
         if (matched.isTopLevelCategory) return matched.name;
@@ -761,9 +823,26 @@ class TransactionsViewModel extends ChangeNotifier {
     _smsSubscription?.cancel();
     const channel = EventChannel('com.shibre/sms_events');
     _smsSubscription = channel.receiveBroadcastStream().listen(
-      (_) {
-        loadAll();
+      (event) async {
+        final eventStr = event?.toString() ?? '';
+        await loadAll();
         onSmsEventReceived?.call();
+
+        // Immediate background cloud sync for incoming transactions and notification actions
+        if (eventStr.startsWith('newTransaction') || eventStr.startsWith('reasonUpdated')) {
+          final parts = eventStr.split(':');
+          final txId = parts.length > 1 ? parts[1].trim() : null;
+          if (txId != null && txId.isNotEmpty) {
+            final tx = _transactions.where((t) => t.id == txId).firstOrNull ??
+                await _repository.getTransactionById(txId);
+            if (tx != null) {
+              unawaited(CloudSyncService.instance.syncTransactionsImmediately([tx]));
+              return;
+            }
+          }
+          // Fallback: fast incremental delta sync in background
+          unawaited(CloudSyncService.instance.syncAll());
+        }
       },
       onError: (err) => debugPrint('SMS event channel error: $err'),
     );
@@ -841,7 +920,10 @@ class TransactionsViewModel extends ChangeNotifier {
           .toList();
       if (_senders.isEmpty) {
         try {
-          final bool hasPermission = await Permission.sms.status.isGranted;
+          final isListening = await _settingsRepository?.getSmsListeningEnabled() ?? true;
+          final activeAcc = AuthService.instance.activeAccount;
+          final bool deviceSmsAllowed = activeAcc?.syncDeviceSms ?? true;
+          final bool hasPermission = isListening && deviceSmsAllowed && await Permission.sms.status.isGranted;
           if (hasPermission) {
             final detected = await SmsService().detectBankingSendersInInbox();
             for (final bankName in detected) {
@@ -854,7 +936,6 @@ class TransactionsViewModel extends ChangeNotifier {
           }
         } catch (_) {}
       }
-      await _applySavedSendersOrder();
       _reasons = results[2] as List<AppReason>;
       _reasonLinks = results[3] as List<AppReasonLink>;
       _pausedBanks = results[4] as Set<String>;
@@ -865,6 +946,7 @@ class TransactionsViewModel extends ChangeNotifier {
       }
       _transactionSplits = splitsMap;
       _rebuildAggregateIndices();
+      await _applySavedSendersOrder();
 
       try {
         _simCards = await SmsService().getSimCards();
@@ -873,7 +955,10 @@ class TransactionsViewModel extends ChangeNotifier {
       // Auto-scan SMS on startup when DB is empty and we haven't scanned yet
       // this session. This handles first boot when no data exists.
       if (_transactions.isEmpty && !_hasScannedOnce) {
-        final hasPermission = await Permission.sms.status.isGranted;
+        final isListening = await _settingsRepository?.getSmsListeningEnabled() ?? true;
+        final activeAcc = AuthService.instance.activeAccount;
+        final bool deviceSmsAllowed = activeAcc?.syncDeviceSms ?? true;
+        final hasPermission = isListening && deviceSmsAllowed && await Permission.sms.status.isGranted;
         if (hasPermission) {
           _hasScannedOnce = true;
           // Release the loading lock before scanning so the UI can render
@@ -882,6 +967,9 @@ class TransactionsViewModel extends ChangeNotifier {
           final activeOption = await _settingsRepository?.getScanWindow() ?? ScanWindowOption.sevenDays;
           await scanSms(scanWindowOption: activeOption);
           return; // scanSms() calls loadAll() at the end, so we're done
+        } else if (activeAcc != null && !activeAcc.syncDeviceSms) {
+          _hasScannedOnce = true;
+          unawaited(CloudSyncService.instance.syncAll());
         }
       }
     } catch (e) {
@@ -894,11 +982,16 @@ class TransactionsViewModel extends ChangeNotifier {
 
   /// Discovers bank senders physically present in the phone's SMS inbox across all time and syncs them to SQLite.
   Future<void> discoverAndSyncPhoneSenders() async {
+    final activeAcc = AuthService.instance.activeAccount;
+    if (activeAcc != null && !activeAcc.syncDeviceSms) {
+      return;
+    }
     try {
       _senders = await _smsIngestionService.discoverAndSyncPhoneSenders(
         currentSenders: _senders,
       );
       _rebuildAggregateIndices();
+      await _applySavedSendersOrder();
       notifyListeners();
     } catch (_) {}
   }
@@ -912,6 +1005,13 @@ class TransactionsViewModel extends ChangeNotifier {
     void Function(ScanProgressStatus)? onProgress,
     DateTime? since,
   }) async {
+    final activeAcc = AuthService.instance.activeAccount;
+    if (activeAcc != null && !activeAcc.syncDeviceSms) {
+      debugPrint(
+          '[TransactionsViewModel] Cloud-only mode active: skipping device SMS scan, triggering cloud sync.');
+      unawaited(CloudSyncService.instance.syncAll());
+      return 0;
+    }
     _isLoading = true;
     notifyListeners();
 
@@ -962,6 +1062,8 @@ class TransactionsViewModel extends ChangeNotifier {
       if (reconciledCount > 0 || _transactions.isEmpty) {
         await loadAll();
       }
+      // Reconcile and push any pending delta to cloud seamlessly
+      unawaited(CloudSyncService.instance.syncAll());
     } catch (_) {}
   }
 
@@ -1111,6 +1213,8 @@ class TransactionsViewModel extends ChangeNotifier {
         customSenders: _senders,
         autoReasonRules: autoRules,
         initialBankBalances: initialBalances,
+        deviceFingerprint: DeviceSecurityService.instance.deviceFingerprint,
+        deviceModel: DeviceSecurityService.instance.deviceModel,
       ));
 
       onProgress?.call(ScanProgressStatus(
@@ -1309,10 +1413,9 @@ class TransactionsViewModel extends ChangeNotifier {
     if (isCashRelated) {
       await DatabaseService.instance.recalculateCashWalletBalances();
       await syncCashWalletBalancesInMemory();
-    } else {
-      _rebuildAggregateIndices();
-      notifyListeners();
     }
+    _rebuildAggregateIndices();
+    notifyListeners();
   }
 
   Future<void> syncCashWalletBalancesInMemory() async {

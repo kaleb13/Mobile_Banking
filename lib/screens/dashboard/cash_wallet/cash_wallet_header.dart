@@ -322,21 +322,11 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                                               size: 22,
                                             ),
                                             const SizedBox(width: 6),
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.visibility_outlined,
-                                                color: Colors.white
-                                                    .withValues(alpha: 0.8),
-                                                size: 20,
-                                              ),
-                                              splashRadius: 20,
-                                              padding: EdgeInsets.zero,
-                                              constraints:
-                                                  const BoxConstraints(),
-                                              onPressed: () {
-                                                HapticFeedback.selectionClick();
-                                                settingsVM.toggleBankBalanceVisibility('Cash Wallet');
-                                              },
+                                            Icon(
+                                              Icons.visibility_outlined,
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.8),
+                                              size: 20,
                                             ),
                                           ],
                                         )
@@ -355,25 +345,15 @@ class _InteractiveCashWalletCardState extends State<InteractiveCashWalletCard>
                                               ),
                                               maxLines: 1,
                                             ),
-                                            const SizedBox(width: 6),
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.visibility_off_outlined,
-                                                color: Colors.white
-                                                    .withValues(alpha: 0.8),
-                                                size: 20,
-                                              ),
-                                              splashRadius: 20,
-                                              padding: EdgeInsets.zero,
-                                              constraints:
-                                                  const BoxConstraints(),
-                                              onPressed: () {
-                                                HapticFeedback.selectionClick();
-                                                settingsVM.toggleBankBalanceVisibility('Cash Wallet');
-                                              },
-                                            ),
-                                          ],
-                                        ),
+                                             const SizedBox(width: 6),
+                                             Icon(
+                                               Icons.visibility_off_outlined,
+                                               color: Colors.white
+                                                   .withValues(alpha: 0.8),
+                                               size: 20,
+                                             ),
+                                           ],
+                                         ),
                                 ),
                               ),
                               const SizedBox(height: 18),

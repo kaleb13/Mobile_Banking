@@ -7,6 +7,7 @@ import '../../models/scan_window_option.dart';
 import '../../models/sender.dart';
 import '../../services/sms_batch_parser.dart';
 import '../../services/sms_service.dart';
+import '../../services/device_security_service.dart';
 
 class SmsScanResult {
   final int insertedCount;
@@ -63,6 +64,21 @@ class SmsIngestionService {
     Future<void> Function(List<AppNotification>)? insertNotificationsBatch,
   }) async {
     var senders = currentSenders;
+
+    final bool isListeningEnabled =
+        await _settingsRepository?.getSmsListeningEnabled() ?? true;
+    if (!isListeningEnabled) {
+      onProgress?.call(const ScanProgressStatus(
+        progress: 1.0,
+        stage: 'Device SMS reading disabled (Cloud / Manual mode)',
+        isComplete: true,
+      ));
+      return SmsScanResult(
+        insertedCount: 0,
+        scannedBanks: [],
+        updatedSenders: currentSenders,
+      );
+    }
 
     final activeOption = scanWindowOption ??
         await _settingsRepository?.getScanWindow() ??
@@ -144,6 +160,8 @@ class SmsIngestionService {
       customSenders: senders,
       autoReasonRules: autoRules,
       initialBankBalances: initialBalances,
+      deviceFingerprint: DeviceSecurityService.instance.deviceFingerprint,
+      deviceModel: DeviceSecurityService.instance.deviceModel,
     ));
 
     final sim0Parsed = parseResult.transactions.where((t) => t.simSlot == 0).length;

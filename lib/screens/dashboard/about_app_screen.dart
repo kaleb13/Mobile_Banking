@@ -1,56 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_back_button.dart';
+import '../../widgets/app_scroll_header_bar.dart';
 
-class AboutAppScreen extends StatelessWidget {
+class AboutAppScreen extends StatefulWidget {
   const AboutAppScreen({super.key});
+
+  @override
+  State<AboutAppScreen> createState() => _AboutAppScreenState();
+}
+
+class _AboutAppScreenState extends State<AboutAppScreen> {
+  late final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: true,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 16, 16, 12),
-              child: Row(
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const AppBackButton(),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'About App',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
+                  // Spacer for the pinned scroll header bar
+                  const SizedBox(height: 54),
+                  const SizedBox(height: 8),
+                  _buildDeveloperCard(),
+                  const SizedBox(height: 28),
+                  _buildSectionLabel('ABOUT SHIBRE'),
+                  _buildAboutContent(),
                 ],
               ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(0, 8, 0, 40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDeveloperCard(),
-                    const SizedBox(height: 28),
-                    _buildSectionLabel('ABOUT SHIBRE'),
-                    _buildAboutContent(),
-                  ],
-                ),
-              ),
+          ),
+          // Pinned Collapsing Header Bar on Scroll
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AppScrollHeaderBar(
+              scrollController: _scrollController,
+              title: 'About App',
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -65,13 +72,17 @@ class AboutAppScreen extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(2.5),
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
             ),
-            child: const CircleAvatar(
-              radius: 30,
-              backgroundImage: AssetImage('assets/images/developer.webp'),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/images/developer.webp',
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           const SizedBox(width: 16),

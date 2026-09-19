@@ -39,12 +39,24 @@ class TransactionQuickEditActivity : FlutterActivity() {
         private const val REASON_UPDATE_PENDING_KEY = "flutter.reason_update_pending"
         private const val TAG = "QuickEditActivity"
 
+        fun getActiveDbName(context: Context): String {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getString("flutter.active_db_name", null)
+                ?: prefs.getString("flutter.flutter.active_db_name", null)
+                ?: prefs.getString("active_db_name", null)
+                ?: DB_NAME
+        }
+
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_TX_ID = "extra_tx_id"
         const val EXTRA_SMS_BODY = "extra_sms_body"
         const val EXTRA_BANK_NAME = "extra_bank_name"
         const val EXTRA_AMOUNT = "extra_amount"
         const val EXTRA_DIRECTION = "extra_direction"
+    }
+
+    private fun getDbFile(): File {
+        return File(getDatabasePath(getActiveDbName(this)).path)
     }
 
     override fun getDartEntrypointFunctionName(): String = "quickEditMain"
@@ -88,7 +100,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     var matchingCount = 0
                     if (resolvedSender.isNotBlank()) {
                         try {
-                            val dbPath = File(getDatabasePath(DB_NAME).path)
+                            val dbPath = getDbFile()
                             if (dbPath.exists()) {
                                 val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READONLY)
                                 val countCursor = db.rawQuery(
@@ -138,7 +150,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                             if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
                             if (targetTxId.isNotBlank()) notificationManager?.cancel(targetTxId.hashCode())
                             try {
-                                MainActivity.smsEventSink?.success("reasonUpdated")
+                                MainActivity.smsEventSink?.success("reasonUpdated:$targetTxId")
                             } catch (_: Exception) {}
                         }
                         result.success(linked)
@@ -167,7 +179,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                         if (notifId != -1) notificationManager?.cancel(notifId)
                         if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
                         try {
-                            MainActivity.smsEventSink?.success("reasonUpdated")
+                            MainActivity.smsEventSink?.success("reasonUpdated:$txId")
                         } catch (_: Exception) {}
                     }
                     result.success(saved)
@@ -190,7 +202,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                             if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
                             if (txIdArg.isNotBlank()) notificationManager?.cancel(txIdArg.hashCode())
                             try {
-                                MainActivity.smsEventSink?.success("reasonUpdated")
+                                MainActivity.smsEventSink?.success("reasonUpdated:$txIdArg")
                             } catch (_: Exception) {}
                         }
                         result.success(saved)
@@ -213,7 +225,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                             if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
                             if (txIdArg.isNotBlank()) notificationManager?.cancel(txIdArg.hashCode())
                             try {
-                                MainActivity.smsEventSink?.success("reasonUpdated")
+                                MainActivity.smsEventSink?.success("reasonUpdated:$txIdArg")
                             } catch (_: Exception) {}
                         }
                         result.success(saved)
@@ -229,7 +241,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
                     if (notifId != -1) notificationManager?.cancel(notifId)
                     if (txId.isNotBlank()) notificationManager?.cancel(txId.hashCode())
                     try {
-                        MainActivity.smsEventSink?.success("reasonUpdated")
+                        MainActivity.smsEventSink?.success("reasonUpdated:$txId")
                     } catch (_: Exception) {}
                     result.success(true)
                     finish()
@@ -264,7 +276,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
      */
     private fun loadReasonsFromDb(): List<Map<String, Any?>> {
         return try {
-            val dbPath = File(getDatabasePath(DB_NAME).path)
+            val dbPath = getDbFile()
             if (!dbPath.exists()) return emptyList()
 
             val db = SQLiteDatabase.openDatabase(
@@ -305,7 +317,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
         reasonId: Int?
     ): Boolean {
         return try {
-            val dbPath = File(getDatabasePath(DB_NAME).path)
+            val dbPath = getDbFile()
             if (!dbPath.exists()) return false
 
             val db = SQLiteDatabase.openDatabase(
@@ -436,7 +448,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
 
     private fun loadCurrentTransaction(txId: String, smsBody: String): Map<String, Any?> {
         return try {
-            val dbPath = File(getDatabasePath(DB_NAME).path)
+            val dbPath = getDbFile()
             if (!dbPath.exists()) return emptyMap()
 
             val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READONLY)
@@ -502,7 +514,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
 
     private fun getTransferCandidates(sourceTxId: String, smsBody: String): List<Map<String, Any?>> {
         return try {
-            val dbPath = File(getDatabasePath(DB_NAME).path)
+            val dbPath = getDbFile()
             if (!dbPath.exists()) return emptyList()
 
             val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READONLY)
@@ -548,7 +560,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
 
     private fun linkInternalTransfer(sourceTxId: String, smsBody: String, targetTxId: String): Boolean {
         return try {
-            val dbPath = File(getDatabasePath(DB_NAME).path)
+            val dbPath = getDbFile()
             if (!dbPath.exists()) return false
 
             val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
@@ -620,7 +632,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
         note: String?
     ): Boolean {
         return try {
-            val dbPath = File(getDatabasePath(DB_NAME).path)
+            val dbPath = getDbFile()
             if (!dbPath.exists()) return false
 
             val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
@@ -674,7 +686,7 @@ class TransactionQuickEditActivity : FlutterActivity() {
         val saved = saveReasonToTransaction(txId, smsBody, reasonName, reasonId)
         if (saved && contactName.isNotBlank()) {
             try {
-                val dbPath = File(getDatabasePath(DB_NAME).path)
+                val dbPath = getDbFile()
                 if (dbPath.exists()) {
                     val db = SQLiteDatabase.openDatabase(dbPath.path, null, SQLiteDatabase.OPEN_READWRITE)
                     var rId = reasonId

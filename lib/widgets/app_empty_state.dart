@@ -27,7 +27,11 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveIconColor = iconColor ?? AppColors.brandGreen;
+    final isLight = context.isLightMode;
+    final effectiveIconColor = iconColor ??
+        (isLight
+            ? AppColors.textSecondaryLight
+            : Colors.white.withValues(alpha: 0.40));
 
     Widget visual;
     if (iconWidget != null) {

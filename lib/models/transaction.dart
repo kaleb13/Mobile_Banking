@@ -60,6 +60,9 @@ class AppTransaction {
   final bool isBookmarked;
   final int simSlot; // 0 = SIM 1 / default, 1 = SIM 2
   final String? accountIdentifier; // Optional account suffix or phone number
+  final String? originDeviceId; // Device hardware fingerprint where SMS was ingested
+  final String? originDeviceModel; // Device model name (e.g., "SRT Galaxy", "Tecno Camon 20")
+  final bool isRemoteSync; // True if downloaded from cloud backup, false if scanned locally
 
   AppTransaction({
     this.id,
@@ -87,6 +90,9 @@ class AppTransaction {
     this.isBookmarked = false,
     this.simSlot = 0,
     this.accountIdentifier,
+    this.originDeviceId,
+    this.originDeviceModel,
+    this.isRemoteSync = false,
   })  : bankName = bankName ?? name ?? 'Unknown',
         counterparty = counterparty ?? sender ?? '',
         sourceTag = sourceTag ?? category ?? 'Auto';
@@ -103,6 +109,9 @@ class AppTransaction {
     bool isBookmarked = false,
     int simSlot = 0,
     String? accountIdentifier,
+    String? originDeviceId,
+    String? originDeviceModel,
+    bool isRemoteSync = false,
   }) {
     // Generate an authoritative unique primary key combining bank ref, slot, and transaction direction
     // so internal transfers between SIM 1 (outflow) and SIM 2 (inflow) never collide or overwrite each other.
@@ -131,8 +140,14 @@ class AppTransaction {
       isBookmarked: isBookmarked,
       simSlot: simSlot,
       accountIdentifier: accountIdentifier,
+      originDeviceId: originDeviceId,
+      originDeviceModel: originDeviceModel,
+      isRemoteSync: isRemoteSync,
     );
   }
+
+  /// True if this transaction was downloaded from cloud backup rather than scanned from local inbox.
+  bool get isDownloadedReplica => isRemoteSync;
 
   /// Resolved display label: prefer reason name from `reason` field (pre-resolved),
   /// fallback to customReasonText.
@@ -173,6 +188,9 @@ class AppTransaction {
       'isBookmarked': isBookmarked ? 1 : 0,
       'simSlot': simSlot,
       'accountIdentifier': accountIdentifier,
+      'originDeviceId': originDeviceId,
+      'originDeviceModel': originDeviceModel,
+      'isRemoteSync': isRemoteSync ? 1 : 0,
     };
   }
 
@@ -203,6 +221,9 @@ class AppTransaction {
       isBookmarked: (map['isBookmarked'] as int? ?? 0) == 1,
       simSlot: (map['simSlot'] as int?) ?? 0,
       accountIdentifier: map['accountIdentifier'] as String?,
+      originDeviceId: map['originDeviceId'] as String?,
+      originDeviceModel: map['originDeviceModel'] as String?,
+      isRemoteSync: (map['isRemoteSync'] as int? ?? 0) == 1,
     );
   }
 
@@ -239,6 +260,9 @@ class AppTransaction {
     int? simSlot,
     String? accountIdentifier,
     bool clearAccountIdentifier = false,
+    String? originDeviceId,
+    String? originDeviceModel,
+    bool? isRemoteSync,
   }) {
     return AppTransaction(
       id: id ?? this.id,
@@ -271,6 +295,9 @@ class AppTransaction {
       accountIdentifier: clearAccountIdentifier
           ? null
           : (accountIdentifier ?? this.accountIdentifier),
+      originDeviceId: originDeviceId ?? this.originDeviceId,
+      originDeviceModel: originDeviceModel ?? this.originDeviceModel,
+      isRemoteSync: isRemoteSync ?? this.isRemoteSync,
     );
   }
 

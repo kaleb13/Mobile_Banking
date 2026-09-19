@@ -436,15 +436,36 @@ class _ReasonTransactionsScreenState extends State<ReasonTransactionsScreen> {
           centerTitle: false,
           titleSpacing: 10,
           leadingWidth: 48,
-          title: Text(
-            displayTitle,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Icon(
+                  AppTheme.getCategoryIcon(displayTitle),
+                  size: 16,
+                  color: AppColors.textPrimaryLight,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  displayTitle,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textPrimaryLight,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          backgroundColor: AppColors.background.withValues(alpha: 0.85),
+          backgroundColor: AppColors.background,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: const Padding(

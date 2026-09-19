@@ -78,75 +78,23 @@ class _SavingGoalsScreenState extends State<SavingGoalsScreen> {
                       final goals = savingsVM.savingGoals;
 
                       if (goals.isEmpty) {
-                        return SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(
-                            parent: BouncingScrollPhysics(),
-                          ),
-                          child: Container(
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.fromLTRB(16, 60, 16, 40),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Icon(
-                                    Icons.savings_outlined,
-                                    color: AppColors.gold,
-                                    size: 36,
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  'No Saving Goals Yet',
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
+                        final isLight = context.isLightMode;
+                        return Center(
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
+                            child: AppEmptyState(
+                              icon: Icons.savings_rounded,
+                              iconColor: (isLight
+                                      ? AppColors.textSecondaryLight
+                                      : Colors.white)
+                                  .withValues(alpha: 0.40),
+                              title: 'No Saving Goals Yet',
+                              subtitle:
                                   'Set a target and track your savings progress',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 28),
-                                GestureDetector(
-                                  onTap: () => _showAddGoalSheet(context),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 24, vertical: 13),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.buttonPrimary,
-                                      borderRadius: BorderRadius.circular(100),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.add,
-                                            color: AppColors.buttonPrimaryText, size: 18),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'Create Goal',
-                                          style: TextStyle(
-                                            color: AppColors.buttonPrimaryText,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              actionText: 'Create Goal',
+                              onAction: () => _showAddGoalSheet(context),
                             ),
                           ),
                         );
@@ -860,7 +808,7 @@ class _AddGoalSheetState extends State<_AddGoalSheet> {
     return AppDrawer(
       heightFactor: 0.88,
       headerCard: AppDrawerHeaderCard(
-        icon: Icons.savings_outlined,
+        icon: Icons.savings_rounded,
         title: isEditing ? 'Edit Goal' : 'New Goal',
       ),
       bottomAction: AppButton.primary(

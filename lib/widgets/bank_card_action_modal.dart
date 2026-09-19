@@ -309,7 +309,56 @@ class _BankCardActionModalState extends State<BankCardActionModal>
 
                         const SizedBox(height: 10),
 
-                        // 2. Change Order Action Pill
+                        // 2. Hide / Show Balance Action Pill
+                        _StaggeredRevealPill(
+                          controller: _animController,
+                          startInterval: 0.24,
+                          endInterval: 0.66,
+                          child: _FocusActionPill(
+                            icon: effectiveBalanceVisible
+                                ? Icons.visibility_off_rounded
+                                : Icons.visibility_rounded,
+                            title: effectiveBalanceVisible
+                                ? 'Hide Balance'
+                                : 'Show Balance',
+                            subtitle: effectiveBalanceVisible
+                                ? 'Mask balance with •••••••• on cards'
+                                : 'Reveal real-time balance on cards',
+                            trailing: effectiveBalanceVisible
+                                ? const AppBadge.neutral(
+                                    text: 'VISIBLE',
+                                    size: AppBadgeSize.small,
+                                  )
+                                : const AppBadge.neutral(
+                                    text: 'HIDDEN',
+                                    size: AppBadgeSize.small,
+                                  ),
+                            onTap: () async {
+                              HapticFeedback.lightImpact();
+                              await settingsVM.toggleBankBalanceVisibility(widget.senderName);
+                              if (context.mounted) {
+                                final isNowHidden = settingsVM.isBankBalanceHidden(widget.senderName);
+                                if (isNowHidden) {
+                                  AppToast.info(
+                                    context,
+                                    message: '${widget.senderName} Balance Hidden',
+                                    subtitle: 'Balance is masked with •••••••• across cards & deck',
+                                  );
+                                } else {
+                                  AppToast.success(
+                                    context,
+                                    message: '${widget.senderName} Balance Visible',
+                                    subtitle: 'Balance is now visible on cards & deck',
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // 3. Change Order Action Pill
                         _StaggeredRevealPill(
                           controller: _animController,
                           startInterval: 0.36,
@@ -334,8 +383,8 @@ class _BankCardActionModalState extends State<BankCardActionModal>
                         // 4. Transaction History Action Pill
                         _StaggeredRevealPill(
                           controller: _animController,
-                          startInterval: 0.46,
-                          endInterval: 0.88,
+                          startInterval: 0.48,
+                          endInterval: 0.90,
                           child: _FocusActionPill(
                             icon: Icons.receipt_long_rounded,
                             title: 'Transaction History',

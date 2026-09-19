@@ -5,6 +5,7 @@ import '../presentation/viewmodels/auth_view_model.dart';
 import '../theme/app_theme.dart';
 import 'app_button.dart';
 import 'app_card.dart';
+import 'account_sms_mode_drawer.dart';
 
 /// Modal paywall shown when a device's 30-day trial has elapsed or device is restricted.
 /// 
@@ -113,9 +114,14 @@ class TrialPaywallSheet extends StatelessWidget {
                 onPressed: authVM.isLoading
                     ? null
                     : () async {
+                        final navigator = Navigator.of(context);
                         final success = await authVM.signInWithGoogle();
                         if (success && context.mounted) {
-                          Navigator.of(context).pop();
+                          navigator.pop();
+                          await AccountSmsModeDrawer.promptIfUnconfigured(
+                            context: context,
+                            authVM: authVM,
+                          );
                         }
                       },
               ),
